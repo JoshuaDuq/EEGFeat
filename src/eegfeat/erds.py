@@ -24,6 +24,9 @@ _UNITS: dict[str, dict[str, str]] = {
         "erd_duration": "s",
         "ers_magnitude": "%",
         "ers_duration": "s",
+        "peak_latency": "s",
+        "onset_latency": "s",
+        "rebound_latency": "s",
     },
     "db": {
         "mean": "dB",
@@ -32,6 +35,9 @@ _UNITS: dict[str, dict[str, str]] = {
         "erd_duration": "s",
         "ers_magnitude": "dB",
         "ers_duration": "s",
+        "peak_latency": "s",
+        "onset_latency": "s",
+        "rebound_latency": "s",
     },
 }
 
@@ -73,18 +79,30 @@ def erds(
     -------
     FeatureTable
         Columns for ``mean``, ``slope``, ``erd_magnitude``, ``erd_duration``,
-        ``ers_magnitude`` and ``ers_duration``.
+        ``ers_magnitude``, ``ers_duration``, ``peak_latency``, ``onset_latency``
+        and ``rebound_latency``.
     """
     if normalize not in ("percent", "db"):
         raise ValueError(f"normalize must be 'percent' or 'db', got {normalize!r}.")
 
+    thresholds: dict[int, npt.NDArray[np.float64]] = {}
+
     def trace_of(signal: BandSignal) -> npt.NDArray[np.float64]:
-        return _trace(signal, baseline, normalize)
+        trace, threshold = _trace(signal, baseline, normalize)
+        thresholds[id(signal)] = threshold
+        return trace
+
+    def kernel(
+        signal: BandSignal,
+        trace: npt.NDArray[np.float64],
+        times: npt.NDArray[np.float64],
+    ) -> dict[str, npt.NDArray[np.float64]]:
+        return _measures(signal, trace, times, thresholds[id(signal)])
 
     return expand_signal(
         signals,
         trace_of=trace_of,
-        kernel=_measures,
+        kernel=kernel,
         units=_UNITS[normalize],
         windows=windows,
         groups=groups,
@@ -93,28 +111,34 @@ def erds(
     )
 
 
-def _trace(signal: BandSignal, baseline: Window, mode: ErdsScale) -> npt.NDArray[np.float64]:
+def _trace(
+    signal: BandSignal, baseline: Window, mode: ErdsScale
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     power = signal.power
     mask = window_mask(signal.times, baseline)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
         reference = np.nanmean(power[:, :, mask], axis=2)
+        deviation = np.nanstd(power[:, :, mask], axis=2)
     # A baseline at the power floor cannot anchor a ratio; say so rather than
     # returning a number that is arithmetically valid and physically meaningless.
     reference = np.where(reference > EPS, reference, np.nan)
-    return _normalize(power, baseline=reference, mode=mode)
+    threshold = deviation / reference * 100.0
+    return _normalize(power, baseline=reference, mode=mode), threshold
 
 
 def _measures(
     signal: BandSignal,
     trace: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
+    threshold: npt.NDArray[np.float64],
 ) -> dict[str, npt.NDArray[np.float64]]:
     finite = np.isfinite(trace)
     usable: npt.NDArray[np.bool_] = np.asarray(finite.any(axis=2), dtype=np.bool_)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
         mean = np.where(usable, np.nanmean(trace, axis=2), np.nan)
+    peak_index = _argmax_masked(np.abs(trace), finite)
     return {
         "mean": mean,
         "slope": _slope(trace, times, finite),
@@ -122,7 +146,43 @@ def _measures(
         "erd_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=True),
         "ers_magnitude": _signed_magnitude(trace, finite, usable, negative=False),
         "ers_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=False),
+        "peak_latency": np.where(usable, times[peak_index], np.nan),
+        "onset_latency": _onset(trace, times, finite, usable, threshold),
+        "rebound_latency": _rebound(trace, times, finite, usable, peak_index),
     }
+
+
+def _argmax_masked(
+    values: npt.NDArray[np.float64], finite: npt.NDArray[np.bool_]
+) -> npt.NDArray[np.int_]:
+    return np.asarray(np.argmax(np.where(finite, values, -np.inf), axis=2), dtype=np.int_)
+
+
+def _onset(
+    trace: npt.NDArray[np.float64],
+    times: npt.NDArray[np.float64],
+    finite: npt.NDArray[np.bool_],
+    usable: npt.NDArray[np.bool_],
+    threshold: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    crossed = finite & (np.abs(trace) > threshold[:, :, np.newaxis])
+    any_crossing: npt.NDArray[np.bool_] = np.asarray(crossed.any(axis=2), dtype=np.bool_)
+    index = np.argmax(crossed, axis=2)
+    return np.where(usable & any_crossing, times[index], np.nan)
+
+
+def _rebound(
+    trace: npt.NDArray[np.float64],
+    times: npt.NDArray[np.float64],
+    finite: npt.NDArray[np.bool_],
+    usable: npt.NDArray[np.bool_],
+    peak_index: npt.NDArray[np.int_],
+) -> npt.NDArray[np.float64]:
+    after = np.arange(trace.shape[2])[np.newaxis, np.newaxis, :] > peak_index[:, :, np.newaxis]
+    eligible = finite & after
+    any_eligible: npt.NDArray[np.bool_] = np.asarray(eligible.any(axis=2), dtype=np.bool_)
+    index = np.argmax(np.where(eligible, trace, -np.inf), axis=2)
+    return np.where(usable & any_eligible, times[index], np.nan)
 
 
 def _slope(

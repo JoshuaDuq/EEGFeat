@@ -110,3 +110,44 @@ def test_erds_without_a_baseline_window_is_impossible_to_call() -> None:
 def test_an_unknown_normalization_raises() -> None:
     with pytest.raises(ValueError, match="normalize"):
         erds([_step(1.0, 1.0)], baseline=BASE, windows=[STIM], normalize="log10")  # type: ignore[arg-type]
+
+
+def test_peak_latency_finds_the_largest_excursion() -> None:
+    n = 201
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, 150] = np.sqrt(3.0)  # t = +0.5 s
+    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.select(measure="peak_latency").values.item() == pytest.approx(0.5)
+
+
+def test_onset_latency_is_the_first_crossing_of_the_baseline_variability() -> None:
+    n = 201
+    rng = np.random.RandomState(0)
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, :100] += rng.normal(0.0, 0.01, (1, 1, 100))
+    envelope[:, :, 130:] = np.sqrt(2.0)  # steps at t = +0.3 s
+    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.select(measure="onset_latency").values.item() == pytest.approx(0.3, abs=0.02)
+
+
+def test_a_trace_that_never_crosses_has_no_onset() -> None:
+    table = erds([_step(1.0, 1.0)], baseline=BASE, windows=[STIM], include_global=False)
+    assert np.isnan(table.select(measure="onset_latency").values).all()
+
+
+def test_rebound_is_the_largest_value_after_the_peak() -> None:
+    n = 201
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, 120] = np.sqrt(0.1)  # deep ERD at +0.2 s, the largest excursion
+    envelope[:, :, 180] = np.sqrt(1.5)  # smaller ERS at +0.8 s
+    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.select(measure="peak_latency").values.item() == pytest.approx(0.2)
+    assert table.select(measure="rebound_latency").values.item() == pytest.approx(0.8)
+
+
+def test_a_peak_at_the_window_end_leaves_no_rebound() -> None:
+    n = 201
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, -1] = np.sqrt(5.0)
+    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert np.isnan(table.select(measure="rebound_latency").values).all()
