@@ -39,6 +39,7 @@ from eegfeat.erds import (
     ers_duration,
     ers_magnitude,
 )
+from eegfeat.phase import itpc, pac
 from eegfeat.power import band_power
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
@@ -82,8 +83,10 @@ __all__ = [
     "FeatureMeta",
     "FeatureTable",
     "fraction_above_threshold",
+    "itpc",
     "mean_amplitude",
     "multiscale_entropy",
+    "pac",
     "peak_amplitude",
     "peak_frequency",
     "peak_latency",

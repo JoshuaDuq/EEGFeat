@@ -60,12 +60,14 @@ def _collect(
 def _assemble(
     columns: Sequence[_Column],
     flag_columns: Mapping[str, Sequence[npt.NDArray[np.bool_]]],
+    row_labels: tuple[str, ...] | None = None,
 ) -> FeatureTable:
     return FeatureTable(
         values=np.stack([c.values for c in columns], axis=1),
         coverage=np.stack([c.coverage for c in columns], axis=1),
         meta=tuple(c.meta for c in columns),
         flags={key: np.stack(list(arrays), axis=1) for key, arrays in flag_columns.items()},
+        row_labels=row_labels,
     )
 
 
@@ -188,8 +190,18 @@ def expand_signal(
     groups: Mapping[str, Sequence[str]] | None,
     include_global: bool,
     mode: Normalization,
+    row_groups: npt.NDArray[np.int_] | None = None,
+    row_labels: tuple[str, ...] | None = None,
 ) -> FeatureTable:
+    """Apply a kernel across bands, windows and spatial groups.
+
+    ``row_groups`` maps each epoch to an output row, for measures estimated across
+    trials rather than within one. The kernel then returns one value per row
+    instead of per epoch, and coverage is averaged over each group's epochs.
+    """
     _check_signals(signals, windows)
+    if (row_groups is None) != (row_labels is None):
+        raise ValueError("row_groups and row_labels must be given together.")
     columns: list[_Column] = []
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
@@ -202,7 +214,12 @@ def expand_signal(
             measured = kernel(signal, trace[:, :, mask], signal.times[mask])
             for name, values in measured.items():
                 by_measure.setdefault(name, []).append(values)
-            coverages.append(signal.coverage[:, :, mask].mean(axis=2))
+            per_epoch = signal.coverage[:, :, mask].mean(axis=2)
+            coverages.append(
+                per_epoch
+                if row_groups is None
+                else _reduce_rows(per_epoch, row_groups, len(row_labels or ()))
+            )
         coverage = np.stack(coverages, axis=2)
 
         for measure, per_window in by_measure.items():
@@ -236,7 +253,15 @@ def expand_signal(
             for key, arrays in new_flags.items():
                 flag_columns.setdefault(key, []).extend(arrays)
 
-    return _assemble(columns, flag_columns)
+    return _assemble(columns, flag_columns, row_labels)
+
+
+def _reduce_rows(
+    per_epoch: npt.NDArray[np.float64],
+    row_groups: npt.NDArray[np.int_],
+    n_rows: int,
+) -> npt.NDArray[np.float64]:
+    return np.stack([per_epoch[row_groups == row].mean(axis=0) for row in range(n_rows)])
 
 
 def _check_signals(signals: Sequence[TimeSeries], windows: Sequence[Window]) -> None:

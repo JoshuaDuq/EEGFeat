@@ -95,10 +95,57 @@ def test_concat_joins_columns_and_preserves_flags() -> None:
 
 def test_concat_refuses_to_align_mismatched_epoch_counts() -> None:
     small = FeatureTable(np.zeros((2, 1)), np.ones((2, 1)), (_meta("C3"),))
-    with pytest.raises(ValueError, match="n_epochs"):
+    with pytest.raises(ValueError, match="n_rows"):
         concat([small, _table(("C4",))])
 
 
 def test_concat_of_nothing_raises() -> None:
     with pytest.raises(ValueError, match="at least one"):
         concat([])
+
+
+# --- row semantics --------------------------------------------------------------------
+
+
+def test_rows_are_epochs_unless_labelled() -> None:
+    assert _table().row_labels is None
+    assert _table().n_rows == 3
+
+
+def test_labelled_rows_index_the_dataframe() -> None:
+    table = FeatureTable(
+        values=np.zeros((2, 1)),
+        coverage=np.ones((2, 1)),
+        meta=(_meta("C3"),),
+        row_labels=("rest", "task"),
+    )
+    assert list(table.to_dataframe().index) == ["rest", "task"]
+
+
+def test_row_labels_must_match_the_row_count() -> None:
+    with pytest.raises(ValueError, match="row_labels"):
+        FeatureTable(
+            values=np.zeros((2, 1)),
+            coverage=np.ones((2, 1)),
+            meta=(_meta("C3"),),
+            row_labels=("only-one",),
+        )
+
+
+def test_concat_refuses_to_join_group_rows_to_epoch_rows() -> None:
+    per_epoch = FeatureTable(np.zeros((2, 1)), np.ones((2, 1)), (_meta("C3"),))
+    per_group = FeatureTable(
+        np.zeros((2, 1)), np.ones((2, 1)), (_meta("C4"),), row_labels=("rest", "task")
+    )
+    with pytest.raises(ValueError, match="row semantics"):
+        concat([per_epoch, per_group])
+
+
+def test_select_preserves_row_labels() -> None:
+    table = FeatureTable(
+        values=np.zeros((2, 2)),
+        coverage=np.ones((2, 2)),
+        meta=(_meta("C3"), _meta("C4")),
+        row_labels=("rest", "task"),
+    )
+    assert table.select(space="C4").row_labels == ("rest", "task")

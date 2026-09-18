@@ -85,12 +85,18 @@ class FeatureTable:
         One record per column.
     flags : mapping of str to ndarray, optional
         Per-cell boolean annotations, each shaped like ``values``.
+    row_labels : tuple of str, optional
+        Names for the rows when they are **not** epochs. None, the default, means
+        one row per epoch. A measure estimated across trials, such as inter-trial
+        phase coherence, has one row per trial group and names them here, so a
+        table of group rows cannot be silently joined to a table of epoch rows.
     """
 
     values: npt.NDArray[np.float64]
     coverage: npt.NDArray[np.float64]
     meta: tuple[FeatureMeta, ...]
     flags: Mapping[str, npt.NDArray[np.bool_]] = field(default_factory=dict)
+    row_labels: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.values.ndim != 2:
@@ -109,6 +115,11 @@ class FeatureTable:
                 raise ValueError(
                     f"flag {key!r} shape {array.shape} does not match values {self.values.shape}."
                 )
+        if self.row_labels is not None and len(self.row_labels) != self.values.shape[0]:
+            raise ValueError(
+                f"row_labels has {len(self.row_labels)} entries but values has "
+                f"{self.values.shape[0]} rows."
+            )
         names = self.names
         if len(set(names)) != len(names):
             duplicates = sorted({n for n in names if names.count(n) > 1})
@@ -120,13 +131,17 @@ class FeatureTable:
         return [m.name for m in self.meta]
 
     @property
-    def n_epochs(self) -> int:
-        """Number of epochs (rows)."""
+    def n_rows(self) -> int:
+        """Number of rows: epochs, or trial groups when ``row_labels`` is set."""
         return int(self.values.shape[0])
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Render the values as a DataFrame with canonical column names."""
-        return pd.DataFrame(self.values, columns=self.names)
+        """Render the values as a DataFrame with canonical column names.
+
+        The index is the row labels when the rows are trial groups, and a plain
+        range when they are epochs.
+        """
+        return pd.DataFrame(self.values, columns=self.names, index=self.row_labels)
 
     def select(self, **conditions: object) -> FeatureTable:
         """Return the columns whose metadata matches every given field.
@@ -158,14 +173,16 @@ class FeatureTable:
             coverage=self.coverage[:, index],
             meta=tuple(self.meta[i] for i in keep),
             flags={k: v[:, index] for k, v in self.flags.items()},
+            row_labels=self.row_labels,
         )
 
 
 def concat(tables: Sequence[FeatureTable]) -> FeatureTable:
     """Join feature tables column-wise.
 
-    Every table must have the same number of epochs. Rows are never aligned or
-    reindexed; a mismatch is an error rather than something to repair.
+    Every table must have the same number of rows and the same row semantics.
+    Rows are never aligned or reindexed; a mismatch is an error rather than
+    something to repair.
 
     Parameters
     ----------
@@ -180,12 +197,20 @@ def concat(tables: Sequence[FeatureTable]) -> FeatureTable:
     """
     if not tables:
         raise ValueError("concat requires at least one table.")
-    n_epochs = tables[0].n_epochs
+    n_rows = tables[0].n_rows
+    row_labels = tables[0].row_labels
     for table in tables:
-        if table.n_epochs != n_epochs:
+        # Row semantics first: it explains a count mismatch too, and is the more
+        # useful error when a cross-trial estimate meets a per-epoch one.
+        if table.row_labels != row_labels:
             raise ValueError(
-                f"concat requires matching n_epochs; got {n_epochs} and {table.n_epochs}."
+                "concat requires matching row semantics: one table has rows "
+                f"{row_labels!r} and another {table.row_labels!r}. A measure estimated "
+                "across trials cannot be joined to one estimated per epoch without "
+                "deciding how to broadcast it."
             )
+        if table.n_rows != n_rows:
+            raise ValueError(f"concat requires matching n_rows; got {n_rows} and {table.n_rows}.")
     flag_keys = sorted({key for table in tables for key in table.flags})
     flags = {
         key: np.concatenate(
@@ -199,4 +224,5 @@ def concat(tables: Sequence[FeatureTable]) -> FeatureTable:
         coverage=np.concatenate([t.coverage for t in tables], axis=1),
         meta=tuple(m for t in tables for m in t.meta),
         flags=flags,
+        row_labels=row_labels,
     )

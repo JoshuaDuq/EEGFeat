@@ -140,6 +140,21 @@ the honest one.
 non-EEG channels and those in `info["bads"]`. The reference operates on
 `PrecomputedData.picks`. Pass an already-picked `Epochs` if that matters.
 
+### Phase Measures
+| Measure | Reference | Result |
+|---|---|---|
+| `itpc` | `phase._compute_itpc_map_precomputed` followed by the time average | bit-identical across locked, random and mixed phase |
+| `pac` | the normalized mean-vector-length form in `phase.py` | agrees to 1.4e-17, float rounding from the reference's added epsilon |
+
+`itpc` returns one row per trial group rather than broadcasting a single estimate
+onto every trial's row. The reference's `global`, `fold_global`, `condition` and
+`loo` modes exist to manage the leakage that broadcasting creates; representing the
+estimand honestly removes the need for them. A caller who wants the broadcast must
+perform it deliberately.
+
+`pac` implements the mean vector length only, as the reference does, and applies no
+surrogate correction.
+
 ### Measures Not Ported
 - **`snr` and `muscle` ratio.** Named for an interpretation rather than a computation:
   the first asserts 1-30 Hz is signal and 40-80 Hz is noise, the second that high

@@ -252,3 +252,50 @@ is a high-frequency power fraction that asserts the high frequencies are muscle.
 Both are available through :func:`~eegfeat.band_power` and
 :func:`~eegfeat.band_ratio` with bands the caller chooses, which puts the
 assumption in the call where it can be seen and argued with.
+
+
+Inter-Trial Phase Coherence
+---------------------------
+
+.. math::
+
+   \mathrm{ITPC} = \frac{1}{T} \sum_t
+   \left| \frac{1}{N} \sum_n e^{i \phi_n(t)} \right|
+
+One means the phase is identical on every trial at that latency, zero that it is
+uniformly distributed. **Trials are averaged first and time second.** Reversing
+the order measures something else entirely: a phase that sweeps over time but is
+identical across trials gives one under the correct order and nearly zero under
+the reverse.
+
+Under the null of uniform phase the expected value is about
+:math:`1/\sqrt{N}`, not zero, so coherence from a small number of trials is
+biased upward and values from different trial counts are not comparable.
+
+**ITPC has one row per trial group, not one per epoch.** It is estimated across
+trials, so a per-epoch row would be the same number repeated, and a model fitted
+on it would treat one estimate as many independent observations. The reference
+implementation broadcasts, and its own documentation calls that
+pseudo-replication; the table returned here carries ``row_labels`` and
+:func:`~eegfeat.concat` refuses to join it to per-epoch features. Pass ``trials``
+to estimate within groups, for example one row per condition.
+
+Phase-Amplitude Coupling
+------------------------
+
+Mean vector length, the amplitude-weighted resultant of the slow band's phase:
+
+.. math::
+
+   \mathrm{MVL} = \frac{\left| \sum_t A(t) e^{i \phi(t)} \right|}{\sum_t A(t)}
+
+Normalizing by the summed amplitude makes the value independent of overall power
+and so comparable across channels and trials; without it the result scales with
+amplitude.
+
+Computed within each trial, so it carries no cross-trial leakage and has one row
+per epoch. **No surrogate correction is applied.** A raw coupling value is biased
+upward by amplitude and phase autocorrelation and should be read against a null
+you construct, not absolutely. The reference offers trial-shuffle and
+circular-shift surrogates; trial shuffling mixes information across trials, so if
+you build a null here, prefer a within-trial circular shift.
