@@ -22,7 +22,9 @@ EXPECTED = {
     "burst_count",
     "burst_duration",
     "burst_rate",
+    "clustering_coefficient",
     "concat",
+    "envelope_correlation",
     "erd_duration",
     "erd_magnitude",
     "erds_mean",
@@ -33,6 +35,7 @@ EXPECTED = {
     "ers_duration",
     "ers_magnitude",
     "fraction_above_threshold",
+    "global_efficiency",
     "itpc",
     "mean_amplitude",
     "multiscale_entropy",
@@ -47,6 +50,7 @@ EXPECTED = {
     "spectral_edge",
     "spectral_entropy",
     "variance",
+    "wpli",
 }
 
 

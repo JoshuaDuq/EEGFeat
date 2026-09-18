@@ -299,3 +299,43 @@ upward by amplitude and phase autocorrelation and should be read against a null
 you construct, not absolutely. The reference offers trial-shuffle and
 circular-shift surrogates; trial shuffling mixes information across trials, so if
 you build a null here, prefer a within-trial circular shift.
+
+
+Connectivity
+------------
+
+``envelope_correlation`` is the Pearson correlation of band envelopes between
+every pair of nodes; ``wpli`` is the weighted phase lag index, which discounts
+zero-lag coupling and so is less vulnerable to volume conduction.
+
+**wPLI delegates to** ``mne_connectivity.spectral_connectivity_epochs``, the
+canonical implementation and the one the reference pipeline uses. Computing it
+from Hilbert analytic signals instead would be a different estimator and would
+not reproduce those values. It is an optional dependency:
+``pip install eegfeat[connectivity]``.
+
+Nodes are channels, or ROIs when ``groups`` is given, in which case the
+channel-level matrix is averaged within each ROI block and a node's own block
+excludes the diagonal. Both measures are estimated across trials, so results have
+one row per trial group; see :func:`~eegfeat.itpc`.
+
+Graph Measures
+--------------
+
+``global_efficiency`` and ``clustering_coefficient`` take a pairwise table and
+reduce it to one value per band and window, the way :func:`~eegfeat.band_ratio`
+takes a power table. They are computed here rather than delegated, because both
+are short and exactly specified, and both are verified bit-identical against
+networkx.
+
+Global efficiency treats each edge as having length ``1 / (|w| + 1e-9)`` and
+averages the inverse shortest path length over all node pairs, so a strong
+connection is a short step and indirect routes count.
+
+The clustering coefficient **binarizes** the network at ``threshold`` and then
+averages the unweighted coefficient over nodes with at least two neighbours.
+Binarizing is what the reference does, so the value depends on the threshold,
+which has no canonical choice; it is required rather than defaulted for that
+reason, and recorded in the column's unit. Nodes below degree two are excluded
+rather than counted as zero, so a network too sparse to contain a triangle gives
+NaN rather than a misleadingly small number.

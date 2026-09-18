@@ -20,6 +20,12 @@ from eegfeat.bursts import (
     fraction_above_threshold,
 )
 from eegfeat.complexity import multiscale_entropy, sample_entropy
+from eegfeat.connectivity import (
+    clustering_coefficient,
+    envelope_correlation,
+    global_efficiency,
+    wpli,
+)
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.descriptors import (
     peak_frequency,
@@ -70,7 +76,9 @@ __all__ = [
     "burst_count",
     "burst_duration",
     "burst_rate",
+    "clustering_coefficient",
     "concat",
+    "envelope_correlation",
     "erd_duration",
     "erd_magnitude",
     "erds_mean",
@@ -83,6 +91,7 @@ __all__ = [
     "FeatureMeta",
     "FeatureTable",
     "fraction_above_threshold",
+    "global_efficiency",
     "itpc",
     "mean_amplitude",
     "multiscale_entropy",
@@ -100,4 +109,5 @@ __all__ = [
     "spectral_entropy",
     "variance",
     "Window",
+    "wpli",
 ]

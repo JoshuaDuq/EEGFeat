@@ -13,6 +13,7 @@ dependencies = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "mne>=1.8"]
 
 [project.optional-dependencies]
 knee = ["specparam>=2.0"]
+connectivity = ["mne-connectivity>=0.7"]
 dev = ["pytest>=8.0", "ruff>=0.6", "black>=24.0", "mypy>=1.11", "pandas-stubs", "scipy-stubs"]
 
 [tool.hatch.build.targets.wheel]
@@ -33,6 +34,10 @@ target-version = ["py311"]
 python_version = "3.11"
 strict = true
 files = ["src/eegfeat"]
+
+[[tool.mypy.overrides]]
+module = ["mne_connectivity.*", "specparam.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

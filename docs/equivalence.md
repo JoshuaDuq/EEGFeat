@@ -155,6 +155,26 @@ perform it deliberately.
 `pac` implements the mean vector length only, as the reference does, and applies no
 surrogate correction.
 
+### Connectivity and Graph Measures
+| Measure | Reference | Result |
+|---|---|---|
+| `wpli` | `mne_connectivity.spectral_connectivity_epochs` | delegated, not reimplemented |
+| `global_efficiency` | `graph_metrics.compute_global_efficiency_weighted` (networkx Dijkstra) | bit-identical over 25 random graphs |
+| `clustering_coefficient` | `networkx.clustering` on the binarized adjacency | bit-identical where every node has degree >= 2 |
+
+`clustering_coefficient` excludes nodes below degree two rather than scoring them
+zero, as networkx does, so a network too sparse to contain a triangle gives NaN
+instead of a small number that looks like a measurement.
+
+**A verification failure worth recording.** The first `wpli` implementation rebuilt
+the connectivity matrix from `get_data()` assuming a lower-triangle vector. It is
+actually the whole matrix raveled, so every pair was silently mislabelled. The check
+that missed it compared `eegfeat` against the same faulty reconstruction and reported
+`max|diff| = 0.000e+00`; the check that caught it planted a known coupling on a named
+pair and asserted that pair came back strongest. Values agreeing proves nothing about
+labels. The regression test asserts placement, not magnitude, and `_dense` now takes
+the matrix from the estimator's own `output="dense"`.
+
 ### Measures Not Ported
 - **`snr` and `muscle` ratio.** Named for an interpretation rather than a computation:
   the first asserts 1-30 Hz is signal and 40-80 Hz is noise, the second that high
