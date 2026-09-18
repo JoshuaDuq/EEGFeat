@@ -12,7 +12,7 @@ from eegfeat.bands import Band
 from eegfeat.naming import feature_name
 
 SpaceKind = Literal["channel", "roi", "global", "pair"]
-Normalization = Literal["raw", "log10", "log_ratio", "db"]
+Normalization = Literal["raw", "log10", "log_ratio", "db", "percent"]
 
 
 @dataclass(frozen=True)

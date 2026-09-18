@@ -28,17 +28,17 @@ def normalize(
     baseline : ndarray, shape (n_epochs, n_channels), or None
         Baseline power, one value per epoch and channel. Required by
         ``"log_ratio"`` and ``"db"``, forbidden by the others.
-    mode : {"raw", "log10", "log_ratio", "db"}
+    mode : {"raw", "log10", "log_ratio", "db", "percent"}
         ``"raw"`` returns the input, ``"log10"`` returns ``log10(p)``,
-        ``"log_ratio"`` returns ``log10(p / b)`` and ``"db"`` returns
-        ``10 * log_ratio``.
+        ``"log_ratio"`` returns ``log10(p / b)``, ``"db"`` returns
+        ``10 * log_ratio``, and ``"percent"`` returns ``(p - b) / b * 100``.
 
     Returns
     -------
     ndarray
         Normalized values, shaped like ``values``.
     """
-    needs_baseline = mode in ("log_ratio", "db")
+    needs_baseline = mode in ("log_ratio", "db", "percent")
     if needs_baseline and baseline is None:
         raise ValueError(f"mode {mode!r} requires a baseline.")
     if not needs_baseline and baseline is not None:
@@ -52,5 +52,8 @@ def normalize(
 
     assert baseline is not None  # narrowed by the guard above
     base = np.where(np.isfinite(baseline), np.maximum(baseline, EPS), np.nan)
+    if mode == "percent":
+        # Not floored in the numerator: a genuine zero is a real 100% decrease.
+        return (values - base[:, :, np.newaxis]) / base[:, :, np.newaxis] * 100.0
     ratio = np.log10(floored / base[:, :, np.newaxis])
     return 10.0 * ratio if mode == "db" else ratio

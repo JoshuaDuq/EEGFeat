@@ -51,3 +51,25 @@ def test_log_ratio_without_a_baseline_raises() -> None:
 def test_log10_with_a_baseline_raises() -> None:
     with pytest.raises(ValueError, match="takes no baseline"):
         normalize(_values(), baseline=np.array([[1.0]]), mode="log10")
+
+
+def test_percent_is_relative_change_in_percent() -> None:
+    values = np.array([[[0.5, 1.0, 2.0]]])
+    out = normalize(values, baseline=np.array([[1.0]]), mode="percent")
+    np.testing.assert_allclose(out, [[[-50.0, 0.0, 100.0]]])
+
+
+def test_percent_against_itself_is_exactly_zero() -> None:
+    values = _values()
+    out = normalize(values, baseline=values[:, :, 0], mode="percent")
+    assert out[0, 0, 0] == 0.0
+
+
+def test_percent_without_a_baseline_raises() -> None:
+    with pytest.raises(ValueError, match="requires a baseline"):
+        normalize(_values(), baseline=None, mode="percent")
+
+
+def test_percent_propagates_a_non_finite_baseline() -> None:
+    out = normalize(_values(), baseline=np.array([[np.nan]]), mode="percent")
+    assert np.isnan(out).all()
