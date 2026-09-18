@@ -1,0 +1,46 @@
+{
+  "subject": "sub-0001",
+  "bands": {
+    "delta": [
+      1.0,
+      4.0
+    ],
+    "theta": [
+      4.0,
+      8.0
+    ],
+    "alpha": [
+      8.0,
+      13.0
+    ],
+    "beta": [
+      13.0,
+      30.0
+    ],
+    "gamma": [
+      30.0,
+      45.0
+    ]
+  },
+  "windows": {
+    "base": [
+      -5.0,
+      -1.0
+    ],
+    "stim": [
+      0.0,
+      8.0
+    ]
+  },
+  "tfr": {
+    "freq_min": 1.0,
+    "freq_max": 100.0,
+    "n_freqs": 40,
+    "n_cycles": "clip(freq/2, 3, 15)",
+    "decim": 4,
+    "method": "morlet"
+  },
+  "n_epochs": 8,
+  "n_channels": 6,
+  "reference_commit": "e4333aa1c2225d01a3df89851c5569d876c5acb2"
+}
