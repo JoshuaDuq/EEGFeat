@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
+import mne  # type: ignore[import-untyped]
 import numpy as np
 import numpy.typing as npt
+from scipy.signal import hilbert
 
 from eegfeat.bands import Band
+
+_FILTER_LENGTH_MULTIPLIER = 6.6
+_MIN_FILTER_LENGTH = 3
+_DEFAULT_LOW_FREQ_HZ = 0.1
 
 
 @dataclass(frozen=True, eq=False)
@@ -129,3 +136,94 @@ class BandSignal:
             sfreq=float(sfreq),
             coverage=coverage,
         )
+
+    @classmethod
+    def from_epochs(
+        cls,
+        epochs: Any,
+        band: Band,
+        *,
+        pad_sec: float = 0.5,
+        pad_cycles: float = 3.0,
+        n_jobs: int = 1,
+    ) -> BandSignal:
+        """Bandpass epochs and take their Hilbert transform.
+
+        Parameters
+        ----------
+        epochs : mne.Epochs
+            Epoched data.
+        band : Band
+            Band to filter to. ``band.fmax`` must be below Nyquist.
+        pad_sec : float, default 0.5
+            Minimum reflect padding in seconds.
+        pad_cycles : float, default 3.0
+            Padding expressed in cycles of ``band.fmin``. The padding actually
+            applied is the larger of the two, clamped to one sample short of the
+            epoch length.
+        n_jobs : int, default 1
+            Passed to MNE's filter.
+
+        Returns
+        -------
+        BandSignal
+            With the padding removed, so ``times`` matches ``epochs.times``.
+        """
+        sfreq = float(epochs.info["sfreq"])
+        if band.fmax > sfreq / 2.0:
+            raise ValueError(
+                f"band {band.name!r} reaches {band.fmax} Hz, above the Nyquist "
+                f"frequency {sfreq / 2.0} of this recording."
+            )
+
+        data = np.asarray(epochs.get_data(), dtype=float)
+        n_epochs, n_channels, n_times = data.shape
+        flat = data.reshape(-1, n_times)
+
+        pad = _padding_samples(pad_sec, pad_cycles, band.fmin, sfreq, n_times)
+        padded = np.pad(flat, ((0, 0), (pad, pad)), mode="reflect") if pad else flat
+
+        filtered = mne.filter.filter_data(
+            padded,
+            sfreq,
+            l_freq=band.fmin,
+            h_freq=band.fmax,
+            filter_length=_filter_length(padded.shape[-1], sfreq, band.fmin),
+            n_jobs=n_jobs,
+            verbose=False,
+        )
+        analytic = hilbert(filtered, axis=-1)
+        if pad:
+            analytic = analytic[:, pad:-pad]
+
+        analytic = analytic.reshape(n_epochs, n_channels, n_times)
+        return cls.from_arrays(
+            analytic=analytic,
+            times=np.asarray(epochs.times, dtype=float),
+            ch_names=tuple(epochs.ch_names),
+            band=band,
+            sfreq=sfreq,
+            coverage=np.isfinite(data).astype(float),
+        )
+
+
+def _padding_samples(
+    pad_sec: float, pad_cycles: float, fmin: float, sfreq: float, n_times: int
+) -> int:
+    cycles_sec = pad_cycles / fmin if np.isfinite(fmin) and fmin > 0 and pad_cycles > 0 else 0.0
+    seconds = max(pad_sec, cycles_sec)
+    if not (np.isfinite(seconds) and seconds > 0) or n_times <= 1:
+        return 0
+    return max(0, min(int(round(seconds * sfreq)), n_times - 1))
+
+
+def _filter_length(n_times: int, sfreq: float, fmin: float) -> str:
+    # MNE's own default would exceed the signal for a low fmin on a short epoch,
+    # so fall back to the longest odd length that fits.
+    low = fmin if fmin > 0 else _DEFAULT_LOW_FREQ_HZ
+    if int(_FILTER_LENGTH_MULTIPLIER * sfreq / low) < n_times:
+        return "auto"
+    safe = n_times - 1
+    if safe % 2 == 0:
+        safe -= 1
+    return str(max(safe, _MIN_FILTER_LENGTH))
