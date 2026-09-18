@@ -151,6 +151,93 @@ def _reference(tfr: object, epochs: object) -> dict[str, np.ndarray]:
             slopes[e, c] = np.nan if slope is None else slope
             offsets[e, c] = np.nan if offset is None else offset
     out["aperiodic_slope"], out["aperiodic_offset"] = slopes, offsets
+
+    from eeg_pipeline.analysis.features.bursts import _extract_burst_metrics
+    from eeg_pipeline.utils.analysis.spectral import compute_band_data
+
+    epochs_data = np.asarray(epochs.get_data())
+    sfreq = float(epochs.info["sfreq"])
+    epoch_times = np.asarray(epochs.times)
+    base_mask = (epoch_times >= WINDOWS["base"][0]) & (epoch_times <= WINDOWS["base"][1])
+    stim_mask = (epoch_times >= WINDOWS["stim"][0]) & (epoch_times <= WINDOWS["stim"][1])
+    active_times = epoch_times[stim_mask]
+
+    for band_name in ("alpha", "beta"):
+        fmin, fmax = BANDS[band_name]
+        band_data = compute_band_data(
+            epochs_data,
+            sfreq,
+            band=band_name,
+            fmin=fmin,
+            fmax=fmax,
+            pad_sec=0.5,
+            pad_cycles=3.0,
+        )
+        out[f"analytic__{band_name}"] = band_data.analytic
+        out[f"envelope__{band_name}"] = band_data.envelope
+
+        power = band_data.power
+        for metric in (
+            "mean",
+            "slope",
+            "erd_magnitude",
+            "erd_duration",
+            "ers_magnitude",
+            "ers_duration",
+            "peak_latency",
+            "onset_latency",
+        ):
+            vals = np.zeros(epochs_data.shape[:2], dtype=np.float64)
+            for e in range(epochs_data.shape[0]):
+                for c in range(epochs_data.shape[1]):
+                    b_trace = power[e, c, base_mask]
+                    ref = np.mean(b_trace)
+                    std = np.std(b_trace)
+                    tr = (power[e, c, stim_mask] - ref) / ref * 100.0
+                    if metric == "mean":
+                        vals[e, c] = np.mean(tr)
+                    elif metric == "slope":
+                        slope, _ = np.polyfit(active_times, tr, 1)
+                        vals[e, c] = slope
+                    elif metric == "erd_magnitude":
+                        erd_vals = tr[tr < 0]
+                        vals[e, c] = np.mean(np.abs(erd_vals)) if len(erd_vals) > 0 else 0.0
+                    elif metric == "erd_duration":
+                        erd_vals = tr[tr < 0]
+                        vals[e, c] = len(erd_vals) / sfreq if len(erd_vals) > 0 else 0.0
+                    elif metric == "ers_magnitude":
+                        ers_vals = tr[tr > 0]
+                        vals[e, c] = np.mean(ers_vals) if len(ers_vals) > 0 else 0.0
+                    elif metric == "ers_duration":
+                        ers_vals = tr[tr > 0]
+                        vals[e, c] = len(ers_vals) / sfreq if len(ers_vals) > 0 else 0.0
+                    elif metric == "peak_latency":
+                        vals[e, c] = active_times[int(np.nanargmax(np.abs(tr)))]
+                    elif metric == "onset_latency":
+                        thresh = std / ref * 100.0
+                        cross = np.abs(tr) > thresh
+                        vals[e, c] = (
+                            active_times[int(np.argmax(cross))] if np.any(cross) else np.nan
+                        )
+            out[f"erds_{metric}__{band_name}"] = vals
+
+        stim_env = band_data.envelope[:, :, stim_mask]
+        thr = np.nanpercentile(band_data.envelope, 75.0, axis=2)
+        min_samples = max(1, int(round(100.0 * sfreq / 1000.0)))
+        for b_metric, ref_key in (
+            ("count", "count"),
+            ("rate", "rate"),
+            ("duration_mean", "duration_mean"),
+            ("amp_mean", "amp_mean"),
+            ("fraction_above", "fraction"),
+        ):
+            b_vals = np.zeros(epochs_data.shape[:2], dtype=np.float64)
+            for e in range(epochs_data.shape[0]):
+                for c in range(epochs_data.shape[1]):
+                    res = _extract_burst_metrics(stim_env[e, c], sfreq, thr[e, c], min_samples)
+                    b_vals[e, c] = res[ref_key]
+            out[f"burst_{b_metric}__{band_name}"] = b_vals
+
     return out
 
 

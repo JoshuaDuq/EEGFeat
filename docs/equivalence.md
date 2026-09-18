@@ -31,6 +31,9 @@ Total fixture size must stay under 50 MB to remain trackable in version control 
 | **Spectral Edge (95%)** | `compute_spectral_edge` | `0.0` | `1e-9` | Cumulative mass quantile search over discrete frequency bins; indices match exactly. |
 | **Aperiodic Slope** | `_robust_aperiodic_fit` | `1e-6` | `1e-9` | Iterative Huber residual rejection fit in log10-log10 space. |
 | **Aperiodic Offset** | `_robust_aperiodic_fit` | `1e-6` | `1e-9` | Intercept of robust linear fit in log10-log10 space. |
+| **BandSignal Envelope** | `compute_band_data` | `1e-6` | `1e-10` | Hilbert transform and FIR bandpass filtering with reflect padding. |
+| **ERDS Measures** | `extract_erds_from_precomputed` (per-channel) | `1e-6` | `1e-10` | Relative power change, slope, signed excursions, and onset/peak latencies. |
+| **Burst Features** | `_extract_burst_metrics` | `1e-6` | `1e-10` | Contiguous run count, rate, duration, amplitude, and fraction above threshold. |
 
 ## 3. Known Deliberate Divergences
 
@@ -79,6 +82,12 @@ grids must therefore not place sample points exactly on band boundaries to avoid
 The reference pipeline extraction compared in `test_equivalence.py` evaluated a 1-D time mask across all channels
 without per-channel support masking. The equivalence test therefore instantiates `Spectra` with plain rectangular
 windows. Channel-by-epoch support-restricted masking is verified independently in unit tests (`test_support_restricted_mask`).
+
+### Rebound Latency
+`rebound_latency` is reconstructed from its standard definition (maximum excursion occurring strictly after
+the peak latency) rather than ported from the reference pipeline's laterality path, which was cut.
+It is therefore verified by analytic unit tests rather than numerical fixture comparison.
+
 
 ## 4. Divergences Discovered During Verification
 

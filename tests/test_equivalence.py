@@ -118,3 +118,77 @@ def test_aperiodic_matches_the_reference(reference: Any) -> None:
         rtol=1e-6,
         atol=1e-9,
     )
+
+
+def _band_signal(
+    spectra_npz: Any, reference: Any, manifest: dict[str, Any], band_name: str
+) -> ef.BandSignal:
+    band = ef.Band(band_name, manifest["bands"][band_name][0], manifest["bands"][band_name][1])
+    analytic = reference[f"analytic__{band_name}"]
+    sfreq = float(spectra_npz["sfreq"][0])
+    n_times = analytic.shape[-1]
+    times = np.arange(n_times) / sfreq - 7.0
+    return ef.BandSignal.from_arrays(
+        analytic=analytic,
+        times=times,
+        ch_names=tuple(spectra_npz["ch_names"].tolist()),
+        band=band,
+        sfreq=sfreq,
+    )
+
+
+@pytest.mark.parametrize("band_name", ["alpha", "beta"])
+def test_band_signal_envelope_matches_the_reference(
+    spectra_npz: Any, reference: Any, manifest: dict[str, Any], band_name: str
+) -> None:
+    signal = _band_signal(spectra_npz, reference, manifest, band_name)
+    expected = reference[f"envelope__{band_name}"]
+    np.testing.assert_allclose(signal.envelope, expected, rtol=1e-6, atol=1e-10)
+
+
+@pytest.mark.parametrize("band_name", ["alpha", "beta"])
+@pytest.mark.parametrize(
+    "measure",
+    [
+        "mean",
+        "slope",
+        "erd_magnitude",
+        "erd_duration",
+        "ers_magnitude",
+        "ers_duration",
+        "peak_latency",
+        "onset_latency",
+    ],
+)
+def test_erds_matches_the_reference(
+    spectra_npz: Any, reference: Any, manifest: dict[str, Any], band_name: str, measure: str
+) -> None:
+    signal = _band_signal(spectra_npz, reference, manifest, band_name)
+    base = ef.Window("base", manifest["windows"]["base"][0], manifest["windows"]["base"][1])
+    stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
+    table = ef.erds([signal], baseline=base, windows=[stim], include_global=False)
+    got = table.select(measure=measure).values
+    expected = reference[f"erds_{measure}__{band_name}"]
+    np.testing.assert_allclose(got, expected, rtol=1e-6, atol=1e-10)
+
+
+@pytest.mark.parametrize("band_name", ["alpha", "beta"])
+@pytest.mark.parametrize(
+    "measure",
+    ["count", "rate", "duration_mean", "amp_mean", "fraction_above"],
+)
+def test_bursts_matches_the_reference(
+    spectra_npz: Any, reference: Any, manifest: dict[str, Any], band_name: str, measure: str
+) -> None:
+    signal = _band_signal(spectra_npz, reference, manifest, band_name)
+    stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
+    table = ef.burst_features(
+        [signal],
+        windows=[stim],
+        threshold=0.75,
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    got = table.select(measure=measure).values
+    expected = reference[f"burst_{measure}__{band_name}"]
+    np.testing.assert_allclose(got, expected, rtol=1e-6, atol=1e-10)
