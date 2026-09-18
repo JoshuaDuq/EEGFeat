@@ -16,6 +16,13 @@ from eegfeat.microstates import (
 from eegfeat.signal import Signal
 from eegfeat.spectra import Window
 
+# segment() clusters with scikit-learn, the optional "microstates" extra; the
+# metric definitions below do not need it.
+requires_sklearn = pytest.mark.skipif(
+    __import__("importlib.util", fromlist=["util"]).find_spec("sklearn") is None,
+    reason="scikit-learn is not installed in this environment",
+)
+
 SFREQ = 100.0
 WINDOW = Window("all", 0.0, 3.99)
 N_CHANNELS = 8
@@ -45,6 +52,7 @@ def _planted(n_epochs: int = 6, n_times: int = 400, noise: float = 0.05) -> tupl
     return signal, truth
 
 
+@requires_sklearn
 def test_planted_topographies_are_recovered() -> None:
     signal, truth = _planted()
     seg = segment(signal, n_states=4)
@@ -57,12 +65,14 @@ def test_planted_topographies_are_recovered() -> None:
     assert purity == pytest.approx(1.0)
 
 
+@requires_sklearn
 def test_four_states_get_canonical_labels_and_others_do_not() -> None:
     signal, _ = _planted()
     assert segment(signal, n_states=4).labels == ("a", "b", "c", "d")
     assert segment(signal, n_states=3).labels == ("state1", "state2", "state3")
 
 
+@requires_sklearn
 def test_a_topography_and_its_inversion_are_the_same_state() -> None:
     signal, _ = _planted(noise=0.0)
     seg = segment(signal, n_states=4)
@@ -76,12 +86,14 @@ def test_a_topography_and_its_inversion_are_the_same_state() -> None:
     np.testing.assert_array_equal(original, inverted)
 
 
+@requires_sklearn
 def test_coverage_sums_to_one_across_states() -> None:
     signal, _ = _planted()
     table = microstate_coverage(segment(signal, n_states=4), windows=[WINDOW])
     np.testing.assert_allclose(table.values.sum(axis=1), 1.0)
 
 
+@requires_sklearn
 def test_measures_have_one_row_per_epoch() -> None:
     signal, _ = _planted(n_epochs=6)
     seg = segment(signal, n_states=4)
@@ -92,6 +104,7 @@ def test_measures_have_one_row_per_epoch() -> None:
         assert all(m.space_kind == "state" for m in table.meta)
 
 
+@requires_sklearn
 def test_duration_recovers_the_planted_block_length() -> None:
     signal, _ = _planted(noise=0.0)
     table = microstate_duration(segment(signal, n_states=4), windows=[WINDOW])
@@ -99,6 +112,7 @@ def test_duration_recovers_the_planted_block_length() -> None:
     assert np.nanmean(table.values) == pytest.approx(250.0, rel=0.1)
 
 
+@requires_sklearn
 def test_transitions_are_ordered_pairs_excluding_self() -> None:
     signal, _ = _planted()
     table = microstate_transitions(segment(signal, n_states=4), windows=[WINDOW])
@@ -108,6 +122,7 @@ def test_transitions_are_ordered_pairs_excluding_self() -> None:
     assert all(m.space_kind == "pair" for m in table.meta)
 
 
+@requires_sklearn
 def test_fit_on_restricts_which_trials_inform_the_templates() -> None:
     signal, _ = _planted(n_epochs=6)
     mask = np.array([True, True, True, False, False, False])
@@ -116,23 +131,36 @@ def test_fit_on_restricts_which_trials_inform_the_templates() -> None:
     assert restricted.states.shape[0] == 6
 
 
+@requires_sklearn
 def test_a_fit_mask_of_the_wrong_length_raises() -> None:
     signal, _ = _planted(n_epochs=6)
     with pytest.raises(ValueError, match="one entry per epoch"):
         segment(signal, n_states=4, fit_on=np.array([True, False]))
 
 
+@requires_sklearn
 def test_excluding_every_epoch_raises() -> None:
     signal, _ = _planted(n_epochs=4)
     with pytest.raises(ValueError, match="nothing to cluster"):
         segment(signal, n_states=4, fit_on=np.zeros(4, dtype=bool))
 
 
+@requires_sklearn
 @pytest.mark.parametrize("n_states", [1, 13])
 def test_an_unsupported_state_count_raises(n_states: int) -> None:
     signal, _ = _planted()
     with pytest.raises(ValueError, match="n_states"):
         segment(signal, n_states=n_states)
+
+
+def test_segment_reports_its_missing_dependency_clearly() -> None:
+    import importlib.util
+
+    if importlib.util.find_spec("sklearn") is not None:
+        pytest.skip("scikit-learn is installed here")
+    signal, _ = _planted()
+    with pytest.raises(ImportError, match=r"eegfeat\[microstates\]"):
+        segment(signal)
 
 
 # --- metric definitions ---------------------------------------------------------------
