@@ -151,3 +151,22 @@ def test_a_peak_at_the_window_end_leaves_no_rebound() -> None:
     envelope[:, :, -1] = np.sqrt(5.0)
     table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
     assert np.isnan(table.select(measure="rebound_latency").values).all()
+
+
+def test_a_near_dead_channel_is_withheld_rather_than_amplified() -> None:
+    # A 0.1 uV baseline envelope is power 1e-14, below the reference's 1e-12 guard.
+    # Without that guard this returns an ERDS of order 1e6 percent.
+    n = 201
+    envelope = np.full((1, 1, n), 1e-7)
+    envelope[:, :, n // 2 :] = 1e-5
+    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert np.isnan(table.select(measure="mean").values).all()
+
+
+def test_a_healthy_channel_is_not_withheld_by_the_guard() -> None:
+    # 10 uV envelope is power 1e-10, comfortably above the guard.
+    n = 201
+    envelope = np.full((1, 1, n), 1e-5)
+    envelope[:, :, n // 2 :] = 1e-5 * np.sqrt(0.5)
+    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.select(measure="mean").values.item() == pytest.approx(-50.0)

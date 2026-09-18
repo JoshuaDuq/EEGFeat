@@ -32,8 +32,26 @@ Total fixture size must stay under 50 MB to remain trackable in version control 
 | **Aperiodic Slope** | `_robust_aperiodic_fit` | `1e-6` | `1e-9` | Iterative Huber residual rejection fit in log10-log10 space. |
 | **Aperiodic Offset** | `_robust_aperiodic_fit` | `1e-6` | `1e-9` | Intercept of robust linear fit in log10-log10 space. |
 | **BandSignal Envelope** | `compute_band_data` | `1e-6` | `1e-10` | Hilbert transform and FIR bandpass filtering with reflect padding. |
-| **ERDS Measures** | `extract_erds_from_precomputed` (per-channel) | `1e-6` | `1e-10` | Relative power change, slope, signed excursions, and onset/peak latencies. |
+| **ERDS Measures** | *transcribed formula, not a reference call* | `1e-6` | `1e-10` | Relative power change, slope, signed excursions, and onset/peak latencies. See the caveat below. |
 | **Burst Features** | `_extract_burst_metrics` | `1e-6` | `1e-10` | Contiguous run count, rate, duration, amplitude, and fraction above threshold. |
+
+### What the ERDS row does and does not establish
+
+`extract_erds_from_precomputed` cannot be called in isolation: it requires a fully
+populated `PrecomputedData` and `FeatureContext`. The fixture generator therefore
+**transcribes** the per-channel expressions from
+`eeg_pipeline/analysis/features/precomputed/erds.py` (around lines 500-620) rather
+than calling them. Comparing against those values checks the implementation against
+the documented formula; it does **not** establish agreement with a pipeline run, and
+a misreading of the reference would be reproduced identically on both sides.
+
+This is not hypothetical. The burst threshold below was calibrated on the wrong
+window in both the implementation and the fixture, and the equivalence test passed
+throughout, because the fixture repeated the same mistake.
+
+The `BandSignal` envelope and the burst metrics **are** genuine reference calls
+(`compute_band_data` and `_extract_burst_metrics`), and the envelope agrees
+bit-for-bit on real recordings.
 
 ## 3. Known Deliberate Divergences
 
@@ -72,6 +90,38 @@ remain, all deliberate:
   fit does not converge, `eegfeat` passes the cell through unwhitened; the reference falls
   back to an unweighted `polyfit`.
 
+### Burst Threshold Calibration
+A percentile threshold is calibrated on the window named by `baseline`, matching the
+reference's `_resolve_burst_reference_envelope`, which uses the baseline mask and
+declines to run on task data without one. When `baseline` is omitted, `eegfeat`
+calibrates on the analysis windows instead, which is the reference's resting-state
+path; that is correct for rest and wrong for task data, so the choice is recorded in
+every column's unit.
+
+The reference additionally offers `zscore` and `mad` threshold methods and a
+cross-trial `threshold_reference` of `"subject"` or `"condition"`. `eegfeat`
+implements only the percentile, and replaces the cross-trial modes with a
+caller-supplied array. Values will differ from any pipeline run that used those
+modes, by construction.
+
+### Coverage Semantics
+`BandSignal.coverage` is taken from the **filtered analytic signal**, not from the
+input epochs. A single non-finite input sample propagates through the FIR
+convolution and the Hilbert transform and renders the whole epoch non-finite, so
+input-based coverage would report a channel as essentially intact while every output
+sample is NaN. The reference has no equivalent field.
+
+### Unmeasurable Channels in Burst Detection
+For a channel whose envelope is wholly non-finite, `eegfeat` returns NaN for `count`,
+`rate` and `fraction_above`, where the reference returns `0.0`. Zero bursts in a
+channel that could not be measured is a false measurement; NaN with zero coverage is
+the honest one.
+
+### Channel Selection
+`BandSignal.from_epochs` filters every channel present in the object, including
+non-EEG channels and those in `info["bads"]`. The reference operates on
+`PrecomputedData.picks`. Pass an already-picked `Epochs` if that matters.
+
 ### Grid Endpoints on Band Bounds
 Frequency arrays generated via `np.logspace` do not reproduce mathematical endpoints exactly due to
 floating-point roundoff (e.g. $10^{\log_{10}(1.0)}$ may land at $1.0 \pm 10^{-16}$). Band masks in
@@ -90,6 +140,24 @@ It is therefore verified by analytic unit tests rather than numerical fixture co
 
 
 ## 4. Divergences Discovered During Verification
+
+### ERDS baseline guard (resolved)
+The implementation originally guarded the baseline at the `1e-20` power floor used
+elsewhere in `eegfeat`, while the reference guards at `EPSILON_STD = 1e-12`. A channel
+with a 0.1 microvolt band envelope therefore returned an ERDS of **999,900 percent**
+instead of NaN. The reference's own comment names this failure: clamping instead of
+invalidating "would produce artificially huge ERD/ERS ratios". `eegfeat` now uses
+`_MIN_BASELINE_POWER = 1e-12`, and a regression test covers both sides of the guard.
+
+### Burst threshold calibration (resolved)
+The percentile threshold was calibrated on the whole epoch rather than the baseline
+window, so on task data the stimulus response raised the very threshold used to detect
+bursts within it. Measured on `sub-0001`, beta band: burst rate 0.467/s against 0.570/s
+with the correct calibration, a 0.82x bias disagreeing in 33 of 64 channel-epochs. In a
+synthetic case where the response is strong, active-window calibration puts the
+threshold exactly at the burst amplitude and finds **zero** bursts where baseline
+calibration finds three. Both the implementation and the fixture have been corrected,
+and a regression test pins the difference.
 
 During Step 5 verification, the initial test run revealed a disagreement in spectral descriptors (centroid,
 bandwidth, entropy, and edge) when using Welch PSD with default `n_fft = 1000` at $f_s = 500\text{ Hz}$.

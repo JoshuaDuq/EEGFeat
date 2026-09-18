@@ -203,7 +203,11 @@ class BandSignal:
             ch_names=tuple(epochs.ch_names),
             band=band,
             sfreq=sfreq,
-            coverage=np.isfinite(data).astype(float),
+            # Coverage is taken from the analytic signal, not the input: a single
+            # non-finite input sample propagates through the FIR convolution and the
+            # Hilbert transform and destroys the whole epoch, so input finiteness
+            # would claim a channel is intact when every output sample is NaN.
+            coverage=np.isfinite(analytic).astype(float),
         )
 
 

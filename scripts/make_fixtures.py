@@ -177,6 +177,12 @@ def _reference(tfr: object, epochs: object) -> dict[str, np.ndarray]:
         out[f"envelope__{band_name}"] = band_data.envelope
 
         power = band_data.power
+        # NOTE: these ERDS values are TRANSCRIBED from the expressions in
+        # eeg_pipeline/analysis/features/precomputed/erds.py (per-channel path,
+        # around lines 500-620), not produced by calling it: that function needs a
+        # full PrecomputedData and FeatureContext. Comparing against this checks the
+        # implementation against the documented formula, not against a pipeline run.
+        # The band envelope and the burst metrics below ARE genuine reference calls.
         for metric in (
             "mean",
             "slope",
@@ -222,7 +228,10 @@ def _reference(tfr: object, epochs: object) -> dict[str, np.ndarray]:
             out[f"erds_{metric}__{band_name}"] = vals
 
         stim_env = band_data.envelope[:, :, stim_mask]
-        thr = np.nanpercentile(band_data.envelope, 75.0, axis=2)
+        # Calibrated on the baseline window, as _resolve_burst_reference_envelope does.
+        # Calibrating on the whole epoch lets the stimulus response raise the very
+        # threshold used to detect bursts within it.
+        thr = np.nanpercentile(band_data.envelope[:, :, base_mask], 75.0, axis=2)
         min_samples = max(1, int(round(100.0 * sfreq / 1000.0)))
         for b_metric, ref_key in (
             ("count", "count"),

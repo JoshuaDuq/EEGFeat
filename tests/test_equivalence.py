@@ -182,9 +182,11 @@ def test_bursts_matches_the_reference(
 ) -> None:
     signal = _band_signal(spectra_npz, reference, manifest, band_name)
     stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
+    base = ef.Window("base", manifest["windows"]["base"][0], manifest["windows"]["base"][1])
     table = ef.burst_features(
         [signal],
         windows=[stim],
+        baseline=base,
         threshold=0.75,
         min_duration_ms=100.0,
         include_global=False,

@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import numpy.typing as npt
 
-from eegfeat._expand import expand_signal
+from eegfeat._expand import expand_signal, window_mask
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
@@ -24,46 +24,56 @@ def burst_features(
     signals: Sequence[BandSignal],
     *,
     windows: Sequence[Window],
+    baseline: Window | None = None,
     threshold: float | npt.NDArray[np.float64] = 0.75,
     min_duration_ms: float = 100.0,
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
 ) -> FeatureTable:
-    """Extract oscillatory burst features from band-limited amplitude envelopes.
+    """Rate, duration and amplitude of suprathreshold envelope bursts.
 
     Parameters
     ----------
     signals : sequence of BandSignal
-        Band-limited signals whose envelopes are analyzed.
+        One per band. The bands axis of the output comes from this sequence.
     windows : sequence of Window
-        Time windows to restrict the analysis to.
+        Analysis windows.
+    baseline : Window, optional
+        Window the percentile threshold is calibrated on. Strongly preferred for
+        task data: calibrating on the analysis window instead lets the stimulus
+        response raise the very threshold used to detect it, which depresses burst
+        rate exactly where the effect is. When omitted the threshold is calibrated
+        on the analysis windows, which is the right choice only for resting state.
+        Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        Either a float in ``(0, 1)``, interpreted as a per-trial envelope
-        percentile, or an array broadcastable to ``(n_epochs, n_channels)``
-        holding absolute envelope thresholds.
+        A float in ``(0, 1)`` is a percentile of the envelope taken within each
+        epoch and channel over the calibration window, so it carries no
+        cross-trial leakage. An array broadcastable to ``(n_epochs, n_channels)``
+        is used as absolute envelope values; that is how a subject-level or
+        condition-level threshold is applied, with the caller deciding which
+        trials informed it.
     min_duration_ms : float, default 100.0
-        Minimum duration in milliseconds for an excursion above threshold to
-        qualify as a burst. Non-negative.
+        Shortest run retained, in milliseconds.
     groups : mapping of str to sequence of str, optional
-        ROI name to channel names. None yields per-channel features.
+        ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
-        Whether to compute features across all channels.
+        Also emit the mean across all channels.
 
     Returns
     -------
     FeatureTable
-        Columns for ``count``, ``rate``, ``duration_mean``, ``amp_mean``
-        and ``fraction_above``.
+        Columns for ``count``, ``rate``, ``duration_mean``, ``amp_mean`` and
+        ``fraction_above``. Each column's unit records how the threshold was set.
     """
     if min_duration_ms < 0.0:
         raise ValueError(f"min_duration_ms must be non-negative, got {min_duration_ms}.")
-
-    thresholds: dict[int, npt.NDArray[np.float64]] = {}
-
-    def trace_of(signal: BandSignal) -> npt.NDArray[np.float64]:
-        envelope = signal.envelope
-        thresholds[id(signal)] = _resolve_threshold(envelope, threshold)
-        return envelope
+    if not isinstance(threshold, np.ndarray):
+        value = float(threshold)
+        if not 0.0 < value < 1.0:
+            raise ValueError(f"threshold must be in (0, 1), got {threshold}.")
+        label = f"percentile {value} of {'baseline' if baseline else 'analysis windows'}"
+    else:
+        label = "absolute"
 
     def kernel(
         signal: BandSignal,
@@ -71,18 +81,14 @@ def burst_features(
         times: npt.NDArray[np.float64],
     ) -> dict[str, npt.NDArray[np.float64]]:
         del times
-        return _measures(
-            trace,
-            thresholds[id(signal)],
-            signal.sfreq,
-            min_duration_ms,
-        )
+        level = _resolve_threshold(signal, threshold, baseline, windows)
+        return _measures(trace, level, signal.sfreq, min_duration_ms)
 
     return expand_signal(
         signals,
-        trace_of=trace_of,
+        trace_of=lambda signal: signal.envelope,
         kernel=kernel,
-        units=_UNITS,
+        units={name: f"{unit} ({label})" for name, unit in _UNITS.items()},
         windows=windows,
         groups=groups,
         include_global=include_global,
@@ -91,24 +97,29 @@ def burst_features(
 
 
 def _resolve_threshold(
-    envelope: npt.NDArray[np.float64],
+    signal: BandSignal,
     threshold: float | npt.NDArray[np.float64],
+    baseline: Window | None,
+    windows: Sequence[Window],
 ) -> npt.NDArray[np.float64]:
-    n_epochs, n_channels = envelope.shape[:2]
-    if isinstance(threshold, (int, float)):
-        val = float(threshold)
-        if not 0.0 < val < 1.0:
-            raise ValueError(f"threshold must be in (0, 1), got {threshold}.")
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", "All-NaN slice", RuntimeWarning)
-            return np.nanquantile(envelope, val, axis=2)
-    array = np.asarray(threshold, dtype=np.float64)
-    try:
-        return np.broadcast_to(array, (n_epochs, n_channels))
-    except ValueError as exc:
-        raise ValueError(
-            f"threshold array shape {array.shape} cannot broadcast to ({n_epochs}, {n_channels})."
-        ) from exc
+    n_epochs, n_channels = signal.analytic.shape[:2]
+    if isinstance(threshold, np.ndarray):
+        try:
+            return np.broadcast_to(np.asarray(threshold, dtype=np.float64), (n_epochs, n_channels))
+        except ValueError as exc:
+            raise ValueError(
+                f"threshold array shape {np.shape(threshold)} cannot broadcast to "
+                f"({n_epochs}, {n_channels})."
+            ) from exc
+
+    calibration = (
+        window_mask(signal.times, baseline)
+        if baseline is not None
+        else np.logical_or.reduce([window_mask(signal.times, w) for w in windows])
+    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "All-NaN slice", RuntimeWarning)
+        return np.nanquantile(signal.envelope[:, :, calibration], float(threshold), axis=2)
 
 
 def _measures(

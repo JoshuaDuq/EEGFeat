@@ -8,11 +8,20 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import expand_signal, window_mask
-from eegfeat.baseline import EPS
 from eegfeat.baseline import normalize as _normalize
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
+
+_MIN_BASELINE_POWER = 1e-12
+"""Smallest baseline power that can anchor a ratio.
+
+Deliberately not the ``1e-20`` power floor used elsewhere: a baseline that small
+turns a quiet channel into an ERDS value of order 1e6 percent, which is
+arithmetically valid and physically meaningless. The reference pipeline guards at
+this value for the same reason, noting that clamping instead "would produce
+artificially huge ERD/ERS ratios".
+"""
 
 ErdsScale = Literal["percent", "db"]
 
@@ -122,7 +131,7 @@ def _trace(
         deviation = np.nanstd(power[:, :, mask], axis=2)
     # A baseline at the power floor cannot anchor a ratio; say so rather than
     # returning a number that is arithmetically valid and physically meaningless.
-    reference = np.where(reference > EPS, reference, np.nan)
+    reference = np.where(reference > _MIN_BASELINE_POWER, reference, np.nan)
     threshold = deviation / reference * 100.0
     return _normalize(power, baseline=reference, mode=mode), threshold
 

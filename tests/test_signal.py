@@ -123,3 +123,17 @@ def test_shape_times_and_band_are_carried_through() -> None:
 def test_a_band_above_nyquist_raises() -> None:
     with pytest.raises(ValueError, match="Nyquist"):
         BandSignal.from_epochs(_epochs(10.0), Band("vhf", 90.0, 150.0))
+
+
+def test_coverage_reflects_the_filtered_output_not_the_raw_input() -> None:
+    # One bad input sample propagates through the FIR convolution and the Hilbert
+    # transform and destroys the whole epoch. Coverage must say so, or a caller
+    # filtering on coverage keeps a column that is entirely NaN.
+    epochs = _epochs(10.0)
+    data = np.asarray(epochs.get_data())
+    data[0, 0, data.shape[2] // 2] = np.nan
+    dirty = mne.EpochsArray(data, epochs.info, tmin=epochs.tmin, verbose="ERROR")
+    signal = BandSignal.from_epochs(dirty, ALPHA)
+    assert not np.isfinite(signal.envelope[0, 0]).any()
+    assert signal.coverage[0, 0].max() == 0.0
+    assert signal.coverage[1, 0].min() == 1.0

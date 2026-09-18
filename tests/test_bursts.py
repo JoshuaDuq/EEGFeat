@@ -242,3 +242,90 @@ def test_threshold_array_shape_mismatch_raises() -> None:
     sig = _signal(np.ones((2, 1, 50)))
     with pytest.raises(ValueError, match="broadcast"):
         burst_features([sig], windows=[WINDOW], threshold=np.ones((5, 5)))
+
+
+# --- threshold calibration window ----------------------------------------------------
+
+BASELINE = Window("base", 0.0, 0.95)
+ACTIVE = Window("active", 1.0, 2.0)
+
+
+def _stimulus_response() -> BandSignal:
+    # A variable baseline, then a sustained response carrying three bursts. The
+    # windows deliberately do not touch: bounds are inclusive at both ends.
+    n = 201
+    envelope = np.empty((1, 1, n))
+    envelope[:, :, :100] = np.linspace(1.0, 6.0, 100)
+    envelope[:, :, 100:] = 3.0
+    for start in (110, 140, 170):
+        envelope[:, :, start : start + 15] = 9.0
+    return _signal(envelope)
+
+
+def test_the_threshold_is_calibrated_on_the_baseline_when_one_is_given() -> None:
+    # Calibrating on the analysis window lets the stimulus response raise the very
+    # threshold used to detect it: here the active window's 75th percentile is 9.0,
+    # exactly the burst amplitude, so nothing exceeds it and every burst is lost.
+    signal = _stimulus_response()
+    on_baseline = burst_features(
+        [signal],
+        windows=[ACTIVE],
+        baseline=BASELINE,
+        threshold=0.75,
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    on_active = burst_features(
+        [signal],
+        windows=[ACTIVE],
+        threshold=0.75,
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    assert on_baseline.select(measure="count").values.item() == 3.0
+    assert on_active.select(measure="count").values.item() == 0.0
+
+
+def test_the_calibration_window_is_recorded_in_the_unit() -> None:
+    signal = _stimulus_response()
+    with_baseline = burst_features(
+        [signal], windows=[ACTIVE], baseline=BASELINE, threshold=0.75, include_global=False
+    )
+    without = burst_features([signal], windows=[ACTIVE], threshold=0.75, include_global=False)
+    absolute = burst_features(
+        [signal], windows=[ACTIVE], threshold=np.array([[2.0]]), include_global=False
+    )
+    assert with_baseline.meta[0].unit.endswith("(percentile 0.75 of baseline)")
+    assert without.meta[0].unit.endswith("(percentile 0.75 of analysis windows)")
+    assert absolute.meta[0].unit.endswith("(absolute)")
+
+
+def test_an_absolute_threshold_ignores_the_baseline_argument() -> None:
+    signal = _stimulus_response()
+    with_baseline = burst_features(
+        [signal],
+        windows=[ACTIVE],
+        baseline=BASELINE,
+        threshold=np.array([[5.0]]),
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    without = burst_features(
+        [signal],
+        windows=[ACTIVE],
+        threshold=np.array([[5.0]]),
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    np.testing.assert_array_equal(with_baseline.values, without.values)
+
+
+def test_a_baseline_window_outside_the_time_axis_raises() -> None:
+    with pytest.raises(ValueError, match="no samples"):
+        burst_features(
+            [_stimulus_response()],
+            windows=[ACTIVE],
+            baseline=Window("nope", 50.0, 60.0),
+            threshold=0.75,
+            include_global=False,
+        )
