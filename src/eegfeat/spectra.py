@@ -245,6 +245,46 @@ class Spectra:
         )
 
 
+def support_restricted_mask(
+    times: npt.NDArray[np.float64],
+    freqs: npt.NDArray[np.float64],
+    window: Window,
+    n_cycles: float | npt.NDArray[np.float64],
+) -> npt.NDArray[np.bool_]:
+    """Per-frequency time mask of coefficients a window can account for.
+
+    A Morlet wavelet at frequency ``f`` with ``n_cycles`` cycles has a temporal
+    half-support of ``n_cycles / (2 f)`` seconds, so a coefficient at time ``t``
+    draws on data from ``t +/- half_support``. Only coefficients whose whole span
+    lies inside the window are attributable to it, which narrows the usable range
+    at low frequencies and can empty it altogether.
+
+    Parameters
+    ----------
+    times : ndarray, shape (n_times,)
+        Time axis in seconds.
+    freqs : ndarray, shape (n_freqs,)
+        Frequency axis in Hz.
+    window : Window
+        The window to restrict to.
+    n_cycles : float or ndarray
+        Cycle count, scalar or one value per frequency.
+
+    Returns
+    -------
+    ndarray of bool, shape (n_freqs, n_times)
+        True where the coefficient is attributable to the window. A row is all
+        False when no coefficient at that frequency fits.
+    """
+    f = np.asarray(freqs, dtype=float)
+    cycles = np.broadcast_to(np.asarray(n_cycles, dtype=float), f.shape)
+    half_support = cycles / (2.0 * f)
+    lower = window.tmin + half_support
+    upper = window.tmax - half_support
+    t = np.asarray(times, dtype=float)[np.newaxis, :]
+    return (t >= lower[:, np.newaxis]) & (t <= upper[:, np.newaxis])
+
+
 def _reduce_window(
     data: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
@@ -252,13 +292,22 @@ def _reduce_window(
     window: Window,
     n_cycles: float | npt.NDArray[np.float64] | None,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    mask = (times >= window.tmin) & (times <= window.tmax)
-    if not mask.any():
-        raise ValueError(
-            f"window {window.name!r} ({window.tmin}, {window.tmax}) selects no samples "
-            f"from a time axis spanning ({times[0]}, {times[-1]})."
-        )
-    mask_2d = np.broadcast_to(mask, (freqs.size, times.size))
+    if n_cycles is None:
+        mask_1d = (times >= window.tmin) & (times <= window.tmax)
+        if not mask_1d.any():
+            raise ValueError(
+                f"window {window.name!r} ({window.tmin}, {window.tmax}) selects no samples "
+                f"from a time axis spanning ({times[0]}, {times[-1]})."
+            )
+        mask_2d = np.broadcast_to(mask_1d, (freqs.size, times.size))
+    else:
+        mask_2d = support_restricted_mask(times, freqs, window, n_cycles)
+        if not mask_2d.any():
+            raise ValueError(
+                f"window {window.name!r} ({window.tmin}, {window.tmax}) retains no coefficients "
+                f"at any frequency once Morlet support is accounted for. Widen the window or "
+                f"lower n_cycles."
+            )
     selected = np.where(mask_2d[np.newaxis, np.newaxis, :, :], data, np.nan)
     finite = np.isfinite(selected)
     n_selected = mask_2d.sum(axis=1).astype(float)

@@ -1,7 +1,13 @@
 import numpy as np
 import pytest
 
-from eegfeat.spectra import Spectra, Window, gradient_weights, trapezoid_weights
+from eegfeat.spectra import (
+    Spectra,
+    Window,
+    gradient_weights,
+    support_restricted_mask,
+    trapezoid_weights,
+)
 
 
 def test_trapezoid_weights_sum_to_the_frequency_span() -> None:
@@ -170,3 +176,49 @@ def test_from_tfr_rejects_complex_output() -> None:
     )()
     with pytest.raises(ValueError, match="complex"):
         Spectra.from_tfr(complex_tfr, (Window("stim", 0.0, 1.0),))
+
+
+def test_support_restriction_narrows_low_frequencies_more_than_high_ones() -> None:
+    times = np.linspace(-2.0, 2.0, 401)
+    freqs = np.array([4.0, 40.0])
+    mask = support_restricted_mask(times, freqs, Window("stim", 0.0, 1.0), n_cycles=6.0)
+    # half support: 6/(2*4) = 0.75 s at 4 Hz, 6/(2*40) = 0.075 s at 40 Hz
+    assert mask.shape == (2, 401)
+    assert mask[0].sum() < mask[1].sum()
+    assert times[mask[1]].min() == pytest.approx(0.075, abs=0.01)
+    assert times[mask[1]].max() == pytest.approx(0.925, abs=0.01)
+
+
+def test_a_frequency_whose_support_never_fits_drops_out_entirely() -> None:
+    times = np.linspace(-2.0, 2.0, 401)
+    freqs = np.array([1.0, 40.0])
+    # at 1 Hz half support is 3 s, far wider than the 1 s window
+    mask = support_restricted_mask(times, freqs, Window("stim", 0.0, 1.0), n_cycles=6.0)
+    assert not mask[0].any()
+    assert mask[1].any()
+
+
+def test_frequencies_drop_out_of_a_window_individually() -> None:
+    # freqs are 8/10/12 Hz and n_cycles is 3, so half-supports are
+    # 0.1875 / 0.150 / 0.125 s. A window of half-width 0.14 s holds only 12 Hz.
+    tfr = _toy_tfr()
+    spectra = Spectra.from_tfr(tfr, (Window("narrow", 0.0, 0.28),), n_cycles=3.0)
+    assert np.isnan(spectra.data[:, :, 0, 0]).all()
+    assert np.isnan(spectra.data[:, :, 0, 1]).all()
+    assert np.isfinite(spectra.data[:, :, 0, 2]).all()
+    assert (spectra.coverage[:, :, 0, :2] == 0.0).all()
+    assert (spectra.coverage[:, :, 0, 2] > 0.0).all()
+
+
+def test_a_window_narrower_than_every_wavelet_raises() -> None:
+    # Every half-support exceeds this window's half-width, so nothing survives.
+    # That is a specification error, not a data condition: the message says so.
+    tfr = _toy_tfr()
+    with pytest.raises(ValueError, match="retains no coefficients"):
+        Spectra.from_tfr(tfr, (Window("tiny", 0.0, 0.1),), n_cycles=3.0)
+
+
+def test_without_n_cycles_no_restriction_is_applied() -> None:
+    tfr = _toy_tfr()
+    unrestricted = Spectra.from_tfr(tfr, (Window("tiny", 0.0, 0.1),))
+    assert np.isfinite(unrestricted.data).all()
