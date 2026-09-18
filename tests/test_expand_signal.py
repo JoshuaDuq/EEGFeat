@@ -1,0 +1,104 @@
+import numpy as np
+import pytest
+
+from eegfeat._expand import expand_signal
+from eegfeat.bands import Band
+from eegfeat.signal import BandSignal
+from eegfeat.spectra import Window
+
+ALPHA, BETA = Band("alpha", 8.0, 13.0), Band("beta", 13.0, 30.0)
+SFREQ = 100.0
+
+
+def _signal(band: Band, value: float) -> BandSignal:
+    times = np.arange(400) / SFREQ - 1.0
+    analytic = np.full((3, 2, 400), value + 0j)
+    return BandSignal.from_arrays(
+        analytic=analytic, times=times, ch_names=("C3", "C4"), band=band, sfreq=SFREQ
+    )
+
+
+def _mean_kernel(signal: BandSignal, trace: np.ndarray, times: np.ndarray) -> dict[str, np.ndarray]:
+    del signal, times
+    return {"mean": trace.mean(axis=2), "count": np.full(trace.shape[:2], trace.shape[2], float)}
+
+
+def _run(**kw: object) -> object:
+    defaults = dict(
+        signals=[_signal(ALPHA, 2.0), _signal(BETA, 4.0)],
+        trace_of=lambda s: s.envelope,
+        kernel=_mean_kernel,
+        units={"mean": "a.u.", "count": "samples"},
+        windows=[Window("early", -1.0, 0.0), Window("late", 0.0, 1.0)],
+        groups=None,
+        include_global=False,
+        mode="raw",
+    )
+    return expand_signal(**{**defaults, **kw})  # type: ignore[arg-type]
+
+
+def test_columns_are_the_product_of_bands_measures_spaces_and_windows() -> None:
+    table = _run()
+    # 2 bands x 2 measures x 2 channels x 2 windows
+    assert table.values.shape == (3, 16)  # type: ignore[attr-defined]
+    assert {m.measure for m in table.meta} == {"mean", "count"}  # type: ignore[attr-defined]
+    assert {m.band.name for m in table.meta if m.band} == {"alpha", "beta"}  # type: ignore[attr-defined]
+
+
+def test_each_measure_carries_its_own_unit() -> None:
+    table = _run()
+    assert {m.unit for m in table.select(measure="count").meta} == {"samples"}  # type: ignore[attr-defined]
+    assert {m.unit for m in table.select(measure="mean").meta} == {"a.u."}  # type: ignore[attr-defined]
+
+
+def test_values_come_from_the_kernel_per_band() -> None:
+    table = _run()
+    np.testing.assert_allclose(table.select(measure="mean", band=ALPHA).values, 2.0)  # type: ignore[attr-defined]
+    np.testing.assert_allclose(table.select(measure="mean", band=BETA).values, 4.0)  # type: ignore[attr-defined]
+
+
+def test_windows_slice_the_time_axis() -> None:
+    table = _run()
+    # 1 s windows at 100 Hz, inclusive of both bounds
+    np.testing.assert_allclose(table.select(measure="count").values, 101.0)  # type: ignore[attr-defined]
+
+
+def test_groups_aggregate_the_channel_axis() -> None:
+    table = _run(groups={"central": ["C3", "C4"]}, include_global=True)
+    assert {m.space for m in table.meta} == {"central", "global"}  # type: ignore[attr-defined]
+
+
+def test_a_window_outside_the_time_axis_raises() -> None:
+    with pytest.raises(ValueError, match="no samples"):
+        _run(windows=[Window("late", 30.0, 40.0)])
+
+
+def test_signals_disagreeing_on_the_time_axis_raise() -> None:
+    other = _signal(BETA, 4.0)
+    shifted = BandSignal.from_arrays(
+        analytic=other.analytic,
+        times=other.times + 5.0,
+        ch_names=other.ch_names,
+        band=other.band,
+        sfreq=other.sfreq,
+    )
+    with pytest.raises(ValueError, match="same time axis"):
+        _run(signals=[_signal(ALPHA, 2.0), shifted])
+
+
+def test_signals_disagreeing_on_channels_raise() -> None:
+    other = _signal(BETA, 4.0)
+    renamed = BandSignal.from_arrays(
+        analytic=other.analytic,
+        times=other.times,
+        ch_names=("Cz", "Pz"),
+        band=other.band,
+        sfreq=other.sfreq,
+    )
+    with pytest.raises(ValueError, match="same channels"):
+        _run(signals=[_signal(ALPHA, 2.0), renamed])
+
+
+def test_an_empty_signal_sequence_raises() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        _run(signals=[])

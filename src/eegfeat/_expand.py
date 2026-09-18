@@ -11,6 +11,7 @@ from eegfeat.bands import Band
 from eegfeat.baseline import normalize
 from eegfeat.groups import SpatialUnit, aggregate
 from eegfeat.qc import band_coverage
+from eegfeat.signal import BandSignal
 from eegfeat.spectra import Spectra, Window, gradient_weights, trapezoid_weights
 from eegfeat.table import FeatureMeta, FeatureTable, Normalization
 
@@ -162,3 +163,99 @@ def _check_band(
             f"band {label!r} holds {n_bins} frequency bins but this measure needs at least "
             f"{min_bins} bins. Compute the input on a finer frequency grid."
         )
+
+
+SignalKernel = Callable[
+    [BandSignal, npt.NDArray[np.float64], npt.NDArray[np.float64]],
+    dict[str, npt.NDArray[np.float64]],
+]
+
+
+def expand_signal(
+    signals: Sequence[BandSignal],
+    *,
+    trace_of: Callable[[BandSignal], npt.NDArray[np.float64]],
+    kernel: SignalKernel,
+    units: Mapping[str, str],
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None,
+    include_global: bool,
+    mode: Normalization,
+) -> FeatureTable:
+    _check_signals(signals, windows)
+    reference = signals[0]
+    columns: list[_Column] = []
+    flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
+
+    for signal in signals:
+        trace = trace_of(signal)
+        by_measure: dict[str, list[npt.NDArray[np.float64]]] = {}
+        coverages: list[npt.NDArray[np.float64]] = []
+        for window in windows:
+            mask = window_mask(signal.times, window)
+            measured = kernel(signal, trace[:, :, mask], signal.times[mask])
+            for name, values in measured.items():
+                by_measure.setdefault(name, []).append(values)
+            coverages.append(signal.coverage[:, :, mask].mean(axis=2))
+        coverage = np.stack(coverages, axis=2)
+
+        for measure, per_window in by_measure.items():
+            if measure not in units:
+                raise ValueError(f"kernel returned measure {measure!r} with no unit declared.")
+            stacked = np.stack(per_window, axis=2)
+            spatial_units = aggregate(stacked, coverage, signal.ch_names, groups, include_global)
+
+            def make_meta(
+                spatial: SpatialUnit,
+                window: Window,
+                _m: str = measure,
+                _s: BandSignal = signal,
+            ) -> FeatureMeta:
+                return FeatureMeta(
+                    measure=_m,
+                    band=_s.band,
+                    space=spatial.space,
+                    space_kind=spatial.space_kind,
+                    window=window.name,
+                    normalization=mode,
+                    unit=units[_m],
+                    source="hilbert",
+                    freq_resolution_hz=None,
+                )
+
+            new_columns, new_flags = _collect(
+                spatial_units, windows, {}, make_meta, skip_window=None
+            )
+            columns.extend(new_columns)
+            for key, arrays in new_flags.items():
+                flag_columns.setdefault(key, []).extend(arrays)
+
+    del reference
+    return _assemble(columns, flag_columns)
+
+
+def _check_signals(signals: Sequence[BandSignal], windows: Sequence[Window]) -> None:
+    if not signals:
+        raise ValueError("expand_signal requires at least one BandSignal.")
+    if not windows:
+        raise ValueError("expand_signal requires at least one window.")
+    first = signals[0]
+    for signal in signals[1:]:
+        if signal.ch_names != first.ch_names:
+            raise ValueError(
+                "all signals must share the same channels; got "
+                f"{first.ch_names} and {signal.ch_names}."
+            )
+        if signal.times.shape != first.times.shape or not np.allclose(signal.times, first.times):
+            raise ValueError("all signals must share the same time axis.")
+
+
+def window_mask(times: npt.NDArray[np.float64], window: Window) -> npt.NDArray[np.bool_]:
+    """Boolean mask of the samples a window covers, inclusive of both bounds."""
+    mask = (times >= window.tmin) & (times <= window.tmax)
+    if not mask.any():
+        raise ValueError(
+            f"window {window.name!r} ({window.tmin}, {window.tmax}) selects no samples "
+            f"from a time axis spanning ({times[0]}, {times[-1]})."
+        )
+    return mask
