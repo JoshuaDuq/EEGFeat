@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -182,3 +184,91 @@ class Spectra:
             coverage=np.isfinite(data).astype(float),
             source=str(getattr(spectrum, "method", "unknown")),
         )
+
+    @classmethod
+    def from_tfr(
+        cls,
+        tfr: Any,
+        windows: Sequence[Window],
+        *,
+        n_cycles: float | npt.NDArray[np.float64] | None = None,
+    ) -> Spectra:
+        """Build from an MNE ``EpochsTFR`` by averaging over time windows.
+
+        Parameters
+        ----------
+        tfr : mne.time_frequency.EpochsTFR
+            Real-valued power, not baseline-corrected.
+        windows : sequence of Window
+            Time windows to average over, inclusive of both bounds.
+        n_cycles : float or ndarray, optional
+            Morlet cycle count used to compute the TFR. When given, each window
+            is narrowed to the coefficients it can account for; see
+            :func:`support_restricted_mask`. MNE does not store this on the TFR
+            object, so it cannot be inferred and must be passed to enable the
+            restriction.
+
+        Returns
+        -------
+        Spectra
+            One spectrum per window.
+        """
+        if getattr(tfr, "baseline", None) is not None:
+            raise ValueError(
+                "this TFR is already baseline-corrected "
+                f"(baseline={tfr.baseline!r}); normalizing it again is meaningless. "
+                "Pass an uncorrected TFR and use the baseline argument of the feature function."
+            )
+        if not windows:
+            raise ValueError("from_tfr requires at least one window.")
+
+        data = np.asarray(tfr.get_data())
+        if np.iscomplexobj(data):
+            raise ValueError("from_tfr requires real power; got a complex TFR.")
+        data = data.astype(float)
+        if data.ndim != 4:
+            raise ValueError(
+                "expected an EpochsTFR of shape (epochs, channels, freqs, times), "
+                f"got shape {data.shape}."
+            )
+
+        times = np.asarray(tfr.times, dtype=float)
+        freqs = np.asarray(tfr.freqs, dtype=float)
+        per_window = [_reduce_window(data, times, freqs, window, n_cycles) for window in windows]
+        return cls(
+            data=np.stack([values for values, _ in per_window], axis=2),
+            freqs=freqs,
+            ch_names=tuple(tfr.ch_names),
+            windows=tuple(windows),
+            coverage=np.stack([cover for _, cover in per_window], axis=2),
+            source=str(getattr(tfr, "method", "unknown")),
+        )
+
+
+def _reduce_window(
+    data: npt.NDArray[np.float64],
+    times: npt.NDArray[np.float64],
+    freqs: npt.NDArray[np.float64],
+    window: Window,
+    n_cycles: float | npt.NDArray[np.float64] | None,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    mask = (times >= window.tmin) & (times <= window.tmax)
+    if not mask.any():
+        raise ValueError(
+            f"window {window.name!r} ({window.tmin}, {window.tmax}) selects no samples "
+            f"from a time axis spanning ({times[0]}, {times[-1]})."
+        )
+    mask_2d = np.broadcast_to(mask, (freqs.size, times.size))
+    selected = np.where(mask_2d[np.newaxis, np.newaxis, :, :], data, np.nan)
+    finite = np.isfinite(selected)
+    n_selected = mask_2d.sum(axis=1).astype(float)
+    with warnings.catch_warnings():
+        # A frequency whose support never fits the window is an all-NaN slice by
+        # design; the finite.any() guard already discards its mean. np.errstate
+        # does not suppress this one, because nanmean raises it through warnings.
+        warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
+        values = np.where(
+            finite.any(axis=3), np.nanmean(np.where(finite, selected, np.nan), axis=3), np.nan
+        )
+    coverage = finite.sum(axis=3) / np.where(n_selected > 0, n_selected, np.nan)
+    return values, np.nan_to_num(coverage, nan=0.0)

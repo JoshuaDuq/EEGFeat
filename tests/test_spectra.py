@@ -104,3 +104,69 @@ def test_shape_and_axis_mismatches_raise() -> None:
         Spectra(**{**good, "freqs": np.array([4.0, 3.0, 2.0, 1.0])})
     with pytest.raises(ValueError, match="coverage"):
         Spectra(**{**good, "coverage": np.ones((2, 2, 1, 3))})
+
+
+def _toy_tfr(n_epochs: int = 4):
+    mne = pytest.importorskip("mne")
+    info = mne.create_info(["C3", "C4"], 200.0, "eeg")
+    rng = np.random.RandomState(0)
+    epochs = mne.EpochsArray(rng.randn(n_epochs, 2, 800) * 1e-6, info, tmin=-2.0, verbose="ERROR")
+    return epochs.compute_tfr(
+        "morlet",
+        freqs=np.array([8.0, 10.0, 12.0]),
+        n_cycles=3.0,
+        return_itc=False,
+        verbose="ERROR",
+    )
+
+
+def test_from_tfr_produces_one_spectrum_per_window() -> None:
+    windows = (Window("base", -2.0, -1.0), Window("stim", 0.0, 1.0))
+    spectra = Spectra.from_tfr(_toy_tfr(), windows)
+    assert spectra.data.shape == (4, 2, 2, 3)
+    assert tuple(w.name for w in spectra.windows) == ("base", "stim")
+    assert spectra.source == "morlet"
+
+
+def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
+    tfr = _toy_tfr()
+    window = Window("stim", 0.0, 1.0)
+    spectra = Spectra.from_tfr(tfr, (window,))
+    times = np.asarray(tfr.times)
+    mask = (times >= 0.0) & (times <= 1.0)
+    expected = np.asarray(tfr.get_data())[:, :, :, mask].mean(axis=3)
+    np.testing.assert_allclose(spectra.data[:, :, 0, :], expected)
+
+
+def test_from_tfr_refuses_an_already_baselined_tfr() -> None:
+    tfr = _toy_tfr().apply_baseline((-2.0, -1.0), mode="logratio", verbose="ERROR")
+    with pytest.raises(ValueError, match="already baseline"):
+        Spectra.from_tfr(tfr, (Window("stim", 0.0, 1.0),))
+
+
+def test_from_tfr_rejects_a_window_outside_the_time_axis() -> None:
+    with pytest.raises(ValueError, match="no samples"):
+        Spectra.from_tfr(_toy_tfr(), (Window("late", 30.0, 40.0),))
+
+
+def test_from_tfr_requires_at_least_one_window() -> None:
+    with pytest.raises(ValueError, match="at least one window"):
+        Spectra.from_tfr(_toy_tfr(), ())
+
+
+def test_from_tfr_rejects_complex_output() -> None:
+    tfr = _toy_tfr()
+    complex_tfr = type(
+        "T",
+        (),
+        {
+            "baseline": None,
+            "times": np.asarray(tfr.times),
+            "freqs": np.asarray(tfr.freqs),
+            "ch_names": list(tfr.ch_names),
+            "method": "morlet",
+            "get_data": lambda self: np.asarray(tfr.get_data(), dtype=complex),
+        },
+    )()
+    with pytest.raises(ValueError, match="complex"):
+        Spectra.from_tfr(complex_tfr, (Window("stim", 0.0, 1.0),))
