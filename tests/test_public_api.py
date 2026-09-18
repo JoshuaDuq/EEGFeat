@@ -21,6 +21,9 @@ EXPECTED = {
     "aperiodic_ratio",
     "band_ratio",
     "asymmetry",
+    "BandSignal",
+    "erds",
+    "burst_features",
 }
 
 

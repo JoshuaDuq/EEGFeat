@@ -134,3 +134,46 @@ The aperiodic (1/f) background is modeled in log-log space:
    \log_{10} P(f) = \text{offset} + \text{slope} \cdot \log_{10} f
 
 Fitting uses iterative peak rejection: an initial least-squares line is fit over ``fit_range``, residuals :math:`r(f) = \log_{10} P(f) - (\text{offset} + \text{slope} \log_{10} f)` are computed, and points with positive residuals exceeding :math:`z \cdot \text{MAD}(r)` (default :math:`z = 2.5`) are rejected before refitting, repeated up to ``max_iterations`` times. Only positive residuals are excluded because oscillatory peaks project above the aperiodic component and would otherwise artificially flatten the estimated slope.
+
+Event-Related Desynchronization and Synchronization (ERDS)
+----------------------------------------------------------
+
+ERDS measures time-varying power changes in band-limited signals relative to a baseline reference period :math:`B`:
+
+.. math::
+
+   \text{ERDS}_{\%}(t) = \frac{P(t) - B}{B} \cdot 100
+
+.. math::
+
+   \text{ERDS}_{\text{dB}}(t) = 10 \log_{10}\left(\frac{P(t)}{B}\right)
+
+where :math:`P(t)` is the instantaneous power derived from the Hilbert envelope. Summary measures are computed within defined analysis windows:
+
+- **mean**: Mean percentage or decibel excursion across the window.
+- **slope**: Least-squares linear rate of change over time.
+- **erd_magnitude**: Mean magnitude of negative excursions (:math:`P < B`).
+- **erd_duration**: Total duration in seconds spent in desynchronization.
+- **ers_magnitude**: Mean magnitude of positive excursions (:math:`P > B`).
+- **ers_duration**: Total duration in seconds spent in synchronization.
+- **peak_latency**: Time of the maximum absolute excursion within the window.
+- **onset_latency**: Earliest time where :math:`|\text{ERDS}(t)|` exceeds the baseline coefficient of variation (:math:`\sigma_B / \mu_B \cdot 100`).
+- **rebound_latency**: Time of the maximum value occurring strictly after the peak latency.
+
+Oscillatory Bursts
+------------------
+
+Oscillatory bursts are identified as contiguous suprathreshold excursions of the band-limited amplitude envelope:
+
+1. Envelope thresholding: :math:`E(t) > \theta`, where :math:`\theta` is either an intra-trial envelope quantile or an externally provided threshold array.
+2. Interval bounding: Contiguous runs above threshold are detected via differencing, closing intervals that touch window boundaries.
+3. Duration filtering: Intervals with durations shorter than ``min_duration_ms`` are discarded.
+
+From the surviving burst intervals, five measures are extracted per window:
+
+- **count**: Total number of detected bursts surviving duration filtering.
+- **rate**: Burst frequency in bursts per second (:math:`\text{count} / T_{\text{window}}`).
+- **duration_mean**: Mean duration of surviving bursts in seconds.
+- **amp_mean**: Mean peak envelope amplitude across surviving bursts.
+- **fraction_above**: Overall fraction of samples above threshold prior to duration filtering.
+

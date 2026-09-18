@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.bands import BANDS_STANDARD, Band
+from eegfeat.bursts import burst_features
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.descriptors import (
     peak_frequency,
@@ -20,7 +21,9 @@ from eegfeat.descriptors import (
     spectral_edge,
     spectral_entropy,
 )
+from eegfeat.erds import erds
 from eegfeat.power import band_power
+from eegfeat.signal import BandSignal
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import FeatureMeta, FeatureTable, concat
 
@@ -29,6 +32,7 @@ __version__ = "0.1.0.dev0"
 __all__ = [
     "BANDS_STANDARD",
     "Band",
+    "BandSignal",
     "FeatureMeta",
     "FeatureTable",
     "Spectra",
@@ -39,7 +43,9 @@ __all__ = [
     "asymmetry",
     "band_power",
     "band_ratio",
+    "burst_features",
     "concat",
+    "erds",
     "peak_frequency",
     "spectral_bandwidth",
     "spectral_centroid",
