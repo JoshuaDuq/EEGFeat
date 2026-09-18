@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
@@ -8,15 +9,63 @@ import numpy.typing as npt
 
 from eegfeat.bands import Band
 from eegfeat.baseline import normalize
-from eegfeat.groups import aggregate
+from eegfeat.groups import SpatialUnit, aggregate
 from eegfeat.qc import band_coverage
-from eegfeat.spectra import Spectra, gradient_weights, trapezoid_weights
+from eegfeat.spectra import Spectra, Window, gradient_weights, trapezoid_weights
 from eegfeat.table import FeatureMeta, FeatureTable, Normalization
 
 Kernel = Callable[
     [npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]],
     tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]],
 ]
+
+
+@dataclass(frozen=True, eq=False)
+class _Column:
+    meta: FeatureMeta
+    values: npt.NDArray[np.float64]
+    coverage: npt.NDArray[np.float64]
+
+
+def _collect(
+    units: Sequence[SpatialUnit],
+    windows: Sequence[Window],
+    flags: Mapping[str, npt.NDArray[np.bool_]],
+    make_meta: Callable[[SpatialUnit, Window], FeatureMeta],
+    *,
+    skip_window: int | None,
+) -> tuple[list[_Column], dict[str, list[npt.NDArray[np.bool_]]]]:
+    columns: list[_Column] = []
+    flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
+    for spatial in units:
+        for w_index, window in enumerate(windows):
+            if w_index == skip_window:
+                continue
+            columns.append(
+                _Column(
+                    make_meta(spatial, window),
+                    spatial.values[:, w_index],
+                    spatial.coverage[:, w_index],
+                )
+            )
+            for key, array in flags.items():
+                flag_col: npt.NDArray[np.bool_] = np.asarray(
+                    array[:, list(spatial.picks), w_index].any(axis=1), dtype=np.bool_
+                )
+                flag_columns.setdefault(key, []).append(flag_col)
+    return columns, flag_columns
+
+
+def _assemble(
+    columns: Sequence[_Column],
+    flag_columns: Mapping[str, Sequence[npt.NDArray[np.bool_]]],
+) -> FeatureTable:
+    return FeatureTable(
+        values=np.stack([c.values for c in columns], axis=1),
+        coverage=np.stack([c.coverage for c in columns], axis=1),
+        meta=tuple(c.meta for c in columns),
+        flags={key: np.stack(list(arrays), axis=1) for key, arrays in flag_columns.items()},
+    )
 
 
 def expand(
@@ -34,7 +83,7 @@ def expand(
     weighting: Literal["trapezoid", "gradient"] = "trapezoid",
 ) -> FeatureTable:
     baseline_index = _baseline_index(spectra, baseline)
-    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64], npt.NDArray[np.float64]]] = []
+    columns: list[_Column] = []
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
     for band in bands if bands is not None else (None,):
@@ -56,40 +105,32 @@ def expand(
         units = aggregate(values, coverage, spectra.ch_names, groups, include_global)
         resolution = float(np.median(np.diff(sub_freqs))) if sub_freqs.size > 1 else None
 
-        # Named `spatial`, not `unit`: `unit` is the physical-unit parameter.
-        for spatial in units:
-            for w_index, window in enumerate(spectra.windows):
-                if w_index == baseline_index:
-                    continue
-                columns.append(
-                    (
-                        FeatureMeta(
-                            measure=measure,
-                            band=band,
-                            space=spatial.space,
-                            space_kind=spatial.space_kind,
-                            window=window.name,
-                            normalization=mode,
-                            unit=unit,
-                            source=spectra.source,
-                            freq_resolution_hz=resolution,
-                        ),
-                        spatial.values[:, w_index],
-                        spatial.coverage[:, w_index],
-                    )
-                )
-                for key, array in flags.items():
-                    flag_col: npt.NDArray[np.bool_] = np.asarray(
-                        array[:, list(spatial.picks), w_index].any(axis=1), dtype=np.bool_
-                    )
-                    flag_columns.setdefault(key, []).append(flag_col)
+        def make_meta(
+            spatial: SpatialUnit,
+            window: Window,
+            _b: Band | None = band,
+            _r: float | None = resolution,
+        ) -> FeatureMeta:
+            return FeatureMeta(
+                measure=measure,
+                band=_b,
+                space=spatial.space,
+                space_kind=spatial.space_kind,
+                window=window.name,
+                normalization=mode,
+                unit=unit,
+                source=spectra.source,
+                freq_resolution_hz=_r,
+            )
 
-    return FeatureTable(
-        values=np.stack([v for _, v, _ in columns], axis=1),
-        coverage=np.stack([c for _, _, c in columns], axis=1),
-        meta=tuple(m for m, _, _ in columns),
-        flags={key: np.stack(arrays, axis=1) for key, arrays in flag_columns.items()},
-    )
+        band_columns, band_flags = _collect(
+            units, spectra.windows, flags, make_meta, skip_window=baseline_index
+        )
+        columns.extend(band_columns)
+        for key, arrays in band_flags.items():
+            flag_columns.setdefault(key, []).extend(arrays)
+
+    return _assemble(columns, flag_columns)
 
 
 def _baseline_index(spectra: Spectra, baseline: str | None) -> int | None:

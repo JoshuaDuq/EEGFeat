@@ -199,3 +199,24 @@ def test_bands_none_yields_one_broadband_column_per_space_and_window() -> None:
     assert table.values.shape == (3, 4)
     assert all(m.band is None for m in table.meta)
     assert table.names[0] == "eeg_slope_broadband_c3_base_raw"
+
+
+def test_column_order_is_band_then_space_then_window() -> None:
+    table = expand(
+        _spectra(),
+        _mean_kernel,
+        measure="power",
+        unit="V^2/Hz",
+        bands=(ALPHA, BETA),
+        groups=None,
+        include_global=True,
+        baseline=None,
+        mode="raw",
+        min_bins=1,
+    )
+    # Order is load-bearing: the refactor must not permute columns.
+    assert table.names[:3] == [
+        "eeg_power_alpha_c3_base_raw",
+        "eeg_power_alpha_c3_stim_raw",
+        "eeg_power_alpha_c4_base_raw",
+    ]
