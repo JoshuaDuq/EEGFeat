@@ -2,7 +2,13 @@ import numpy as np
 import pytest
 
 from eegfeat.bands import Band
-from eegfeat.descriptors import peak_frequency
+from eegfeat.descriptors import (
+    peak_frequency,
+    spectral_bandwidth,
+    spectral_centroid,
+    spectral_edge,
+    spectral_entropy,
+)
 from eegfeat.spectra import Spectra, Window
 
 ALPHA = Band("alpha", 8.0, 13.0)
@@ -70,3 +76,93 @@ def test_all_nan_input_yields_nan_without_raising() -> None:
         _spectra(np.full(freqs.size, np.nan), freqs), band=ALPHA, include_global=False
     )
     assert np.isnan(table.values).all()
+
+
+UNIFORM = np.arange(8.0, 13.0, 0.25)
+
+
+def test_centroid_of_a_flat_band_is_its_midpoint() -> None:
+    table = spectral_centroid(
+        _spectra(np.ones(UNIFORM.size), UNIFORM), band=ALPHA, include_global=False
+    )
+    assert table.values.item() == pytest.approx((UNIFORM[0] + UNIFORM[-1]) / 2.0)
+
+
+def test_centroid_follows_where_the_power_is() -> None:
+    table = spectral_centroid(
+        _spectra(_gaussian(UNIFORM, 9.0, 0.3), UNIFORM), band=ALPHA, include_global=False
+    )
+    assert table.values.item() == pytest.approx(9.0, abs=0.1)
+
+
+def test_bandwidth_of_a_flat_band_matches_a_uniform_distribution() -> None:
+    # The discrete population std of n equally spaced bins, h*sqrt((n^2-1)/12).
+    # NOT the continuous span/sqrt(12): for n = 20 those differ by 5%, because the
+    # estimator sums over bins rather than integrating over the band.
+    table = spectral_bandwidth(
+        _spectra(np.ones(UNIFORM.size), UNIFORM), band=ALPHA, include_global=False
+    )
+    expected = np.sqrt(np.mean((UNIFORM - UNIFORM.mean()) ** 2))
+    assert table.values.item() == pytest.approx(expected, rel=1e-12)
+
+
+def test_bandwidth_is_smaller_for_a_narrower_peak() -> None:
+    narrow = spectral_bandwidth(
+        _spectra(_gaussian(UNIFORM, 10.5, 0.2), UNIFORM), band=ALPHA, include_global=False
+    )
+    wide = spectral_bandwidth(
+        _spectra(_gaussian(UNIFORM, 10.5, 1.0), UNIFORM), band=ALPHA, include_global=False
+    )
+    assert narrow.values.item() < wide.values.item()
+
+
+def test_entropy_of_a_flat_band_is_exactly_one() -> None:
+    table = spectral_entropy(
+        _spectra(np.ones(UNIFORM.size), UNIFORM), band=ALPHA, include_global=False
+    )
+    assert table.values.item() == pytest.approx(1.0)
+
+
+def test_entropy_of_a_single_occupied_bin_is_zero() -> None:
+    power = np.zeros(UNIFORM.size)
+    power[5] = 1.0
+    table = spectral_entropy(_spectra(power, UNIFORM), band=ALPHA, include_global=False)
+    assert table.values.item() == pytest.approx(0.0, abs=1e-12)
+
+
+def test_edge_at_half_of_a_flat_band_is_near_its_midpoint() -> None:
+    table = spectral_edge(
+        _spectra(np.ones(UNIFORM.size), UNIFORM),
+        band=ALPHA,
+        percentile=0.5,
+        include_global=False,
+    )
+    midpoint = (UNIFORM[0] + UNIFORM[-1]) / 2.0
+    assert abs(table.values.item() - midpoint) <= 0.25
+
+
+def test_edge_returns_a_grid_frequency_because_it_does_not_interpolate() -> None:
+    table = spectral_edge(
+        _spectra(np.ones(UNIFORM.size), UNIFORM),
+        band=ALPHA,
+        percentile=0.5,
+        include_global=False,
+    )
+    assert table.values.item() in set(UNIFORM.tolist())
+
+
+@pytest.mark.parametrize("percentile", [0.0, -0.1, 1.5, np.nan])
+def test_an_out_of_range_percentile_raises(percentile: float) -> None:
+    with pytest.raises(ValueError, match="percentile"):
+        spectral_edge(
+            _spectra(np.ones(UNIFORM.size), UNIFORM),
+            band=ALPHA,
+            percentile=percentile,
+            include_global=False,
+        )
+
+
+def test_an_empty_band_yields_nan_for_every_descriptor() -> None:
+    dead = _spectra(np.zeros(UNIFORM.size), UNIFORM)
+    for fn in (spectral_centroid, spectral_bandwidth, spectral_entropy):
+        assert np.isnan(fn(dead, band=ALPHA, include_global=False).values).all()
