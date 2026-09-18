@@ -1,0 +1,84 @@
+# eegfeat recipe: which epochs to read, what to compute, and where results go.
+#
+#   eegfeat check recipe.toml    validate it and try it on the first recording
+#   eegfeat run recipe.toml      compute features for every recording
+#
+# Relative paths resolve against this file's directory. Each [[features]] entry
+# names one eegfeat measure; its other keys are that function's own parameters
+# (see the API reference), plus the keys described below.
+
+[inputs]
+root = "derivatives/preprocessed"   # searched recursively
+pattern = "**/*_epo.fif"            # MNE epochs files
+picks = "eeg"                       # a channel type, or a list of channel names
+exclude_bads = true                 # drop the channels each file marks as bad
+
+[output]
+root = "derivatives/eegfeat"        # the input tree is mirrored here
+epoch_metadata = true               # copy each epoch's metadata into its row
+
+# Frequency bands in Hz, as [low, high). Leave the section out to use
+# delta, theta, alpha, beta and gamma (1-45 Hz).
+# [bands]
+# theta = [4.0, 8.0]
+# alpha = [8.0, 13.0]
+# beta = [13.0, 30.0]
+
+# Time windows in seconds from the epoch origin. Leave the section out to
+# measure the whole epoch. The name "all" is reserved for the whole epoch.
+# [windows]
+# baseline = [-0.5, 0.0]
+# stimulus = [0.0, 1.0]
+
+# Regions of interest, used by entries whose spatial list includes "rois".
+# [rois]
+# frontal = ["Fz", "F3", "F4"]
+# parietal = ["Pz", "P3", "P4"]
+
+# How spectra are estimated for band_power, aperiodic, peak_frequency and the
+# spectral_* measures: "welch" (default), "multitaper" or "morlet". Morlet
+# restricts each window to the coefficients its wavelets can account for.
+[spectra]
+method = "welch"
+# n_fft = 500                       # welch segment in samples; default 2 s, capped by the shortest window
+
+# How cross-trial measures (itpc, envelope_correlation, wpli) group epochs:
+# "all" (one group), "event" (by event name) or "metadata" (by a metadata column).
+# [trials]
+# by = "event"
+
+# Keys every entry may use, where the measure supports them:
+#   bands     band names; defaults to every band
+#   windows   window names; defaults to every window except the baseline
+#   baseline  a window name, for band_power, bursts and ERDS
+#   spatial   any of "channels", "rois", "global"; defaults to channels and global
+
+[[features]]
+measure = "band_power"
+normalize = "log10"
+
+[[features]]
+measure = "peak_frequency"
+bands = ["alpha"]
+
+[[features]]
+measure = "aperiodic"
+
+[[features]]
+measure = "spectral_entropy"
+
+# More examples, once windows and trials are defined above:
+#
+# [[features]]
+# measure = "burst_rate"
+# bands = ["beta"]
+# baseline = "baseline"
+#
+# [[features]]
+# measure = "erds_mean"
+# bands = ["alpha", "beta"]
+# baseline = "baseline"
+#
+# [[features]]
+# measure = "itpc"
+# bands = ["theta"]

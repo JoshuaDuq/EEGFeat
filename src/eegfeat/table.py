@@ -108,8 +108,7 @@ class FeatureTable:
             )
         if len(self.meta) != self.values.shape[1]:
             raise ValueError(
-                f"meta has {len(self.meta)} records but values has "
-                f"{self.values.shape[1]} columns."
+                f"meta has {len(self.meta)} records but values has {self.values.shape[1]} columns."
             )
         for key, array in self.flags.items():
             if array.shape != self.values.shape:

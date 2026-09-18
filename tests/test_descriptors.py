@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from scipy.signal import welch
 
 from eegfeat.bands import Band
 from eegfeat.descriptors import (
@@ -67,7 +68,7 @@ def test_resolution_is_reported_on_the_column() -> None:
 
 
 def test_a_grid_too_coarse_for_an_interior_peak_raises() -> None:
-    # The pipeline's Morlet grid puts only 4 bins in alpha; two is below the
+    # A sparse grid with fewer than 3 bins in the band is below the
     # definition domain of the estimator and must not silently return a number.
     freqs = np.array([8.0, 11.0, 14.0])
     with pytest.raises(ValueError, match="3 bins"):
@@ -217,6 +218,20 @@ def test_smoothing_rejects_a_single_bin_spike() -> None:
     steady = peak_frequency(_wide(spiked), band=ALPHA, include_global=False)
     assert fooled.values.item() == pytest.approx(8.75)
     assert abs(steady.values.item() - 11.0) < abs(fooled.values.item() - 11.0)
+
+
+@pytest.mark.parametrize("smoothing_hz", [1.0, 1.5, 2.0])
+def test_smoothing_does_not_move_a_peak_that_sits_on_a_bin(smoothing_hz: float) -> None:
+    # Windows of 2, 3 and 4 bins on this 0.5 Hz grid. An even window that is not
+    # centred shifts the spectrum half a bin up and reported this sine at 10.25 Hz.
+    sfreq = 250.0
+    times = np.arange(int(60 * sfreq)) / sfreq
+    noise = 0.05 * np.random.default_rng(0).standard_normal(times.size)
+    freqs, power = welch(np.sin(2 * np.pi * 10.0 * times) + noise, fs=sfreq, nperseg=500)
+    table = peak_frequency(
+        _spectra(power, freqs), band=ALPHA, smoothing_hz=smoothing_hz, include_global=False
+    )
+    assert table.values.item() == pytest.approx(10.0, abs=0.05)
 
 
 def test_a_spectrum_with_no_oscillation_falls_back_to_centre_of_gravity() -> None:

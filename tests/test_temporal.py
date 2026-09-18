@@ -85,8 +85,7 @@ def test_peak_latency_reports_the_time_not_the_index() -> None:
 
 
 def test_polarity_is_not_inferred_from_the_window_name() -> None:
-    # The reference reads the first letter of the label, so a window called
-    # "noxious" would search for a negative peak. This pins that we do not.
+    # Polarity is explicit; verify window names (e.g. "noxious") do not influence polarity.
     values = np.array([0.0, -5.0, 0.0, 3.0, 0.0]).reshape(1, 1, 5)
     noxious = Window("noxious", 0.0, 2.0)
     table = peak_amplitude(

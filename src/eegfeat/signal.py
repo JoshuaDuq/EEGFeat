@@ -195,9 +195,7 @@ class BandSignal:
     """A band-filtered analytic signal over epochs, channels and time.
 
     Only the complex analytic signal is stored; ``envelope``, ``phase`` and
-    ``power`` are derived on access. The reference implementation keeps five
-    parallel arrays of this shape, which holds the same information at five times
-    the memory.
+    ``power`` are derived on access via property descriptors to minimize memory overhead.
 
     Parameters
     ----------
@@ -225,16 +223,14 @@ class BandSignal:
     def __post_init__(self) -> None:
         if self.analytic.ndim != 3:
             raise ValueError(
-                "analytic must be 3-D (n_epochs, n_channels, n_times), "
-                f"got {self.analytic.shape}."
+                f"analytic must be 3-D (n_epochs, n_channels, n_times), got {self.analytic.shape}."
             )
         if not np.iscomplexobj(self.analytic):
             raise TypeError("analytic must be complex; a real array has already lost its phase.")
         n_channels, n_times = self.analytic.shape[1:]
         if len(self.ch_names) != n_channels:
             raise ValueError(
-                f"ch_names has {len(self.ch_names)} entries but analytic has "
-                f"{n_channels} channels."
+                f"ch_names has {len(self.ch_names)} entries but analytic has {n_channels} channels."
             )
         if self.times.ndim != 1 or self.times.size != n_times:
             raise ValueError(f"times must be 1-D of length {n_times}, got {self.times.shape}.")

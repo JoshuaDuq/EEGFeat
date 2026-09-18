@@ -15,7 +15,7 @@ from eegfeat.spectra import Window
 from eegfeat.table import FeatureMeta, FeatureTable
 
 _EPS = 1e-9
-"""Edge-length floor, matching the reference's weighted global efficiency."""
+"""Edge-weight floor to avoid division by zero when converting weights to path distances."""
 
 
 def envelope_correlation(
@@ -74,9 +74,7 @@ def wpli(
     """Weighted phase lag index between every pair of nodes.
 
     Delegates the estimation to ``mne_connectivity.spectral_connectivity_epochs``,
-    which is the canonical implementation and the one the reference pipeline uses.
-    Computing it instead from Hilbert analytic signals would be a different
-    estimator and would not reproduce those values.
+    ensuring standard cross-spectral density calculation.
 
     Takes a broadband :class:`~eegfeat.Signal` and a list of bands, rather than
     pre-filtered :class:`~eegfeat.BandSignal` objects, because the band is a
@@ -163,11 +161,10 @@ def global_efficiency(pairs: FeatureTable) -> FeatureTable:
 def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureTable:
     """Mean clustering coefficient of the binarized network.
 
-    Edges above ``threshold`` in absolute weight are kept and the rest discarded,
-    then the unweighted clustering coefficient is averaged over nodes with at
-    least two neighbours. Binarizing is what the reference does; the value
-    therefore depends on ``threshold``, which has no canonical choice and is
-    required rather than defaulted for that reason.
+    Edges above ``threshold`` in absolute weight are retained (:math:`A_{ij} = 1`)
+    and subthreshold edges set to zero, then the unweighted clustering coefficient
+    is averaged over nodes with at least two neighbors. The threshold is an explicit
+    required argument.
 
     Parameters
     ----------

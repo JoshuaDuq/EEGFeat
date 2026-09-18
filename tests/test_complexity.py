@@ -49,7 +49,7 @@ def test_coarse_graining_averages_non_overlapping_blocks() -> None:
 def test_coarse_graining_drops_non_finite_samples_before_blocking() -> None:
     # Removing the NaN leaves three finite samples, so one block of two fits and
     # the trailing sample is discarded. Note this closes the gap rather than
-    # preserving sample positions, which is the reference's behaviour.
+    # preserving sample positions.
     x = np.array([1.0, np.nan, 3.0, 5.0])
     np.testing.assert_allclose(_coarse_grain(x, 2), [2.0])
 

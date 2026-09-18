@@ -39,9 +39,9 @@ def peak_frequency(
       of the band whatever the oscillation is doing. The fit spans ``fit_range``,
       which deliberately reaches outside the band: a 1/f slope estimated from a
       five-hertz window is not a 1/f slope.
-    - ``smoothing_hz`` averages over a window of that width before the search, so
-      a single noisy bin cannot win. The average ignores non-finite bins and
-      renormalizes rather than closing the gap and averaging across it.
+    - ``smoothing_hz`` averages over a centred window of that width before the
+      search, so a single noisy bin cannot win. The average ignores non-finite
+      bins and renormalizes rather than closing the gap and averaging across it.
     - ``min_prominence`` guards against reporting noise as a peak. When the
       maximum stands less than this far, in log10 units, above the band median,
       the centre of gravity is reported instead and ``"cog_fallback"`` is set. A
@@ -133,10 +133,20 @@ def _smooth(
     finite = np.isfinite(values)
     # A moving average renormalized by how many bins were finite, so a gap neither
     # poisons its neighbours nor is silently closed up and averaged across.
-    total = uniform_filter1d(np.where(finite, values, 0.0), size=width, axis=3, mode="nearest")
-    count = uniform_filter1d(finite.astype(float), size=width, axis=3, mode="nearest")
+    total = _centred_boxcar(np.where(finite, values, 0.0), width)
+    count = _centred_boxcar(finite.astype(float), width)
     with np.errstate(invalid="ignore", divide="ignore"):
         return np.where(count > 0.0, total / count, np.nan)
+
+
+def _centred_boxcar(values: npt.NDArray[np.float64], width: int) -> npt.NDArray[np.float64]:
+    # scipy puts an even window one bin further below its output bin than above it,
+    # which moves the spectrum, and so the peak, half a bin up. Averaging it with the
+    # same window one bin higher centres it, with half weight on the two end bins.
+    boxcar = uniform_filter1d(values, size=width, axis=3, mode="nearest")
+    if width % 2:
+        return boxcar
+    return 0.5 * (boxcar + uniform_filter1d(values, size=width, axis=3, mode="nearest", origin=-1))
 
 
 def _find_peak(

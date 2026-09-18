@@ -1,0 +1,1596 @@
+/* =========================================================
+   eegfeat — Furo theme overrides
+   Monochrome Research Terminal: pure grayscale palette
+   matched 1:1 to the TUI. The only chromatic tones are
+   amber (#C49A5B) and muted red (#C07878), reserved for
+   Warning and Error states where typography alone would
+   be unsafe. All other emphasis is carried by weight + value.
+
+   Layout philosophy: hairline borders, tight typographic
+   rhythm, generous inter-section whitespace, no decorative
+   ornament. The page should read like a research note —
+   high information density, low visual noise.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   Tokens
+   --------------------------------------------------------- */
+:root {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  --radius-sm: 3px;
+  --radius-md: 4px;
+
+  --hairline: 1px solid var(--color-foreground-border);
+  --hairline-quiet: 1px solid var(--color-background-border);
+}
+
+body[data-theme="dark"],
+body[data-theme="auto"] {
+  --color-background-primary:    #0A0B0D;
+  --color-background-secondary:  #131518;
+  --color-background-hover:      #1A1C20;
+  --color-background-border:     #24262A;
+
+  --color-foreground-primary:    #E6E8EB;
+  --color-foreground-secondary:  #A4A8AD;
+  --color-foreground-muted:      #6A6D72;
+  --color-foreground-border:     #3D4045;
+
+  --color-brand-primary:         #F2F3F5;
+  --color-brand-content:         #BFC3C7;
+
+  --color-highlight-on-target:   rgba(242, 243, 245, 0.07);
+  --color-admonition-background: #131518;
+
+  --color-api-name:              #F2F3F5;
+  --color-api-pre-name:          #6A6D72;
+  --color-api-keyword:           #A4A8AD;
+  --color-api-paren:             #6A6D72;
+  --color-api-overall:           #E6E8EB;
+  --color-api-background:        #131518;
+  --color-api-background-hover:  #1A1C20;
+
+  --color-semantic-warning: #C49A5B;
+  --color-semantic-error:   #C07878;
+
+  --color-selection-bg: rgba(242, 243, 245, 0.18);
+  --color-focus-ring:   rgba(242, 243, 245, 0.45);
+
+  --font-stack:            "Inter", "Inter Tight", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-stack--monospace: "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, Menlo, monospace;
+}
+
+body[data-theme="light"] {
+  --color-background-primary:    #FAFAFB;
+  --color-background-secondary:  #F1F2F4;
+  --color-background-hover:      #E8EAEC;
+  --color-background-border:     #D8DADD;
+
+  --color-foreground-primary:    #1A1C20;
+  --color-foreground-secondary:  #4A4D52;
+  --color-foreground-muted:      #74777C;
+  --color-foreground-border:     #C4C6C9;
+
+  --color-brand-primary:         #0E0F12;
+  --color-brand-content:         #3D4045;
+
+  --color-highlight-on-target:   rgba(26, 28, 32, 0.06);
+  --color-admonition-background: #F4F5F7;
+
+  --color-api-name:              #0E0F12;
+  --color-api-pre-name:          #74777C;
+  --color-api-keyword:           #4A4D52;
+  --color-api-paren:             #74777C;
+  --color-api-overall:           #1A1C20;
+  --color-api-background:        #F1F2F4;
+  --color-api-background-hover:  #E8EAEC;
+
+  --color-semantic-warning: #8A6322;
+  --color-semantic-error:   #8A3A3A;
+
+  --color-selection-bg: rgba(26, 28, 32, 0.12);
+  --color-focus-ring:   rgba(26, 28, 32, 0.45);
+}
+
+/* ---------------------------------------------------------
+   Base — typography + selection + focus
+   --------------------------------------------------------- */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-stack);
+  font-feature-settings: "cv11", "ss01", "ss03", "tnum";
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.005em;
+  line-height: 1.65;
+}
+
+::selection {
+  background: var(--color-selection-bg);
+  color: var(--color-foreground-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------------------------------------------------------
+   Typography hierarchy — emphasis by weight + size, never hue
+   --------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-stack);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  color: var(--color-foreground-primary);
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  border-bottom: var(--hairline);
+  padding-bottom: var(--space-3);
+  margin: 0 0 var(--space-6);
+}
+
+/* Landing page — drop the H1 border so the title flows into the
+   lede paragraph as a single visual block. */
+h1:has(+ .hero-lede) {
+  font-size: 2rem;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: var(--space-4);
+}
+
+h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  color: var(--color-foreground-primary);
+  border-bottom: var(--hairline-quiet);
+  padding-bottom: var(--space-2);
+  margin: var(--space-7) 0 var(--space-4);
+}
+
+h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--color-foreground-primary);
+  margin: var(--space-5) 0 var(--space-3);
+}
+
+h4 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.085em;
+  color: var(--color-foreground-secondary);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+h5, h6 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-foreground-muted);
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+p {
+  line-height: 1.68;
+  color: var(--color-foreground-primary);
+  margin: 0 0 var(--space-4);
+}
+
+ul, ol {
+  margin: 0 0 var(--space-4);
+  padding-left: 1.4rem;
+}
+
+li {
+  line-height: 1.65;
+  margin-bottom: 0.2rem;
+}
+
+li::marker {
+  color: var(--color-foreground-muted);
+}
+
+strong, b {
+  font-weight: 600;
+  color: var(--color-foreground-primary);
+}
+
+em, i {
+  font-style: italic;
+  color: var(--color-foreground-primary);
+}
+
+/* ---------------------------------------------------------
+   Sidebar — quiet, recedes from content
+   --------------------------------------------------------- */
+.sidebar-drawer {
+  border-right: var(--hairline-quiet);
+}
+
+.sidebar-brand {
+  padding: 1.25rem 1rem 0.75rem;
+  border-bottom: var(--hairline-quiet);
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-brand-text {
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.005em;
+  color: var(--color-foreground-primary);
+}
+
+.sidebar-tree .reference {
+  font-size: 0.825rem;
+  color: var(--color-foreground-secondary);
+  letter-spacing: 0.005em;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.sidebar-tree .reference:hover {
+  color: var(--color-foreground-primary);
+  background: var(--color-background-hover);
+}
+
+.sidebar-tree .current > .reference,
+.sidebar-tree .current-page > .reference {
+  color: var(--color-foreground-primary);
+  font-weight: 600;
+  position: relative;
+}
+
+.sidebar-tree .current-page > .reference::before {
+  content: "";
+  position: absolute;
+  left: -0.25rem;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  width: 2px;
+  background: var(--color-foreground-primary);
+  border-radius: 1px;
+}
+
+.sidebar-tree .caption-text {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-foreground-muted);
+  margin-top: 1.25rem;
+  padding-bottom: 0.3rem;
+}
+
+/* ---------------------------------------------------------
+   Right-side TOC — tighter, quieter
+   --------------------------------------------------------- */
+.toc-tree .reference {
+  font-size: 0.78rem;
+  color: var(--color-foreground-secondary);
+  padding: 0.15rem 0;
+  letter-spacing: 0.005em;
+  transition: color 0.12s ease;
+}
+
+.toc-tree .reference:hover {
+  color: var(--color-foreground-primary);
+}
+
+.toc-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-foreground-muted);
+}
+
+/* ---------------------------------------------------------
+   sphinx-design cards — hairline, monochrome hover
+   --------------------------------------------------------- */
+.sd-card {
+  border: var(--hairline) !important;
+  background: var(--color-background-secondary) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.sd-card:hover {
+  border-color: var(--color-foreground-secondary) !important;
+  background: var(--color-background-hover) !important;
+}
+
+.sd-card-header {
+  background: transparent !important;
+  border-bottom: var(--hairline) !important;
+  padding: 0.55rem 0.9rem !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  color: var(--color-foreground-primary) !important;
+  letter-spacing: -0.005em;
+}
+
+.sd-card-body {
+  padding: 0.7rem 0.9rem !important;
+  font-size: 0.82rem !important;
+  color: var(--color-foreground-secondary) !important;
+  line-height: 1.6;
+}
+
+.sd-card-body p {
+  margin-bottom: 0.35rem;
+}
+
+.sd-card-body p:last-child {
+  margin-bottom: 0;
+}
+
+.sd-card-body strong {
+  color: var(--color-foreground-primary);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------
+   Tab set — line indicator, no chromatic accent
+   --------------------------------------------------------- */
+.sd-tab-set {
+  margin: var(--space-5) 0;
+}
+
+.sd-tab-set > input ~ label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  padding: 0.4rem 0.85rem;
+  border-bottom: 2px solid transparent;
+  color: var(--color-foreground-secondary);
+  transition: color 0.12s, border-color 0.12s;
+  background: transparent;
+}
+
+.sd-tab-set > input ~ label:hover {
+  color: var(--color-foreground-primary);
+}
+
+.sd-tab-set > input:checked ~ label {
+  color: var(--color-foreground-primary);
+  border-bottom-color: var(--color-foreground-primary);
+  font-weight: 600;
+}
+
+.sd-tab-content {
+  border: var(--hairline);
+  border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
+  padding: 1rem 1.15rem;
+  background: var(--color-background-secondary);
+}
+
+/* ---------------------------------------------------------
+   Admonitions — single left rule, monochrome by default;
+   amber/red appear only on Warning/Error variants.
+   --------------------------------------------------------- */
+.admonition {
+  border: none !important;
+  border-left: 2px solid var(--color-foreground-secondary) !important;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
+  background: var(--color-admonition-background) !important;
+  padding: 0.6rem 0.95rem !important;
+  margin: var(--space-4) 0 !important;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.admonition-title {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+  margin: 0 0 0.3rem !important;
+  color: var(--color-foreground-primary) !important;
+  background: transparent !important;
+  padding: 0 !important;
+  display: block;
+}
+
+.admonition-title::before {
+  display: none !important;
+}
+
+.admonition p:last-child {
+  margin-bottom: 0;
+}
+
+.admonition.note,
+.admonition.tip,
+.admonition.important,
+.admonition.hint {
+  border-left-color: var(--color-foreground-secondary) !important;
+}
+
+.admonition.note .admonition-title,
+.admonition.tip .admonition-title,
+.admonition.important .admonition-title,
+.admonition.hint .admonition-title {
+  color: var(--color-foreground-primary) !important;
+}
+
+.admonition.seealso {
+  border-left-color: var(--color-foreground-muted) !important;
+}
+.admonition.seealso .admonition-title {
+  color: var(--color-foreground-muted) !important;
+}
+
+.admonition.warning,
+.admonition.caution,
+.admonition.attention {
+  border-left-color: var(--color-semantic-warning) !important;
+}
+.admonition.warning .admonition-title,
+.admonition.caution .admonition-title,
+.admonition.attention .admonition-title {
+  color: var(--color-semantic-warning) !important;
+}
+
+.admonition.danger,
+.admonition.error {
+  border-left-color: var(--color-semantic-error) !important;
+}
+.admonition.danger .admonition-title,
+.admonition.error .admonition-title {
+  color: var(--color-semantic-error) !important;
+}
+
+/* ---------------------------------------------------------
+   Code blocks — monochrome syntax tokens, weight-based emphasis
+   --------------------------------------------------------- */
+div.highlight {
+  border-radius: var(--radius-md) !important;
+  border: var(--hairline-quiet) !important;
+  position: relative;
+  background: var(--color-background-secondary) !important;
+  margin: var(--space-4) 0;
+}
+
+div.highlight pre {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.8rem;
+  font-feature-settings: "calt", "ss03";
+  line-height: 1.62;
+  padding: 0.85rem 1rem !important;
+  background: transparent !important;
+  color: var(--color-foreground-primary);
+  overflow-x: auto;
+}
+
+/* Pygments token overrides — neutralize all theme colors to grayscale.
+   Selectors cover every common token class so the look is identical
+   regardless of which pygments_style is configured. */
+.highlight .hll { background-color: var(--color-background-hover); }
+.highlight .c, .highlight .ch, .highlight .cm, .highlight .c1,
+.highlight .cs, .highlight .cp, .highlight .cpf {
+  color: var(--color-foreground-muted);
+  font-style: italic;
+}
+.highlight .k, .highlight .kc, .highlight .kd, .highlight .kn,
+.highlight .kp, .highlight .kr, .highlight .kt {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+.highlight .o, .highlight .ow {
+  color: var(--color-foreground-primary);
+}
+.highlight .p {
+  color: var(--color-foreground-secondary);
+}
+.highlight .n, .highlight .nx, .highlight .nv, .highlight .vc,
+.highlight .vg, .highlight .vi {
+  color: var(--color-foreground-primary);
+}
+.highlight .nb, .highlight .bp {
+  color: var(--color-foreground-primary);
+  font-weight: 500;
+}
+.highlight .nf, .highlight .nc, .highlight .nn {
+  color: var(--color-brand-content);
+  font-weight: 600;
+}
+.highlight .nd, .highlight .ni, .highlight .ne, .highlight .nl,
+.highlight .no, .highlight .py {
+  color: var(--color-brand-content);
+}
+.highlight .s, .highlight .s1, .highlight .s2, .highlight .sb,
+.highlight .sc, .highlight .sd, .highlight .se, .highlight .sh,
+.highlight .si, .highlight .sx, .highlight .sr, .highlight .ss,
+.highlight .sa, .highlight .dl {
+  color: var(--color-foreground-secondary);
+}
+.highlight .m, .highlight .mf, .highlight .mh, .highlight .mi,
+.highlight .mo, .highlight .il, .highlight .mb {
+  color: var(--color-brand-content);
+}
+.highlight .gh, .highlight .gu {
+  color: var(--color-brand-primary);
+  font-weight: 700;
+}
+.highlight .gd { color: var(--color-semantic-error); }
+.highlight .gi { color: var(--color-foreground-primary); font-weight: 600; }
+.highlight .ge { font-style: italic; }
+.highlight .gs { font-weight: 700; }
+.highlight .gr, .highlight .gt {
+  color: var(--color-semantic-error);
+}
+.highlight .err {
+  color: var(--color-semantic-error);
+  border: none;
+  background: transparent;
+}
+
+/* Shell/REPL prompts (>>>, $) — recede so the typed command stands out */
+.highlight .gp,
+.highlight .go {
+  color: var(--color-foreground-muted);
+  user-select: none;
+}
+
+/* Copy button (sphinx-copybutton) — hairline chip */
+button.copybtn {
+  opacity: 0 !important;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
+  background: var(--color-background-hover) !important;
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--color-foreground-secondary) !important;
+  padding: 2px 6px !important;
+  font-size: 0.72rem !important;
+  top: 0.4rem !important;
+  right: 0.4rem !important;
+}
+
+div.highlight:hover button.copybtn {
+  opacity: 1 !important;
+}
+
+button.copybtn:hover {
+  color: var(--color-foreground-primary) !important;
+  border-color: var(--color-foreground-secondary) !important;
+}
+
+button.copybtn.success {
+  color: var(--color-foreground-primary) !important;
+  border-color: var(--color-foreground-primary) !important;
+}
+
+/* Inline code — refined chip, not a heavy badge */
+code.literal,
+p code,
+li code,
+td code,
+dd code {
+  background: var(--color-background-hover) !important;
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 0.05em 0.35em !important;
+  font-size: 0.83em !important;
+  color: var(--color-foreground-primary) !important;
+  font-family: var(--font-stack--monospace);
+  font-feature-settings: "calt", "ss03";
+}
+
+/* Code inside headings should stay quiet */
+h1 code, h2 code, h3 code, h4 code {
+  font-size: 0.92em !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+}
+
+/* ---------------------------------------------------------
+   Links — hairline underline, brightens on hover
+   --------------------------------------------------------- */
+a, a:visited {
+  color: var(--color-foreground-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--color-foreground-border);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
+}
+
+a:hover {
+  color: var(--color-foreground-primary);
+  text-decoration-color: var(--color-foreground-secondary);
+}
+
+/* ---------------------------------------------------------
+   Tables — hairline rows, dense header
+   --------------------------------------------------------- */
+table.docutils {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.84rem;
+  margin: var(--space-4) 0;
+  border-top: var(--hairline);
+  border-bottom: var(--hairline);
+}
+
+table.docutils th {
+  background: transparent !important;
+  color: var(--color-foreground-secondary) !important;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: var(--hairline) !important;
+  border-top: none !important;
+  padding: 0.5rem 0.8rem !important;
+  text-align: left;
+}
+
+table.docutils td {
+  border-bottom: var(--hairline-quiet) !important;
+  padding: 0.45rem 0.8rem !important;
+  vertical-align: top;
+  color: var(--color-foreground-primary);
+  line-height: 1.55;
+}
+
+table.docutils tr:last-child td {
+  border-bottom: none !important;
+}
+
+table.docutils tr:hover td {
+  background: var(--color-background-hover);
+}
+
+/* ---------------------------------------------------------
+   Horizontal rule — quiet section break
+   --------------------------------------------------------- */
+hr,
+hr.docutils {
+  border: none !important;
+  border-top: var(--hairline-quiet) !important;
+  margin: var(--space-7) 0 !important;
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------
+   Landing page — hero, primary CTAs, stage grid, docs nav
+
+   Note: sphinx-design grid-item-card emits .sd-card-title inside
+   .sd-card-body (not a separate .sd-card-header). All landing-page
+   header styling targets .sd-card-title, not .sd-card-header.
+   --------------------------------------------------------- */
+.hero-lede {
+  font-size: 1.05rem;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--color-foreground-secondary);
+  max-width: 68ch;
+  margin: 0 0 var(--space-6);
+  letter-spacing: -0.005em;
+}
+
+.hero-lede strong {
+  color: var(--color-foreground-primary);
+  font-weight: 600;
+}
+
+/* Disable the default sphinx-design hover lift on landing grids —
+   minimalist surfaces shouldn't move under the cursor. */
+.nav-cards .sd-card,
+.stage-grid .sd-card,
+.docs-nav .sd-card {
+  transform: none !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.nav-cards .sd-card:hover,
+.stage-grid .sd-card:hover,
+.docs-nav .sd-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Primary navigation cards — aerated, hairline, with a chevron affordance.
+   Used on the landing page hero CTAs and on every section index page
+   (user_guide, methods, cli, etc.) to give navigation a consistent voice. */
+.nav-cards {
+  margin: 0 0 var(--space-6);
+}
+
+.nav-cards .sd-card {
+  background: transparent !important;
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-md) !important;
+  position: relative;
+}
+
+.nav-cards .sd-card:hover {
+  background: var(--color-background-secondary) !important;
+  border-color: var(--color-foreground-secondary) !important;
+}
+
+.nav-cards .sd-card-body {
+  padding: 1rem 1.1rem 1.1rem !important;
+}
+
+.nav-cards .sd-card-title {
+  font-size: 0.98rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.005em;
+  color: var(--color-foreground-primary) !important;
+  margin: 0 0 0.4rem !important;
+  padding-right: 1.1rem;
+}
+
+.nav-cards .sd-card-title::after {
+  content: "→";
+  position: absolute;
+  top: 1rem;
+  right: 1.1rem;
+  font-size: 0.95rem;
+  color: var(--color-foreground-muted);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.nav-cards .sd-card:hover .sd-card-title::after {
+  color: var(--color-foreground-primary);
+  transform: translateX(2px);
+}
+
+.nav-cards .sd-card-text {
+  font-size: 0.83rem !important;
+  color: var(--color-foreground-secondary) !important;
+  line-height: 1.6;
+  margin: 0 0 0.35rem !important;
+}
+
+.nav-cards .sd-card-text:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Anchor cards (link-type: url) carry an external indicator instead. */
+.nav-cards .sd-card[href^="http"] .sd-card-title::after,
+.nav-cards .sd-card:has(a[href^="http"].sd-stretched-link) .sd-card-title::after {
+  content: "↗";
+}
+
+/* Hero screenshot — quiet framed image, no caption clutter */
+.hero-screenshot,
+a.hero-screenshot {
+  display: block;
+  margin: var(--space-7) auto !important;
+  max-width: 100%;
+}
+
+img.hero-screenshot {
+  display: block;
+  margin: 0 auto !important;
+  max-width: 100%;
+  height: auto;
+  border: var(--hairline-quiet);
+  border-radius: var(--radius-md);
+}
+
+/* Feature stage cards — eyebrow title, mono output footer */
+.stage-grid .sd-card {
+  background: var(--color-background-secondary) !important;
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.stage-grid .sd-card:hover {
+  border-color: var(--color-foreground-secondary) !important;
+  background: var(--color-background-hover) !important;
+}
+
+.stage-grid .sd-card-body {
+  padding: 0.85rem 1rem 0.95rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.stage-grid .sd-card-title {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--color-foreground-secondary) !important;
+  margin: 0 !important;
+  padding-bottom: 0.45rem;
+  border-bottom: var(--hairline-quiet);
+}
+
+.stage-grid .sd-card-text {
+  font-size: 0.83rem !important;
+  color: var(--color-foreground-primary) !important;
+  line-height: 1.6;
+  margin: 0 !important;
+}
+
+.stage-grid .sd-card-text:not(:first-child):last-child {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.74rem !important;
+  color: var(--color-foreground-muted) !important;
+  margin-top: auto !important;
+  letter-spacing: 0.005em;
+}
+
+.stage-grid .sd-card-text:not(:first-child):last-child code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+  font-size: 1em !important;
+}
+
+/* Secondary docs navigation — borderless, top-rule emphasis */
+.docs-nav {
+  margin-top: var(--space-3);
+}
+
+.docs-nav .sd-card {
+  background: transparent !important;
+  border: none !important;
+  border-top: var(--hairline-quiet) !important;
+  border-radius: 0 !important;
+}
+
+.docs-nav .sd-card:hover {
+  background: transparent !important;
+  border-top-color: var(--color-foreground-primary) !important;
+}
+
+.docs-nav .sd-card-body {
+  padding: 0.7rem 0 0.85rem !important;
+}
+
+.docs-nav .sd-card-title {
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  color: var(--color-foreground-primary) !important;
+  margin: 0 0 0.25rem !important;
+}
+
+.docs-nav .sd-card-text {
+  font-size: 0.78rem !important;
+  color: var(--color-foreground-muted) !important;
+  line-height: 1.55;
+  margin: 0 !important;
+}
+
+/* Quiet status aside — replaces a heavy admonition on the landing page */
+.dev-status {
+  font-size: 0.82rem;
+  color: var(--color-foreground-muted);
+  border-left: 1px solid var(--color-foreground-border);
+  padding: 0.1rem 0.85rem;
+  margin: var(--space-6) 0 0;
+  max-width: 70ch;
+  line-height: 1.6;
+}
+
+.dev-status strong {
+  color: var(--color-foreground-secondary);
+  font-weight: 600;
+}
+
+/* Step-progress eyebrow — shows the n-step roadmap at the top of a
+   tutorial page (e.g. Quick Start). Renders as a single horizontal
+   strip of small uppercase tokens separated by hairline arrows. */
+.step-progress {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--color-foreground-muted);
+  margin: 0 0 var(--space-6);
+  padding: 0.55rem 0;
+  border-top: var(--hairline-quiet);
+  border-bottom: var(--hairline-quiet);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+  line-height: 1.4;
+}
+
+.step-progress .step-count {
+  color: var(--color-foreground-secondary);
+  margin-right: 0.5rem;
+  padding-right: 0.65rem;
+  border-right: var(--hairline-quiet);
+}
+
+.step-progress a {
+  color: var(--color-foreground-muted);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+
+.step-progress a:hover {
+  color: var(--color-foreground-primary);
+}
+
+.step-progress .sep {
+  color: var(--color-foreground-border);
+  user-select: none;
+}
+
+/* Landing-page responsive — collapse the 4-up docs nav before the
+   global 700px breakpoint so titles don't get cramped. */
+@media (max-width: 900px) {
+  .docs-nav .sd-row.sd-row-cols-4 > .sd-col {
+    width: 50% !important;
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   Breadcrumb / prev-next navigation
+   --------------------------------------------------------- */
+.related-pages {
+  border-top: var(--hairline-quiet);
+  padding-top: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.related-pages a {
+  font-size: 0.82rem;
+  color: var(--color-foreground-secondary);
+  text-decoration: none;
+}
+
+.related-pages a:hover {
+  color: var(--color-foreground-primary);
+}
+
+/* ---------------------------------------------------------
+   Footer
+   --------------------------------------------------------- */
+footer {
+  font-size: 0.75rem;
+  color: var(--color-foreground-muted);
+  border-top: var(--hairline-quiet);
+  padding-top: var(--space-4);
+  margin-top: var(--space-6);
+  letter-spacing: 0.01em;
+}
+
+/* ---------------------------------------------------------
+   Search input
+   --------------------------------------------------------- */
+.sidebar-search-container {
+  border-top: var(--hairline-quiet);
+  border-bottom: var(--hairline-quiet);
+}
+
+input[type="search"] {
+  border-radius: var(--radius-sm) !important;
+  border: var(--hairline-quiet) !important;
+  background: var(--color-background-hover) !important;
+  font-size: 0.83rem !important;
+  color: var(--color-foreground-primary) !important;
+  padding: 0.4rem 0.6rem !important;
+  font-family: var(--font-stack);
+}
+
+input[type="search"]::placeholder {
+  color: var(--color-foreground-muted);
+}
+
+/* ---------------------------------------------------------
+   Dropdown (sphinx-design) — collapsibles
+   --------------------------------------------------------- */
+details.sd-dropdown {
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--color-background-secondary) !important;
+  margin: var(--space-2) 0 !important;
+}
+
+details.sd-dropdown summary {
+  padding: 0.55rem 0.95rem !important;
+  font-size: 0.86rem !important;
+  font-weight: 500 !important;
+  color: var(--color-foreground-primary) !important;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+details.sd-dropdown summary:hover {
+  background: var(--color-background-hover) !important;
+}
+
+details.sd-dropdown[open] summary {
+  border-bottom: var(--hairline-quiet);
+  font-weight: 600 !important;
+}
+
+details.sd-dropdown .sd-summary-content {
+  padding: 0.75rem 0.95rem !important;
+  font-size: 0.85rem !important;
+  color: var(--color-foreground-secondary) !important;
+  line-height: 1.62;
+}
+
+details.sd-dropdown .sd-summary-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------
+   Search results
+   --------------------------------------------------------- */
+.search-results .context {
+  font-size: 0.83rem;
+  color: var(--color-foreground-secondary);
+  line-height: 1.6;
+  border-left: 2px solid var(--color-foreground-border);
+  padding-left: 0.75rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.search-results li {
+  border-bottom: var(--hairline-quiet);
+  padding: 0.6rem 0;
+  list-style: none;
+}
+
+.search-results li:last-child {
+  border-bottom: none;
+}
+
+.search-results a {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-foreground-primary);
+  text-decoration: none;
+}
+
+.search-results a:hover {
+  text-decoration: underline;
+}
+
+.search-results .highlighted {
+  background: var(--color-background-hover);
+  color: var(--color-foreground-primary);
+  border-radius: var(--radius-sm);
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+#search-results h2 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-foreground-muted);
+  border-bottom: none;
+  margin: var(--space-4) 0 var(--space-2);
+  padding-bottom: 0;
+}
+
+/* ---------------------------------------------------------
+   Math — block equations rendered in a subtle bordered panel
+   matching the code-block aesthetic. Inline math stays
+   transparent so it flows with prose.
+
+   Sphinx emits block math as:
+     <div class="math-wrapper docutils container">
+       <div class="math notranslate nohighlight">\[ ... \]</div>
+     </div>
+   MathJax then injects an <mjx-container display="true"> inside the
+   inner div. Style the inner div as the visible panel, and zero out
+   the wrapper so we don't get double padding.
+   --------------------------------------------------------- */
+.math-wrapper.docutils.container {
+  padding: 0 !important;
+  margin: var(--space-4) 0;
+  background: transparent !important;
+  border: none !important;
+}
+
+div.math.notranslate.nohighlight,
+div.math {
+  background: var(--color-background-secondary) !important;
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.9rem 1.15rem !important;
+  margin: var(--space-4) 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  color: var(--color-foreground-primary);
+  position: relative;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* MathJax-rendered block container inside our div.math should sit flat */
+div.math mjx-container[display="true"] {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: inherit;
+}
+
+/* Equation number — quiet right-aligned tag */
+div.math span.eqno,
+.math .eqno {
+  color: var(--color-foreground-muted) !important;
+  font-size: 0.78rem !important;
+  font-family: var(--font-stack--monospace);
+  letter-spacing: 0.01em;
+  float: right;
+  padding-left: 0.75rem;
+}
+
+/* Inline math — no panel, inherits flow */
+mjx-container:not([display="true"]),
+span.math.notranslate.nohighlight {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: inherit;
+}
+
+/* MathJax glyph color tracks the foreground primary */
+mjx-container,
+mjx-container * {
+  color: var(--color-foreground-primary);
+}
+
+/* Math inside admonitions and tables — drop the panel so the
+   surrounding container provides the framing */
+.admonition div.math,
+.admonition mjx-container[display="true"],
+table.docutils div.math,
+table.docutils mjx-container[display="true"] {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.25rem 0 !important;
+  margin: 0.25rem 0 !important;
+}
+
+/* ---------------------------------------------------------
+   Meta-cards strip — Inputs / Outputs / CLI / Config eyebrow
+   strip at the top of every methods page. Compact, eyebrow
+   uppercase title, transparent surface so it reads as page
+   metadata rather than as a major visual element.
+   --------------------------------------------------------- */
+.meta-cards {
+  margin: 0 0 var(--space-5);
+}
+
+.meta-cards .sd-card {
+  background: transparent !important;
+  border: none !important;
+  border-top: var(--hairline-quiet) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transition: border-top-color 0.15s ease;
+}
+
+.meta-cards .sd-card:hover {
+  background: transparent !important;
+  border-top-color: var(--color-foreground-secondary) !important;
+}
+
+.meta-cards .sd-card-body {
+  padding: 0.55rem 0 0.7rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.meta-cards .sd-card-title {
+  font-size: 0.66rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--color-foreground-muted) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.meta-cards .sd-card-text {
+  font-size: 0.82rem !important;
+  color: var(--color-foreground-primary) !important;
+  line-height: 1.55;
+  margin: 0 !important;
+}
+
+/* ---------------------------------------------------------
+   Stage / Step section headers — long methods pages have many
+   sequential "Stage N — Foo" sections. A subtle horizontal
+   pre-rule above each h3 starting with "Stage" or "Step"
+   improves vertical rhythm. Pure CSS, no markup change needed.
+   --------------------------------------------------------- */
+section[id^="stage-"] > h3,
+section[id^="step-"] > h3 {
+  border-top: var(--hairline-quiet);
+  padding-top: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+/* ---------------------------------------------------------
+   Module-ref caption — small uppercase eyebrow line that
+   identifies the source module implementing a stage. Rendered
+   directly under the section heading. The literal "Module:"
+   prefix becomes a small letter-spaced label; the code path
+   keeps its monospace styling.
+   --------------------------------------------------------- */
+.module-ref {
+  margin: -0.4rem 0 var(--space-4);
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--color-foreground-muted);
+  border-left: 2px solid var(--color-foreground-border);
+  padding-left: 0.7rem;
+}
+
+.module-ref p {
+  margin: 0 !important;
+  line-height: 1.5;
+}
+
+.module-ref code,
+.module-ref .docutils.literal {
+  font-size: 0.78rem !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: var(--color-foreground-secondary) !important;
+}
+
+/* ---------------------------------------------------------
+   Dropdown directive — slightly tighter chevron + monospace
+   summary for the "click to expand" affordance. Used on
+   source_localization Manual Docker Workflow.
+   --------------------------------------------------------- */
+details.sd-dropdown summary svg.octicon {
+  color: var(--color-foreground-muted);
+}
+
+details.sd-dropdown[open] summary svg.octicon {
+  color: var(--color-foreground-primary);
+}
+
+/* ---------------------------------------------------------
+   Glossary — definition list
+   --------------------------------------------------------- */
+dl.glossary dt {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-foreground-primary);
+  margin-top: 1.1rem;
+  padding-bottom: 0.2rem;
+  border-bottom: var(--hairline-quiet);
+}
+
+dl.glossary dd {
+  margin-left: 1rem;
+  font-size: 0.85rem;
+  color: var(--color-foreground-secondary);
+  line-height: 1.65;
+  margin-bottom: 0.2rem;
+}
+
+/* ---------------------------------------------------------
+   Step-header cards (quickstart numbered steps)
+   --------------------------------------------------------- */
+.sd-col-12 > .sd-card,
+.sd-col-xs-12 > .sd-card {
+  border-left: 2px solid var(--color-foreground-secondary) !important;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
+  background: var(--color-background-secondary) !important;
+}
+
+.sd-col-12 > .sd-card .sd-card-body,
+.sd-col-xs-12 > .sd-card .sd-card-body {
+  padding: 0.55rem 0.95rem !important;
+  font-size: 0.85rem !important;
+  color: var(--color-foreground-secondary) !important;
+}
+
+/* ---------------------------------------------------------
+   Mobile / narrow viewport
+   --------------------------------------------------------- */
+@media (max-width: 700px) {
+  .sd-row.sd-row-cols-3 > .sd-col,
+  .sd-row.sd-row-cols-xs-3 > .sd-col,
+  .sd-row.sd-row-cols-2 > .sd-col,
+  .sd-row.sd-row-cols-xs-2 > .sd-col {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  h1 { font-size: 1.45rem; }
+  h2 { font-size: 1.05rem; }
+  .hero-lede { font-size: 0.95rem; }
+
+  table.docutils {
+    font-size: 0.78rem;
+  }
+
+  table.docutils th,
+  table.docutils td {
+    padding: 0.35rem 0.55rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  div.highlight pre {
+    font-size: 0.74rem;
+  }
+
+  .sd-card-body {
+    font-size: 0.8rem !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   Scrollbar — thin, unobtrusive
+   --------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-foreground-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-foreground-muted);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-foreground-border) transparent;
+}
+
+/* ---------------------------------------------------------
+   Print / PDF — clean grayscale scholarly output
+   --------------------------------------------------------- */
+@media print {
+  body,
+  .page,
+  .content,
+  article {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+  }
+
+  .sidebar-drawer,
+  .toc-drawer,
+  .mobile-header,
+  .related-pages,
+  button.copybtn,
+  footer,
+  nav {
+    display: none !important;
+  }
+
+  .main,
+  .content,
+  article.bd-article {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 1cm 1.5cm !important;
+  }
+
+  h1, h2, h3, h4 {
+    color: #111111 !important;
+    border-color: #cccccc !important;
+    page-break-after: avoid;
+  }
+
+  div.highlight,
+  pre {
+    background: #f5f5f5 !important;
+    border: 1px solid #cccccc !important;
+    color: #1a1a1a !important;
+    font-size: 0.78rem !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    page-break-inside: avoid;
+  }
+
+  .sd-card {
+    border: 1px solid #cccccc !important;
+    background: #fafafa !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .sd-card-header {
+    color: #1a1a1a !important;
+    border-bottom-color: #cccccc !important;
+    background: #f0f0f0 !important;
+  }
+
+  .sd-card-body {
+    color: #333333 !important;
+  }
+
+  table.docutils th {
+    background: #eeeeee !important;
+    color: #333333 !important;
+    border-color: #aaaaaa !important;
+  }
+
+  table.docutils td {
+    border-color: #dddddd !important;
+    color: #1a1a1a !important;
+  }
+
+  .admonition {
+    background: #f9f9f9 !important;
+    border-left-color: #666666 !important;
+  }
+
+  .admonition-title {
+    color: #111111 !important;
+  }
+
+  .admonition.warning,
+  .admonition.caution,
+  .admonition.attention {
+    border-left-color: #8A6322 !important;
+  }
+  .admonition.warning .admonition-title,
+  .admonition.caution .admonition-title,
+  .admonition.attention .admonition-title {
+    color: #8A6322 !important;
+  }
+
+  .admonition.danger,
+  .admonition.error {
+    border-left-color: #8A3A3A !important;
+  }
+  .admonition.danger .admonition-title,
+  .admonition.error .admonition-title {
+    color: #8A3A3A !important;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    color: #666666;
+  }
+
+  a[href^="#"]::after,
+  a[href^="javascript:"]::after {
+    content: "";
+  }
+
+  .hero-lede {
+    color: #444444 !important;
+  }
+
+  .step-progress,
+  .dev-status {
+    color: #555555 !important;
+    border-color: #cccccc !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   API signatures & autodoc (Sphinx)
+   --------------------------------------------------------- */
+.sig:not(.sig-inline) {
+  border: var(--hairline-quiet) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.5rem 0.85rem 0.5rem 3em !important;
+  text-indent: -2.25em !important;
+  background: var(--color-api-background) !important;
+  color: var(--color-api-overall) !important;
+  margin-top: var(--space-5) !important;
+  margin-bottom: var(--space-3) !important;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.sig:not(.sig-inline):hover {
+  background: var(--color-api-background-hover) !important;
+  border-color: var(--color-foreground-secondary) !important;
+}
+
+.sig:not(.sig-inline) .sig-name {
+  color: var(--color-api-name) !important;
+  font-weight: 700 !important;
+}
+
+.sig:not(.sig-inline) .sig-prename {
+  color: var(--color-api-pre-name) !important;
+  font-weight: 400 !important;
+}
+
+.sig:not(.sig-inline) .sig-paren {
+  color: var(--color-api-paren) !important;
+}
+
+.sig:not(.sig-inline) em.property,
+.sig:not(.sig-inline) span.property {
+  color: var(--color-api-keyword) !important;
+  font-style: normal;
+}
+
+.sig:not(.sig-inline) .sig-param {
+  color: var(--color-foreground-secondary);
+  font-style: normal;
+}
+
+.sig:not(.sig-inline) .sig-param .n {
+  color: var(--color-foreground-primary);
+}
+
+.sig:not(.sig-inline) .default_value {
+  color: var(--color-foreground-muted);
+}
+
+/* Field lists inside docstrings (Parameters, Returns, etc.) */
+dl.field-list {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+dl.field-list > dt {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+  color: var(--color-foreground-secondary) !important;
+  margin-top: var(--space-3) !important;
+  padding-bottom: 0.2rem;
+  border-bottom: var(--hairline-quiet);
+}
+
+dl.field-list > dd {
+  margin-left: 0.75rem !important;
+  padding-left: 0.5rem !important;
+  font-size: 0.85rem !important;
+  color: var(--color-foreground-primary) !important;
+  line-height: 1.6;
+}
+
+dl.field-list > dd > ul {
+  padding-left: 1.1rem;
+}

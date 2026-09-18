@@ -18,9 +18,8 @@ _MIN_BASELINE_POWER = 1e-12
 
 Deliberately not the ``1e-20`` power floor used elsewhere: a baseline that small
 turns a quiet channel into an ERDS value of order 1e6 percent, which is
-arithmetically valid and physically meaningless. The reference pipeline guards at
-this value for the same reason, noting that clamping instead "would produce
-artificially huge ERD/ERS ratios".
+arithmetically valid and physically meaningless. Baselines below this floor
+are invalidated to NaN to prevent artificially inflated ERD/ERS ratios.
 """
 
 ErdsScale = Literal["percent", "db"]
@@ -457,11 +456,9 @@ def erds_rebound_latency(
     include_global: bool = True,
     normalize: ErdsScale = "percent",
 ) -> FeatureTable:
-    """Time of the largest value after the peak.
+    """Latency of the largest ERDS excursion after the peak.
 
-    Reconstructed rather than ported: the reference computes a rebound only inside a stimulus-
-    side-dependent path that this library does not implement. NaN when no sample follows the
-    peak.
+    Evaluates to NaN when no sample follows the peak latency within the analysis window.
 
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own

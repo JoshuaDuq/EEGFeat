@@ -26,12 +26,30 @@ Normalization
 Power normalization is applied per channel before spatial aggregation:
 
 - **log10**: :math:`\log_{10}(\max(P, \epsilon))`
-- **log_ratio**: :math:`\log_{10}(\max(P, \epsilon) / \max(B, \epsilon))`
-- **db**: :math:`10 \log_{10}(\max(P, \epsilon) / \max(B, \epsilon))`
+- **log_ratio**: :math:`\log_{10}\left(\frac{\max(P, \epsilon)}{\max(B, \epsilon)}\right)`
+- **db**: :math:`10 \log_{10}\left(\frac{\max(P, \epsilon)}{\max(B, \epsilon)}\right)`
+- **percent**: :math:`\frac{P - \max(B, \epsilon)}{\max(B, \epsilon)} \cdot 100`
 
-where :math:`B` is the baseline power in a designated reference window, and :math:`\epsilon = 10^{-20}` is a symmetric floor applied equally to the numerator and denominator to prevent infinite ratios while avoiding numerator bias.
+where :math:`B` is the baseline power in a designated reference window, and :math:`\epsilon = 10^{-20}` is a symmetric floor applied equally to the numerator and denominator to prevent infinite ratios while avoiding numerator bias (in percent normalization, the numerator is unfloored so that a true zero power remains an exact :math:`-100\%` decrease).
 
 Applying normalization per channel before spatial aggregation ensures that region-of-interest (ROI) values reflect the mean of log-ratios rather than the log-ratio of channel means.
+
+Wavelet Support Restriction
+---------------------------
+
+When computing spectral power or features across time-frequency representations (TFRs), Morlet wavelet kernels possess frequency-dependent temporal duration. For a Morlet wavelet at center frequency :math:`f` parameterized with :math:`n_{\text{cycles}}` cycles, the temporal half-support is:
+
+.. math::
+
+   \tau(f) = \frac{n_{\text{cycles}}}{2 f}
+
+A time-frequency coefficient at time coordinate :math:`t` draws upon underlying signal data from :math:`[t - \tau(f), t + \tau(f)]`. Consequently, a coefficient is mathematically attributable to an analysis window :math:`[t_{\min}, t_{\max}]` if and only if its full temporal support is contained entirely within the window bounds:
+
+.. math::
+
+   t_{\min} + \tau(f) \le t \le t_{\max} - \tau(f)
+
+Bins failing this condition are masked out prior to window averaging. Frequencies where :math:`\tau(f) > (t_{\max} - t_{\min}) / 2` retain no attributable coefficients across the window and are returned as NaN, preventing edge and baseline leakage.
 
 Peak Frequency
 --------------
@@ -64,16 +82,15 @@ discrete maximum and its two neighbours:
 
 .. math::
 
-   \delta = \frac{1}{2} \frac{P(f_{k-1}) - P(f_{k+1})}{P(f_{k-1}) - 2 P(f_k) + P(f_{k+1})}
-
-.. math::
-
-   f_{\text{peak}} = f_k + \delta \cdot \frac{f_{k+1} - f_{k-1}}{2}
+   \begin{aligned}
+   \delta &= \frac{1}{2} \frac{P(f_{k-1}) - P(f_{k+1})}{P(f_{k-1}) - 2 P(f_k) + P(f_{k+1})} \\[6pt]
+   f_{\text{peak}} &= f_k + \delta \cdot \frac{f_{k+1} - f_{k-1}}{2}
+   \end{aligned}
 
 where :math:`k` is the discrete argmax index. Interpolation requires at least
 three frequency bins in the band, which is also the definition domain of an
 interior maximum; narrower bands raise. Set ``interpolate=False`` to report the
-bin frequency itself, which is what the reference pipeline does.
+discrete bin frequency itself without interpolation.
 
 If the discrete maximum falls on the first or last bin of the band, the
 ``edge_hit`` flag is set, indicating that the true peak may lie outside the
@@ -116,11 +133,10 @@ Spectral entropy measures the uniformity of the spectral distribution within a b
 
 .. math::
 
-   p_i = \frac{P(f_i) \Delta f_i}{\sum_j P(f_j) \Delta f_j}
-
-.. math::
-
-   H = -\frac{\sum_i p_i \ln(p_i)}{\ln(N)}
+   \begin{aligned}
+   p_i &= \frac{P(f_i) \Delta f_i}{\sum_j P(f_j) \Delta f_j} \\[6pt]
+   H &= -\frac{\sum_i p_i \ln(p_i)}{\ln(N)}
+   \end{aligned}
 
 where :math:`N` is the number of frequency bins in the band. A value of 1 indicates uniform power across the band, while 0 indicates concentration in a single bin. Because the normalization depends on :math:`\ln(N)`, entropy values across bands with different bin counts are not directly comparable.
 
@@ -142,23 +158,24 @@ ERDS measures time-varying power changes in band-limited signals relative to a b
 
 .. math::
 
-   \text{ERDS}_{\%}(t) = \frac{P(t) - B}{B} \cdot 100
+   \begin{aligned}
+   \text{ERDS}_{\%}(t) &= \frac{P(t) - B}{B} \cdot 100 \\[6pt]
+   \text{ERDS}_{\text{dB}}(t) &= 10 \log_{10}\left(\frac{P(t)}{B}\right)
+   \end{aligned}
 
-.. math::
+where :math:`P(t)` is the instantaneous power derived from the Hilbert envelope :math:`|z(t)|^2`, and :math:`B` is the mean baseline power. To prevent extreme instability on low-amplitude channels, the baseline is guarded such that :math:`B \ge 10^{-12}\,\text{V}^2`; channels failing this guard evaluate to NaN.
 
-   \text{ERDS}_{\text{dB}}(t) = 10 \log_{10}\left(\frac{P(t)}{B}\right)
+Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}_{k=1}^K` within defined analysis windows:
 
-where :math:`P(t)` is the instantaneous power derived from the Hilbert envelope. Summary measures are computed within defined analysis windows:
-
-- **mean**: Mean percentage or decibel excursion across the window.
-- **slope**: Least-squares linear rate of change over time.
-- **erd_magnitude**: Mean magnitude of negative excursions (:math:`P < B`).
-- **erd_duration**: Total duration in seconds spent in desynchronization.
-- **ers_magnitude**: Mean magnitude of positive excursions (:math:`P > B`).
-- **ers_duration**: Total duration in seconds spent in synchronization.
-- **peak_latency**: Time of the maximum absolute excursion within the window.
-- **onset_latency**: Earliest time where :math:`|\text{ERDS}(t)|` exceeds the baseline coefficient of variation (:math:`\sigma_B / \mu_B \cdot 100`).
-- **rebound_latency**: Time of the maximum value occurring strictly after the peak latency.
+- **mean**: Mean percentage or decibel excursion: :math:`\bar{E} = \frac{1}{K} \sum_{k=1}^K \text{ERDS}(t_k)`.
+- **slope**: Ordinary least squares linear slope of :math:`\text{ERDS}(t_k)` against :math:`t_k`, requiring at least three finite samples.
+- **erd_magnitude**: Mean magnitude of negative excursions: :math:`\frac{1}{|K_-|} \sum_{t_k \in K_-} |\text{ERDS}(t_k)|`, where :math:`K_- = \{t_k : \text{ERDS}(t_k) < 0\}` (returns :math:`0.0` if :math:`K_- = \emptyset`).
+- **erd_duration**: Cumulative desynchronization duration: :math:`|K_-| / f_s` in seconds.
+- **ers_magnitude**: Mean magnitude of positive excursions: :math:`\frac{1}{|K_+|} \sum_{t_k \in K_+} \text{ERDS}(t_k)`, where :math:`K_+ = \{t_k : \text{ERDS}(t_k) > 0\}` (returns :math:`0.0` if :math:`K_+ = \emptyset`).
+- **ers_duration**: Cumulative synchronization duration: :math:`|K_+| / f_s` in seconds.
+- **peak_latency**: Latency of the maximum absolute excursion: :math:`t^* = \arg\max_{t_k} |\text{ERDS}(t_k)|`.
+- **onset_latency**: Earliest latency where :math:`|\text{ERDS}(t_k)|` exceeds the baseline coefficient of variation: :math:`\min \{t_k : |\text{ERDS}(t_k)| > \theta_\text{baseline}\}`, where :math:`\theta_\text{baseline} = \frac{\sigma_B}{\mu_B} \cdot 100`.
+- **rebound_latency**: Latency of the maximal excursion occurring strictly after the peak latency: :math:`\arg\max_{t_k > t^*} \text{ERDS}(t_k)`.
 
 Oscillatory Bursts
 ------------------
@@ -187,9 +204,9 @@ summarize a series within a window. They accept a raw :class:`~eegfeat.Signal` o
 a :class:`~eegfeat.BandSignal`, reading the signal itself in the first case and
 the envelope in the second.
 
-Non-finite samples are excluded and reported through ``coverage``, rather than
-poisoning the window as they do in the reference implementation, which returns
-NaN if any sample is non-finite.
+Non-finite samples are excluded and reported through ``coverage``, ensuring
+window summaries reflect only valid, finite electrophysiological data without
+silent zero-filling or whole-window invalidation.
 
 ``area_under_curve`` integrates by the trapezoid rule over each contiguous run of
 finite samples and sums them. A gap is skipped rather than interpolated across,
@@ -203,11 +220,10 @@ Peak Amplitude and Latency
 ``"positive"`` searches the signal, ``"negative"`` its negation, ``"absolute"``
 its magnitude. The returned amplitude is always signed.
 
-**Polarity is an explicit argument, never inferred from the window's name.** The
-reference pipeline reads the first letter of the label, so a window called
-``noxious`` silently searches for a negative peak and one called ``post`` for a
-positive one. Component-name parsing of the ``N2`` and ``P300`` form is likewise
-not implemented: those conventions belong to a paradigm, not to a measurement.
+**Polarity is an explicit parameter (``"positive"``, ``"negative"``, or ``"absolute"``).**
+Peak extraction is decoupled from window nomenclature or paradigm-specific ERP component
+labels (such as ``N2`` or ``P300``), ensuring unambiguous measurement semantics across
+arbitrary experimental designs.
 
 ``prominence``, when given, confines the search to local maxima meeting that
 prominence and takes the most prominent. This matters where the extremum of a
@@ -233,25 +249,41 @@ entropy means perfect regularity rather than absent evidence.
 
 ``multiscale_entropy`` applies the same measure after coarse-graining by
 non-overlapping block averages, one column per scale. The tolerance is recomputed
-from each coarse-grained series, following the reference, so it tracks the
-variance surviving the averaging. Note that coarse-graining removes non-finite
-samples before blocking, which closes gaps rather than preserving sample
-positions.
+from each coarse-grained series so it tracks the variance surviving the averaging.
+Note that coarse-graining removes non-finite samples before blocking, which closes
+gaps rather than preserving sample positions.
 
 Cost grows with the square of the window length, so entropy on long windows is
 markedly slower than the spectral measures.
 
-What Is Deliberately Absent
----------------------------
+Band Ratio and Asymmetry
+------------------------
 
-The reference pipeline computes an ``snr`` and a ``muscle`` ratio. Neither is
-implemented here, because both are named for an interpretation rather than for
-what they compute: ``snr`` is a band-power density ratio that asserts 1-30 Hz is
-signal and 40-80 Hz is noise, which is false for any study of gamma; ``muscle``
-is a high-frequency power fraction that asserts the high frequencies are muscle.
-Both are available through :func:`~eegfeat.band_power` and
-:func:`~eegfeat.band_ratio` with bands the caller chooses, which puts the
-assumption in the call where it can be seen and argued with.
+Band power ratios and hemispheric asymmetry indices operate on computed band power tables. To maintain mathematical consistency across linear and logarithmic scales, the transformation adapts to the input normalization:
+
+**Band Ratio:** For linear power, the ratio between numerator band :math:`A` and denominator band :math:`B` is:
+
+.. math::
+
+   R_{A/B} = \frac{P_A}{P_B}
+
+When the input is logarithmic (``"log10"``, ``"log_ratio"``, or ``"db"``), division is replaced by subtraction:
+
+.. math::
+
+   R_{A/B} = \log_{10} P_A - \log_{10} P_B = \log_{10}\left(\frac{P_A}{P_B}\right)
+
+**Hemispheric Asymmetry:** For a left-right homologous channel pair :math:`(L, R)`, raw power asymmetry is defined as the normalized difference:
+
+.. math::
+
+   A_{L, R} = \frac{P_R - P_L}{P_R + P_L}
+
+For logarithmic input, the difference of logs corresponds directly to the logarithm of the power ratio:
+
+.. math::
+
+   A_{L, R} = \log_{10} P_R - \log_{10} P_L = \log_{10}\left(\frac{P_R}{P_L}\right)
 
 
 Inter-Trial Phase Coherence
@@ -272,13 +304,14 @@ Under the null of uniform phase the expected value is about
 :math:`1/\sqrt{N}`, not zero, so coherence from a small number of trials is
 biased upward and values from different trial counts are not comparable.
 
-**ITPC has one row per trial group, not one per epoch.** It is estimated across
-trials, so a per-epoch row would be the same number repeated, and a model fitted
-on it would treat one estimate as many independent observations. The reference
-implementation broadcasts, and its own documentation calls that
-pseudo-replication; the table returned here carries ``row_labels`` and
-:func:`~eegfeat.concat` refuses to join it to per-epoch features. Pass ``trials``
-to estimate within groups, for example one row per condition.
+**ITPC has one row per trial group, not one per epoch.** Because phase coherence
+is estimated across trials, assigning a per-epoch row would replicate the identical
+summary estimate across single trials, introducing severe pseudo-replication in
+downstream statistical or predictive models. Feature tables returned by
+:func:`~eegfeat.itpc` carry explicit ``row_labels`` and :func:`~eegfeat.concat`
+refuses to join trial-group rows to per-epoch rows without an explicit broadcasting
+strategy. Pass ``trials`` to estimate coherence within distinct groups (for example,
+per experimental condition).
 
 Phase-Amplitude Coupling
 ------------------------
@@ -295,10 +328,9 @@ amplitude.
 
 Computed within each trial, so it carries no cross-trial leakage and has one row
 per epoch. **No surrogate correction is applied.** A raw coupling value is biased
-upward by amplitude and phase autocorrelation and should be read against a null
-you construct, not absolutely. The reference offers trial-shuffle and
-circular-shift surrogates; trial shuffling mixes information across trials, so if
-you build a null here, prefer a within-trial circular shift.
+upward by amplitude and phase autocorrelation and should be evaluated against an
+empirical null distribution (preferring within-trial circular time shifts over
+trial-shuffling to preserve single-trial spectral structure).
 
 
 Connectivity
@@ -309,10 +341,8 @@ every pair of nodes; ``wpli`` is the weighted phase lag index, which discounts
 zero-lag coupling and so is less vulnerable to volume conduction.
 
 **wPLI delegates to** ``mne_connectivity.spectral_connectivity_epochs``, the
-canonical implementation and the one the reference pipeline uses. Computing it
-from Hilbert analytic signals instead would be a different estimator and would
-not reproduce those values. It is an optional dependency:
-``pip install eegfeat[connectivity]``.
+canonical implementation for cross-spectral phase lag calculation. It is an
+optional dependency: ``pip install eegfeat[connectivity]``.
 
 Nodes are channels, or ROIs when ``groups`` is given, in which case the
 channel-level matrix is averaged within each ROI block and a node's own block
@@ -323,50 +353,62 @@ Graph Measures
 --------------
 
 ``global_efficiency`` and ``clustering_coefficient`` take a pairwise table and
-reduce it to one value per band and window, the way :func:`~eegfeat.band_ratio`
-takes a power table. They are computed here rather than delegated, because both
-are short and exactly specified, and both are verified bit-identical against
-networkx.
+reduce it to one summary value per band and window, analogous to how :func:`~eegfeat.band_ratio`
+summarizes a power table. Both graph metrics are computed directly without
+third-party network graph dependencies.
 
-Global efficiency treats each edge as having length ``1 / (|w| + 1e-9)`` and
-averages the inverse shortest path length over all node pairs, so a strong
-connection is a short step and indirect routes count.
+Global efficiency converts edge weights :math:`w_{ij}` into path distances :math:`L_{ij} = \frac{1}{|w_{ij}| + \epsilon}` (where :math:`\epsilon = 10^{-9}`), computes the all-pairs shortest path matrix :math:`D = [d_{ij}]` via the Floyd-Warshall algorithm, and averages the harmonic mean of distances across all node pairs:
 
-The clustering coefficient **binarizes** the network at ``threshold`` and then
-averages the unweighted coefficient over nodes with at least two neighbours.
-Binarizing is what the reference does, so the value depends on the threshold,
-which has no canonical choice; it is required rather than defaulted for that
-reason, and recorded in the column's unit. Nodes below degree two are excluded
-rather than counted as zero, so a network too sparse to contain a triangle gives
-NaN rather than a misleadingly small number.
+.. math::
+
+   E_{\text{global}} = \frac{2}{N (N - 1)} \sum_{i < j} \frac{1}{d_{ij}}
+
+where :math:`N` is the number of network nodes.
+
+The clustering coefficient **binarizes** the connectivity matrix at user-specified ``threshold`` :math:`\theta` (:math:`A_{ij} = 1` if :math:`|w_{ij}| > \theta`, else :math:`0`), and computes the average local clustering coefficient over nodes with degree :math:`k_i \ge 2`:
+
+.. math::
+
+   \begin{aligned}
+   C_i &= \frac{(A^3)_{ii}}{k_i (k_i - 1)} = \frac{2 T_i}{k_i (k_i - 1)} \\[6pt]
+   C &= \frac{1}{|\{i : k_i \ge 2\}|} \sum_{i : k_i \ge 2} C_i
+   \end{aligned}
+
+where :math:`(A^3)_{ii}` is the diagonal entry of the cubed adjacency matrix (representing twice the number of triangles :math:`T_i` containing node :math:`i`), and :math:`k_i = \sum_j A_{ij}` is the node degree. Nodes with :math:`k_i < 2` are excluded from the average rather than counted as zero, so networks too sparse to contain a triangle evaluate to NaN rather than an artificially suppressed value.
 
 
 Microstates
 -----------
 
-Templates are clustered from the topographies at peaks of the global field power,
-where the map is most stable, then every sample is assigned to its most similar
-template. Similarity uses the **absolute** correlation, so a topography and its
-inversion are the same state; that is the convention, and it is why templates are
-sign-normalized to a single representation.
+Templates are clustered from the topographies at local maxima of the global field power (GFP):
 
-Segments shorter than ``min_duration_ms`` are absorbed into a neighbour: the
-longer one, or split between them on a tie. A one-sample run with equal
-neighbours therefore lands entirely on the following state, because its first
-half is empty.
+.. math::
 
-**Template fitting pools across trials; the measures do not.** ``fit_on`` names
-which trials may contribute topographies, as a cross-validation fold requires.
-The default uses every trial, which is right for description and leaks for
-prediction. Assignment and every measure derived from it are per epoch, so the
-tables have one row per epoch.
+   \text{GFP}(t) = \sqrt{\frac{1}{N_{\text{channels}}} \sum_{c=1}^{N_{\text{channels}}} \left( V_c(t) - \bar{V}(t) \right)^2 }
 
-``microstate_coverage`` is the fraction of the window spent in each state and
-sums to one, so the values are compositional rather than independent.
-``microstate_duration`` is the mean time per visit, NaN for a state never
-entered, because a state that did not occur has no duration. ``microstate_occurrence``
-is visits per second and is **zero** in that case, which is a real measurement.
-``microstate_transitions`` counts moves between successive *segments*, not
-successive samples, so remaining in a state is not a self-transition.
+where :math:`\bar{V}(t)` is the instantaneous average-reference potential. GFP peak maps are sign-normalized such that the channel with the largest absolute amplitude is positive, and partitioned into :math:`K` prototype classes using :math:`k`-means clustering.
+
+Continuous EEG samples are subsequently assigned to the prototype template exhibiting the highest absolute spatial correlation:
+
+.. math::
+
+   s(t) = \arg\max_k \frac{|V(t)^T \mu_k|}{\|V(t)\| \|\mu_k\|}
+
+Segments shorter than ``min_duration_ms`` are absorbed into neighbouring states: the longer one, or split between them on a tie.
+
+**Template fitting pools across trials; the measures do not.** ``fit_on`` names which trials may contribute topographies, as a cross-validation fold requires. The default uses every trial, which is right for description and leaks for prediction. Assignment and every measure derived from it are per epoch, so the returned feature tables have one row per epoch.
+
+From the resulting symbolic state sequence :math:`s(t)`, four canonical microstate statistics are derived:
+
+- **coverage**: Fractional occupancy time: :math:`\frac{1}{T} \sum_t \mathbb{I}[s(t) = k]` (compositional, sums to 1 across states).
+- **duration**: Mean continuous dwell time per visit in milliseconds (evaluates to NaN if state :math:`k` was never entered).
+- **occurrence**: Number of distinct visits per second (evaluates to :math:`0.0` if never entered).
+- **transitions**: Directional transition probability between successive segments:
+
+.. math::
+
+   T_{i \to j} = \frac{N_{i \to j}}{\sum_{m \ne i} N_{i \to m}} \quad (i \ne j)
+
+Self-transitions (:math:`i = j`) are omitted from segment-based transition matrices.
 
 Segmentation requires scikit-learn: ``pip install eegfeat[microstates]``.

@@ -188,7 +188,7 @@ def test_a_peak_at_the_window_end_leaves_no_rebound() -> None:
 
 
 def test_a_near_dead_channel_is_withheld_rather_than_amplified() -> None:
-    # A 0.1 uV baseline envelope is power 1e-14, below the reference's 1e-12 guard.
+    # A 0.1 uV baseline envelope is power 1e-14, below the 1e-12 guard.
     # Without that guard this returns an ERDS of order 1e6 percent.
     n = 201
     envelope = np.full((1, 1, n), 1e-7)

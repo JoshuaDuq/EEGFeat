@@ -66,10 +66,9 @@ def gradient_weights(freqs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Central-difference bin widths for a frequency axis.
 
     Identical to :func:`trapezoid_weights` in the interior and twice its value
-    at each endpoint. The spectral descriptors use this weighting and band power
-    uses the trapezoid rule, matching the reference pipeline, which applies both.
-    On a uniform grid every weight here is equal, which is what gives a flat
-    spectrum exactly maximal entropy.
+    at each endpoint. Spectral descriptors use this weighting, whereas band power
+    uses the trapezoid rule. On a uniform grid every weight here is equal, which is
+    what gives a flat spectrum exactly maximal entropy.
 
     Parameters
     ----------

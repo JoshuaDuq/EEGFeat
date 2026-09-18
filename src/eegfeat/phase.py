@@ -37,10 +37,10 @@ def itpc(
 
     **This is estimated across trials, so the result has one row per trial group,
     not one per epoch.** The returned table carries ``row_labels`` and cannot be
-    concatenated with per-epoch features. That is deliberate: the reference
-    implementation broadcasts a single value onto every trial's row, which its own
-    documentation calls pseudo-replication, and a model fitted on such a column
-    treats one estimate as N independent observations.
+    concatenated with per-epoch features. Broadcasting group-level estimates onto
+    single epochs introduces pseudo-replication in downstream statistical models;
+    models fitted on broadcasted tables incorrectly treat a single group estimate
+    as N independent observations.
 
     Parameters
     ----------

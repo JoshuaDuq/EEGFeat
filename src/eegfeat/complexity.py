@@ -97,8 +97,8 @@ def multiscale_entropy(
 
     Coarse-graining averages non-overlapping blocks of ``scale`` samples, so scale
     1 is the signal itself and larger scales describe slower structure. The
-    tolerance is recomputed from each coarse-grained series, following the
-    reference implementation, so it tracks the variance that survives averaging.
+    tolerance is recomputed from each coarse-grained series so it tracks the
+    variance that survives averaging.
 
     Parameters
     ----------

@@ -28,9 +28,8 @@ def variance(
 ) -> FeatureTable:
     """Variance of the signal within each window.
 
-    Computed over the finite samples only, with the rest reported through
-    ``coverage``. The reference pipeline instead returns NaN if any sample in the
-    window is non-finite.
+    Computed over finite samples within each window, with valid sample fractions
+    recorded in the parallel ``coverage`` matrix.
 
     Parameters
     ----------
@@ -151,9 +150,8 @@ def peak_amplitude(
 ) -> FeatureTable:
     """Signed value of the extremum within each window.
 
-    ``polarity`` is an explicit argument rather than something inferred from the
-    window's name. The reference pipeline reads the first letter of the label, so
-    a window called ``"noxious"`` silently searches for a negative peak.
+    ``polarity`` is specified as an explicit parameter (``"positive"``,
+    ``"negative"``, or ``"absolute"``), independent of window labels or naming conventions.
 
     Parameters
     ----------

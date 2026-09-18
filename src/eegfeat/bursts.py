@@ -257,10 +257,9 @@ def fraction_above_threshold(
 ) -> FeatureTable:
     """Share of window samples above threshold.
 
-    Computed before the duration filter, so it counts samples in runs that were later
-    discarded. It answers how much of the window was above threshold, which is a
-    different question from how much of it was in a burst; this is the reference's
-    behaviour and is deliberate.
+    Computed before the duration filter, quantifying the overall fraction of samples
+    exceeding the envelope amplitude threshold across the window regardless of
+    burst duration.
 
     Parameters
     ----------
