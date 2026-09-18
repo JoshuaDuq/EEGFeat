@@ -1,0 +1,76 @@
+import numpy as np
+import pytest
+
+from eegfeat.bands import Band
+from eegfeat.derived import asymmetry, band_ratio
+from eegfeat.table import FeatureMeta, FeatureTable, Normalization
+
+THETA, BETA = Band("theta", 4.0, 8.0), Band("beta", 13.0, 30.0)
+
+
+def _table(values: np.ndarray, bands, spaces, norm: Normalization = "raw") -> FeatureTable:
+    meta = tuple(
+        FeatureMeta(
+            measure="power",
+            band=b,
+            space=s,
+            space_kind="channel",
+            window="stim",
+            normalization=norm,
+            unit="V^2/Hz",
+            source="test",
+        )
+        for b, s in zip(bands, spaces, strict=True)
+    )
+    return FeatureTable(values=values, coverage=np.ones(values.shape), meta=meta)
+
+
+def test_raw_power_ratio_divides() -> None:
+    table = _table(np.array([[8.0, 2.0]]), [THETA, BETA], ["C3", "C3"])
+    out = band_ratio(table, "theta", "beta")
+    assert out.values.item() == pytest.approx(4.0)
+    assert out.meta[0].measure == "ratio_theta_beta"
+    assert out.meta[0].band is None
+
+
+def test_log_power_ratio_subtracts() -> None:
+    table = _table(np.array([[3.0, 1.0]]), [THETA, BETA], ["C3", "C3"], norm="log10")
+    out = band_ratio(table, "theta", "beta")
+    assert out.values.item() == pytest.approx(2.0)
+
+
+def test_ratio_is_computed_per_space_and_window() -> None:
+    table = _table(
+        np.array([[8.0, 2.0, 9.0, 3.0]]),
+        [THETA, BETA, THETA, BETA],
+        ["C3", "C3", "C4", "C4"],
+    )
+    out = band_ratio(table, "theta", "beta")
+    assert out.values.shape == (1, 2)
+    np.testing.assert_allclose(out.values, [[4.0, 3.0]])
+
+
+def test_a_missing_band_raises() -> None:
+    table = _table(np.array([[8.0]]), [THETA], ["C3"])
+    with pytest.raises(ValueError, match="beta"):
+        band_ratio(table, "theta", "beta")
+
+
+def test_raw_asymmetry_is_normalized_difference() -> None:
+    table = _table(np.array([[1.0, 3.0]]), [THETA, THETA], ["F3", "F4"])
+    out = asymmetry(table, pairs=[("F3", "F4")])
+    assert out.values.item() == pytest.approx((3.0 - 1.0) / (3.0 + 1.0))
+    assert out.meta[0].space == "F3-F4"
+    assert out.meta[0].space_kind == "pair"
+
+
+def test_log_asymmetry_is_a_plain_difference() -> None:
+    table = _table(np.array([[1.0, 3.0]]), [THETA, THETA], ["F3", "F4"], norm="log_ratio")
+    out = asymmetry(table, pairs=[("F3", "F4")])
+    assert out.values.item() == pytest.approx(2.0)
+
+
+def test_an_unknown_channel_in_a_pair_raises() -> None:
+    table = _table(np.array([[1.0, 3.0]]), [THETA, THETA], ["F3", "F4"])
+    with pytest.raises(KeyError, match="Fz"):
+        asymmetry(table, pairs=[("Fz", "F4")])
