@@ -175,6 +175,17 @@ pair and asserted that pair came back strongest. Values agreeing proves nothing 
 labels. The regression test asserts placement, not magnitude, and `_dense` now takes
 the matrix from the estimator's own `output="dense"`.
 
+### Microstates
+| Component | Reference | Result |
+|---|---|---|
+| topography normalization | `microstates._normalize_topographies` | bit-identical |
+| minimum-duration smoothing | `microstates._apply_min_duration` | identical on every sample |
+| coverage, duration, occurrence, transitions | `microstates._compute_epoch_metrics` | bit-identical, NaN patterns included |
+
+Verified over 200 random state sequences with varying lengths, state counts and
+smoothing windows. Clustering itself is delegated to `sklearn.cluster.KMeans`, as the
+reference does, and is an optional dependency.
+
 ### Measures Not Ported
 - **`snr` and `muscle` ratio.** Named for an interpretation rather than a computation:
   the first asserts 1-30 Hz is signal and 40-80 Hz is noise, the second that high

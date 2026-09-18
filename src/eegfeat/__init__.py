@@ -45,6 +45,14 @@ from eegfeat.erds import (
     ers_duration,
     ers_magnitude,
 )
+from eegfeat.microstates import (
+    MicrostateSegmentation,
+    microstate_coverage,
+    microstate_duration,
+    microstate_occurrence,
+    microstate_transitions,
+    segment,
+)
 from eegfeat.phase import itpc, pac
 from eegfeat.power import band_power
 from eegfeat.signal import BandSignal, Signal
@@ -94,6 +102,11 @@ __all__ = [
     "global_efficiency",
     "itpc",
     "mean_amplitude",
+    "microstate_coverage",
+    "microstate_duration",
+    "microstate_occurrence",
+    "microstate_transitions",
+    "MicrostateSegmentation",
     "multiscale_entropy",
     "pac",
     "peak_amplitude",
@@ -101,6 +114,7 @@ __all__ = [
     "peak_latency",
     "peak_to_peak",
     "sample_entropy",
+    "segment",
     "Signal",
     "Spectra",
     "spectral_bandwidth",

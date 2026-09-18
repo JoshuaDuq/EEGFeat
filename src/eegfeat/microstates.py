@@ -1,0 +1,458 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+import numpy.typing as npt
+from scipy.signal import find_peaks
+
+from eegfeat._expand import window_mask
+from eegfeat.signal import Signal
+from eegfeat.spectra import Window
+from eegfeat.table import FeatureMeta, FeatureTable
+
+_CANONICAL = ("a", "b", "c", "d")
+
+
+@dataclass(frozen=True, eq=False)
+class MicrostateSegmentation:
+    """Microstate templates and the state each sample was assigned to.
+
+    Produced by :func:`segment`. The measures take this rather than a signal, so
+    every measure describes the same segmentation: fitting separately per measure
+    would give each one different templates.
+
+    Parameters
+    ----------
+    templates : ndarray, shape (n_states, n_channels)
+        Normalized topographies, one per state.
+    states : ndarray of int, shape (n_epochs, n_times)
+        Index of the template each sample was assigned to.
+    labels : tuple of str
+        Name of each state, in template order.
+    times : ndarray, shape (n_times,)
+        Time axis in seconds.
+    sfreq : float
+        Sampling frequency in Hz.
+    """
+
+    templates: npt.NDArray[np.float64]
+    states: npt.NDArray[np.int_]
+    labels: tuple[str, ...]
+    times: npt.NDArray[np.float64]
+    sfreq: float
+
+    @property
+    def n_states(self) -> int:
+        """Number of microstate classes."""
+        return int(self.templates.shape[0])
+
+
+def segment(
+    signal: Signal,
+    *,
+    n_states: int = 4,
+    fit_on: npt.NDArray[np.bool_] | None = None,
+    min_duration_ms: float = 20.0,
+    min_peak_distance_ms: float = 10.0,
+    max_peaks_per_epoch: int = 400,
+    peak_prominence: float | None = None,
+    random_state: int = 42,
+) -> MicrostateSegmentation:
+    """Fit microstate templates and assign every sample to one.
+
+    Templates are clustered from the topographies at peaks of the global field
+    power, where the map is most stable, then every sample is assigned to its
+    most similar template. Similarity uses the **absolute** correlation, so a
+    topography and its inversion are the same state; that is the convention, and
+    it is why templates are sign-normalized.
+
+    **Template fitting pools across trials.** ``fit_on`` names which trials may
+    contribute, exactly as a cross-validation fold would require. The default
+    uses every trial, which is correct for description and leaks for prediction.
+    The per-sample assignment and every measure derived from it are per epoch, so
+    the measures themselves carry one row per epoch.
+
+    Requires the optional dependency: ``pip install eegfeat[microstates]``.
+
+    Parameters
+    ----------
+    signal : Signal
+        Broadband epochs. Topographies are demeaned across channels per sample,
+        which is equivalent to an average reference.
+    n_states : int, default 4
+        Number of microstate classes. Four is conventional and gets the labels
+        ``a`` to ``d``; other counts get ``state1`` onward.
+    fit_on : ndarray of bool, optional
+        Which epochs may contribute topographies to the clustering. None uses all.
+    min_duration_ms : float, default 20.0
+        Segments shorter than this are absorbed into a neighbour, which removes
+        physiologically implausible one-sample flickering.
+    min_peak_distance_ms : float, default 10.0
+        Minimum separation between global field power peaks.
+    max_peaks_per_epoch : int, default 400
+        Strongest peaks retained per epoch.
+    peak_prominence : float, optional
+        Minimum prominence for a peak to count.
+    random_state : int, default 42
+        Seed for the clustering.
+
+    Returns
+    -------
+    MicrostateSegmentation
+    """
+    kmeans = _require_sklearn()
+    if not 2 <= n_states <= 12:
+        raise ValueError(f"n_states must be between 2 and 12, got {n_states}.")
+    if min_duration_ms < 0.0:
+        raise ValueError(f"min_duration_ms must be non-negative, got {min_duration_ms}.")
+
+    data = signal.data
+    contributing = np.ones(data.shape[0], dtype=bool) if fit_on is None else np.asarray(fit_on)
+    if contributing.shape != (data.shape[0],):
+        raise ValueError(
+            f"fit_on must have one entry per epoch; got {contributing.shape} for "
+            f"{data.shape[0]} epochs."
+        )
+    if not contributing.any():
+        raise ValueError("fit_on excludes every epoch, so there is nothing to cluster.")
+
+    maps = [
+        _peak_topographies(
+            data[epoch], signal.sfreq, min_peak_distance_ms, max_peaks_per_epoch, peak_prominence
+        )
+        for epoch in np.flatnonzero(contributing)
+    ]
+    stacked = np.concatenate([m for m in maps if m.size], axis=0) if maps else np.empty((0, 0))
+    if stacked.shape[0] < n_states:
+        raise ValueError(
+            f"only {stacked.shape[0]} global field power peaks were found across the "
+            f"contributing epochs, fewer than the {n_states} states requested."
+        )
+
+    model = kmeans(n_clusters=n_states, n_init=20, random_state=random_state)
+    model.fit(stacked)
+    templates = _normalize_rows(np.asarray(model.cluster_centers_, dtype=float))
+
+    min_samples = max(1, int(round(min_duration_ms * signal.sfreq / 1000.0)))
+    states = np.stack(
+        [_smooth(_assign(data[epoch], templates), min_samples) for epoch in range(data.shape[0])]
+    )
+    labels = (
+        _CANONICAL
+        if n_states == len(_CANONICAL)
+        else tuple(f"state{i + 1}" for i in range(n_states))
+    )
+    return MicrostateSegmentation(
+        templates=templates, states=states, labels=labels, times=signal.times, sfreq=signal.sfreq
+    )
+
+
+def microstate_coverage(
+    segmentation: MicrostateSegmentation, *, windows: Sequence[Window]
+) -> FeatureTable:
+    """Fraction of the window spent in each state.
+
+    Sums to one across states, so the values are compositional and not
+    independent of one another.
+
+    Parameters
+    ----------
+    segmentation : MicrostateSegmentation
+        From :func:`segment`.
+    windows : sequence of Window
+        Analysis windows.
+
+    Returns
+    -------
+    FeatureTable
+        One column per state and window, with ``space_kind="state"``.
+    """
+    return _per_state(segmentation, windows, "coverage", "fraction", _coverage)
+
+
+def microstate_duration(
+    segmentation: MicrostateSegmentation, *, windows: Sequence[Window]
+) -> FeatureTable:
+    """Mean time spent in a state per visit, in milliseconds.
+
+    NaN for a state the window never enters, rather than zero: a state that did
+    not occur has no duration, which is not the same as a very short one.
+
+    Parameters
+    ----------
+    segmentation : MicrostateSegmentation
+        From :func:`segment`.
+    windows : sequence of Window
+        Analysis windows.
+
+    Returns
+    -------
+    FeatureTable
+        One column per state and window.
+    """
+    return _per_state(segmentation, windows, "duration", "ms", _duration)
+
+
+def microstate_occurrence(
+    segmentation: MicrostateSegmentation, *, windows: Sequence[Window]
+) -> FeatureTable:
+    """Number of times a state is entered per second.
+
+    Zero for a state the window never enters, which unlike duration is a real
+    measurement: the state occurred zero times.
+
+    Parameters
+    ----------
+    segmentation : MicrostateSegmentation
+        From :func:`segment`.
+    windows : sequence of Window
+        Analysis windows.
+
+    Returns
+    -------
+    FeatureTable
+        One column per state and window.
+    """
+    return _per_state(segmentation, windows, "occurrence", "1/s", _occurrence)
+
+
+def microstate_transitions(
+    segmentation: MicrostateSegmentation, *, windows: Sequence[Window]
+) -> FeatureTable:
+    """Probability of moving from one state to each other state.
+
+    Counted over successive **segments**, not successive samples, so remaining in
+    a state is not counted as a transition to itself. Each row of the matrix sums
+    to one, or is NaN where the source state was never left.
+
+    Parameters
+    ----------
+    segmentation : MicrostateSegmentation
+        From :func:`segment`.
+    windows : sequence of Window
+        Analysis windows.
+
+    Returns
+    -------
+    FeatureTable
+        One column per ordered state pair and window, named ``"a-to-b"``, with
+        ``space_kind="pair"``.
+    """
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
+    for window in windows:
+        mask = window_mask(segmentation.times, window)
+        matrices = np.stack(
+            [_transitions(row[mask], segmentation.n_states) for row in segmentation.states]
+        )
+        for source in range(segmentation.n_states):
+            for target in range(segmentation.n_states):
+                if source == target:
+                    continue
+                columns.append(
+                    (
+                        _meta(
+                            "transition",
+                            f"{segmentation.labels[source]}-to-{segmentation.labels[target]}",
+                            "pair",
+                            window,
+                            "probability",
+                        ),
+                        matrices[:, source, target],
+                    )
+                )
+    return _assemble(columns)
+
+
+def _require_sklearn() -> Any:
+    try:
+        from sklearn.cluster import KMeans
+    except ImportError as exc:  # pragma: no cover - exercised by the import guard test
+        raise ImportError(
+            "microstate segmentation needs scikit-learn, which is not installed. "
+            "Install it with: pip install eegfeat[microstates]"
+        ) from exc
+    return KMeans
+
+
+def _normalize_rows(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    out = np.zeros_like(matrix, dtype=float)
+    for index, row in enumerate(matrix):
+        vector = row - np.nanmean(row)
+        norm = float(np.linalg.norm(vector))
+        if not np.isfinite(norm) or norm <= 0.0:
+            continue
+        vector = vector / norm
+        # Fix the sign so a topography and its inversion have one representation.
+        if vector[int(np.argmax(np.abs(vector)))] < 0.0:
+            vector = -vector
+        out[index] = vector
+    return out
+
+
+def _gfp(epoch: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    demeaned = epoch - np.nanmean(epoch, axis=0, keepdims=True)
+    return np.asarray(np.nanstd(demeaned, axis=0), dtype=float)
+
+
+def _peak_topographies(
+    epoch: npt.NDArray[np.float64],
+    sfreq: float,
+    min_peak_distance_ms: float,
+    max_peaks: int,
+    prominence: float | None,
+) -> npt.NDArray[np.float64]:
+    if epoch.ndim != 2 or epoch.shape[1] < 3:
+        return np.empty((0, epoch.shape[0]), dtype=float)
+    strength = _gfp(epoch)
+    if not np.isfinite(strength).any():
+        return np.empty((0, epoch.shape[0]), dtype=float)
+    distance = max(1, int(round(min_peak_distance_ms * sfreq / 1000.0)))
+    peaks, _ = find_peaks(strength, distance=distance, prominence=prominence)
+    if peaks.size == 0:
+        peaks = np.array([int(np.nanargmax(strength))], dtype=int)
+    strongest = peaks[np.argsort(strength[peaks])[::-1][:max_peaks]]
+    return _normalize_rows(epoch[:, strongest].T)
+
+
+def _assign(
+    epoch: npt.NDArray[np.float64], templates: npt.NDArray[np.float64]
+) -> npt.NDArray[np.int_]:
+    maps = _normalize_rows(epoch.T)
+    # Absolute similarity: a map and its inversion belong to the same state.
+    similarity = np.abs(templates @ maps.T)
+    return np.asarray(np.argmax(similarity, axis=0), dtype=int)
+
+
+def _runs(states: npt.NDArray[np.int_]) -> list[tuple[int, int, int]]:
+    if states.size == 0:
+        return []
+    out: list[tuple[int, int, int]] = []
+    start = 0
+    for index in range(1, states.size + 1):
+        if index == states.size or states[index] != states[start]:
+            out.append((start, index, int(states[start])))
+            start = index
+    return out
+
+
+def _smooth(states: npt.NDArray[np.int_], min_samples: int) -> npt.NDArray[np.int_]:
+    if states.size == 0 or min_samples <= 1:
+        return states
+    out = states.copy()
+    runs = _runs(out)
+    for position, (start, stop, _state) in enumerate(runs):
+        if stop - start >= min_samples:
+            continue
+        previous = runs[position - 1] if position > 0 else None
+        following = runs[position + 1] if position < len(runs) - 1 else None
+        if previous is None and following is None:
+            continue
+        if previous is None:
+            out[start:stop] = following[2]  # type: ignore[index]
+            continue
+        if following is None:
+            out[start:stop] = previous[2]
+            continue
+        if previous[2] == following[2]:
+            out[start:stop] = previous[2]
+            continue
+        previous_length = previous[1] - previous[0]
+        following_length = following[1] - following[0]
+        if previous_length > following_length:
+            out[start:stop] = previous[2]
+        elif following_length > previous_length:
+            out[start:stop] = following[2]
+        else:
+            # A tie splits the segment between its neighbours rather than
+            # arbitrarily favouring one.
+            middle = start + (stop - start) // 2
+            out[start:middle] = previous[2]
+            out[middle:stop] = following[2]
+    return out
+
+
+def _coverage(states: npt.NDArray[np.int_], n_states: int, sfreq: float) -> npt.NDArray[np.float64]:
+    del sfreq
+    if states.size == 0:
+        return np.full(n_states, np.nan)
+    return np.array([(states == k).mean() for k in range(n_states)], dtype=float)
+
+
+def _duration(states: npt.NDArray[np.int_], n_states: int, sfreq: float) -> npt.NDArray[np.float64]:
+    out = np.full(n_states, np.nan)
+    lengths = [(state, stop - start) for start, stop, state in _runs(states)]
+    for k in range(n_states):
+        visits = [length for state, length in lengths if state == k]
+        if visits:
+            out[k] = float(np.mean(visits) * 1000.0 / sfreq)
+    return out
+
+
+def _occurrence(
+    states: npt.NDArray[np.int_], n_states: int, sfreq: float
+) -> npt.NDArray[np.float64]:
+    if states.size == 0:
+        return np.full(n_states, np.nan)
+    seconds = max(states.size / float(sfreq), 1e-12)
+    lengths = [state for _start, _stop, state in _runs(states)]
+    return np.array([lengths.count(k) / seconds for k in range(n_states)], dtype=float)
+
+
+def _transitions(states: npt.NDArray[np.int_], n_states: int) -> npt.NDArray[np.float64]:
+    counts = np.zeros((n_states, n_states))
+    sequence = [state for _start, _stop, state in _runs(states)]
+    for source, target in zip(sequence, sequence[1:], strict=False):
+        if 0 <= source < n_states and 0 <= target < n_states:
+            counts[source, target] += 1.0
+    totals = counts.sum(axis=1, keepdims=True)
+    out = np.full_like(counts, np.nan)
+    nonzero = totals[:, 0] > 0
+    out[nonzero] = counts[nonzero] / totals[nonzero]
+    return out
+
+
+def _meta(measure: str, space: str, kind: Any, window: Window, unit: str) -> FeatureMeta:
+    return FeatureMeta(
+        measure=measure,
+        band=None,
+        space=space,
+        space_kind=kind,
+        window=window.name,
+        normalization="raw",
+        unit=unit,
+        source="microstates",
+        freq_resolution_hz=None,
+    )
+
+
+def _per_state(
+    segmentation: MicrostateSegmentation,
+    windows: Sequence[Window],
+    measure: str,
+    unit: str,
+    reduce: Any,
+) -> FeatureTable:
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
+    for window in windows:
+        mask = window_mask(segmentation.times, window)
+        values = np.stack(
+            [
+                reduce(row[mask], segmentation.n_states, segmentation.sfreq)
+                for row in segmentation.states
+            ]
+        )
+        for index, label in enumerate(segmentation.labels):
+            columns.append((_meta(measure, label, "state", window, unit), values[:, index]))
+    return _assemble(columns)
+
+
+def _assemble(columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]]) -> FeatureTable:
+    values = np.stack([column for _, column in columns], axis=1)
+    return FeatureTable(
+        values=values,
+        coverage=np.isfinite(values).astype(float),
+        meta=tuple(meta for meta, _ in columns),
+    )

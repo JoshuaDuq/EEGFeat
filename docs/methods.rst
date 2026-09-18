@@ -339,3 +339,34 @@ which has no canonical choice; it is required rather than defaulted for that
 reason, and recorded in the column's unit. Nodes below degree two are excluded
 rather than counted as zero, so a network too sparse to contain a triangle gives
 NaN rather than a misleadingly small number.
+
+
+Microstates
+-----------
+
+Templates are clustered from the topographies at peaks of the global field power,
+where the map is most stable, then every sample is assigned to its most similar
+template. Similarity uses the **absolute** correlation, so a topography and its
+inversion are the same state; that is the convention, and it is why templates are
+sign-normalized to a single representation.
+
+Segments shorter than ``min_duration_ms`` are absorbed into a neighbour: the
+longer one, or split between them on a tie. A one-sample run with equal
+neighbours therefore lands entirely on the following state, because its first
+half is empty.
+
+**Template fitting pools across trials; the measures do not.** ``fit_on`` names
+which trials may contribute topographies, as a cross-validation fold requires.
+The default uses every trial, which is right for description and leaks for
+prediction. Assignment and every measure derived from it are per epoch, so the
+tables have one row per epoch.
+
+``microstate_coverage`` is the fraction of the window spent in each state and
+sums to one, so the values are compositional rather than independent.
+``microstate_duration`` is the mean time per visit, NaN for a state never
+entered, because a state that did not occur has no duration. ``microstate_occurrence``
+is visits per second and is **zero** in that case, which is a real measurement.
+``microstate_transitions`` counts moves between successive *segments*, not
+successive samples, so remaining in a state is not a self-transition.
+
+Segmentation requires scikit-learn: ``pip install eegfeat[microstates]``.

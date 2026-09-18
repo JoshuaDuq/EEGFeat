@@ -11,7 +11,7 @@ import pandas as pd
 from eegfeat.bands import Band
 from eegfeat.naming import feature_name
 
-SpaceKind = Literal["channel", "roi", "global", "pair"]
+SpaceKind = Literal["channel", "roi", "global", "pair", "state"]
 Normalization = Literal["raw", "log10", "log_ratio", "db", "percent"]
 
 
@@ -31,9 +31,10 @@ class FeatureMeta:
         a fitted range rather than a band.
     space : str
         Channel name, ROI name, or ``"global"``.
-    space_kind : {"channel", "roi", "global", "pair"}
-        Which of those ``space`` is. ``"pair"`` marks a derived unit comparing
-        two channels, such as an asymmetry.
+    space_kind : {"channel", "roi", "global", "pair", "state"}
+        Which of those ``space`` is. ``"pair"`` marks a derived unit relating two
+        nodes, such as an asymmetry or a connection; ``"state"`` marks a
+        microstate class, which is a spatial mode rather than a location.
     window : str or None
         Time window name, or None when the spectrum spans the whole segment.
     normalization : {"raw", "log10", "log_ratio", "db"}
