@@ -50,11 +50,24 @@ The legacy pipeline used two distinct frequency weighting conventions:
 compatibility with the reference pipeline while cleanly separating their definitions.
 
 ### Peak Frequency
-`eegfeat.peak_frequency` is not equivalent to the reference `compute_peak_frequency` by design:
-- `eegfeat`: Computes an interpolated parabolic argmax over raw or normalized band spectra, returning an `edge_hit` diagnostic flag.
-- Reference: Fits and subtracts an aperiodic 1/f model, smooths the residual spectrum with a 1 Hz Gaussian filter, and identifies prominent peaks.
+`eegfeat.peak_frequency` now implements the reference estimator: the aperiodic
+adjustment, the smoothing and the prominence-gated centre-of-gravity fallback are all
+present, and `aperiodic_ratio` exposes the whitening step on its own. Four differences
+remain, all deliberate:
 
-The reference peak estimator is a multi-step composite method whose port is planned as a future specialized addition.
+- **Interpolation is on by default.** The reference returns the bin frequency; `eegfeat`
+  refines it parabolically. Pass `interpolate=False` to match the reference exactly.
+- **Smoothing handles gaps differently.** The reference drops non-finite bins and smooths
+  the compacted array, so its window silently spans across a gap in index space.
+  `eegfeat` keeps the frequency axis and renormalizes by how many bins were finite.
+  The reference filter is a uniform boxcar (`scipy.ndimage.uniform_filter1d`), not a
+  Gaussian; `eegfeat` uses the same.
+- **Band and fit-range masks are half-open**, as everywhere else in `eegfeat`, against the
+  reference's inclusive `<= fmax`.
+- **Non-positive power is excluded from the aperiodic fit** rather than floored at
+  `1e-20`. Flooring lets a zero bin sit at -20 in log space and drag the fit. Where the
+  fit does not converge, `eegfeat` passes the cell through unwhitened; the reference falls
+  back to an unweighted `polyfit`.
 
 ### Grid Endpoints on Band Bounds
 Frequency arrays generated via `np.logspace` do not reproduce mathematical endpoints exactly due to

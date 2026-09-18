@@ -13,6 +13,10 @@ from eegfeat.spectra import Spectra, Window
 
 ALPHA = Band("alpha", 8.0, 13.0)
 
+# The corrections are on by default. These keywords select the bare
+# interpolated argmax, which is what the tests immediately below are about.
+PLAIN = {"aperiodic_adjusted": False, "smoothing_hz": 0.0, "min_prominence": 0.0}
+
 
 def _spectra(power: np.ndarray, freqs: np.ndarray) -> Spectra:
     data = power.reshape(1, 1, 1, freqs.size)
@@ -33,7 +37,7 @@ def _gaussian(freqs: np.ndarray, centre: float, width: float = 0.8) -> np.ndarra
 def test_recovers_a_known_peak_to_better_than_the_bin_spacing() -> None:
     freqs = np.arange(8.0, 13.0, 0.5)
     table = peak_frequency(
-        _spectra(_gaussian(freqs, 10.2), freqs), band=ALPHA, include_global=False
+        _spectra(_gaussian(freqs, 10.2), freqs), band=ALPHA, include_global=False, **PLAIN
     )
     assert table.values.item() == pytest.approx(10.2, abs=0.1)
 
@@ -41,14 +45,14 @@ def test_recovers_a_known_peak_to_better_than_the_bin_spacing() -> None:
 def test_peak_on_a_band_edge_is_flagged() -> None:
     freqs = np.arange(8.0, 13.0, 0.5)
     rising = _spectra(np.linspace(1.0, 5.0, freqs.size), freqs)
-    table = peak_frequency(rising, band=ALPHA, include_global=False)
+    table = peak_frequency(rising, band=ALPHA, include_global=False, **PLAIN)
     assert table.flags["edge_hit"].all()
 
 
 def test_an_interior_peak_is_not_flagged() -> None:
     freqs = np.arange(8.0, 13.0, 0.5)
     table = peak_frequency(
-        _spectra(_gaussian(freqs, 10.2), freqs), band=ALPHA, include_global=False
+        _spectra(_gaussian(freqs, 10.2), freqs), band=ALPHA, include_global=False, **PLAIN
     )
     assert not table.flags["edge_hit"].any()
 
@@ -56,7 +60,7 @@ def test_an_interior_peak_is_not_flagged() -> None:
 def test_resolution_is_reported_on_the_column() -> None:
     freqs = np.arange(8.0, 13.0, 0.5)
     table = peak_frequency(
-        _spectra(_gaussian(freqs, 10.2), freqs), band=ALPHA, include_global=False
+        _spectra(_gaussian(freqs, 10.2), freqs), band=ALPHA, include_global=False, **PLAIN
     )
     assert table.meta[0].freq_resolution_hz == pytest.approx(0.5)
     assert table.meta[0].unit == "Hz"
@@ -67,13 +71,15 @@ def test_a_grid_too_coarse_for_an_interior_peak_raises() -> None:
     # definition domain of the estimator and must not silently return a number.
     freqs = np.array([8.0, 11.0, 14.0])
     with pytest.raises(ValueError, match="3 bins"):
-        peak_frequency(_spectra(np.array([1.0, 2.0, 1.0]), freqs), band=ALPHA, include_global=False)
+        peak_frequency(
+            _spectra(np.array([1.0, 2.0, 1.0]), freqs), band=ALPHA, include_global=False, **PLAIN
+        )
 
 
 def test_all_nan_input_yields_nan_without_raising() -> None:
     freqs = np.arange(8.0, 13.0, 0.5)
     table = peak_frequency(
-        _spectra(np.full(freqs.size, np.nan), freqs), band=ALPHA, include_global=False
+        _spectra(np.full(freqs.size, np.nan), freqs), band=ALPHA, include_global=False, **PLAIN
     )
     assert np.isnan(table.values).all()
 
@@ -166,3 +172,103 @@ def test_an_empty_band_yields_nan_for_every_descriptor() -> None:
     dead = _spectra(np.zeros(UNIFORM.size), UNIFORM)
     for fn in (spectral_centroid, spectral_bandwidth, spectral_entropy):
         assert np.isnan(fn(dead, band=ALPHA, include_global=False).values).all()
+
+
+# --- the aperiodic-adjusted estimator ------------------------------------------------
+
+WIDE = np.arange(2.0, 45.0, 0.25)
+
+
+def _wide(power: np.ndarray) -> Spectra:
+    data = power.reshape(1, 1, 1, WIDE.size)
+    return Spectra(
+        data=data,
+        freqs=WIDE,
+        ch_names=("C3",),
+        windows=(Window("all", -np.inf, np.inf),),
+        coverage=np.isfinite(data).astype(float),
+        source="test",
+    )
+
+
+def _alpha_on_a_slope(exponent: float = -3.5, amplitude: float = 0.35) -> np.ndarray:
+    background = 10.0 * WIDE**exponent
+    return background * (1.0 + amplitude * np.exp(-0.5 * ((WIDE - 10.5) / 0.6) ** 2))
+
+
+def test_a_raw_argmax_reports_the_band_edge_on_a_steep_spectrum() -> None:
+    # The failure the adjustment exists to fix, pinned so it stays visible.
+    table = peak_frequency(_wide(_alpha_on_a_slope()), band=ALPHA, include_global=False, **PLAIN)
+    assert table.values.item() == pytest.approx(8.0)
+    assert table.flags["edge_hit"].all()
+
+
+def test_the_adjustment_recovers_the_oscillation_the_raw_argmax_missed() -> None:
+    table = peak_frequency(_wide(_alpha_on_a_slope()), band=ALPHA, include_global=False)
+    assert table.values.item() == pytest.approx(10.5, abs=0.5)
+    assert not table.flags["edge_hit"].any()
+
+
+def test_smoothing_rejects_a_single_bin_spike() -> None:
+    clean = 10.0 * WIDE**-1.5 * (1.0 + 0.8 * np.exp(-0.5 * ((WIDE - 11.0) / 0.5) ** 2))
+    spiked = clean.copy()
+    spiked[int(np.argmin(np.abs(WIDE - 8.75)))] *= 6.0
+    fooled = peak_frequency(_wide(spiked), band=ALPHA, smoothing_hz=0.0, include_global=False)
+    steady = peak_frequency(_wide(spiked), band=ALPHA, include_global=False)
+    assert fooled.values.item() == pytest.approx(8.75)
+    assert abs(steady.values.item() - 11.0) < abs(fooled.values.item() - 11.0)
+
+
+def test_a_spectrum_with_no_oscillation_falls_back_to_centre_of_gravity() -> None:
+    table = peak_frequency(_wide(10.0 * WIDE**-2.2), band=ALPHA, include_global=False)
+    assert table.flags["cog_fallback"].all()
+    assert not table.flags["edge_hit"].any()
+    assert 8.0 < table.values.item() < 13.0
+
+
+def test_disabling_the_prominence_guard_disables_the_fallback() -> None:
+    table = peak_frequency(
+        _wide(10.0 * WIDE**-2.2), band=ALPHA, min_prominence=0.0, include_global=False
+    )
+    assert not table.flags["cog_fallback"].any()
+
+
+def test_the_measure_name_records_whether_the_adjustment_ran() -> None:
+    spectra = _wide(_alpha_on_a_slope())
+    adjusted = peak_frequency(spectra, band=ALPHA, include_global=False)
+    plain = peak_frequency(spectra, band=ALPHA, include_global=False, **PLAIN)
+    assert adjusted.meta[0].measure == "peak_freq_adjusted"
+    assert plain.meta[0].measure == "peak_freq"
+
+
+def test_the_source_records_the_whitening() -> None:
+    table = peak_frequency(_wide(_alpha_on_a_slope()), band=ALPHA, include_global=False)
+    assert table.meta[0].source == "test+aperiodic_ratio"
+
+
+def test_without_interpolation_the_result_is_a_grid_frequency() -> None:
+    table = peak_frequency(
+        _wide(_alpha_on_a_slope(amplitude=2.0)),
+        band=ALPHA,
+        interpolate=False,
+        min_prominence=0.0,
+        include_global=False,
+    )
+    assert table.values.item() in set(WIDE.tolist())
+
+
+def test_fit_range_without_the_adjustment_raises() -> None:
+    with pytest.raises(ValueError, match="fit_range applies only"):
+        peak_frequency(
+            _wide(_alpha_on_a_slope()),
+            band=ALPHA,
+            aperiodic_adjusted=False,
+            fit_range=(2.0, 40.0),
+            include_global=False,
+        )
+
+
+@pytest.mark.parametrize(("key", "value"), [("smoothing_hz", -1.0), ("min_prominence", -0.1)])
+def test_negative_tuning_values_raise(key: str, value: float) -> None:
+    with pytest.raises(ValueError, match=key):
+        peak_frequency(_wide(_alpha_on_a_slope()), band=ALPHA, include_global=False, **{key: value})

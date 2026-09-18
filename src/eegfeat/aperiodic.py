@@ -98,6 +98,68 @@ def aperiodic(
     return concat(stripped)
 
 
+def aperiodic_ratio(
+    spectra: Spectra,
+    *,
+    fit_range: tuple[float, float] = (2.0, 40.0),
+    peak_rejection_z: float = 2.5,
+    max_iterations: int = 3,
+) -> Spectra:
+    """Divide out the fitted aperiodic component, leaving the periodic residual.
+
+    Returns spectra in which a pure power law is flat at 1.0, so an oscillation is
+    measured against the local 1/f floor rather than against zero. This is what
+    makes peak finding work on real data: a steep spectrum puts its largest raw
+    value at the low edge of any band, whatever the oscillation is doing.
+
+    The fit is the same iterative, positive-residual-rejecting fit used by
+    :func:`aperiodic`. A cell whose fit does not converge passes through unchanged
+    rather than being dropped.
+
+    Parameters
+    ----------
+    spectra : Spectra
+        Input spectra.
+    fit_range : tuple of float, default (2.0, 40.0)
+        Frequency range to fit, in Hz. The fitted curve is divided out across the
+        whole frequency axis, not only this range.
+    peak_rejection_z : float, default 2.5
+        Residual threshold in robust deviations.
+    max_iterations : int, default 3
+        Maximum refit rounds.
+
+    Returns
+    -------
+    Spectra
+        Power divided by the fitted aperiodic component. Frequencies at or below
+        zero carry no 1/f value and pass through unchanged.
+    """
+    mask = Band("fit", *fit_range).mask(spectra.freqs)
+    n_bins = int(mask.sum())
+    if n_bins < _MIN_FIT_POINTS:
+        raise ValueError(
+            f"fit_range {fit_range} holds {n_bins} frequency bins of the axis spanning "
+            f"({spectra.freqs[0]}, {spectra.freqs[-1]}), but the aperiodic fit needs at "
+            f"least {_MIN_FIT_POINTS}."
+        )
+
+    positive = spectra.freqs > 0.0
+    log_f = np.zeros_like(spectra.freqs)
+    np.log10(spectra.freqs, where=positive, out=log_f)
+
+    data = spectra.data
+    out = np.array(data, dtype=float)
+    for index in np.ndindex(data.shape[:3]):
+        slope, offset = _fit_one(log_f[mask], data[index][mask], peak_rejection_z, max_iterations)
+        if not (np.isfinite(slope) and np.isfinite(offset)):
+            # Nothing was fitted, so there is nothing to divide out.
+            continue
+        curve = 10.0 ** (offset + slope * log_f)
+        out[index] = np.where(positive, data[index] / curve, data[index])
+
+    return replace(spectra, data=out, source=f"{spectra.source}+aperiodic_ratio")
+
+
 def _fit_kernel(
     data: npt.NDArray[np.float64],
     freqs: npt.NDArray[np.float64],

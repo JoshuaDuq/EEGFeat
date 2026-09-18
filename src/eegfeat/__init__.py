@@ -10,7 +10,7 @@ It computes no time-frequency transform of its own.
 
 from __future__ import annotations
 
-from eegfeat.aperiodic import aperiodic
+from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.bands import BANDS_STANDARD, Band
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.descriptors import (
@@ -35,6 +35,7 @@ __all__ = [
     "Window",
     "__version__",
     "aperiodic",
+    "aperiodic_ratio",
     "asymmetry",
     "band_power",
     "band_ratio",

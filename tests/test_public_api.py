@@ -18,6 +18,7 @@ EXPECTED = {
     "spectral_edge",
     "spectral_entropy",
     "aperiodic",
+    "aperiodic_ratio",
     "band_ratio",
     "asymmetry",
 }

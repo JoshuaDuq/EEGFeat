@@ -36,7 +36,31 @@ Applying normalization per channel before spatial aggregation ensures that regio
 Peak Frequency
 --------------
 
-Peak frequency identifies the frequency of maximum spectral power within a band, refined via parabolic interpolation through the discrete maximum and its two adjacent neighbors:
+A bare argmax is a poor peak estimator on real spectra, so ``peak_frequency``
+applies three corrections by default, each of which can be switched off.
+
+**Aperiodic adjustment.** The fitted 1/f component is divided out first, so the
+search runs on :math:`P(f) / P_{\text{ap}}(f)` where a pure power law is flat at
+one. Without this step a steep spectrum reports the low edge of the band
+whatever the oscillation is doing, because the largest raw value in the band is
+simply the leftmost one. The fit spans ``fit_range``, defaulting to
+:math:`(\min(2, f_{\min}), \max(40, f_{\max}))`, which deliberately reaches
+outside the band: a 1/f slope estimated from a five-hertz window is not a 1/f
+slope. This sets the measure name to ``peak_freq_adjusted``.
+
+**Smoothing.** The spectrum is averaged over a window of ``smoothing_hz`` before
+the search, so a single noisy bin cannot win. The average ignores non-finite bins
+and renormalizes by how many contributed, rather than closing the gap and
+averaging across it.
+
+**Prominence guard.** If the maximum stands less than ``min_prominence`` above
+the band median, in :math:`\log_{10}` units, the centre of gravity
+:math:`\sum f P(f) / \sum P(f)` is reported instead and the ``cog_fallback``
+flag is set. A centre of gravity degrades gracefully when no oscillation is
+present; an argmax does not.
+
+The surviving maximum is then refined by parabolic interpolation through the
+discrete maximum and its two neighbours:
 
 .. math::
 
@@ -46,7 +70,16 @@ Peak frequency identifies the frequency of maximum spectral power within a band,
 
    f_{\text{peak}} = f_k + \delta \cdot \frac{f_{k+1} - f_{k-1}}{2}
 
-where :math:`k` is the discrete argmax index. Parabolic interpolation requires at least three frequency bins in the band. If the discrete maximum falls on the first or last bin of the band, the ``edge_hit`` flag is set, indicating that the true peak may lie outside the evaluated band.
+where :math:`k` is the discrete argmax index. Interpolation requires at least
+three frequency bins in the band, which is also the definition domain of an
+interior maximum; narrower bands raise. Set ``interpolate=False`` to report the
+bin frequency itself, which is what the reference pipeline does.
+
+If the discrete maximum falls on the first or last bin of the band, the
+``edge_hit`` flag is set, indicating that the true peak may lie outside the
+evaluated band. Every column additionally reports ``freq_resolution_hz``, the
+median in-band bin spacing, so the precision the grid could support is visible
+alongside the estimate.
 
 Spectral Centroid and Bandwidth
 -------------------------------

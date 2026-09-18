@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from eegfeat.aperiodic import aperiodic
+from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.spectra import Spectra, Window
 
 FREQS = np.logspace(np.log10(2.0), np.log10(40.0), 60)
@@ -62,3 +62,45 @@ def test_non_positive_power_is_excluded_rather_than_producing_neg_inf() -> None:
 def test_fit_range_outside_the_axis_raises() -> None:
     with pytest.raises(ValueError, match="no frequencies"):
         aperiodic(_spectra(10.0 * FREQS**-1.7), fit_range=(100.0, 200.0), include_global=False)
+
+
+# --- aperiodic_ratio -----------------------------------------------------------------
+
+
+def test_a_pure_power_law_flattens_to_one() -> None:
+    ratio = aperiodic_ratio(_spectra(10.0 * FREQS**-1.7))
+    np.testing.assert_allclose(ratio.data, 1.0, rtol=1e-6)
+
+
+def test_an_oscillation_survives_the_whitening_and_stands_above_one() -> None:
+    background = 10.0 * FREQS**-1.7
+    peaked = background * (1.0 + 1.5 * np.exp(-0.5 * ((FREQS - 10.0) / 1.0) ** 2))
+    ratio = aperiodic_ratio(_spectra(peaked))
+    at_peak = ratio.data[0, 0, 0, int(np.argmin(np.abs(FREQS - 10.0)))]
+    assert at_peak > 2.0
+    assert ratio.data[0, 0, 0, 0] == pytest.approx(1.0, abs=0.2)
+
+
+def test_whitening_is_recorded_in_the_provenance() -> None:
+    assert aperiodic_ratio(_spectra(10.0 * FREQS**-1.7)).source == "test+aperiodic_ratio"
+
+
+def test_the_grid_and_coverage_are_carried_through_unchanged() -> None:
+    spectra = _spectra(10.0 * FREQS**-1.7)
+    ratio = aperiodic_ratio(spectra)
+    np.testing.assert_array_equal(ratio.freqs, spectra.freqs)
+    np.testing.assert_array_equal(ratio.coverage, spectra.coverage)
+    assert ratio.windows == spectra.windows
+
+
+def test_a_fit_range_holding_too_few_bins_raises() -> None:
+    with pytest.raises(ValueError, match="at least 5"):
+        aperiodic_ratio(_spectra(10.0 * FREQS**-1.7), fit_range=(2.0, 2.2))
+
+
+def test_a_cell_that_cannot_be_fitted_passes_through_unchanged() -> None:
+    power = np.full(FREQS.size, np.nan)
+    power[:4] = 1.0
+    spectra = _spectra(power)
+    ratio = aperiodic_ratio(spectra)
+    np.testing.assert_array_equal(ratio.data[np.isfinite(ratio.data)], [1.0, 1.0, 1.0, 1.0])

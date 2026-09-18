@@ -1,33 +1,57 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 
 import numpy as np
 import numpy.typing as npt
+from scipy.ndimage import uniform_filter1d
 
 from eegfeat._expand import Kernel, expand
+from eegfeat.aperiodic import aperiodic_ratio
 from eegfeat.bands import Band
 from eegfeat.spectra import Spectra
 from eegfeat.table import FeatureTable
+
+_POWER_FLOOR = 1e-20
 
 
 def peak_frequency(
     spectra: Spectra,
     *,
     band: Band,
+    aperiodic_adjusted: bool = True,
+    smoothing_hz: float = 1.0,
+    min_prominence: float = 0.1,
+    interpolate: bool = True,
+    fit_range: tuple[float, float] | None = None,
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
 ) -> FeatureTable:
-    """Frequency of the largest peak within a band.
+    """Frequency of the dominant oscillation within a band.
 
-    The bin-resolution argmax is refined by parabolic interpolation through the
-    maximum and its two neighbours, so the result is not quantized to the grid.
+    A bare argmax is a poor peak estimator on real spectra, so three corrections
+    are applied by default and each can be switched off:
 
-    The estimate is only as trustworthy as the grid it came from, so every
-    column reports ``freq_resolution_hz`` and every cell carries an
-    ``"edge_hit"`` flag, set when the maximum landed on the first or last bin of
-    the band and the true peak may therefore lie outside it. Bands holding fewer
-    than three bins raise, because an interior maximum is undefined there.
+    - ``aperiodic_adjusted`` divides out the fitted 1/f component first, via
+      :func:`~eegfeat.aperiodic.aperiodic_ratio`, so the peak is measured against
+      the local aperiodic floor. Without it a steep spectrum reports the low edge
+      of the band whatever the oscillation is doing. The fit spans ``fit_range``,
+      which deliberately reaches outside the band: a 1/f slope estimated from a
+      five-hertz window is not a 1/f slope.
+    - ``smoothing_hz`` averages over a window of that width before the search, so
+      a single noisy bin cannot win. The average ignores non-finite bins and
+      renormalizes rather than closing the gap and averaging across it.
+    - ``min_prominence`` guards against reporting noise as a peak. When the
+      maximum stands less than this far, in log10 units, above the band median,
+      the centre of gravity is reported instead and ``"cog_fallback"`` is set. A
+      centre of gravity degrades gracefully when no oscillation is present; an
+      argmax does not.
+
+    Every column reports ``freq_resolution_hz``, and every cell carries
+    ``"edge_hit"``, set when the maximum landed on the first or last bin of the
+    band so the true peak may lie outside it. Bands holding fewer than three bins
+    raise, because an interior maximum is undefined there.
 
     Parameters
     ----------
@@ -35,6 +59,21 @@ def peak_frequency(
         Input spectra.
     band : Band
         Band to search.
+    aperiodic_adjusted : bool, default True
+        Divide out the fitted 1/f component before searching. Sets the measure
+        name to ``"peak_freq_adjusted"``.
+    smoothing_hz : float, default 1.0
+        Width of the smoothing window in Hz. Zero disables smoothing.
+    min_prominence : float, default 0.1
+        Minimum height above the band median, in log10 units, for the maximum to
+        be reported as a peak. Zero disables the centre-of-gravity fallback.
+    interpolate : bool, default True
+        Refine the result by parabolic interpolation through the maximum and its
+        neighbours, so it is not quantized to the frequency grid.
+    fit_range : tuple of float, optional
+        Frequency range for the aperiodic fit. Defaults to
+        ``(min(2.0, band.fmin), max(40.0, band.fmax))``. Requires
+        ``aperiodic_adjusted``.
     groups : mapping of str to sequence of str, optional
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
@@ -43,12 +82,31 @@ def peak_frequency(
     Returns
     -------
     FeatureTable
-        Peak frequency in Hz, with the ``"edge_hit"`` flag.
+        Peak frequency in Hz, with the ``"edge_hit"`` and ``"cog_fallback"`` flags.
     """
+    if smoothing_hz < 0.0:
+        raise ValueError(f"smoothing_hz must be >= 0, got {smoothing_hz}.")
+    if min_prominence < 0.0:
+        raise ValueError(f"min_prominence must be >= 0, got {min_prominence}.")
+    if fit_range is not None and not aperiodic_adjusted:
+        raise ValueError("fit_range applies only when aperiodic_adjusted is True.")
+
+    if aperiodic_adjusted:
+        span = fit_range or (min(2.0, band.fmin), max(40.0, band.fmax))
+        spectra = aperiodic_ratio(spectra, fit_range=span)
+
+    def kernel(
+        data: npt.NDArray[np.float64],
+        freqs: npt.NDArray[np.float64],
+        weights: npt.NDArray[np.float64],
+    ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
+        del weights  # a peak location does not depend on bin widths
+        return _find_peak(data, freqs, smoothing_hz, min_prominence, interpolate)
+
     return expand(
         spectra,
-        _peak_kernel,
-        measure="peak_freq",
+        kernel,
+        measure="peak_freq_adjusted" if aperiodic_adjusted else "peak_freq",
         unit="Hz",
         bands=(band,),
         groups=groups,
@@ -59,38 +117,88 @@ def peak_frequency(
     )
 
 
-def _peak_kernel(
+def _smooth(
+    values: npt.NDArray[np.float64],
+    freqs: npt.NDArray[np.float64],
+    smoothing_hz: float,
+) -> npt.NDArray[np.float64]:
+    if smoothing_hz <= 0.0 or freqs.size <= 3:
+        return values
+    spacing = float(np.median(np.diff(freqs)))
+    if spacing <= 0.0:
+        return values
+    width = max(1, int(smoothing_hz / spacing))
+    if width <= 1:
+        return values
+    finite = np.isfinite(values)
+    # A moving average renormalized by how many bins were finite, so a gap neither
+    # poisons its neighbours nor is silently closed up and averaged across.
+    total = uniform_filter1d(np.where(finite, values, 0.0), size=width, axis=3, mode="nearest")
+    count = uniform_filter1d(finite.astype(float), size=width, axis=3, mode="nearest")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(count > 0.0, total / count, np.nan)
+
+
+def _find_peak(
     data: npt.NDArray[np.float64],
     freqs: npt.NDArray[np.float64],
-    weights: npt.NDArray[np.float64],
+    smoothing_hz: float,
+    min_prominence: float,
+    interpolate: bool,
 ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
-    del weights  # a peak location does not depend on bin widths
-    usable = np.isfinite(data).any(axis=3)
-    filled = np.where(np.isfinite(data), data, -np.inf)
+    finite = np.isfinite(data)
+    usable = finite.any(axis=3)
+    present = np.where(finite, data, np.nan)
+
+    power = _smooth(present, freqs, smoothing_hz)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        residual = _smooth(np.log10(np.maximum(present, _POWER_FLOOR)), freqs, smoothing_hz)
+
+    filled = np.where(np.isfinite(power), power, -np.inf)
     index = np.argmax(filled, axis=3)
 
     last = freqs.size - 1
     interior = (index > 0) & (index < last)
     safe = np.clip(index, 1, max(last - 1, 1))
+    peak = freqs[index]
 
-    def take(offset: int) -> npt.NDArray[np.float64]:
-        shifted = np.clip(safe + offset, 0, last)
-        return np.take_along_axis(filled, shifted[..., np.newaxis], axis=3)[..., 0]
+    if interpolate:
+        left, centre, right = (_at(filled, np.clip(safe + o, 0, last)) for o in (-1, 0, 1))
+        with np.errstate(invalid="ignore", divide="ignore"):
+            # An all-NaN slice leaves -inf on every side, so these subtractions are
+            # inf - inf by design; the usable mask discards the result below.
+            denominator = left - 2.0 * centre + right
+            delta = np.where(denominator != 0.0, 0.5 * (left - right) / denominator, 0.0)
+        delta = np.where(np.isfinite(delta), np.clip(delta, -0.5, 0.5), 0.0)
+        # Local half-spacing, so interpolation is correct on a non-uniform grid too.
+        spacing = (freqs[np.clip(safe + 1, 0, last)] - freqs[np.clip(safe - 1, 0, last)]) / 2.0
+        peak = peak + np.where(interior, delta * spacing, 0.0)
 
-    left, centre, right = take(-1), take(0), take(1)
+    use_cog = np.zeros(usable.shape, dtype=bool)
+    if min_prominence > 0.0:
+        with warnings.catch_warnings():
+            # A cell with no finite bin is an all-NaN slice by design.
+            warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+            floor = np.nanmedian(residual, axis=3)
+        prominence = _at(residual, index) - floor
+        use_cog = usable & np.isfinite(prominence) & (prominence < min_prominence)
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        # An all-NaN slice leaves -inf on every side, so these subtractions are
-        # inf - inf by design; the usable mask discards the result below.
-        denominator = left - 2.0 * centre + right
-        delta = np.where(denominator != 0.0, 0.5 * (left - right) / denominator, 0.0)
-    delta = np.where(np.isfinite(delta), np.clip(delta, -0.5, 0.5), 0.0)
+    if bool(use_cog.any()):
+        weights = np.where(np.isfinite(power) & (power > 0.0), power, 0.0)
+        total = weights.sum(axis=3)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            centroid = np.where(total > 0.0, (weights * freqs).sum(axis=3) / total, np.nan)
+        use_cog &= np.isfinite(centroid)
+        peak = np.where(use_cog, centroid, peak)
 
-    # Local half-spacing, so interpolation is correct on a non-uniform grid too.
-    spacing = (freqs[np.clip(safe + 1, 0, last)] - freqs[np.clip(safe - 1, 0, last)]) / 2.0
-    peak = freqs[index] + np.where(interior, delta * spacing, 0.0)
+    return (
+        np.where(usable, peak, np.nan),
+        {"edge_hit": usable & ~interior & ~use_cog, "cog_fallback": use_cog},
+    )
 
-    return np.where(usable, peak, np.nan), {"edge_hit": usable & ~interior}
+
+def _at(values: npt.NDArray[np.float64], index: npt.NDArray[np.int_]) -> npt.NDArray[np.float64]:
+    return np.take_along_axis(values, index[..., np.newaxis], axis=3)[..., 0]
 
 
 def spectral_centroid(
