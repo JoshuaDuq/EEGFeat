@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+from typing import Literal
+
+import numpy as np
+import numpy.typing as npt
+
+from eegfeat.bands import Band
+from eegfeat.baseline import normalize
+from eegfeat.groups import aggregate
+from eegfeat.qc import band_coverage
+from eegfeat.spectra import Spectra, gradient_weights, trapezoid_weights
+from eegfeat.table import FeatureMeta, FeatureTable, Normalization
+
+Kernel = Callable[
+    [npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]],
+    tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]],
+]
+
+
+def expand(
+    spectra: Spectra,
+    kernel: Kernel,
+    *,
+    measure: str,
+    unit: str,
+    bands: Sequence[Band] | None,
+    groups: Mapping[str, Sequence[str]] | None,
+    include_global: bool,
+    baseline: str | None,
+    mode: Normalization,
+    min_bins: int,
+    weighting: Literal["trapezoid", "gradient"] = "trapezoid",
+) -> FeatureTable:
+    baseline_index = _baseline_index(spectra, baseline)
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64], npt.NDArray[np.float64]]] = []
+    flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
+
+    for band in bands if bands is not None else (None,):
+        mask = band.mask(spectra.freqs) if band is not None else np.ones(spectra.freqs.size, bool)
+        _check_band(band, mask, min_bins, spectra.freqs)
+
+        sub_freqs = spectra.freqs[mask]
+        weights = (
+            trapezoid_weights(sub_freqs)
+            if weighting == "trapezoid"
+            else gradient_weights(sub_freqs)
+        )
+        values, flags = kernel(spectra.data[:, :, :, mask], sub_freqs, weights)
+        coverage = band_coverage(spectra.coverage[:, :, :, mask], weights)
+
+        base = values[:, :, baseline_index] if baseline_index is not None else None
+        values = normalize(values, baseline=base, mode=mode)
+
+        units = aggregate(values, coverage, spectra.ch_names, groups, include_global)
+        resolution = float(np.median(np.diff(sub_freqs))) if sub_freqs.size > 1 else None
+
+        # Named `spatial`, not `unit`: `unit` is the physical-unit parameter.
+        for spatial in units:
+            for w_index, window in enumerate(spectra.windows):
+                if w_index == baseline_index:
+                    continue
+                columns.append(
+                    (
+                        FeatureMeta(
+                            measure=measure,
+                            band=band,
+                            space=spatial.space,
+                            space_kind=spatial.space_kind,
+                            window=window.name,
+                            normalization=mode,
+                            unit=unit,
+                            source=spectra.source,
+                            freq_resolution_hz=resolution,
+                        ),
+                        spatial.values[:, w_index],
+                        spatial.coverage[:, w_index],
+                    )
+                )
+                for key, array in flags.items():
+                    flag_col: npt.NDArray[np.bool_] = np.asarray(
+                        array[:, list(spatial.picks), w_index].any(axis=1), dtype=np.bool_
+                    )
+                    flag_columns.setdefault(key, []).append(flag_col)
+
+    return FeatureTable(
+        values=np.stack([v for _, v, _ in columns], axis=1),
+        coverage=np.stack([c for _, _, c in columns], axis=1),
+        meta=tuple(m for m, _, _ in columns),
+        flags={key: np.stack(arrays, axis=1) for key, arrays in flag_columns.items()},
+    )
+
+
+def _baseline_index(spectra: Spectra, baseline: str | None) -> int | None:
+    if baseline is None:
+        return None
+    names = [w.name for w in spectra.windows]
+    if baseline not in names:
+        raise ValueError(f"baseline window {baseline!r} is not among {names}.")
+    if len(names) < 2:
+        raise ValueError("baseline normalization needs at least one non-baseline window.")
+    return names.index(baseline)
+
+
+def _check_band(
+    band: Band | None,
+    mask: npt.NDArray[np.bool_],
+    min_bins: int,
+    freqs: npt.NDArray[np.float64],
+) -> None:
+    label = band.name if band is not None else "the fitted range"
+    n_bins = int(mask.sum())
+    if n_bins == 0:
+        raise ValueError(
+            f"band {label!r} contains no frequencies of the axis spanning "
+            f"({freqs[0]}, {freqs[-1]})."
+        )
+    if n_bins < min_bins:
+        raise ValueError(
+            f"band {label!r} holds {n_bins} frequency bins but this measure needs at least "
+            f"{min_bins} bins. Compute the input on a finer frequency grid."
+        )
