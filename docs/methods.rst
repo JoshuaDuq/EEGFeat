@@ -177,3 +177,78 @@ From the surviving burst intervals, five measures are extracted per window:
 - **amp_mean**: Mean peak envelope amplitude across surviving bursts.
 - **fraction_above**: Overall fraction of samples above threshold prior to duration filtering.
 
+
+
+Time-Domain Measures
+--------------------
+
+``variance``, ``peak_to_peak``, ``mean_amplitude`` and ``area_under_curve``
+summarize a series within a window. They accept a raw :class:`~eegfeat.Signal` or
+a :class:`~eegfeat.BandSignal`, reading the signal itself in the first case and
+the envelope in the second.
+
+Non-finite samples are excluded and reported through ``coverage``, rather than
+poisoning the window as they do in the reference implementation, which returns
+NaN if any sample is non-finite.
+
+``area_under_curve`` integrates by the trapezoid rule over each contiguous run of
+finite samples and sums them. A gap is skipped rather than interpolated across,
+so missing data contributes nothing instead of contributing a straight line.
+
+Peak Amplitude and Latency
+--------------------------
+
+``peak_amplitude`` returns the signed value of the extremum in a window and
+``peak_latency`` its time. Which extremum is found is set by ``polarity``:
+``"positive"`` searches the signal, ``"negative"`` its negation, ``"absolute"``
+its magnitude. The returned amplitude is always signed.
+
+**Polarity is an explicit argument, never inferred from the window's name.** The
+reference pipeline reads the first letter of the label, so a window called
+``noxious`` silently searches for a negative peak and one called ``post`` for a
+positive one. Component-name parsing of the ``N2`` and ``P300`` form is likewise
+not implemented: those conventions belong to a paradigm, not to a measurement.
+
+``prominence``, when given, confines the search to local maxima meeting that
+prominence and takes the most prominent. This matters where the extremum of a
+window sits at its edge on a monotonic trend, which is not a peak at all. It does
+not reject narrow spikes: an isolated tall sample is highly prominent by
+definition.
+
+Sample and Multiscale Entropy
+-----------------------------
+
+Sample entropy is the negative log probability that two template vectors matching
+over ``order`` samples still match over ``order + 1``:
+
+.. math::
+
+   H(x, m, r) = -\log \frac{C(m + 1, r)}{C(m, r)}
+
+Two templates match when their Chebyshev distance is strictly below
+:math:`r \cdot \sigma_x`. Pairs are counted once. The result is NaN when no
+length-:math:`m` pair matches and infinite when some do but no
+length-:math:`m+1` pair does; neither case is reported as zero, because zero
+entropy means perfect regularity rather than absent evidence.
+
+``multiscale_entropy`` applies the same measure after coarse-graining by
+non-overlapping block averages, one column per scale. The tolerance is recomputed
+from each coarse-grained series, following the reference, so it tracks the
+variance surviving the averaging. Note that coarse-graining removes non-finite
+samples before blocking, which closes gaps rather than preserving sample
+positions.
+
+Cost grows with the square of the window length, so entropy on long windows is
+markedly slower than the spectral measures.
+
+What Is Deliberately Absent
+---------------------------
+
+The reference pipeline computes an ``snr`` and a ``muscle`` ratio. Neither is
+implemented here, because both are named for an interpretation rather than for
+what they compute: ``snr`` is a band-power density ratio that asserts 1-30 Hz is
+signal and 40-80 Hz is noise, which is false for any study of gamma; ``muscle``
+is a high-frequency power fraction that asserts the high frequencies are muscle.
+Both are available through :func:`~eegfeat.band_power` and
+:func:`~eegfeat.band_ratio` with bands the caller chooses, which puts the
+assumption in the call where it can be seen and argued with.

@@ -12,7 +12,14 @@ from __future__ import annotations
 
 from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.bands import BANDS_STANDARD, Band
-from eegfeat.bursts import burst_features
+from eegfeat.bursts import (
+    burst_amplitude,
+    burst_count,
+    burst_duration,
+    burst_rate,
+    fraction_above_threshold,
+)
+from eegfeat.complexity import multiscale_entropy, sample_entropy
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.descriptors import (
     peak_frequency,
@@ -21,34 +28,73 @@ from eegfeat.descriptors import (
     spectral_edge,
     spectral_entropy,
 )
-from eegfeat.erds import erds
+from eegfeat.erds import (
+    erd_duration,
+    erd_magnitude,
+    erds_mean,
+    erds_onset_latency,
+    erds_peak_latency,
+    erds_rebound_latency,
+    erds_slope,
+    ers_duration,
+    ers_magnitude,
+)
 from eegfeat.power import band_power
-from eegfeat.signal import BandSignal
+from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import FeatureMeta, FeatureTable, concat
+from eegfeat.temporal import (
+    area_under_curve,
+    mean_amplitude,
+    peak_amplitude,
+    peak_latency,
+    peak_to_peak,
+    variance,
+)
 
 __version__ = "0.1.0.dev0"
 
 __all__ = [
-    "BANDS_STANDARD",
-    "Band",
-    "BandSignal",
-    "FeatureMeta",
-    "FeatureTable",
-    "Spectra",
-    "Window",
     "__version__",
     "aperiodic",
     "aperiodic_ratio",
+    "area_under_curve",
     "asymmetry",
+    "Band",
     "band_power",
     "band_ratio",
-    "burst_features",
+    "BANDS_STANDARD",
+    "BandSignal",
+    "burst_amplitude",
+    "burst_count",
+    "burst_duration",
+    "burst_rate",
     "concat",
-    "erds",
+    "erd_duration",
+    "erd_magnitude",
+    "erds_mean",
+    "erds_onset_latency",
+    "erds_peak_latency",
+    "erds_rebound_latency",
+    "erds_slope",
+    "ers_duration",
+    "ers_magnitude",
+    "FeatureMeta",
+    "FeatureTable",
+    "fraction_above_threshold",
+    "mean_amplitude",
+    "multiscale_entropy",
+    "peak_amplitude",
     "peak_frequency",
+    "peak_latency",
+    "peak_to_peak",
+    "sample_entropy",
+    "Signal",
+    "Spectra",
     "spectral_bandwidth",
     "spectral_centroid",
     "spectral_edge",
     "spectral_entropy",
+    "variance",
+    "Window",
 ]

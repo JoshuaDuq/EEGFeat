@@ -7,6 +7,25 @@ import pytest
 
 import eegfeat as ef
 
+_ERDS_FUNCTIONS = {
+    "mean": ef.erds_mean,
+    "slope": ef.erds_slope,
+    "erd_magnitude": ef.erd_magnitude,
+    "erd_duration": ef.erd_duration,
+    "ers_magnitude": ef.ers_magnitude,
+    "ers_duration": ef.ers_duration,
+    "peak_latency": ef.erds_peak_latency,
+    "onset_latency": ef.erds_onset_latency,
+}
+
+_BURST_FUNCTIONS = {
+    "count": ef.burst_count,
+    "rate": ef.burst_rate,
+    "duration_mean": ef.burst_duration,
+    "amp_mean": ef.burst_amplitude,
+    "fraction_above": ef.fraction_above_threshold,
+}
+
 FIXTURES = Path(__file__).parent / "fixtures"
 pytestmark = pytest.mark.skipif(
     not (FIXTURES / "manifest.json").exists(), reason="fixtures not generated"
@@ -166,8 +185,8 @@ def test_erds_matches_the_reference(
     signal = _band_signal(spectra_npz, reference, manifest, band_name)
     base = ef.Window("base", manifest["windows"]["base"][0], manifest["windows"]["base"][1])
     stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
-    table = ef.erds([signal], baseline=base, windows=[stim], include_global=False)
-    got = table.select(measure=measure).values
+    table = _ERDS_FUNCTIONS[measure]([signal], baseline=base, windows=[stim], include_global=False)
+    got = table.values
     expected = reference[f"erds_{measure}__{band_name}"]
     np.testing.assert_allclose(got, expected, rtol=1e-6, atol=1e-10)
 
@@ -183,7 +202,7 @@ def test_bursts_matches_the_reference(
     signal = _band_signal(spectra_npz, reference, manifest, band_name)
     stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
     base = ef.Window("base", manifest["windows"]["base"][0], manifest["windows"]["base"][1])
-    table = ef.burst_features(
+    table = _BURST_FUNCTIONS[measure](
         [signal],
         windows=[stim],
         baseline=base,
@@ -191,6 +210,6 @@ def test_bursts_matches_the_reference(
         min_duration_ms=100.0,
         include_global=False,
     )
-    got = table.select(measure=measure).values
+    got = table.values
     expected = reference[f"burst_{measure}__{band_name}"]
     np.testing.assert_allclose(got, expected, rtol=1e-6, atol=1e-10)

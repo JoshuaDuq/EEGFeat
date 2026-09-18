@@ -20,7 +20,7 @@ _UNITS: dict[str, str] = {
 }
 
 
-def burst_features(
+def burst_count(
     signals: Sequence[BandSignal],
     *,
     windows: Sequence[Window],
@@ -30,7 +30,11 @@ def burst_features(
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
 ) -> FeatureTable:
-    """Rate, duration and amplitude of suprathreshold envelope bursts.
+    """Number of bursts in the window.
+
+    A burst is a contiguous run of samples above threshold lasting at least
+    ``min_duration_ms``. Runs touching a window edge are counted with their visible
+    duration. Exactly ``0.0`` when none survive.
 
     Parameters
     ----------
@@ -41,17 +45,13 @@ def burst_features(
     baseline : Window, optional
         Window the percentile threshold is calibrated on. Strongly preferred for
         task data: calibrating on the analysis window instead lets the stimulus
-        response raise the very threshold used to detect it, which depresses burst
-        rate exactly where the effect is. When omitted the threshold is calibrated
-        on the analysis windows, which is the right choice only for resting state.
-        Ignored when ``threshold`` is an array.
+        response raise the very threshold used to detect it. When omitted the
+        threshold is calibrated on the analysis windows, which is right only for
+        resting state. Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        A float in ``(0, 1)`` is a percentile of the envelope taken within each
-        epoch and channel over the calibration window, so it carries no
-        cross-trial leakage. An array broadcastable to ``(n_epochs, n_channels)``
-        is used as absolute envelope values; that is how a subject-level or
-        condition-level threshold is applied, with the caller deciding which
-        trials informed it.
+        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        and channel, carrying no cross-trial leakage. An array broadcastable to
+        ``(n_epochs, n_channels)`` is used as absolute envelope values.
     min_duration_ms : float, default 100.0
         Shortest run retained, in milliseconds.
     groups : mapping of str to sequence of str, optional
@@ -62,9 +62,258 @@ def burst_features(
     Returns
     -------
     FeatureTable
-        Columns for ``count``, ``rate``, ``duration_mean``, ``amp_mean`` and
-        ``fraction_above``. Each column's unit records how the threshold was set.
+        One column per band, spatial unit and window. The unit records how the
+        threshold was set.
     """
+    return _burst_measure(
+        signals,
+        "count",
+        windows=windows,
+        baseline=baseline,
+        threshold=threshold,
+        min_duration_ms=min_duration_ms,
+        groups=groups,
+        include_global=include_global,
+    )
+
+
+def burst_rate(
+    signals: Sequence[BandSignal],
+    *,
+    windows: Sequence[Window],
+    baseline: Window | None = None,
+    threshold: float | npt.NDArray[np.float64] = 0.75,
+    min_duration_ms: float = 100.0,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """Bursts per second.
+
+    ``count`` divided by the window duration, so windows of different lengths are
+    comparable.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    windows : sequence of Window
+        Analysis windows.
+    baseline : Window, optional
+        Window the percentile threshold is calibrated on. Strongly preferred for
+        task data: calibrating on the analysis window instead lets the stimulus
+        response raise the very threshold used to detect it. When omitted the
+        threshold is calibrated on the analysis windows, which is right only for
+        resting state. Ignored when ``threshold`` is an array.
+    threshold : float or ndarray, default 0.75
+        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        and channel, carrying no cross-trial leakage. An array broadcastable to
+        ``(n_epochs, n_channels)`` is used as absolute envelope values.
+    min_duration_ms : float, default 100.0
+        Shortest run retained, in milliseconds.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window. The unit records how the
+        threshold was set.
+    """
+    return _burst_measure(
+        signals,
+        "rate",
+        windows=windows,
+        baseline=baseline,
+        threshold=threshold,
+        min_duration_ms=min_duration_ms,
+        groups=groups,
+        include_global=include_global,
+    )
+
+
+def burst_duration(
+    signals: Sequence[BandSignal],
+    *,
+    windows: Sequence[Window],
+    baseline: Window | None = None,
+    threshold: float | npt.NDArray[np.float64] = 0.75,
+    min_duration_ms: float = 100.0,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """Mean burst duration in seconds.
+
+    Averaged over surviving runs only. NaN when none survive, because there is genuinely
+    nothing to average.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    windows : sequence of Window
+        Analysis windows.
+    baseline : Window, optional
+        Window the percentile threshold is calibrated on. Strongly preferred for
+        task data: calibrating on the analysis window instead lets the stimulus
+        response raise the very threshold used to detect it. When omitted the
+        threshold is calibrated on the analysis windows, which is right only for
+        resting state. Ignored when ``threshold`` is an array.
+    threshold : float or ndarray, default 0.75
+        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        and channel, carrying no cross-trial leakage. An array broadcastable to
+        ``(n_epochs, n_channels)`` is used as absolute envelope values.
+    min_duration_ms : float, default 100.0
+        Shortest run retained, in milliseconds.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window. The unit records how the
+        threshold was set.
+    """
+    return _burst_measure(
+        signals,
+        "duration_mean",
+        windows=windows,
+        baseline=baseline,
+        threshold=threshold,
+        min_duration_ms=min_duration_ms,
+        groups=groups,
+        include_global=include_global,
+    )
+
+
+def burst_amplitude(
+    signals: Sequence[BandSignal],
+    *,
+    windows: Sequence[Window],
+    baseline: Window | None = None,
+    threshold: float | npt.NDArray[np.float64] = 0.75,
+    min_duration_ms: float = 100.0,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """Mean peak envelope amplitude across bursts.
+
+    The maximum of the envelope within each surviving run, averaged. NaN when none
+    survive.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    windows : sequence of Window
+        Analysis windows.
+    baseline : Window, optional
+        Window the percentile threshold is calibrated on. Strongly preferred for
+        task data: calibrating on the analysis window instead lets the stimulus
+        response raise the very threshold used to detect it. When omitted the
+        threshold is calibrated on the analysis windows, which is right only for
+        resting state. Ignored when ``threshold`` is an array.
+    threshold : float or ndarray, default 0.75
+        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        and channel, carrying no cross-trial leakage. An array broadcastable to
+        ``(n_epochs, n_channels)`` is used as absolute envelope values.
+    min_duration_ms : float, default 100.0
+        Shortest run retained, in milliseconds.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window. The unit records how the
+        threshold was set.
+    """
+    return _burst_measure(
+        signals,
+        "amp_mean",
+        windows=windows,
+        baseline=baseline,
+        threshold=threshold,
+        min_duration_ms=min_duration_ms,
+        groups=groups,
+        include_global=include_global,
+    )
+
+
+def fraction_above_threshold(
+    signals: Sequence[BandSignal],
+    *,
+    windows: Sequence[Window],
+    baseline: Window | None = None,
+    threshold: float | npt.NDArray[np.float64] = 0.75,
+    min_duration_ms: float = 100.0,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """Share of window samples above threshold.
+
+    Computed before the duration filter, so it counts samples in runs that were later
+    discarded. It answers how much of the window was above threshold, which is a
+    different question from how much of it was in a burst; this is the reference's
+    behaviour and is deliberate.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    windows : sequence of Window
+        Analysis windows.
+    baseline : Window, optional
+        Window the percentile threshold is calibrated on. Strongly preferred for
+        task data: calibrating on the analysis window instead lets the stimulus
+        response raise the very threshold used to detect it. When omitted the
+        threshold is calibrated on the analysis windows, which is right only for
+        resting state. Ignored when ``threshold`` is an array.
+    threshold : float or ndarray, default 0.75
+        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        and channel, carrying no cross-trial leakage. An array broadcastable to
+        ``(n_epochs, n_channels)`` is used as absolute envelope values.
+    min_duration_ms : float, default 100.0
+        Shortest run retained, in milliseconds.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window. The unit records how the
+        threshold was set.
+    """
+    return _burst_measure(
+        signals,
+        "fraction_above",
+        windows=windows,
+        baseline=baseline,
+        threshold=threshold,
+        min_duration_ms=min_duration_ms,
+        groups=groups,
+        include_global=include_global,
+    )
+
+
+def _burst_measure(
+    signals: Sequence[BandSignal],
+    measure: str,
+    *,
+    windows: Sequence[Window],
+    baseline: Window | None,
+    threshold: float | npt.NDArray[np.float64],
+    min_duration_ms: float,
+    groups: Mapping[str, Sequence[str]] | None,
+    include_global: bool,
+) -> FeatureTable:
     if min_duration_ms < 0.0:
         raise ValueError(f"min_duration_ms must be non-negative, got {min_duration_ms}.")
     if not isinstance(threshold, np.ndarray):
@@ -82,13 +331,13 @@ def burst_features(
     ) -> dict[str, npt.NDArray[np.float64]]:
         del times
         level = _resolve_threshold(signal, threshold, baseline, windows)
-        return _measures(trace, level, signal.sfreq, min_duration_ms)
+        return {measure: _measures(trace, level, signal.sfreq, min_duration_ms)[measure]}
 
     return expand_signal(
         signals,
         trace_of=lambda signal: signal.envelope,
         kernel=kernel,
-        units={name: f"{unit} ({label})" for name, unit in _UNITS.items()},
+        units={measure: f"{_UNITS[measure]} ({label})"},
         windows=windows,
         groups=groups,
         include_global=include_global,

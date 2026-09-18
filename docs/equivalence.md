@@ -53,6 +53,24 @@ The `BandSignal` envelope and the burst metrics **are** genuine reference calls
 (`compute_band_data` and `_extract_burst_metrics`), and the envelope agrees
 bit-for-bit on real recordings.
 
+### Time-Domain and Entropy Measures
+
+| Measure | Reference | Result |
+|---|---|---|
+| `area_under_curve` | `erp._compute_auc` | bit-identical, with and without gaps |
+| `peak_amplitude`, `peak_latency` | `erp._find_peak_in_signal` | bit-identical for all three polarities, with and without prominence |
+| `sample_entropy` | `antropy.sample_entropy` 0.2.2 via `signal_metrics.compute_sample_entropy` | bit-identical across 8 signal types and two embedding dimensions, including constant, too-short, NaN-laden and two-level inputs |
+| `multiscale_entropy` | `signal_metrics.compute_multiscale_entropy` | bit-identical |
+
+`sample_entropy` is implemented natively rather than depending on `antropy`, so the
+library's runtime dependencies stay at numpy, scipy, pandas and mne. The cross-check
+against `antropy` runs wherever it is installed and skips elsewhere.
+
+`variance`, `peak_to_peak` and `mean_amplitude` are **not** compared: they are
+`np.var`, `np.ptp` and `np.mean` over a window, and `eegfeat` computes them over the
+finite samples while the reference returns NaN if any sample is non-finite. That is a
+deliberate difference, not a tolerance.
+
 ## 3. Known Deliberate Divergences
 
 ### Band Edges
@@ -121,6 +139,16 @@ the honest one.
 `BandSignal.from_epochs` filters every channel present in the object, including
 non-EEG channels and those in `info["bads"]`. The reference operates on
 `PrecomputedData.picks`. Pass an already-picked `Epochs` if that matters.
+
+### Measures Not Ported
+- **`snr` and `muscle` ratio.** Named for an interpretation rather than a computation:
+  the first asserts 1-30 Hz is signal and 40-80 Hz is noise, the second that high
+  frequencies are muscle. Both reduce to a band-power ratio and are available through
+  `band_power` and `band_ratio` with caller-chosen bands.
+- **ERP component-label parsing.** The reference infers peak polarity from the first
+  letter of a window's name and parses labels of the `N2`/`P300` form. `eegfeat` takes
+  polarity as an explicit argument.
+- **ERDS laterality.** Depends on which side was stimulated per trial.
 
 ### Grid Endpoints on Band Bounds
 Frequency arrays generated via `np.logspace` do not reproduce mathematical endpoints exactly due to

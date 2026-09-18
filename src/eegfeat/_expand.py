@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, TypeAlias, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -11,7 +11,7 @@ from eegfeat.bands import Band
 from eegfeat.baseline import normalize
 from eegfeat.groups import SpatialUnit, aggregate
 from eegfeat.qc import band_coverage
-from eegfeat.signal import BandSignal
+from eegfeat.signal import TimeSeries
 from eegfeat.spectra import Spectra, Window, gradient_weights, trapezoid_weights
 from eegfeat.table import FeatureMeta, FeatureTable, Normalization
 
@@ -165,17 +165,24 @@ def _check_band(
         )
 
 
-SignalKernel = Callable[
-    [BandSignal, npt.NDArray[np.float64], npt.NDArray[np.float64]],
+Series = TypeVar("Series", bound=TimeSeries)
+
+SignalKernel: TypeAlias = Callable[
+    [Series, npt.NDArray[np.float64], npt.NDArray[np.float64]],
     dict[str, npt.NDArray[np.float64]],
 ]
+"""Measure one window of a series.
+
+Generic in the series type, so a kernel written against :class:`BandSignal` stays
+typed as such while :func:`expand_signal` also accepts a plain :class:`Signal`.
+"""
 
 
 def expand_signal(
-    signals: Sequence[BandSignal],
+    signals: Sequence[Series],
     *,
-    trace_of: Callable[[BandSignal], npt.NDArray[np.float64]],
-    kernel: SignalKernel,
+    trace_of: Callable[[Series], npt.NDArray[np.float64]],
+    kernel: SignalKernel[Series],
     units: Mapping[str, str],
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None,
@@ -183,7 +190,6 @@ def expand_signal(
     mode: Normalization,
 ) -> FeatureTable:
     _check_signals(signals, windows)
-    reference = signals[0]
     columns: list[_Column] = []
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
@@ -209,7 +215,7 @@ def expand_signal(
                 spatial: SpatialUnit,
                 window: Window,
                 _m: str = measure,
-                _s: BandSignal = signal,
+                _s: Series = signal,
             ) -> FeatureMeta:
                 return FeatureMeta(
                     measure=_m,
@@ -219,7 +225,7 @@ def expand_signal(
                     window=window.name,
                     normalization=mode,
                     unit=units[_m],
-                    source="hilbert",
+                    source=_s.source,
                     freq_resolution_hz=None,
                 )
 
@@ -230,11 +236,10 @@ def expand_signal(
             for key, arrays in new_flags.items():
                 flag_columns.setdefault(key, []).extend(arrays)
 
-    del reference
     return _assemble(columns, flag_columns)
 
 
-def _check_signals(signals: Sequence[BandSignal], windows: Sequence[Window]) -> None:
+def _check_signals(signals: Sequence[TimeSeries], windows: Sequence[Window]) -> None:
     if not signals:
         raise ValueError("expand_signal requires at least one BandSignal.")
     if not windows:

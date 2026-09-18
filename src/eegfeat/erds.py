@@ -51,7 +51,7 @@ _UNITS: dict[str, dict[str, str]] = {
 }
 
 
-def erds(
+def erds_mean(
     signals: Sequence[BandSignal],
     *,
     baseline: Window,
@@ -60,20 +60,21 @@ def erds(
     include_global: bool = True,
     normalize: ErdsScale = "percent",
 ) -> FeatureTable:
-    """Event-related desynchronization and synchronization.
+    """Mean of the ERDS trace over the window.
 
-    Expresses band power in each analysis window relative to a baseline window,
-    then summarizes the resulting trace. Both baseline statistics are computed per
-    epoch and per channel, so every trial is referenced to its own pre-stimulus
-    power and no cross-trial leakage arises.
+    The conventional summary: negative is desynchronization, positive is synchronization.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
 
     Parameters
     ----------
     signals : sequence of BandSignal
         One per band. The bands axis of the output comes from this sequence.
     baseline : Window
-        Window whose mean power each trial is referenced to. Required: ERDS
-        without a baseline is not a defined quantity.
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
     windows : sequence of Window
         Analysis windows to summarize.
     groups : mapping of str to sequence of str, optional
@@ -81,43 +82,473 @@ def erds(
     include_global : bool, default True
         Also emit the mean across all channels.
     normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels. Percent is the reference
-        pipeline's default.
+        Percent change from baseline, or decibels.
 
     Returns
     -------
     FeatureTable
-        Columns for ``mean``, ``slope``, ``erd_magnitude``, ``erd_duration``,
-        ``ers_magnitude``, ``ers_duration``, ``peak_latency``, ``onset_latency``
-        and ``rebound_latency``.
+        One column per band, spatial unit and window.
     """
+    return _erds_measure(
+        signals,
+        "mean",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def erds_slope(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Least-squares slope of the ERDS trace against time.
+
+    Positive means the response is recovering across the window, negative that it is deepening.
+    NaN with fewer than three finite samples.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "slope",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def erd_magnitude(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Mean depth of the desynchronized part of the trace.
+
+    The mean of ``abs(trace)`` over samples below zero. Exactly ``0.0`` when no sample is
+    negative: no desynchronization is a measurement, not a missing value.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "erd_magnitude",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def erd_duration(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Time spent desynchronized.
+
+    Count of samples below zero divided by the sampling rate. Exactly ``0.0`` when none are.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "erd_duration",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def ers_magnitude(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Mean height of the synchronized part of the trace.
+
+    The mean of the trace over samples above zero, and ``0.0`` when none are.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "ers_magnitude",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def ers_duration(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Time spent synchronized.
+
+    Count of samples above zero divided by the sampling rate, and ``0.0`` when none are.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "ers_duration",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def erds_peak_latency(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Time of the largest excursion from baseline, in either direction.
+
+    Located by ``argmax(abs(trace))``, so a deep desynchronization outranks a shallower
+    synchronization.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "peak_latency",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def erds_onset_latency(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Time the trace first leaves the baseline's own variability.
+
+    The first sample where ``abs(trace)`` exceeds the baseline coefficient of variation in
+    percent, so a noisy baseline demands a correspondingly larger excursion. A first crossing,
+    not a sustained one. NaN when the trace never crosses.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "onset_latency",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def erds_rebound_latency(
+    signals: Sequence[BandSignal],
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    normalize: ErdsScale = "percent",
+) -> FeatureTable:
+    """Time of the largest value after the peak.
+
+    Reconstructed rather than ported: the reference computes a rebound only inside a stimulus-
+    side-dependent path that this library does not implement. NaN when no sample follows the
+    peak.
+
+    Band power in each analysis window is expressed relative to ``baseline``,
+    per epoch and per channel, so every trial is referenced to its own
+    pre-stimulus power and no cross-trial leakage arises.
+
+    Parameters
+    ----------
+    signals : sequence of BandSignal
+        One per band. The bands axis of the output comes from this sequence.
+    baseline : Window
+        Window each trial is referenced to. Required: ERDS without a baseline is
+        not a defined quantity.
+    windows : sequence of Window
+        Analysis windows to summarize.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+    normalize : {"percent", "db"}, default "percent"
+        Percent change from baseline, or decibels.
+
+    Returns
+    -------
+    FeatureTable
+        One column per band, spatial unit and window.
+    """
+    return _erds_measure(
+        signals,
+        "rebound_latency",
+        baseline=baseline,
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        normalize=normalize,
+    )
+
+
+def _erds_measure(
+    signals: Sequence[BandSignal],
+    measure: str,
+    *,
+    baseline: Window,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None,
+    include_global: bool,
+    normalize: ErdsScale,
+) -> FeatureTable:
     if normalize not in ("percent", "db"):
         raise ValueError(f"normalize must be 'percent' or 'db', got {normalize!r}.")
 
-    thresholds: dict[int, npt.NDArray[np.float64]] = {}
-
     def trace_of(signal: BandSignal) -> npt.NDArray[np.float64]:
-        trace, threshold = _trace(signal, baseline, normalize)
-        thresholds[id(signal)] = threshold
-        return trace
+        return _trace(signal, baseline, normalize)[0]
 
     def kernel(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        return _measures(signal, trace, times, thresholds[id(signal)])
+        threshold = _baseline_threshold(signal, baseline)
+        # Every measure derives from the same trace, so computing the set and
+        # taking one is cheaper than it looks and keeps the definitions together.
+        return {measure: _measures(signal, trace, times, threshold)[measure]}
 
     return expand_signal(
         signals,
         trace_of=trace_of,
         kernel=kernel,
-        units=_UNITS[normalize],
+        units={measure: _UNITS[normalize][measure]},
         windows=windows,
         groups=groups,
         include_global=include_global,
         mode=normalize,
     )
+
+
+def _baseline_threshold(signal: BandSignal, baseline: Window) -> npt.NDArray[np.float64]:
+    # The baseline's coefficient of variation in percent: a noisy baseline demands
+    # a larger excursion before onset is declared.
+    mask = window_mask(signal.times, baseline)
+    power = signal.power[:, :, mask]
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
+        warnings.filterwarnings("ignore", "Degrees of freedom <= 0", RuntimeWarning)
+        reference = np.nanmean(power, axis=2)
+        deviation = np.nanstd(power, axis=2)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(reference > _MIN_BASELINE_POWER, deviation / reference * 100.0, np.nan)
 
 
 def _trace(

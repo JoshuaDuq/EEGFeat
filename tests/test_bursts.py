@@ -1,10 +1,31 @@
 import numpy as np
 import pytest
 
+import eegfeat as ef
 from eegfeat.bands import Band
-from eegfeat.bursts import burst_features
+from eegfeat.bursts import (
+    burst_amplitude,
+    burst_count,
+    burst_duration,
+    burst_rate,
+    fraction_above_threshold,
+)
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
+
+BURST_FUNCTIONS = {
+    "count": burst_count,
+    "rate": burst_rate,
+    "duration_mean": burst_duration,
+    "amp_mean": burst_amplitude,
+    "fraction_above": fraction_above_threshold,
+}
+
+
+def burst_features(signals, **kwargs):
+    """Test-only: every burst measure in one table. See the note in test_erds.py."""
+    return ef.concat([fn(signals, **kwargs) for fn in BURST_FUNCTIONS.values()])
+
 
 BETA = Band("beta", 13.0, 30.0)
 SFREQ = 100.0
@@ -328,4 +349,38 @@ def test_a_baseline_window_outside_the_time_axis_raises() -> None:
             baseline=Window("nope", 50.0, 60.0),
             threshold=0.75,
             include_global=False,
+        )
+
+
+# --- the split public surface ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(("measure", "function"), list(BURST_FUNCTIONS.items()))
+def test_each_burst_function_returns_exactly_its_own_measure(measure, function) -> None:
+    table = function(
+        [_stimulus_response()],
+        windows=[ACTIVE],
+        baseline=BASELINE,
+        threshold=0.75,
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    assert table.values.shape == (1, 1)
+    assert [m.measure for m in table.meta] == [measure]
+
+
+def test_the_burst_functions_agree_with_the_combined_view() -> None:
+    signals = [_stimulus_response()]
+    kw = dict(
+        windows=[ACTIVE],
+        baseline=BASELINE,
+        threshold=0.75,
+        min_duration_ms=100.0,
+        include_global=False,
+    )
+    combined = burst_features(signals, **kw)
+    for measure, function in BURST_FUNCTIONS.items():
+        alone = function(signals, **kw)
+        np.testing.assert_allclose(
+            alone.values, combined.select(measure=measure).values, equal_nan=True
         )

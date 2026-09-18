@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from eegfeat.bands import Band
-from eegfeat.signal import BandSignal
+from eegfeat.signal import BandSignal, Signal, TimeSeries
 
 BETA = Band("beta", 13.0, 30.0)
 
@@ -137,3 +137,56 @@ def test_coverage_reflects_the_filtered_output_not_the_raw_input() -> None:
     assert not np.isfinite(signal.envelope[0, 0]).any()
     assert signal.coverage[0, 0].max() == 0.0
     assert signal.coverage[1, 0].min() == 1.0
+
+
+# --- the raw Signal container ---------------------------------------------------------
+
+
+def test_signal_wraps_epochs_without_transforming_them() -> None:
+    epochs = _epochs(10.0)
+    signal = Signal.from_epochs(epochs)
+    np.testing.assert_allclose(signal.data, np.asarray(epochs.get_data()))
+    np.testing.assert_allclose(signal.times, epochs.times)
+    assert signal.ch_names == ("C3", "C4")
+    assert signal.sfreq == 200.0
+    assert signal.band is None
+    assert signal.source == "signal"
+
+
+def test_both_containers_satisfy_the_time_series_protocol() -> None:
+    epochs = _epochs(10.0)
+    assert isinstance(Signal.from_epochs(epochs), TimeSeries)
+    assert isinstance(BandSignal.from_epochs(epochs, ALPHA), TimeSeries)
+
+
+def test_a_band_signal_reports_its_band_and_a_raw_signal_does_not() -> None:
+    epochs = _epochs(10.0)
+    assert BandSignal.from_epochs(epochs, ALPHA).band is ALPHA
+    assert Signal.from_epochs(epochs).band is None
+
+
+def test_signal_coverage_marks_non_finite_samples() -> None:
+    data = np.ones((1, 2, 5))
+    data[0, 1, 3] = np.nan
+    signal = Signal.from_arrays(
+        data=data, times=np.arange(5) / 100.0, ch_names=("C3", "C4"), sfreq=100.0
+    )
+    assert signal.coverage[0, 1, 3] == 0.0
+    assert signal.coverage.sum() == 9.0
+
+
+def test_signal_shape_mismatches_raise() -> None:
+    good = dict(
+        data=np.ones((2, 2, 4)),
+        times=np.arange(4) / 100.0,
+        ch_names=("C3", "C4"),
+        sfreq=100.0,
+    )
+    with pytest.raises(ValueError, match="ch_names"):
+        Signal.from_arrays(**{**good, "ch_names": ("C3",)})
+    with pytest.raises(ValueError, match="times"):
+        Signal.from_arrays(**{**good, "times": np.arange(3) / 100.0})
+    with pytest.raises(ValueError, match="3-D"):
+        Signal.from_arrays(**{**good, "data": np.ones((2, 4))})
+    with pytest.raises(ValueError, match="sfreq"):
+        Signal.from_arrays(**{**good, "sfreq": 0.0})

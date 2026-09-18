@@ -1,10 +1,44 @@
 import numpy as np
 import pytest
 
+import eegfeat as ef
 from eegfeat.bands import Band
-from eegfeat.erds import erds
+from eegfeat.erds import (
+    erd_duration,
+    erd_magnitude,
+    erds_mean,
+    erds_onset_latency,
+    erds_peak_latency,
+    erds_rebound_latency,
+    erds_slope,
+    ers_duration,
+    ers_magnitude,
+)
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
+
+ERDS_FUNCTIONS = {
+    "mean": erds_mean,
+    "slope": erds_slope,
+    "erd_magnitude": erd_magnitude,
+    "erd_duration": erd_duration,
+    "ers_magnitude": ers_magnitude,
+    "ers_duration": ers_duration,
+    "peak_latency": erds_peak_latency,
+    "onset_latency": erds_onset_latency,
+    "rebound_latency": erds_rebound_latency,
+}
+
+
+def erds(signals, **kwargs):
+    """Test-only: every ERDS measure in one table.
+
+    The library exposes one function per measure so a caller asks for exactly what
+    they want. These tests assert relationships across measures, so they rebuild
+    the combined view here rather than in the public namespace.
+    """
+    return ef.concat([fn(signals, **kwargs) for fn in ERDS_FUNCTIONS.values()])
+
 
 ALPHA = Band("alpha", 8.0, 13.0)
 SFREQ = 100.0
@@ -170,3 +204,25 @@ def test_a_healthy_channel_is_not_withheld_by_the_guard() -> None:
     envelope[:, :, n // 2 :] = 1e-5 * np.sqrt(0.5)
     table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
     assert table.select(measure="mean").values.item() == pytest.approx(-50.0)
+
+
+# --- the split public surface ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(("measure", "function"), list(ERDS_FUNCTIONS.items()))
+def test_each_function_returns_exactly_its_own_measure(measure, function) -> None:
+    table = function(
+        [_step(1.0, np.sqrt(0.5))], baseline=BASE, windows=[STIM], include_global=False
+    )
+    assert table.values.shape == (1, 1)
+    assert [m.measure for m in table.meta] == [measure]
+
+
+def test_the_functions_agree_with_the_combined_view() -> None:
+    signals = [_step(1.0, np.sqrt(0.5))]
+    combined = erds(signals, baseline=BASE, windows=[STIM], include_global=False)
+    for measure, function in ERDS_FUNCTIONS.items():
+        alone = function(signals, baseline=BASE, windows=[STIM], include_global=False)
+        np.testing.assert_allclose(
+            alone.values, combined.select(measure=measure).values, equal_nan=True
+        )

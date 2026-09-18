@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import mne  # type: ignore[import-untyped]
 import numpy as np
@@ -13,6 +13,181 @@ from eegfeat.bands import Band
 _FILTER_LENGTH_MULTIPLIER = 6.6
 _MIN_FILTER_LENGTH = 3
 _DEFAULT_LOW_FREQ_HZ = 0.1
+
+
+@runtime_checkable
+class TimeSeries(Protocol):
+    """What a feature function needs from a time-domain container.
+
+    Structural, not inherited: :class:`Signal` and :class:`BandSignal` satisfy it
+    without sharing a base class, so a measure defined on a trace works on a raw
+    recording and on a band envelope alike.
+    """
+
+    @property
+    def times(self) -> npt.NDArray[np.float64]: ...
+
+    @property
+    def ch_names(self) -> tuple[str, ...]: ...
+
+    @property
+    def sfreq(self) -> float: ...
+
+    @property
+    def coverage(self) -> npt.NDArray[np.float64]: ...
+
+    @property
+    def amplitude(self) -> npt.NDArray[np.float64]:
+        """The real-valued series a time-domain measure reads."""
+
+    @property
+    def band(self) -> Band | None:
+        """The band this series is restricted to, or None for broadband."""
+
+    @property
+    def source(self) -> str:
+        """Provenance, recorded on every feature derived from this series."""
+
+
+@dataclass(frozen=True, eq=False)
+class Signal:
+    """A broadband time series over epochs, channels and time.
+
+    The raw counterpart to :class:`BandSignal`: no filtering, no analytic signal,
+    nothing derived. Measures that read the signal itself rather than a band take
+    this.
+
+    Parameters
+    ----------
+    data : ndarray, shape (n_epochs, n_channels, n_times)
+        Signal amplitude.
+    times : ndarray, shape (n_times,)
+        Time axis in seconds, ascending, relative to the epoch origin.
+    ch_names : tuple of str
+        Channel names, one per channel axis entry.
+    sfreq : float
+        Sampling frequency in Hz.
+    coverage : ndarray, same shape as ``data``
+        Fraction of each sample that was finite, in ``[0, 1]``.
+    """
+
+    data: npt.NDArray[np.float64]
+    times: npt.NDArray[np.float64]
+    ch_names: tuple[str, ...]
+    sfreq: float
+    coverage: npt.NDArray[np.float64]
+
+    def __post_init__(self) -> None:
+        _validate_series(self.data, self.times, self.ch_names, self.coverage, self.sfreq, "data")
+
+    @property
+    def amplitude(self) -> npt.NDArray[np.float64]:
+        """The signal itself."""
+        return self.data
+
+    @property
+    def band(self) -> Band | None:
+        """Always None: a raw signal is broadband."""
+        return None
+
+    @property
+    def source(self) -> str:
+        """Provenance label recorded on derived features."""
+        return "signal"
+
+    @property
+    def n_epochs(self) -> int:
+        """Number of epochs."""
+        return int(self.data.shape[0])
+
+    @classmethod
+    def from_epochs(cls, epochs: Any) -> Signal:
+        """Wrap an ``mne.Epochs`` without transforming it.
+
+        Parameters
+        ----------
+        epochs : mne.Epochs
+            Epoched data. Every channel present is carried through, including
+            non-EEG channels and those marked bad; pass an already-picked object
+            if that matters.
+
+        Returns
+        -------
+        Signal
+        """
+        data = np.asarray(epochs.get_data(), dtype=float)
+        return cls(
+            data=data,
+            times=np.asarray(epochs.times, dtype=float),
+            ch_names=tuple(epochs.ch_names),
+            sfreq=float(epochs.info["sfreq"]),
+            coverage=np.isfinite(data).astype(float),
+        )
+
+    @classmethod
+    def from_arrays(
+        cls,
+        *,
+        data: npt.NDArray[np.float64],
+        times: npt.NDArray[np.float64],
+        ch_names: tuple[str, ...],
+        sfreq: float,
+        coverage: npt.NDArray[np.float64] | None = None,
+    ) -> Signal:
+        """Build from arrays.
+
+        Parameters
+        ----------
+        data : ndarray, shape (n_epochs, n_channels, n_times)
+            Signal amplitude.
+        times : ndarray, shape (n_times,)
+            Time axis in seconds.
+        ch_names : tuple of str
+            Channel names.
+        sfreq : float
+            Sampling frequency in Hz.
+        coverage : ndarray, optional
+            Per-sample coverage. Defaults to where ``data`` is finite.
+
+        Returns
+        -------
+        Signal
+        """
+        array = np.asarray(data, dtype=float)
+        return cls(
+            data=array,
+            times=np.asarray(times, dtype=float),
+            ch_names=tuple(ch_names),
+            sfreq=float(sfreq),
+            coverage=np.isfinite(array).astype(float) if coverage is None else coverage,
+        )
+
+
+def _validate_series(
+    values: npt.NDArray[Any],
+    times: npt.NDArray[np.float64],
+    ch_names: tuple[str, ...],
+    coverage: npt.NDArray[np.float64],
+    sfreq: float,
+    label: str,
+) -> None:
+    if values.ndim != 3:
+        raise ValueError(
+            f"{label} must be 3-D (n_epochs, n_channels, n_times), got {values.shape}."
+        )
+    n_channels, n_times = values.shape[1:]
+    if len(ch_names) != n_channels:
+        raise ValueError(
+            f"ch_names has {len(ch_names)} entries but {label} has {n_channels} channels."
+        )
+    if times.ndim != 1 or times.size != n_times:
+        raise ValueError(f"times must be 1-D of length {n_times}, got {times.shape}.")
+    if n_times > 1 and not np.all(np.diff(times) > 0):
+        raise ValueError("times must be strictly ascending.")
+    if coverage.shape != values.shape:
+        raise ValueError(f"coverage shape {coverage.shape} does not match {label} {values.shape}.")
+    if not sfreq > 0.0:
+        raise ValueError(f"sfreq must be positive, got {sfreq}.")
 
 
 @dataclass(frozen=True, eq=False)
@@ -87,6 +262,16 @@ class BandSignal:
     def power(self) -> npt.NDArray[np.float64]:
         """Instantaneous power, the squared envelope."""
         return np.abs(self.analytic) ** 2
+
+    @property
+    def amplitude(self) -> npt.NDArray[np.float64]:
+        """The envelope: a band signal's amplitude over time."""
+        return self.envelope
+
+    @property
+    def source(self) -> str:
+        """Provenance label recorded on derived features."""
+        return "hilbert"
 
     @property
     def n_epochs(self) -> int:
