@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import eegfeat.model as efm
 from eegfeat.io import read_dataset, read_table
 from eegfeat.runner import RunError, check, load_recipe, run
 from eegfeat.runner.progress import JsonReporter
@@ -50,7 +49,13 @@ def test_each_recording_gets_its_own_table_in_a_mirrored_tree(tmp_path) -> None:
         assert read_table(_features_path(tmp_path, subject)).n_rows == 12
 
 
+@pytest.mark.skipif(
+    __import__("importlib.util", fromlist=["util"]).find_spec("sklearn") is None,
+    reason="scikit-learn is not installed in this environment",
+)
 def test_runner_outputs_feed_group_disjoint_modeling_without_manual_reassembly(tmp_path) -> None:
+    import eegfeat.model as efm
+
     for subject in ("sub-01", "sub-02", "sub-03"):
         save_epochs(tmp_path / f"data/{subject}/eeg/{subject}_task-rest_epo.fif")
 

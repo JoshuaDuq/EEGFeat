@@ -245,9 +245,12 @@ def inner_cv(
             raise ValueError("Stratified inner split requires at least 2 classes in y_train.")
         min_class_count = int(np.min(counts))
         if min_class_count < effective_splits:
+            rarest = classes[int(np.argmin(counts))]
+            tally = ", ".join(f"{c}: {n}" for c, n in zip(classes, counts, strict=True))
             raise ValueError(
                 f"StratifiedGroupKFold requires each class to have at least {effective_splits} "
-                f"training samples, got minority class count {min_class_count}."
+                f"training samples; class {rarest} has {min_class_count} "
+                f"(class counts: {tally})."
             )
         return StratifiedGroupKFold(
             n_splits=effective_splits,

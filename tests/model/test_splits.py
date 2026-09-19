@@ -70,6 +70,19 @@ def test_stratified_inner_cv_enforces_minority_class_precondition() -> None:
         )
 
 
+def test_the_stratification_error_names_the_rare_class_and_every_count() -> None:
+    # A "binary" target with a stray -1 code, such as a missed response, has three classes.
+    # A bare minority count hides that; naming the class and the counts reveals it.
+    groups = np.array(["s1"] * 4 + ["s2"] * 4, dtype=object)
+    y_train = np.array([0, 1, 0, 1, 0, 1, -1, 0], dtype=np.intp)
+    with pytest.raises(ValueError, match=r"class -1 has 1 \(class counts: -1: 1, 0: 4, 1: 3\)"):
+        inner_cv(
+            groups,
+            InnerSplit(grouping="subject", stratified=True, n_splits=2),
+            y_train=y_train,
+        )
+
+
 def test_a_within_subject_fold_cannot_be_grouped_by_subject() -> None:
     # Its training rows are one subject, so a subject-grouped inner split has one group.
     # Refusing the combination here beats a puzzling "at least 2 groups" from inside tuning.
