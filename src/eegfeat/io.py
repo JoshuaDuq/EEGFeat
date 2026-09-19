@@ -27,7 +27,13 @@ import numpy.typing as npt
 import pandas as pd
 
 from eegfeat.bands import Band
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, stack_rows
+from eegfeat.table import (
+    ComputationSpec,
+    FeatureMeta,
+    FeatureTable,
+    _json_value,
+    stack_rows,
+)
 
 _NA = "n/a"
 """Missing-value marker, following the BIDS convention for tabular files."""
@@ -344,7 +350,9 @@ def _meta_record(meta: FeatureMeta) -> dict[str, Any]:
         "space": meta.space,
         "space_kind": meta.space_kind,
         "window": meta.window,
-        "window_bounds": meta.window_bounds,
+        "window_bounds": (
+            _json_value(meta.window_bounds) if meta.window_bounds is not None else None
+        ),
         "normalization": meta.normalization,
         "unit": meta.unit,
         "source": meta.source,

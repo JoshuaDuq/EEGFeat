@@ -195,9 +195,9 @@ and safe against accidental mislabeling:
    # Convert to pandas DataFrame with canonical column names
    df = spectral_features.to_dataframe()
    print(df.head())
-   # Output column names are structured slugs:
-   # eeg_power_alpha_cz_all_raw
-   # eeg_peak-freq-adjusted_alpha_cz_all_raw
+   # Output column names are structured slugs with unique parameter hashes:
+   # eeg_band-power_alpha_cz_all_raw_p<hash>
+   # eeg_peak-freq-adjusted_alpha_cz_all_raw_p<hash>
 
 ----
 

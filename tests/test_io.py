@@ -297,3 +297,17 @@ def test_reordered_coverage_rows_are_rejected(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="row identities"):
         read_table(path)
+
+
+def test_infinite_window_bounds_round_trip(tmp_path) -> None:
+    table = FeatureTable(
+        values=np.array([[1.0]]),
+        coverage=np.array([[1.0]]),
+        meta=(_meta(window="all", window_bounds=(-np.inf, np.inf)),),
+        row_ids=(("sub-01_task-test", 0, "left"),),
+    )
+    path = tmp_path / "sub-01_features.tsv"
+    write_table(table, path)
+    restored = read_table(path)
+    _assert_same_table(restored, table)
+    assert restored.meta[0].window_bounds == (-np.inf, np.inf)

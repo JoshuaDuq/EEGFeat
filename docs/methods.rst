@@ -245,7 +245,7 @@ Sample and Multiscale Entropy
 -----------------------------
 
 Sample entropy is the negative log probability that two template vectors matching
-over ``order`` samples still match over ``order + 1``:
+over ``order`` (:math:`m`) samples still match over ``order + 1`` (:math:`m + 1`):
 
 .. math::
 
@@ -334,17 +334,27 @@ Under the null of uniform phase the expected value is about
 :math:`1/\sqrt{N}`, not zero, so coherence from a small number of trials is
 biased upward and values from different trial counts are not comparable. ITPC
 requires at least two valid trials by default and flags cells that do not meet
-``min_valid_trials``. ``ppc`` is a distinct estimator of squared population phase
-locking without the same finite-sample mean bias.
+``min_valid_trials``.
 
-**ITPC has one row per trial group, not one per epoch.** Because phase coherence
-is estimated across trials, assigning a per-epoch row would replicate the identical
-summary estimate across single trials, introducing severe pseudo-replication in
+Pairwise phase consistency (:func:`~eegfeat.ppc`) is a distinct estimator of squared
+population phase locking without this finite-sample mean bias:
+
+.. math::
+
+   \mathrm{PPC} = \frac{1}{T} \sum_t \left( \frac{2}{N(N - 1)} \sum_{j < k} \cos(\phi_j(t) - \phi_k(t)) \right)
+
+By evaluating the cosine of pairwise relative phase differences across all distinct trial
+pairs :math:`j < k`, PPC has an expected value of zero under uniform phase, making values
+comparable across conditions or subjects with different numbers of trials.
+
+**ITPC and PPC have one row per trial group, not one per epoch.** Because phase coherence
+and consistency are estimated across trials, assigning a per-epoch row would replicate the
+identical summary estimate across single trials, introducing severe pseudo-replication in
 downstream statistical or predictive models. Feature tables returned by
-:func:`~eegfeat.itpc` carry explicit ``row_labels`` and :func:`~eegfeat.concat`
-refuses to join trial-group rows to per-epoch rows without an explicit broadcasting
-strategy. Pass ``trials`` to estimate coherence within distinct groups (for example,
-per experimental condition).
+:func:`~eegfeat.itpc` and :func:`~eegfeat.ppc` carry explicit ``row_labels`` and
+:func:`~eegfeat.concat` refuses to join trial-group rows to per-epoch rows without an
+explicit broadcasting strategy. Pass ``trials`` to estimate coherence within distinct groups
+(for example, per experimental condition).
 
 Phase-Amplitude Coupling
 ------------------------

@@ -274,3 +274,20 @@ def test_event_immediately_outside_window_cannot_affect_retained_coefficients() 
     spectra = Spectra.from_tfr(tfr, (Window("target", 0.0, 0.6),), recording="test", n_cycles=3.0)
 
     np.testing.assert_allclose(spectra.data[1], spectra.data[0], atol=1e-14)
+
+
+def test_from_spectrum_accepts_method_in_estimator_parameters() -> None:
+    mne = pytest.importorskip("mne")
+    info = mne.create_info(["C3"], 200.0, "eeg")
+    epochs = mne.EpochsArray(
+        np.random.RandomState(0).randn(2, 1, 400) * 1e-6, info, tmin=-1.0, verbose="ERROR"
+    )
+    spectrum = epochs.compute_psd("welch", fmin=2.0, fmax=40.0, verbose="ERROR")
+    spectra = Spectra.from_spectrum(
+        spectrum,
+        recording="test",
+        estimator_parameters={"method": "welch", "fmin": 2.0, "fmax": 40.0},
+    )
+    assert spectra.source == "welch"
+    assert spectra.computation.method == "welch"
+

@@ -230,19 +230,19 @@ class Spectra:
                 f"got shape {data.shape}."
             )
         data = data[:, :, np.newaxis, :]
+        params = dict(estimator_parameters)
+        method = str(params.pop("method", getattr(spectrum, "method", "unknown")))
         return cls(
             data=data,
             freqs=np.asarray(spectrum.freqs, dtype=float),
             ch_names=tuple(spectrum.ch_names),
             windows=(Window("all", -np.inf, np.inf),),
             coverage=np.isfinite(data).astype(float),
-            source=str(getattr(spectrum, "method", "unknown")),
+            source=method,
             representation="psd",
             support=np.ones(data.shape, dtype=float),
             row_ids=epoch_row_ids(spectrum, recording, data.shape[0]),
-            computation=ComputationSpec.create(
-                str(getattr(spectrum, "method", "unknown")), **estimator_parameters
-            ),
+            computation=ComputationSpec.create(method, **params),
         )
 
     @classmethod

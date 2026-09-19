@@ -95,9 +95,9 @@ To install with all extras:
 
 .. code-block:: bash
 
-   pip install -e ".[connectivity,microstates,knee,dev,docs]"
+   pip install -e ".[connectivity,microstates,model,importance,knee,dev,docs]"
 
-For predictive modeling, install ``.[model]``. Add ``.[importance]`` when SHAP explanations
+For predictive modeling specifically, install ``.[model]``. Add ``.[importance]`` when SHAP explanations
 are needed; permutation importance itself is available with the model extra.
 
 Verification

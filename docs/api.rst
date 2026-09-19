@@ -20,6 +20,10 @@ Core Data Structures
    :members:
    :show-inheritance:
 
+.. autoclass:: eegfeat.ComputationSpec
+   :members:
+   :show-inheritance:
+
 .. autofunction:: eegfeat.concat
 
 .. autofunction:: eegfeat.stack_rows
@@ -78,6 +82,8 @@ Design and preprocessing
 
 .. autofunction:: eegfeat.model.harmonize_fold
 
+.. autofunction:: eegfeat.model.compute_train_group_intersection_mask
+
 Splits, estimators, and cross-fitting
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -133,6 +139,16 @@ Metrics, nulls, uncertainty, and importance
 .. autofunction:: eegfeat.model.fold_results
 
 .. autofunction:: eegfeat.model.regression_metrics
+
+.. autofunction:: eegfeat.model.subject_level_r
+
+.. autofunction:: eegfeat.model.subject_level_errors
+
+.. autofunction:: eegfeat.model.within_subject_centered_metrics
+
+.. autofunction:: eegfeat.model.within_condition_metrics
+
+.. autofunction:: eegfeat.model.residualize_targets
 
 .. autofunction:: eegfeat.model.classification_metrics
 

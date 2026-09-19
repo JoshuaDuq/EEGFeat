@@ -38,7 +38,7 @@ pip install eegfeat
 ### Optional Extras
 
 - `pip install "eegfeat[model]"`: `scikit-learn` for predictive modeling, cross-fitting, and statistical evaluation.
-- `pip install "eegfeat[importance]"`: `scikit-learn` + `shap` for SHAP and permutation feature importance.
+- `pip install "eegfeat[importance]"`: `scikit-learn` + `shap` for SHAP explanations (permutation feature importance is included with `[model]`).
 - `pip install "eegfeat[connectivity]"`: `mne-connectivity` for weighted phase lag index (wPLI).
 - `pip install "eegfeat[microstates]"`: `scikit-learn` for GFP-peak topography clustering.
 - `pip install "eegfeat[knee]"`: `specparam` for spectral knee fitting.
@@ -178,6 +178,9 @@ rebound = ef.erds_rebound_latency([alpha_sig], baseline=base_win, windows=[task_
 # Inter-trial phase coherence across trial groups (one row per group)
 coh = ef.itpc([theta_sig], windows=[task_win])
 
+# Pairwise phase consistency across trial groups (unbiased by trial count)
+phase_cons = ef.ppc([theta_sig], windows=[task_win])
+
 # Phase-amplitude coupling (theta phase modulating gamma amplitude envelope)
 phase_amp = ef.pac(theta_sig, gamma_sig, windows=[task_win])
 
@@ -194,7 +197,7 @@ clustering = ef.clustering_coefficient(conn_aec, threshold=0.2)
 
 ```python
 # Chebyshev sample entropy and coarse-grained multiscale entropy
-samp_ent = ef.sample_entropy([raw_sig], windows=[task_win], m=2, r=0.2)
+samp_ent = ef.sample_entropy([raw_sig], windows=[task_win], order=2, r=0.2)
 mse = ef.multiscale_entropy([raw_sig], windows=[task_win], scales=range(1, 6))
 ```
 
