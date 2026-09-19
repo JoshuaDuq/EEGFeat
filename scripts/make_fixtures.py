@@ -33,8 +33,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--subject", default="sub-0001")
     parser.add_argument("--out", type=Path, default=Path("tests/fixtures"))
+    parser.add_argument("--model", action="store_true", help="Generate model fixtures")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+
+    if args.model:
+        rng = np.random.default_rng(42)
+        model_data = model_fixtures(rng)
+        np.savez_compressed(args.out / "model_reference.npz", **model_data)
+        print(f"Wrote {args.out / 'model_reference.npz'}")
+        return
 
     path = (
         REFERENCE_ROOT
@@ -248,6 +256,35 @@ def _reference(tfr: object, epochs: object) -> dict[str, np.ndarray]:
             out[f"burst_{b_metric}__{band_name}"] = b_vals
 
     return out
+
+
+def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
+    import sys
+
+    sys.path.insert(0, str(REFERENCE_ROOT))
+    from eeg_pipeline.analysis.machine_learning import cv
+
+    n_subjects, n_trials, n_features = 6, 10, 4
+    groups = np.repeat([f"sub-{i:04d}" for i in range(n_subjects)], n_trials).astype(object)
+    X = rng.normal(size=(groups.size, n_features))
+    y = X[:, 0] * 2.0 + rng.normal(scale=0.1, size=groups.size)
+
+    folds = cv.create_loso_folds(X, groups)
+    # Fold index arrays are ragged. Flattening them with an offsets array keeps the
+    # fixture free of object arrays, so it loads with allow_pickle=False as
+    # tests/test_equivalence.py:43 already requires.
+    train = np.concatenate([f[1] for f in folds])
+    test = np.concatenate([f[2] for f in folds])
+    return {
+        "X": X,
+        "y": y,
+        "groups": groups.astype("U16"),
+        "loso_train": train,
+        "loso_train_offsets": np.cumsum([0] + [f[1].size for f in folds]),
+        "loso_test": test,
+        "loso_test_offsets": np.cumsum([0] + [f[2].size for f in folds]),
+        "reference_commit": np.array(_reference_commit()),
+    }
 
 
 def _reference_commit() -> str:
