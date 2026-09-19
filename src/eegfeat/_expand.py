@@ -232,7 +232,7 @@ def expand_signal(
     trials rather than within one. The kernel then returns one value per row
     instead of per epoch, and coverage is averaged over each group's epochs.
     """
-    _check_signals(signals, windows)
+    check_signals(signals, windows)
     if (row_groups is None) != (row_labels is None):
         raise ValueError("row_groups and row_labels must be given together.")
     columns: list[_Column] = []
@@ -311,17 +311,33 @@ def _reduce_rows(
     return np.stack([per_epoch[row_groups == row].mean(axis=0) for row in range(n_rows)])
 
 
-def _check_signals(signals: Sequence[TimeSeries], windows: Sequence[Window]) -> None:
+def check_signals(signals: Sequence[TimeSeries], windows: Sequence[Window]) -> None:
+    """Reject signals that cannot be combined column-wise into one table.
+
+    Equal ``row_ids`` also settles the epoch count, since every series validates
+    one identity per epoch on construction.
+    """
     if not signals:
-        raise ValueError("expand_signal requires at least one BandSignal.")
+        raise ValueError("at least one signal is required.")
     if not windows:
-        raise ValueError("expand_signal requires at least one window.")
+        raise ValueError("at least one window is required.")
     first = signals[0]
     for signal in signals[1:]:
         if signal.ch_names != first.ch_names:
             raise ValueError(
-                "all signals must share the same channels; got "
+                "all signals must share the same channels in the same order; got "
                 f"{first.ch_names} and {signal.ch_names}."
+            )
+        if signal.row_ids != first.row_ids:
+            raise ValueError(
+                "all signals must share exact row identities in the same order; the "
+                "recording, epoch or event identity differs. Rows are never aligned "
+                "or reindexed here."
+            )
+        if not np.isclose(signal.sfreq, first.sfreq):
+            raise ValueError(
+                "all signals must share the same sampling frequency; got "
+                f"{first.sfreq} and {signal.sfreq} Hz."
             )
         if signal.times.shape != first.times.shape or not np.allclose(signal.times, first.times):
             raise ValueError("all signals must share the same time axis.")

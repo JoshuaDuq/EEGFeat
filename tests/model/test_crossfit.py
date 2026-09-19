@@ -6,7 +6,9 @@ from sklearn.dummy import DummyRegressor
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model.crossfit import cross_fit_regression
+from eegfeat.model.estimators import ridge_pipeline
 from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegfeat.model.transformers import PreprocessingConfig
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 GRID = {"regressor__strategy": ["mean", "median"]}
@@ -96,7 +98,7 @@ def test_cross_fit_applies_feature_harmonization() -> None:
 
 
 def test_cross_fit_applies_target_residualization() -> None:
-    covariates = np.arange(GROUPS.size, dtype=float).reshape(-1, 1)
+    covariates = Y.reshape(-1, 1)
     predictions = cross_fit_regression(
         loso_folds(GROUPS),
         X,
@@ -110,5 +112,51 @@ def test_cross_fit_applies_target_residualization() -> None:
         residualize_on=["c1"],
     )
     assert len(predictions) == 4
+    # Residualized target has nuisance subtracted, so it must not equal raw Y
+    raw_y_fold0 = Y[predictions[0].rows]
+    assert not np.allclose(predictions[0].y_true, raw_y_fold0)
+    assert np.allclose(predictions[0].y_true, 0.0, atol=1e-10)
 
 
+def test_cross_fit_regression_rejects_residualize_on_without_covariates() -> None:
+    with pytest.raises(ValueError, match="residualize_on, but covariates is None"):
+        cross_fit_regression(
+            loso_folds(GROUPS),
+            X,
+            Y,
+            GROUPS,
+            PIPE,
+            GRID,
+            inner=BY_SUBJECT,
+            seed=0,
+            covariates=None,
+            residualize_on=["c1"],
+        )
+
+
+@pytest.mark.parametrize("n_covariates", [0, 1])
+def test_a_training_subject_above_the_missingness_limit_fails_the_fold(
+    n_covariates: int,
+) -> None:
+    # max_subject_missingness belongs to the pipeline's missingness step, but pipelines never
+    # route groups to their steps, so the limit has to be checked on the fitted model.
+    rng = np.random.default_rng(0)
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 10).astype(object)
+    values = rng.normal(size=(40, 10 + n_covariates))
+    # Where s1 trains, each of these features is 20% missing (kept), but 36% of s1's own
+    # feature values are missing.
+    values[:6, :6] = np.nan
+    pipe = ridge_pipeline(
+        PreprocessingConfig(max_subject_missingness=0.3), seed=0, n_covariates=n_covariates
+    )
+    with pytest.raises(ValueError, match="s1"):
+        cross_fit_regression(
+            loso_folds(groups),
+            values,
+            rng.normal(size=40),
+            groups,
+            pipe,
+            {},
+            inner=BY_SUBJECT,
+            seed=0,
+        )

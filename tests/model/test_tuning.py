@@ -6,10 +6,16 @@ from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.estimators import ridge_grid, ridge_pipeline
+from eegfeat.model.estimators import (
+    elasticnet_grid,
+    elasticnet_pipeline,
+    ridge_grid,
+    ridge_pipeline,
+)
+from eegfeat.model.scoring import scoring_dict
 from eegfeat.model.splits import InnerSplit
 from eegfeat.model.transformers import PreprocessingConfig
-from eegfeat.model.tuning import fit_untuned, tune
+from eegfeat.model.tuning import FoldFitError, fit_untuned, tune
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 GRID = {"regressor__strategy": ["mean", "median"]}
@@ -113,3 +119,53 @@ def test_within_subject_regression_tunes_with_real_pipeline() -> None:
     grid = ridge_grid()
     fit = tune(pipe, grid, X8, Y8, TWO_RUNS, split=BY_RUN, seed=42, fold=1)
     assert "regressor__alpha" in fit.best_params
+
+
+def test_a_candidate_that_zeroes_every_coefficient_does_not_abort_tuning() -> None:
+    # The default elastic-net grid reaches penalties that zero every coefficient on a
+    # standardized target. Such a candidate predicts a constant, which has no correlation
+    # with the target: it must lose the search, not end it.
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(60, 5))
+    y = 0.5 * X[:, 0] + rng.normal(size=60)
+    y = (y - y.mean()) / y.std()
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 15).astype(object)
+    fit = tune(
+        elasticnet_pipeline(PreprocessingConfig(), seed=0),
+        elasticnet_grid(),
+        X,
+        y,
+        groups,
+        split=InnerSplit(grouping="subject", n_splits=3),
+        seed=0,
+        fold=1,
+        scoring=scoring_dict(),
+        refit="r",
+    )
+    assert fit.best_params["regressor__alpha"] < 10.0
+
+
+def test_a_failed_inner_search_is_reported_as_a_fit_failure() -> None:
+    # Callers such as the permutation null must tell a fit that failed apart from a design
+    # that cannot be fitted at all, which stays a plain ValueError.
+    with pytest.raises(FoldFitError, match="Fold 1"):
+        tune(
+            PIPE,
+            {"regressor__nonexistent": [1]},
+            X8,
+            Y8,
+            TWO_SUBJECTS,
+            split=BY_SUBJECT,
+            seed=0,
+            fold=1,
+        )
+
+
+class _Diverges(DummyRegressor):
+    def fit(self, X: np.ndarray, y: np.ndarray, sample_weight: object = None) -> _Diverges:
+        raise RuntimeError("solver diverged")
+
+
+def test_an_untuned_fit_that_raises_is_reported_as_a_fit_failure() -> None:
+    with pytest.raises(FoldFitError, match="solver diverged"):
+        fit_untuned(Pipeline([("regressor", _Diverges())]), X8, Y8, seed=0, fold=3)

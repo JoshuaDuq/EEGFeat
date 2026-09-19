@@ -30,10 +30,6 @@ __all__ = [
 ]
 
 
-def _variance_param_prefix(n_covariates: int) -> str:
-    return "preprocessing__eeg__var" if n_covariates > 0 else "var"
-
-
 def _append_classification_resampler(
     steps: list[tuple[str, object]],
     *,
@@ -45,14 +41,16 @@ def _append_classification_resampler(
         return
     if resampler_choice == "undersample":
         try:
-            from imblearn.under_sampling import RandomUnderSampler  # type: ignore[import-not-found]
+            from imblearn.under_sampling import (  # type: ignore[import-untyped]
+                RandomUnderSampler,
+            )
         except ImportError as err:
             msg = "imblearn is required for resampling 'undersample'."
             raise ImportError(msg) from err
         steps.append(("resampler", RandomUnderSampler(random_state=resampler_seed)))
     elif resampler_choice == "smote":
         try:
-            from imblearn.over_sampling import SMOTE  # type: ignore[import-not-found]
+            from imblearn.over_sampling import SMOTE  # type: ignore[import-untyped]
         except ImportError as err:
             msg = "imblearn is required for resampling 'smote'."
             raise ImportError(msg) from err
@@ -84,7 +82,9 @@ def _get_lr_kwargs(penalty: str, l1_ratio: float | None = None) -> dict[str, Any
 def _assemble_pipeline(steps: list[tuple[str, object]], resampler: str) -> Pipeline:
     if resampler.strip().lower() != "none":
         try:
-            from imblearn.pipeline import Pipeline as ImbPipeline  # type: ignore[import-not-found]
+            from imblearn.pipeline import (  # type: ignore[import-untyped]
+                Pipeline as ImbPipeline,
+            )
 
             return ImbPipeline(steps)
         except ImportError as err:
@@ -324,52 +324,43 @@ def ensemble_pipeline(
     return _assemble_pipeline(steps, resampler)
 
 
-def elasticnet_grid(*, n_covariates: int = 0) -> dict[str, list[object]]:
-    var_prefix = _variance_param_prefix(n_covariates)
+# The grids do not tune the variance threshold. It acts on unscaled features, whose units
+# differ across a FeatureTable, so any value above zero selects features by unit; the
+# pipelines keep it at 0.0, which removes only constant features.
+
+
+def elasticnet_grid() -> dict[str, list[object]]:
     return {
         "regressor__alpha": [0.001, 0.01, 0.1, 1.0, 10.0],
         "regressor__l1_ratio": [0.2, 0.5, 0.8],
-        f"{var_prefix}__threshold": [0.0, 0.01, 0.1],
     }
 
 
-def ridge_grid(*, n_covariates: int = 0) -> dict[str, list[object]]:
-    var_prefix = _variance_param_prefix(n_covariates)
-    return {
-        "regressor__alpha": [0.01, 0.1, 1.0, 10.0, 100.0],
-        f"{var_prefix}__threshold": [0.0, 0.01, 0.1],
-    }
+def ridge_grid() -> dict[str, list[object]]:
+    return {"regressor__alpha": [0.01, 0.1, 1.0, 10.0, 100.0]}
 
 
-def random_forest_grid(*, n_covariates: int = 0) -> dict[str, list[object]]:
-    var_prefix = _variance_param_prefix(n_covariates)
+def random_forest_grid() -> dict[str, list[object]]:
     return {
         "rf__max_depth": [5, 10, 20, None],
         "rf__min_samples_split": [2, 5, 10],
         "rf__min_samples_leaf": [1, 2, 4],
-        f"{var_prefix}__threshold": [0.0, 0.01, 0.1],
     }
 
 
-def svm_grid(*, n_covariates: int = 0) -> dict[str, list[object]]:
-    var_prefix = _variance_param_prefix(n_covariates)
+def svm_grid() -> dict[str, list[object]]:
     return {
         "svm__C": [0.1, 1.0, 10.0],
         "svm__gamma": ["scale", "auto"],
-        f"{var_prefix}__threshold": [0.0, 0.01, 0.1],
     }
 
 
-def logistic_grid(*, penalty: str = "l2", n_covariates: int = 0) -> dict[str, list[object]]:
-    var_prefix = _variance_param_prefix(n_covariates)
-    grid: dict[str, list[object]] = {
-        "lr__C": [0.01, 0.1, 1.0, 10.0],
-        f"{var_prefix}__threshold": [0.0, 0.01, 0.1],
-    }
+def logistic_grid(*, penalty: str = "l2") -> dict[str, list[object]]:
+    grid: dict[str, list[object]] = {"lr__C": [0.01, 0.1, 1.0, 10.0]}
     if penalty == "elasticnet":
         grid["lr__l1_ratio"] = [0.1, 0.5, 0.9]
     return grid
 
 
-def random_forest_classifier_grid(*, n_covariates: int = 0) -> dict[str, list[object]]:
-    return random_forest_grid(n_covariates=n_covariates)
+def random_forest_classifier_grid() -> dict[str, list[object]]:
+    return random_forest_grid()

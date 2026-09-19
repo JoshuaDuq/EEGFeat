@@ -5,9 +5,10 @@ eegfeat
 
    <p class="hero-lede">
      Labelled, mathematically sound <strong>spectral</strong>, <strong>temporal</strong>,
-     and <strong>connectivity</strong> feature extraction for <strong>MNE</strong> objects.
-     Turns raw spectra, time-frequency arrays, and analytic band signals into structured,
-     inspectable <code>FeatureTable</code> outputs with first-class quality control.
+     and <strong>connectivity</strong> feature extraction plus leakage-safe <strong>predictive
+     modeling</strong> for <strong>MNE</strong> objects. Turns raw spectra, time-frequency
+     arrays, and analytic band signals into structured, inspectable <code>FeatureTable</code>
+     outputs, then carries per-epoch tables into grouped model evaluation.
    </p>
 
 .. grid:: 3
@@ -31,6 +32,12 @@ eegfeat
       :link-type: doc
 
       Mathematical formulations, algorithms, and rationale.
+
+   .. grid-item-card:: Modeling
+      :link: modeling
+      :link-type: doc
+
+      Design matrices, group-disjoint cross-fitting, uncertainty, and importance.
 
 ----
 
@@ -95,12 +102,21 @@ Core Capabilities
 
       ``eegfeat.sample_entropy`` · ``microstates.segment``
 
+   .. grid-item-card:: 07 — Predictive Modeling
+      :link: modeling
+      :link-type: doc
+
+      Per-epoch design matrices, group-disjoint nested validation, fold-local preprocessing,
+      permutation nulls, conformal intervals, and metadata-aware importance.
+
+      ``eegfeat.model.build_design`` · ``eegfeat.model.cross_fit_regression``
+
 ----
 
 Explore the Documentation
 -------------------------
 
-.. grid:: 4
+.. grid:: 5
    :gutter: 2
    :class-container: docs-nav
 
@@ -121,6 +137,12 @@ Explore the Documentation
       :link-type: doc
 
       Mathematical formulations and rationale.
+
+   .. grid-item-card:: Modeling
+      :link: modeling
+      :link-type: doc
+
+      Leakage-safe predictive workflows and model diagnostics.
 
    .. grid-item-card:: API Reference
       :link: api
@@ -150,6 +172,13 @@ Explore the Documentation
    :caption: Scientific Methods
 
    methods
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: Predictive Modeling
+
+   modeling
 
 .. toctree::
    :hidden:

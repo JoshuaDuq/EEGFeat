@@ -14,7 +14,8 @@ import os
 import platform
 import time
 import traceback
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -46,7 +47,7 @@ class TrialError(Exception):
 
     def __init__(self, recording: Recording, cause: Exception) -> None:
         self.recording = recording
-        super().__init__(f"{recording.label}: {type(cause).__name__}: {cause}")
+        super().__init__(f"{recording.label}: {_describe_error(cause)}")
 
 
 @dataclass(frozen=True)
@@ -131,7 +132,11 @@ class RunResult:
 
 @dataclass(frozen=True, eq=False)
 class CheckReport:
-    """A recipe tried on its first recording, without writing anything."""
+    """A recipe tried on its first recording, without writing anything.
+
+    ``missing_channels`` maps the label of each recording a run would fail to the
+    channels the recipe names that it will not have once picked.
+    """
 
     recordings: tuple[Recording, ...]
     existing: tuple[Path, ...]
@@ -139,6 +144,7 @@ class CheckReport:
     n_epochs: int
     channels: tuple[str, ...]
     features: RecordingFeatures
+    missing_channels: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def discover(recipe: Recipe) -> tuple[Recording, ...]:
@@ -191,7 +197,10 @@ def discover(recipe: Recipe) -> tuple[Recording, ...]:
 
 def load_epochs(path: Path, inputs: Inputs) -> Any:
     """Read an epochs file and keep the channels the recipe picks."""
-    epochs = mne.read_epochs(path, preload=True, verbose="error")
+    return _pick(mne.read_epochs(path, preload=True, verbose="error"), inputs)
+
+
+def _pick(epochs: Any, inputs: Inputs) -> Any:
     picks = list(inputs.picks) if isinstance(inputs.picks, tuple) else inputs.picks
     epochs.pick(picks, exclude="bads" if inputs.exclude_bads else ())
     return epochs
@@ -257,7 +266,10 @@ def check(recipe: Recipe, *, n_jobs: int = 1) -> CheckReport:
     """Compute a recipe's features for its first recording, writing nothing.
 
     Catches what loading a recipe cannot: channels an ROI names but the data
-    lacks, windows outside the epochs, spectra the data cannot support.
+    lacks, windows outside the epochs, spectra the data cannot support. Only the
+    first recording is computed, but every recording's header is read for the
+    channels that ROIs and asymmetry pairs name, since bad channels differ between
+    recordings.
 
     Raises
     ------
@@ -284,7 +296,46 @@ def check(recipe: Recipe, *, n_jobs: int = 1) -> CheckReport:
         n_epochs=len(epochs),
         channels=tuple(epochs.ch_names),
         features=features,
+        missing_channels=_missing_channels(recipe, recordings),
     )
+
+
+def _missing_channels(
+    recipe: Recipe, recordings: tuple[Recording, ...]
+) -> dict[str, tuple[str, ...]]:
+    uses: dict[str, list[str]] = {}
+    if any("rois" in spec.spatial for spec in recipe.features):
+        for roi, members in recipe.rois.items():
+            for channel in members:
+                uses.setdefault(channel, []).append(f"ROI {roi!r}")
+    for spec in recipe.features:
+        for left, right in spec.asymmetry:
+            for channel in (left, right):
+                uses.setdefault(channel, []).append(f"asymmetry pair {left}/{right}")
+    if not uses:
+        return {}
+
+    missing: dict[str, tuple[str, ...]] = {}
+    for recording in recordings:
+        # Picking needs loaded data, so pick on a one-sample stand-in with the
+        # recording's own info: the same selection load_epochs makes, without reading data.
+        info = mne.io.read_info(recording.source, verbose="error")
+        stand_in = mne.EpochsArray(np.zeros((1, info["nchan"], 1)), info, verbose="error")
+        kept = set(_pick(stand_in, recipe.inputs).ch_names)
+        problems = []
+        for channel, named_by in uses.items():
+            if channel in kept:
+                continue
+            if channel in info["bads"] and recipe.inputs.exclude_bads:
+                reason = "is marked bad, and inputs.exclude_bads leaves it out"
+            elif channel in info["ch_names"]:
+                reason = "is not among the channels inputs.picks keeps"
+            else:
+                reason = "is not in the recording"
+            problems.append(f"{channel} ({', '.join(dict.fromkeys(named_by))}) {reason}")
+        if problems:
+            missing[recording.label] = tuple(problems)
+    return missing
 
 
 def epoch_rows(epochs: Any, include_metadata: bool) -> pd.DataFrame:
@@ -327,7 +378,7 @@ def _process(
             recording,
             success=False,
             seconds=time.perf_counter() - clock,
-            error=f"{type(exc).__name__}: {exc}",
+            error=_describe_error(exc),
             traceback=traceback.format_exc(),
         )
     seconds = time.perf_counter() - clock
@@ -477,6 +528,12 @@ def _describe(n_epochs: int, features: RecordingFeatures, seconds: float) -> str
         parts.append(f"{len(table.meta)} cross-trial features × {table.n_rows} groups")
     parts.append(f"{seconds:.1f} s")
     return " · ".join(parts)
+
+
+def _describe_error(exc: Exception) -> str:
+    # compute_features notes which recipe entry failed; lead with it.
+    context = "".join(f"{note}: " for note in getattr(exc, "__notes__", ()))
+    return f"{context}{type(exc).__name__}: {exc}"
 
 
 def _run_summary(outcome: RunResult) -> str:

@@ -87,7 +87,13 @@ def compute_features(
     for position, spec in enumerate(recipe.features, start=1):
         if on_step is not None:
             on_step(spec.measure, position, len(recipe.features))
-        table = _compute(spec, inputs)
+        try:
+            table = _compute(spec, inputs)
+        except Exception as exc:
+            # Keep the exception's type for callers; the note names the entry the way
+            # recipe problems do, so it can be found in the file.
+            exc.add_note(f"features[{position - 1}] ({spec.measure})")
+            raise
         (per_epoch if table.row_labels is None else crosstrial).append(table)
     return RecordingFeatures(
         epochs=concat(per_epoch) if per_epoch else None,

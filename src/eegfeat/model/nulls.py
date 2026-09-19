@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
@@ -9,9 +9,10 @@ import numpy.typing as npt
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
+from eegfeat.model.aggregate import AggregationConfig, subject_level_r
 from eegfeat.model.crossfit import cross_fit_regression
-from eegfeat.model.scoring import safe_pearsonr
 from eegfeat.model.splits import Fold, InnerSplit
+from eegfeat.model.tuning import FoldFitError
 
 __all__ = [
     "NullConfig",
@@ -24,7 +25,12 @@ __all__ = [
     "permute",
 ]
 
-Scheme = Literal["within_subject", "run_wise", "circular_shift_within_run"]
+Scheme = Literal[
+    "within_subject",
+    "run_wise",
+    "within_subject_within_run",
+    "circular_shift_within_run",
+]
 
 
 @dataclass(frozen=True)
@@ -35,15 +41,23 @@ class NullConfig:
     min_retained_trials: int = 8
 
     def __post_init__(self) -> None:
-        valid: tuple[str, ...] = ("within_subject", "run_wise", "circular_shift_within_run")
+        valid: tuple[str, ...] = (
+            "within_subject",
+            "run_wise",
+            "within_subject_within_run",
+            "circular_shift_within_run",
+        )
         if self.scheme not in valid:
             msg = f"Unknown scheme {self.scheme!r}. Expected one of: {valid}."
             raise ValueError(msg)
-        if self.n_permutations < 1:
-            msg = f"n_permutations must be >= 1, got {self.n_permutations}."
+        if self.n_permutations <= 0:
+            msg = f"n_permutations must be > 0, got {self.n_permutations}."
             raise ValueError(msg)
         if not (0.0 <= self.min_complete_fraction <= 1.0):
-            msg = "min_complete_fraction must be between 0.0 and 1.0."
+            msg = f"min_complete_fraction must be in [0, 1], got {self.min_complete_fraction}."
+            raise ValueError(msg)
+        if self.min_retained_trials < 1:
+            msg = f"min_retained_trials must be >= 1, got {self.min_retained_trials}."
             raise ValueError(msg)
 
 
@@ -56,26 +70,18 @@ class NullResult:
     n_incomplete: int
 
 
-def is_permutation_valid_run(
-    trial_indices: npt.NDArray[np.intp] | Sequence[int],
-    *,
-    min_retained_trials: int = 8,
-) -> bool:
-    retained = np.asarray(trial_indices, dtype=np.intp)
-    return bool(retained.size >= int(min_retained_trials) and retained.size >= 2)
+_DEFAULT_AGGREGATION = AggregationConfig()
+
+
+def is_permutation_valid_run(retained: npt.NDArray[np.intp], min_retained: int = 8) -> bool:
+    arr = np.asarray(retained, dtype=np.intp)
+    return bool(arr.size >= min_retained and np.all(np.isfinite(arr)))
 
 
 def circular_shift_group(n_retained: int) -> tuple[int, ...]:
-    """Return every within-run circular shift, the identity included.
-
-    The upper-tail permutation p-value is justified by the transformations forming a
-    group under composition, with the observed statistic as the identity element. The
-    full cycle is that group; any subset of it generally is not.
-    """
-    count = int(n_retained)
-    if count <= 0:
+    if n_retained <= 0:
         return ()
-    return tuple(range(count))
+    return tuple(range(n_retained))
 
 
 def changed_fraction(
@@ -85,15 +91,14 @@ def changed_fraction(
     orig = np.asarray(y_original, dtype=np.float64)
     perm = np.asarray(y_permuted, dtype=np.float64)
     if orig.shape != perm.shape:
-        msg = f"Permutation shape mismatch: {orig.shape} vs {perm.shape}."
+        msg = f"y_original and y_permuted shape mismatch: {orig.shape} vs {perm.shape}."
         raise ValueError(msg)
-    if orig.size == 0:
+    if len(orig) == 0:
         return 0.0
     finite = np.isfinite(orig) & np.isfinite(perm)
-    if not np.any(finite):
+    if np.sum(finite) == 0:
         return 0.0
-    changed = int(np.sum(orig[finite] != perm[finite]))
-    return float(changed / int(np.sum(finite)))
+    return float(np.mean(orig[finite] != perm[finite]))
 
 
 def permute(
@@ -111,7 +116,9 @@ def permute(
         msg = "Permutation values and groups must have the same length."
         raise ValueError(msg)
 
-    if config.scheme in ("run_wise", "circular_shift_within_run"):
+    source_indices = np.arange(len(values), dtype=np.intp)
+
+    if config.scheme in ("run_wise", "within_subject_within_run", "circular_shift_within_run"):
         if runs is None:
             msg = f"Permutation scheme {config.scheme!r} requires run labels."
             raise ValueError(msg)
@@ -121,49 +128,68 @@ def permute(
                 f"Permutation runs must have the same length as y when scheme is {config.scheme!r}."
             )
             raise ValueError(msg)
-        if np.all(pd.isna(runs_arr)):
-            msg = f"Permutation scheme {config.scheme!r} requires run labels."
+        n_unlabelled = int(np.sum(pd.isna(runs_arr)))
+        if n_unlabelled:
+            # Runs are paradigm-specific: a trial without a label has no run to be exchanged
+            # within, and inventing one would change the hypothesis being tested.
+            msg = (
+                f"Permutation scheme {config.scheme!r} requires run labels for every trial; "
+                f"{n_unlabelled} of {len(runs_arr)} have none."
+            )
             raise ValueError(msg)
     else:
         runs_arr = None
 
-    y_perm = values.copy()
+    if config.scheme == "circular_shift_within_run":
+        if trial_indices is None:
+            msg = "circular_shift_within_run requires within-run trial indices."
+            raise ValueError(msg)
+        trial_arr = np.asarray(trial_indices, dtype=float)
+        if len(trial_arr) != len(values):
+            msg = (
+                "Permutation trial indices must have the same length as y "
+                "when scheme is 'circular_shift_within_run'."
+            )
+            raise ValueError(msg)
+        if not np.all(np.isfinite(trial_arr)):
+            msg = "circular_shift_within_run requires finite within-run trial indices."
+            raise ValueError(msg)
+        trial_indices_arr = trial_arr.astype(np.intp)
+    else:
+        trial_indices_arr = None
+
     unique_subs = [s for s in pd.unique(groups_arr) if not pd.isna(s)]
 
-    if config.scheme == "within_subject":
-        for subj in unique_subs:
-            mask = groups_arr == subj
-            if np.sum(mask) >= 2:
-                y_perm[mask] = rng.permutation(y_perm[mask])
-        return y_perm
+    for subj in unique_subs:
+        subj_mask = groups_arr == subj
+        if np.sum(subj_mask) < 2:
+            continue
 
-    if config.scheme == "run_wise" and runs_arr is not None:
-        for subj in unique_subs:
-            subj_mask = groups_arr == subj
-            subj_runs = runs_arr[subj_mask]
-            unique_runs = [r for r in pd.unique(subj_runs) if not pd.isna(r)]
-            if len(unique_runs) < 2:
-                continue
-            perm_runs = rng.permutation(unique_runs)
-            run_indices_orig = [np.where(subj_mask & (runs_arr == r))[0] for r in unique_runs]
-            run_indices_perm = [np.where(subj_mask & (runs_arr == r))[0] for r in perm_runs]
-            for orig_idx, perm_idx in zip(run_indices_orig, run_indices_perm, strict=True):
-                min_len = min(len(orig_idx), len(perm_idx))
-                if min_len > 0:
-                    y_perm[orig_idx[:min_len]] = values[perm_idx[:min_len]]
-        return y_perm
+        if config.scheme == "within_subject":
+            subj_idx = np.where(subj_mask)[0]
+            source_indices[subj_idx] = rng.permutation(source_indices[subj_idx])
 
-    if config.scheme == "circular_shift_within_run" and runs_arr is not None:
-        for subj in unique_subs:
-            subj_mask = groups_arr == subj
+        elif config.scheme in ("run_wise", "within_subject_within_run") and runs_arr is not None:
+            # A subject with one run is still shuffled within it; skipping it would put its
+            # real labels into every draw.
+            subj_idx = np.flatnonzero(subj_mask)
+            for r in pd.unique(runs_arr[subj_idx]):
+                run_idx = subj_idx[runs_arr[subj_idx] == r]
+                if len(run_idx) >= 2:
+                    source_indices[run_idx] = rng.permutation(source_indices[run_idx])
+
+        elif (
+            config.scheme == "circular_shift_within_run"
+            and runs_arr is not None
+            and trial_indices_arr is not None
+        ):
             subj_runs = runs_arr[subj_mask]
             unique_runs = [r for r in pd.unique(subj_runs) if not pd.isna(r)]
             for r in unique_runs:
                 run_idx = np.where(subj_mask & (runs_arr == r))[0]
-                if trial_indices is not None:
-                    order = np.argsort(trial_indices[run_idx], kind="stable")
-                    run_idx = run_idx[order]
-                n_trials = len(run_idx)
+                order = np.argsort(trial_indices_arr[run_idx], kind="stable")
+                ordered_run_idx = run_idx[order]
+                n_trials = len(ordered_run_idx)
                 if n_trials < config.min_retained_trials:
                     msg = (
                         f"circular_shift_within_run requires runs with at "
@@ -172,10 +198,9 @@ def permute(
                     raise ValueError(msg)
                 shift_group = circular_shift_group(n_trials)
                 shift = int(rng.choice(shift_group))
-                y_perm[run_idx] = np.roll(values[run_idx], shift)
-        return y_perm
+                source_indices[ordered_run_idx] = np.roll(source_indices[ordered_run_idx], shift)
 
-    return y_perm
+    return values[source_indices]
 
 
 def permutation_test(
@@ -199,8 +224,12 @@ def permutation_test(
     refit: str | bool | None = None,
     metric_fn: Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], float] | None = None,
     trial_indices: npt.NDArray[np.intp] | None = None,
+    aggregation: AggregationConfig = _DEFAULT_AGGREGATION,
 ) -> NullResult:
     rng = np.random.default_rng(seed)
+    groups_arr = np.asarray(groups, dtype=object)
+    # Each draw needs only the point estimate, so the per-draw bootstrap CI is skipped.
+    null_aggregation = replace(aggregation, ci_method="fixed_effects")
     permuted_targets: list[npt.NDArray[np.float64]] = []
     sampled_changed_fractions: list[float] = []
 
@@ -238,22 +267,34 @@ def permutation_test(
                 scoring=scoring,
                 refit=refit,
             )
-            y_true_all = np.concatenate([p.y_true for p in predictions])
-            y_pred_all = np.concatenate([p.y_pred for p in predictions])
-            if not np.all(np.isfinite(y_pred_all)):
-                n_incomplete += 1
-                continue
-            if metric_fn is not None:
-                score = float(metric_fn(y_true_all, y_pred_all))
-            else:
-                score, _ = safe_pearsonr(y_true_all, y_pred_all)
-            if not np.isfinite(score):
-                n_incomplete += 1
-                continue
-            null_scores.append(score)
-            completed_changed_fractions.append(cf)
-        except Exception:
+        except FoldFitError:
             n_incomplete += 1
+            continue
+        y_true_all = np.concatenate([p.y_true for p in predictions])
+        y_pred_all = np.concatenate([p.y_pred for p in predictions])
+        if not np.all(np.isfinite(y_pred_all)):
+            n_incomplete += 1
+            continue
+
+        if metric_fn is not None:
+            score = float(metric_fn(y_true_all, y_pred_all))
+            if not np.isfinite(score):
+                score = 0.0
+        else:
+            # The same statistic as the documented observed value: subject-level r over the
+            # design's subjects, whatever the fold source. A subject whose predictions do
+            # not vary counts as no correlation instead of voiding the other subjects.
+            pred_df = pd.DataFrame(
+                {
+                    "subject_id": np.concatenate([groups_arr[p.rows] for p in predictions]),
+                    "y_true": y_true_all,
+                    "y_pred": y_pred_all,
+                }
+            )
+            score = subject_level_r(pred_df, config=null_aggregation, undefined="zero").r
+
+        null_scores.append(score)
+        completed_changed_fractions.append(cf)
 
     n_completed = len(null_scores)
     completion_rate = n_completed / config.n_permutations
@@ -265,8 +306,14 @@ def permutation_test(
         raise ValueError(msg)
 
     null_arr = np.asarray(null_scores, dtype=np.float64)
-    count_extreme = int(np.sum(null_arr >= observed))
-    p_value = float((count_extreme + 1) / (len(null_arr) + 1))
+    if np.isnan(observed):
+        p_value = float("nan")
+    else:
+        # Incomplete draws are faults, not draws that fell short of the observed value, so
+        # they are left out of both terms.
+        count_extreme = int(np.sum(null_arr >= observed))
+        p_value = float((count_extreme + 1) / (null_arr.size + 1))
+
     return NullResult(
         p_value=p_value,
         observed=observed,

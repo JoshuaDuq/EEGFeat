@@ -34,6 +34,7 @@ templates_path = ["_templates"]
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 exclude_patterns = [
     "_build",
+    "superpowers",
     "Thumbs.db",
     ".DS_Store",
 ]

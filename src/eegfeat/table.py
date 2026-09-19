@@ -76,6 +76,12 @@ def _json_value(value: object) -> object:
     raise TypeError(f"computation parameter {value!r} is not JSON-serializable.")
 
 
+def _band_record(band: Band | None) -> dict[str, object] | None:
+    if band is None:
+        return None
+    return {"name": band.name, "fmin": band.fmin, "fmax": band.fmax}
+
+
 @dataclass(frozen=True)
 class FeatureMeta:
     """Structured description of one feature column.
@@ -125,29 +131,11 @@ class FeatureMeta:
     amplitude_band: Band | None = None
     nodes: tuple[str, str] | None = None
 
-    @property
-    def parameter_hash(self) -> str:
-        """Stable digest of every field that defines this feature column."""
-        band = None
-        if self.band is not None:
-            band = {"name": self.band.name, "fmin": self.band.fmin, "fmax": self.band.fmax}
-        phase_band = None
-        if self.phase_band is not None:
-            phase_band = {
-                "name": self.phase_band.name,
-                "fmin": self.phase_band.fmin,
-                "fmax": self.phase_band.fmax,
-            }
-        amplitude_band = None
-        if self.amplitude_band is not None:
-            amplitude_band = {
-                "name": self.amplitude_band.name,
-                "fmin": self.amplitude_band.fmin,
-                "fmax": self.amplitude_band.fmax,
-            }
-        record = {
+    def record(self) -> dict[str, object]:
+        """JSON-serializable form of every field that defines this column."""
+        return {
             "measure": self.measure,
-            "band": band,
+            "band": _band_record(self.band),
             "space": self.space,
             "space_kind": self.space_kind,
             "window": self.window,
@@ -157,12 +145,16 @@ class FeatureMeta:
             "source": self.source,
             "freq_resolution_hz": self.freq_resolution_hz,
             "computation": self.computation.record(),
-            "phase_band": phase_band,
-            "amplitude_band": amplitude_band,
+            "phase_band": _band_record(self.phase_band),
+            "amplitude_band": _band_record(self.amplitude_band),
             "nodes": self.nodes,
         }
+
+    @property
+    def parameter_hash(self) -> str:
+        """Stable digest of every field that defines this feature column."""
         canonical = json.dumps(
-            _json_value(record), sort_keys=True, separators=(",", ":"), allow_nan=False
+            _json_value(self.record()), sort_keys=True, separators=(",", ":"), allow_nan=False
         )
         return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -375,5 +367,45 @@ def concat(tables: Sequence[FeatureTable]) -> FeatureTable:
         meta=tuple(m for t in tables for m in t.meta),
         flags=flags,
         row_labels=row_labels,
+        row_ids=row_ids,
+    )
+
+
+def stack_rows(tables: Sequence[FeatureTable]) -> FeatureTable:
+    """Stack compatible per-epoch feature tables in input order.
+
+    This is the cohort-building counterpart to :func:`concat`, which joins
+    feature columns for the same epochs. Cross-trial tables are deliberately
+    excluded because their group rows are not independent epochs.
+    """
+    if not tables:
+        raise ValueError("stack_rows requires at least one table.")
+
+    meta = tables[0].meta
+    identity_groups: list[tuple[RowId, ...]] = []
+    for table in tables:
+        if table.row_labels is not None or table.row_ids is None:
+            raise ValueError("stack_rows accepts per-epoch tables with row_ids only.")
+        if table.meta != meta:
+            raise ValueError("stack_rows requires the same ordered feature metadata.")
+        identity_groups.append(table.row_ids)
+
+    row_ids = tuple(row_id for identities in identity_groups for row_id in identities)
+    if len(set(row_ids)) != len(row_ids):
+        raise ValueError("stack_rows found duplicate row_ids across input tables.")
+
+    flag_names = sorted({name for table in tables for name in table.flags})
+    flags = {
+        name: np.concatenate(
+            [table.flags.get(name, np.zeros(table.values.shape, dtype=bool)) for table in tables],
+            axis=0,
+        )
+        for name in flag_names
+    }
+    return FeatureTable(
+        values=np.concatenate([table.values for table in tables], axis=0),
+        coverage=np.concatenate([table.coverage for table in tables], axis=0),
+        meta=meta,
+        flags=flags,
         row_ids=row_ids,
     )

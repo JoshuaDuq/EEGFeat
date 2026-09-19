@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import replace
 
 import numpy as np
@@ -6,7 +7,7 @@ import pytest
 from eegfeat.bands import Band
 from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
 from eegfeat.spectra import Spectra, Window
-from eegfeat.table import ComputationSpec
+from eegfeat.table import ComputationSpec, FeatureTable
 
 ALPHA = Band("alpha", 8.0, 13.0)
 
@@ -109,3 +110,35 @@ def test_psd_and_tfr_reductions_reject_the_wrong_representation() -> None:
     with pytest.raises(ValueError, match="requires spectral representation"):
         integrated_band_power(tfr, bands=(ALPHA,))
     assert np.isfinite(mean_tfr_power(tfr, bands=(ALPHA,)).values).all()
+
+
+@pytest.mark.parametrize(
+    ("reduction", "representation"),
+    [
+        (integrated_band_power, "psd"),
+        (mean_psd, "psd"),
+        (mean_tfr_power, "time_frequency_power"),
+    ],
+)
+def test_percent_is_change_from_the_baseline_window(
+    reduction: Callable[..., FeatureTable], representation: str
+) -> None:
+    # Flat power of 2 in the baseline and 3 in the stimulus: (3 - 2) / 2 = +50%,
+    # whether the band value is an integral or a mean.
+    freqs = np.arange(8.0, 13.5, 0.5)
+    data = np.stack([np.full(freqs.size, 2.0), np.full(freqs.size, 3.0)])[np.newaxis, np.newaxis]
+    spectra = replace(
+        _spectra(np.ones(freqs.size), freqs),
+        data=data,
+        windows=(Window("baseline", -1.0, 0.0), Window("stimulus", 0.0, 1.0)),
+        coverage=np.ones(data.shape),
+        support=np.ones(data.shape),
+        representation=representation,
+    )
+    table = reduction(
+        spectra, bands=(ALPHA,), include_global=False, baseline="baseline", normalize="percent"
+    )
+    stimulus = table.select(window="stimulus")
+    np.testing.assert_allclose(stimulus.values, 50.0)
+    assert stimulus.meta[0].normalization == "percent"
+    assert stimulus.meta[0].unit == "%"

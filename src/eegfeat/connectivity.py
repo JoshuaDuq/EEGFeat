@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from eegfeat._expand import window_mask
+from eegfeat._expand import check_signals, window_mask
 from eegfeat.bands import Band
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Window
@@ -129,7 +129,7 @@ def wpli(
                     window,
                     "wpli",
                     "a.u.",
-                    signal.source,
+                    signal,
                 )
             )
     return _table(columns, labels)
@@ -152,7 +152,7 @@ def global_efficiency(pairs: FeatureTable) -> FeatureTable:
     FeatureTable
         One column per band and window, with ``space="global"``.
     """
-    return _graph_measure(pairs, "global_efficiency", _global_efficiency)
+    return _graph_measure(pairs, "global_efficiency", _global_efficiency, unit="a.u.")
 
 
 def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureTable:
@@ -178,7 +178,11 @@ def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureT
     if not np.isfinite(threshold):
         raise ValueError(f"threshold must be finite, got {threshold}.")
     return _graph_measure(
-        pairs, "clustering", lambda m: _clustering(m, threshold), suffix=f" (>{threshold})"
+        pairs,
+        "clustering",
+        lambda m: _clustering(m, threshold),
+        unit=f"a.u. (>{threshold})",
+        threshold=threshold,
     )
 
 
@@ -275,8 +279,18 @@ def _pair_columns(
     window: Window,
     measure: str,
     unit: str,
-    source: str,
+    signal: BandSignal | Signal,
 ) -> list[tuple[FeatureMeta, npt.NDArray[np.float64]]]:
+    computation = ComputationSpec.create(
+        measure,
+        estimator=("per-trial-pearson-mean" if measure == "aec" else "mne-connectivity-wpli"),
+        input_source=signal.source,
+        input_computation=signal.computation.record(),
+        # The node set belongs to the specification: channel-level and ROI-level
+        # estimates of the same band and window are otherwise indistinguishable,
+        # and a graph built from their union is a graph of neither.
+        nodes=list(node_names),
+    )
     columns = []
     for i in range(len(node_names)):
         for j in range(i + 1, len(node_names)):
@@ -288,14 +302,9 @@ def _pair_columns(
                 window=window.name,
                 normalization="raw",
                 unit=unit,
-                source=source,
+                source=signal.source,
                 window_bounds=(window.tmin, window.tmax),
-                computation=ComputationSpec.create(
-                    measure,
-                    estimator=(
-                        "per-trial-pearson-mean" if measure == "aec" else "mne-connectivity-wpli"
-                    ),
-                ),
+                computation=computation,
                 freq_resolution_hz=None,
                 nodes=(node_names[i], node_names[j]),
             )
@@ -325,8 +334,7 @@ def _pairwise(
     trials: Sequence[str] | npt.NDArray[np.str_] | None,
     matrix: Callable[[npt.NDArray[np.float64], list[list[int]]], npt.NDArray[np.float64]],
 ) -> FeatureTable:
-    if not signals:
-        raise ValueError("at least one BandSignal is required.")
+    check_signals(signals, windows)
     row_groups, labels = _resolve_rows(trials, signals[0].n_epochs)
     node_names, picks = _nodes(signals[0].ch_names, groups)
 
@@ -342,9 +350,7 @@ def _pairwise(
                 ]
             )
             columns.extend(
-                _pair_columns(
-                    stacked, node_names, signal.band, window, measure, unit, signal.source
-                )
+                _pair_columns(stacked, node_names, signal.band, window, measure, unit, signal)
             )
     return _table(columns, labels)
 
@@ -353,7 +359,9 @@ def _graph_measure(
     pairs: FeatureTable,
     measure: str,
     reduce: Callable[[npt.NDArray[np.float64]], float],
-    suffix: str = "",
+    *,
+    unit: str,
+    **parameters: object,
 ) -> FeatureTable:
     if any(m.space_kind != "pair" for m in pairs.meta):
         raise ValueError(
@@ -361,7 +369,7 @@ def _graph_measure(
             "this table has columns that are not pairs."
         )
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
-    for key, indices in _by_band_window(pairs).items():
+    for indices in _by_estimator(pairs).values():
         nodes = _node_order(pairs, indices)
         values = np.empty(pairs.n_rows)
         for row in range(pairs.n_rows):
@@ -374,25 +382,32 @@ def _graph_measure(
                     measure=measure,
                     space="global",
                     space_kind="global",
-                    unit=f"a.u.{suffix}",
+                    unit=unit,
                     computation=ComputationSpec.create(
                         measure,
+                        input_measure=template.measure,
                         input_computation=template.computation.record(),
-                        threshold=suffix if suffix else None,
+                        nodes=nodes,
+                        **parameters,
                     ),
                     nodes=None,
                 ),
                 values,
             )
         )
-        del key
     return _table(columns, pairs.row_labels or ("all",))
 
 
-def _by_band_window(pairs: FeatureTable) -> dict[tuple[str, str | None], list[int]]:
-    out: dict[tuple[str, str | None], list[int]] = {}
+def _by_estimator(pairs: FeatureTable) -> dict[str, list[int]]:
+    """Index the pair columns by everything that defines them except the pair itself.
+
+    Grouping on band and window alone merges estimators: concatenated AEC and
+    wPLI columns for one band land in a single graph, where each edge keeps
+    whichever estimate was written last.
+    """
+    out: dict[str, list[int]] = {}
     for index, meta in enumerate(pairs.meta):
-        key = (meta.band.name if meta.band else "", meta.window)
+        key = replace(meta, space="", nodes=None).parameter_hash
         out.setdefault(key, []).append(index)
     return out
 
@@ -414,11 +429,19 @@ def _square(
 ) -> npt.NDArray[np.float64]:
     position = {name: i for i, name in enumerate(nodes)}
     matrix = np.zeros((len(nodes), len(nodes)))
+    filled: set[frozenset[str]] = set()
     for index in indices:
         nodes_pair = pairs.meta[index].nodes
         if nodes_pair is None:
             raise ValueError("pair metadata must carry its two node identities.")
         left, right = nodes_pair
+        edge = frozenset(nodes_pair)
+        if edge in filled:
+            raise ValueError(
+                f"edge {left}-{right} is measured twice within one estimator; a graph "
+                "cannot take two values for the same pair."
+            )
+        filled.add(edge)
         value = pairs.values[row, index]
         matrix[position[left], position[right]] = value
         matrix[position[right], position[left]] = value

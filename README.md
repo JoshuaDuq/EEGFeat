@@ -22,10 +22,10 @@ Labelled spectral, temporal, oscillatory burst, connectivity, complexity, and mi
 - **Strict row semantics**: Cross-trial measures (ITPC, wPLI, AEC) return one row per trial group with explicit labels, preventing single-trial pseudo-replication.
 - **Finite-data accounting**: Parallel coverage matrices report numerical finiteness, not artifact rejection. Morlet spectra separately expose the fraction of each requested window with complete wavelet support.
 - **Group-disjoint cross-validation**: Subjects and runs never appear in both training and evaluation splits; inner tuning refuses fewer than two training groups.
-- **Fold-local preprocessing**: Imputation, scaling, feature selection, ComBat harmonization, and target residualization fit strictly on training folds to prevent target leakage.
+- **Fold-local preprocessing**: Imputation, scaling, feature selection, group-intersection harmonization, and target residualization fit strictly on training folds to prevent target leakage.
 - **Subject-level primary metrics**: Continuous predictions are aggregated across subjects in Fisher $z$-space with equal weighting rather than pooled across trials.
 - **Unconditioned permutation nulls**: Multi-level label permutations (within-subject, run-wise, circular shift) include all sampled draws without selective filtering.
-- **Conformal prediction intervals**: Distribution-free coverage intervals calibrated at trial or subject levels (split, CV+, CQR).
+- **Conformal prediction intervals**: Distribution-free prediction intervals calibrated at trial or subject levels (split, CV+, conformalized quantile).
 
 ---
 
@@ -42,7 +42,7 @@ pip install eegfeat
 - `pip install "eegfeat[connectivity]"`: `mne-connectivity` for weighted phase lag index (wPLI).
 - `pip install "eegfeat[microstates]"`: `scikit-learn` for GFP-peak topography clustering.
 - `pip install "eegfeat[knee]"`: `specparam` for spectral knee fitting.
-- `pip install "eegfeat[docs]"`: Sphinx, Furo theme, and doc extensions.
+- `pip install "eegfeat[docs]"`: Sphinx, Furo theme, doc extensions, and scikit-learn for the modeling API reference.
 - `pip install "eegfeat[dev]"`: `pytest`, `mypy`, `ruff`, and stubs.
 
 ---
@@ -216,9 +216,9 @@ m_trans = ef.microstate_transitions(seg, windows=[task_win])
 ## Table Operations & BIDS-style I/O
 
 ```python
-from eegfeat.io import read_table, write_table
+from eegfeat.io import read_dataset, read_table, write_table
 
-# Concatenate tables horizontally (validates row semantics)
+# Concatenate tables horizontally; row identities must match exactly.
 features = ef.concat([power, peak_freq, var, burst_rt])
 
 # Query columns by structured metadata fields
@@ -232,45 +232,60 @@ paths = write_table(features, "sub-01_features.tsv", rows=epochs.metadata)
 
 # Restore FeatureTable losslessly with metadata, flags, and row labels
 restored = read_table("sub-01_features.tsv")
+
+# Or restore runner outputs together with aligned target descriptors
+dataset = read_dataset(
+    ["sub-01_features.tsv", "sub-02_features.tsv", "sub-03_features.tsv"]
+)
 ```
+
+``stack_rows`` is the cohort-building counterpart to ``concat``: it stacks compatible
+per-epoch tables in input order and rejects duplicate row identities or cross-trial tables.
+``read_dataset`` performs the same operation for runner-generated bundles and restores the
+descriptor columns alongside their canonical ``recording``, ``epoch``, and ``event`` keys.
 
 ---
 
 ## Predictive Modeling (`eegfeat.model`)
 
-`eegfeat.model` is a scikit-learn subpackage for fitting, cross-validating, and evaluating predictive models on `FeatureTable`s with strict leakage controls.
+`eegfeat.model` is an optional scikit-learn subpackage for fitting, cross-validating, and evaluating predictive models on per-epoch `FeatureTable`s with strict leakage controls. Install it with `pip install "eegfeat[model]"`; add the `importance` extra for SHAP. Cross-trial tables such as ITPC and wPLI outputs are intentionally excluded because their group estimates are not independent epoch observations.
 
 ### 1. Design Matrices from Feature Tables
 
-Filter features by structured metadata queries, extract target variables, and isolate grouping identifiers:
+Filter features by structured metadata queries, then align target variables by the canonical
+`recording`, `epoch`, and `event` keys. The grouping column is commonly `subject_id`; use
+`recording` when the scientific question is generalization to a new recording.
 
 ```python
 import eegfeat.model as efm
 
-# Build (X, y, groups) from FeatureTable and trial metadata
+selection = efm.Selection(band=("theta", "alpha"), space_kind=("channel",))
+selected = efm.select(dataset.table, selection)
+
+# Build (X, y, groups) from the persisted cohort and its aligned descriptors.
 design = efm.build_design(
-    table=features,
-    metadata=epochs.metadata,
+    table=selected,
+    targets=dataset.targets,
     target="reaction_time",
-    selection=efm.Selection(band=("theta", "alpha"), space_kind=("channel",)),
-    group_by="subject_id",
+    groups="subject_id",
 )
 X, y, groups = design.X, design.y, design.groups
 ```
 
 ### 2. Group-Disjoint Cross-Fitting & Inner Tuning
 
-Fit regression or classification pipelines across leave-one-subject-out (LOSO) or within-subject folds with fold-local inner tuning:
+Fit regression or classification pipelines across leave-one-subject-out (LOSO) or within-subject folds with fold-local inner tuning. Every imputation, scaling, feature-selection, and optional PCA step is fitted inside the training fold.
 
 ```python
 import numpy as np
 
-# Create outer LOSO folds and declare inner cross-validation structure
+# Create outer LOSO folds and declare inner cross-validation structure.
 folds = efm.loso_folds(groups)
 inner = efm.InnerSplit(grouping="subject", n_splits=5)
 
-# Standard estimator pipelines and parameter grids (ridge, elasticnet, rf, svm, logistic)
-pipe = efm.ridge_pipeline(include_scaling=True)
+# Standard estimator pipelines and parameter grids are available for ridge, elastic-net,
+# random forest, SVM, logistic regression, and soft-voting ensembles.
+pipe = efm.ridge_pipeline(efm.PreprocessingConfig(), seed=42)
 grid = efm.ridge_grid()
 
 # Outer cross-validation loop with fold-local inner hyperparameter tuning
@@ -282,34 +297,45 @@ results = efm.cross_fit_regression(
     pipeline=pipe,
     grid=grid,
     inner=inner,
+    seed=42,
 )
 
-y_pred = np.concatenate([r.y_pred for r in results])
-y_true = np.concatenate([r.y_true for r in results])
-eval_groups = np.concatenate([groups[r.rows] for r in results])
+# Fold results are returned in fold order; use their row indices to recover aligned groups.
+y_true, y_pred, eval_groups, _, _ = efm.fold_results(results, groups=groups)
+eval_groups = np.asarray(eval_groups, dtype=object)
 ```
+
+Use `cross_fit_classification` with `logistic_pipeline`, `svm_pipeline`,
+`random_forest_classifier_pipeline`, or `ensemble_pipeline` for binary 0/1 targets.
 
 ### 3. Subject-Level Metrics & Hypothesis Testing
 
-Evaluate performance with equal subject weighting via Fisher $z$-transformation:
+Evaluate regression performance overall and at the subject level. Subject-level correlations
+are averaged in Fisher $z$ space by default, giving each subject equal weight:
 
 ```python
 # Primary subject-level metrics and per-subject correlation scores
 metrics, per_subject = efm.regression_metrics(y_true, y_pred, groups=eval_groups)
 print(f"Subject-level r: {metrics['subject_level_r']:.3f}")
 
-# Bootstrap confidence intervals and non-parametric sign-flip test
-subj_r = np.array([r for _, r in per_subject])
+# Optional bootstrap confidence interval and non-parametric sign-flip test.
+subj_r = np.array([row["r"] for row in per_subject])
 ci_low, ci_high = efm.bootstrap_mean_ci(subj_r, iterations=10_000, seed=42)
 p_signflip = efm.paired_signflip_p_value(subj_r, iterations=10_000, seed=42)
 ```
 
+`classification_metrics` reports accuracy, balanced accuracy, AUC, average precision, F1,
+precision, recall, specificity, and the confusion matrix. Pass `groups` for per-subject
+summaries where the metric is defined.
+
 ### 4. Permutation Null Distributions
 
-Test exchangeability against multi-level null schemes without selective filtering:
+Test exchangeability with within-subject, run-wise, within-subject-within-run, or
+circular-shift-within-run null schemes. Incomplete fits are reported in `NullResult` rather
+than silently changing the tested hypothesis:
 
 ```python
-# Hierarchical label permutation null (within-subject, run-wise, or circular shift)
+# Pass design.runs instead of None for run-aware schemes.
 null = efm.permutation_test(
     folds=folds,
     X=X,
@@ -328,10 +354,10 @@ print(f"Permutation p-value: {null.p_value:.4f}")
 
 ### 5. Conformal Prediction Intervals
 
-Construct distribution-free prediction intervals with finite-sample coverage guarantees:
+Construct split, CV+, or conformalized quantile (`quantile`) intervals. Supplying `groups`
+calibrates at the subject level; omitting it calibrates at the trial level:
 
 ```python
-# Conformal prediction intervals (split, cv_plus, or quantile/CQR)
 intervals = efm.prediction_intervals(
     model=pipe,
     X_train=X,
@@ -340,16 +366,19 @@ intervals = efm.prediction_intervals(
     groups=groups,
     alpha=0.10,
     method="cv_plus",
+    seed=42,
 )
-print(f"Coverage: {intervals.coverage:.1%}, calibration unit: {intervals.calibration_unit}")
+print(intervals.lower, intervals.upper)
+print(f"Calibration unit: {intervals.calibration_unit}")
 ```
 
 ### 6. Feature Importance & Metadata Aggregation
 
-Compute test-set permutation or SHAP importance and aggregate scores by anatomical and spectral attributes:
+Compute held-out permutation or SHAP importance and aggregate scores by anatomical and
+spectral attributes. SHAP requires the `importance` extra:
 
 ```python
-# Fold-aggregated permutation importance on held-out test sets
+# Fold-aggregated permutation importance on held-out test sets.
 importance = efm.permutation_importance_over_folds(
     folds=folds,
     X=X,
@@ -358,10 +387,12 @@ importance = efm.permutation_importance_over_folds(
     pipeline=pipe,
     grid=grid,
     inner=inner,
+    feature_names=selected.names,
+    seed=42,
 )
 
-# Sum feature importance by metadata field (band, space, or measure)
-band_importance = efm.aggregate_by(importance, design.meta, field="band")
+# Sum feature importance by metadata field (band, space, or measure).
+band_importance = efm.aggregate_by(importance, selected.meta, field="band")
 ```
 
 ---
@@ -398,6 +429,8 @@ mypy src
 Comprehensive documentation is available under `docs/` and built via Sphinx:
 - **[Quick Start](docs/quickstart.rst)**: Walkthroughs and end-to-end extraction recipes.
 - **[Methods](docs/methods.rst)**: Mathematical formulations and algorithm specifications.
+- **[Modeling](docs/modeling.rst)**: Per-epoch design matrices, leakage-safe cross-fitting,
+  metrics, nulls, uncertainty, and feature importance.
 - **[Command Line Runner](docs/runner.rst)**: Recipe syntax, batch configuration, and output schemas.
 - **[API Reference](docs/api.rst)**: Complete function signatures and class specifications.
 

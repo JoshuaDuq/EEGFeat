@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -245,3 +247,101 @@ def test_wpli_places_a_planted_coupling_on_the_right_pair() -> None:
     table = wpli(signal, bands=[ALPHA], windows=[Window("all", 0.0, 3.995)])
     values = dict(zip([m.space for m in table.meta], table.values[0], strict=True))
     assert max(values, key=lambda name: values[name]) == "C3-C4"
+
+
+def _pair_table(
+    measure: str, value: float, nodes: tuple[str, ...] = CHANNELS[:3]
+) -> ef.FeatureTable:
+    """A pairwise table shaped like a connectivity result, with a constant edge weight."""
+    metas, columns = [], []
+    for i in range(len(nodes)):
+        for j in range(i + 1, len(nodes)):
+            metas.append(
+                ef.FeatureMeta(
+                    measure=measure,
+                    band=ALPHA,
+                    space=f"{nodes[i]}-{nodes[j]}",
+                    space_kind="pair",
+                    window=WINDOW.name,
+                    normalization="raw",
+                    unit="r" if measure == "aec" else "a.u.",
+                    source="hilbert",
+                    window_bounds=(WINDOW.tmin, WINDOW.tmax),
+                    computation=ef.ComputationSpec.create(
+                        measure, estimator=measure, nodes=list(nodes)
+                    ),
+                    nodes=(nodes[i], nodes[j]),
+                )
+            )
+            columns.append(np.full(1, value))
+    return ef.FeatureTable(
+        values=np.stack(columns, axis=1),
+        coverage=np.ones((1, len(columns))),
+        meta=tuple(metas),
+        row_labels=("all",),
+    )
+
+
+@pytest.mark.parametrize("order", [("aec", "wpli"), ("wpli", "aec")])
+def test_concatenated_estimators_yield_separate_graphs(order: tuple[str, str]) -> None:
+    # Grouping on band and window alone collapsed these into one graph whose edges
+    # came from whichever estimator was concatenated last.
+    weights = {"aec": 0.8, "wpli": 0.2}
+    table = ef.concat([_pair_table(name, weights[name]) for name in order])
+    out = global_efficiency(table)
+    assert out.values.shape == (1, 2)
+    by_estimator = {
+        m.computation.parameters["input_measure"]: value
+        for m, value in zip(out.meta, out.values[0], strict=True)
+    }
+    assert by_estimator == {"aec": pytest.approx(0.8), "wpli": pytest.approx(0.2)}
+
+
+@pytest.mark.parametrize("order", [("aec", "wpli"), ("wpli", "aec")])
+def test_each_graph_keeps_the_provenance_of_its_own_estimator(order: tuple[str, str]) -> None:
+    table = ef.concat([_pair_table(name, 0.5) for name in order])
+    for meta in global_efficiency(table).meta:
+        parameters = meta.computation.parameters
+        assert parameters["input_computation"]["method"] == parameters["input_measure"]
+
+
+def test_a_graph_measure_matches_the_one_built_from_that_estimator_alone() -> None:
+    aec = _pair_table("aec", 0.8)
+    mixed = global_efficiency(ef.concat([aec, _pair_table("wpli", 0.2)]))
+    alone = global_efficiency(aec)
+    assert alone.values.shape == (1, 1)
+    np.testing.assert_allclose(mixed.values[:, 0], alone.values[:, 0])
+    assert mixed.meta[0].name == alone.meta[0].name
+
+
+def test_the_same_estimator_over_different_node_sets_stays_separate() -> None:
+    # Channel-level and ROI-level AEC differ only in their nodes; merged, they
+    # would form one graph over the union, which is a graph of neither.
+    signal = _shared_driver(5.0)
+    channels = envelope_correlation([signal], windows=[WINDOW])
+    rois = envelope_correlation(
+        [signal], windows=[WINDOW], groups={"left": ["C3", "P3"], "right": ["C4", "P4"]}
+    )
+    out = global_efficiency(ef.concat([channels, rois]))
+    assert out.values.shape == (1, 2)
+    np.testing.assert_allclose(
+        sorted(out.values[0]),
+        sorted([global_efficiency(rois).values[0, 0], global_efficiency(channels).values[0, 0]]),
+    )
+
+
+def test_one_edge_measured_twice_within_a_group_raises() -> None:
+    table = _pair_table("aec", 0.8, nodes=("C3", "C4"))
+    mirrored = ef.FeatureTable(
+        values=table.values,
+        coverage=table.coverage,
+        meta=(replace(table.meta[0], space="C4-C3", nodes=("C4", "C3")),),
+        row_labels=table.row_labels,
+    )
+    with pytest.raises(ValueError, match="measured twice"):
+        global_efficiency(ef.concat([table, mirrored]))
+
+
+def test_the_clustering_threshold_is_recorded_as_a_number() -> None:
+    out = clustering_coefficient(_pair_table("aec", 0.8), threshold=0.5)
+    assert out.meta[0].computation.parameters["threshold"] == 0.5

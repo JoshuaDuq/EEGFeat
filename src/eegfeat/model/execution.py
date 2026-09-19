@@ -11,12 +11,10 @@ from eegfeat.model import _deps as _deps
 from eegfeat.model.splits import Fold
 
 __all__ = [
-    "determine_inner_n_jobs",
     "inner_n_jobs",
     "run_folds",
     "set_random_seeds",
     "should_parallelize",
-    "should_parallelize_folds",
 ]
 
 _T = TypeVar("_T")
@@ -56,7 +54,3 @@ def run_folds(
             )
             return list(results)
         return [work(fold) for fold in folds]
-
-
-determine_inner_n_jobs = inner_n_jobs
-should_parallelize_folds = should_parallelize

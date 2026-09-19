@@ -15,6 +15,12 @@ FRONTAL_ROI = (
     '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n'
 )
 
+# A dB scale needs a baseline window: the recipe loads, and the entry fails when computed.
+DB_WITHOUT_BASELINE = (
+    '\n[[features]]\nmeasure = "mean_psd"\nbands = ["alpha"]\nspatial = ["global"]\n'
+    'normalize = "db"\n'
+)
+
 
 def _recipe(tmp_path: Path, body: str = POWER) -> Path:
     path = tmp_path / "recipe.toml"
@@ -102,6 +108,78 @@ def test_check_exits_one_when_the_trial_recording_fails(tmp_path, capsys) -> Non
 
     assert code == 1
     assert "F3" in capsys.readouterr().err
+
+
+def test_check_finds_a_named_channel_that_a_later_recording_marks_bad(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    _recording(tmp_path, "sub-02", bads=["F3"])
+
+    code = main(["check", str(_recipe(tmp_path, FRONTAL_ROI))])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "sub-02_task-rest" in out and "F3" in out and "marked bad" in out
+    assert "Ready" not in out
+
+
+def test_check_finds_a_named_channel_that_a_later_recording_lacks(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    _recording(tmp_path, "sub-02", channels=["Fz", "Cz"])
+
+    code = main(["check", str(_recipe(tmp_path, FRONTAL_ROI))])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "sub-02_task-rest" in out and "F3" in out
+
+
+def test_check_finds_an_asymmetry_channel_that_a_later_recording_marks_bad(
+    tmp_path, capsys
+) -> None:
+    _recording(tmp_path, "sub-01")
+    _recording(tmp_path, "sub-02", bads=["F4"])
+    body = (
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\n'
+        'spatial = ["channels"]\nasymmetry = [["F3", "F4"]]\n'
+    )
+
+    code = main(["check", str(_recipe(tmp_path, body))])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "sub-02_task-rest" in out and "F4" in out
+
+
+def test_check_ignores_rois_that_no_entry_uses(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    _recording(tmp_path, "sub-02", bads=["F3"])
+
+    code = main(["check", str(_recipe(tmp_path, '[rois]\nfront = ["Fz", "F3"]\n\n' + POWER))])
+
+    assert code == 0
+    assert "Ready" in capsys.readouterr().out
+
+
+def test_a_failed_check_names_the_recipe_entry_it_came_from(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+
+    code = main(["check", str(_recipe(tmp_path, POWER + DB_WITHOUT_BASELINE))])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "features[1] (mean_psd)" in err
+    assert "requires a baseline" in err
+
+
+def test_a_failed_recording_in_a_run_names_the_recipe_entry(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+
+    code = main(["run", str(_recipe(tmp_path, POWER + DB_WITHOUT_BASELINE))])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "features[1] (mean_psd)" in out
+    assert "requires a baseline" in out
 
 
 def test_init_writes_a_recipe_that_loads(tmp_path) -> None:

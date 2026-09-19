@@ -52,6 +52,24 @@ def test_inner_cv_splits_are_capped_by_available_groups() -> None:
     assert inner_cv_splits(10, default=5) == 5
 
 
+def test_inner_cv_splits_rejects_fewer_than_two_groups() -> None:
+    with pytest.raises(ValueError, match="at least 2"):
+        inner_cv_splits(0)
+    with pytest.raises(ValueError, match="at least 2"):
+        inner_cv_splits(1)
+
+
+def test_stratified_inner_cv_enforces_minority_class_precondition() -> None:
+    groups = np.array(["s1", "s1", "s2", "s2"], dtype=object)
+    y_train = np.array([0, 0, 0, 1], dtype=np.intp)
+    with pytest.raises(ValueError, match="requires each class to have at least 2"):
+        inner_cv(
+            groups,
+            InnerSplit(grouping="subject", stratified=True, n_splits=2),
+            y_train=y_train,
+        )
+
+
 def test_a_within_subject_fold_cannot_be_grouped_by_subject() -> None:
     # Its training rows are one subject, so a subject-grouped inner split has one group.
     # Refusing the combination here beats a puzzling "at least 2 groups" from inside tuning.
@@ -144,6 +162,16 @@ def test_create_within_subject_folds_raises_when_ordered_runs_cannot_be_formed()
             seed=42,
             ordered_runs=True,
         )
+
+
+def test_within_subject_folds_accept_integer_subject_ids() -> None:
+    # Subject ids read from a targets table are often integers; they must match themselves.
+    groups = np.array([1] * 6 + [2] * 6, dtype=object)
+    blocks = np.array([1, 1, 2, 2, 3, 3] * 2, dtype=object)
+    folds = within_subject_folds(groups, blocks, inner_splits=3, seed=0)
+    assert sorted({fold.subject for fold in folds if fold.subject is not None}) == ["1", "2"]
+    for fold in folds:
+        assert set(groups[fold.train]) == set(groups[fold.test]) == {int(str(fold.subject))}
 
 
 def test_find_run_column_parses_run_prefixed_labels() -> None:

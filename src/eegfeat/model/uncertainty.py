@@ -30,25 +30,36 @@ class PredictionIntervals:
 
 
 def _compute_conformal_quantile(residuals: npt.NDArray[np.float64], alpha: float) -> float:
-    n_cal = len(residuals)
+    arr = np.sort(np.asarray(residuals, dtype=np.float64))
+    arr = arr[np.isfinite(arr)]
+    n_cal = len(arr)
     if n_cal == 0:
-        return 0.0
-    q_level = min(np.ceil((n_cal + 1) * (1.0 - alpha)) / n_cal, 1.0)
-    return float(np.quantile(residuals, q_level))
+        raise ValueError("Calibration set cannot be empty.")
+    k = int(np.ceil((n_cal + 1) * (1.0 - alpha)))
+    if k > n_cal:
+        return float("inf")
+    return float(arr[k - 1])
 
 
-def _order_stat_quantile(values: npt.NDArray[np.float64], q: float, *, tail: str) -> float:
+def _order_stat_quantile(values: npt.NDArray[np.float64], alpha: float, *, tail: str) -> float:
     arr = np.sort(np.asarray(values, dtype=np.float64))
     arr = arr[np.isfinite(arr)]
-    if arr.size == 0:
+    n = arr.size
+    if n == 0:
         return np.nan
-    q_clamped = float(np.clip(q, 0.0, 1.0))
     if tail == "upper":
-        rank = int(np.ceil(q_clamped * arr.size)) - 1
-    else:
-        rank = int(np.floor(q_clamped * arr.size))
-    rank = int(np.clip(rank, 0, arr.size - 1))
-    return float(arr[rank])
+        k = int(np.ceil((1.0 - alpha) * (n + 1)))
+        if k > n:
+            return float("inf")
+        if k <= 0:
+            return float("-inf")
+        return float(arr[k - 1])
+    k = int(np.floor(alpha * (n + 1)))
+    if k <= 0:
+        return float("-inf")
+    if k > n:
+        return float("inf")
+    return float(arr[k - 1])
 
 
 def _split_conformal(
@@ -160,6 +171,15 @@ def _conformal_cv_plus(
         lower_chunks.append(test_preds[:, None] - residuals[None, :])
         upper_chunks.append(test_preds[:, None] + residuals[None, :])
 
+    return _cv_plus_bounds(lower_chunks, upper_chunks, alpha, n_test)
+
+
+def _cv_plus_bounds(
+    lower_chunks: list[npt.NDArray[np.float64]],
+    upper_chunks: list[npt.NDArray[np.float64]],
+    alpha: float,
+    n_test: int,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     if not lower_chunks or not upper_chunks:
         msg = "CV+ calibration failed: no valid fold calibration chunks were produced."
         raise ValueError(msg)
@@ -171,9 +191,20 @@ def _conformal_cv_plus(
     upper = np.full(n_test, np.nan, dtype=np.float64)
     for i in range(n_test):
         lower[i] = _order_stat_quantile(lower_candidates[i, :], alpha, tail="lower")
-        upper[i] = _order_stat_quantile(upper_candidates[i, :], 1.0 - alpha, tail="upper")
+        upper[i] = _order_stat_quantile(upper_candidates[i, :], alpha, tail="upper")
 
     return lower, upper
+
+
+def _quantile_model(model: Pipeline, quantile: float, seed: int) -> Pipeline:
+    # Quantile regression needs a quantile loss, so the model's final estimator is replaced;
+    # its preprocessing (imputation, scaling, selection) is kept.
+    regressor = GradientBoostingRegressor(loss="quantile", alpha=quantile, random_state=seed)
+    if not isinstance(model, Pipeline):
+        return Pipeline([("regressor", regressor)])
+    quantile_model = cast(Pipeline, clone(model))
+    quantile_model.set_params(**{quantile_model.steps[-1][0]: regressor})
+    return quantile_model
 
 
 def _conformal_quantile(
@@ -186,38 +217,38 @@ def _conformal_quantile(
     seed: int,
     groups: npt.NDArray[np.object_] | None,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    n = len(X_train)
-    alpha_lo = alpha / 2.0
-    alpha_hi = 1.0 - alpha / 2.0
+    # Conformalized quantile regression in CV+ form: each fold's quantile models are
+    # calibrated on the trials they did not see, and those same models give the interval.
+    # Refitting on all data after calibrating out of fold would lose the coverage guarantee.
     splits = _get_cv_splits(cv_splits, seed, groups, X_train, y_train)
-
-    loo_lower = np.zeros(n, dtype=np.float64)
-    loo_upper = np.zeros(n, dtype=np.float64)
+    lower_chunks: list[npt.NDArray[np.float64]] = []
+    upper_chunks: list[npt.NDArray[np.float64]] = []
 
     for train_idx, val_idx in splits:
-        qr_low = GradientBoostingRegressor(loss="quantile", alpha=alpha_lo, random_state=seed)
-        qr_low.fit(X_train[train_idx], y_train[train_idx])
-        loo_lower[val_idx] = qr_low.predict(X_train[val_idx])
+        if len(train_idx) == 0 or len(val_idx) == 0:
+            continue
+        low = _quantile_model(model, alpha / 2.0, seed).fit(X_train[train_idx], y_train[train_idx])
+        high = _quantile_model(model, 1.0 - alpha / 2.0, seed).fit(
+            X_train[train_idx], y_train[train_idx]
+        )
 
-        qr_high = GradientBoostingRegressor(loss="quantile", alpha=alpha_hi, random_state=seed)
-        qr_high.fit(X_train[train_idx], y_train[train_idx])
-        loo_upper[val_idx] = qr_high.predict(X_train[val_idx])
+        y_val = y_train[val_idx]
+        scores = np.maximum(
+            np.asarray(low.predict(X_train[val_idx]), dtype=np.float64) - y_val,
+            y_val - np.asarray(high.predict(X_train[val_idx]), dtype=np.float64),
+        )
+        scores = scores[np.isfinite(scores)]
+        if scores.size == 0:
+            continue
 
-    e_lo = loo_lower - y_train
-    e_hi = y_train - loo_upper
-    scores = np.maximum(e_lo, e_hi)
-    scores = scores[np.isfinite(scores)]
-    q_hat = _compute_conformal_quantile(scores, alpha)
+        lower_chunks.append(
+            np.asarray(low.predict(X_test), dtype=np.float64)[:, None] - scores[None, :]
+        )
+        upper_chunks.append(
+            np.asarray(high.predict(X_test), dtype=np.float64)[:, None] + scores[None, :]
+        )
 
-    qr_low_full = GradientBoostingRegressor(loss="quantile", alpha=alpha_lo, random_state=seed)
-    qr_low_full.fit(X_train, y_train)
-
-    qr_high_full = GradientBoostingRegressor(loss="quantile", alpha=alpha_hi, random_state=seed)
-    qr_high_full.fit(X_train, y_train)
-
-    lower = np.asarray(qr_low_full.predict(X_test) - q_hat, dtype=np.float64)
-    upper = np.asarray(qr_high_full.predict(X_test) + q_hat, dtype=np.float64)
-    return lower, upper
+    return _cv_plus_bounds(lower_chunks, upper_chunks, alpha, len(X_test))
 
 
 def prediction_intervals(

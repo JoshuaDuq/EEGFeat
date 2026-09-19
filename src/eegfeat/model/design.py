@@ -28,6 +28,7 @@ class Selection:
     space_kind: tuple[str, ...] = ()
     window: tuple[str, ...] = ()
     normalization: tuple[str, ...] = ()
+    space: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,8 @@ def select(table: FeatureTable, selection: Selection) -> FeatureTable:
             continue
         if selection.normalization and meta.normalization not in selection.normalization:
             continue
+        if selection.space and meta.space not in selection.space:
+            continue
         kept_indices.append(i)
 
     if not kept_indices:
@@ -93,12 +96,16 @@ def build_design(
     selection: Selection = _DEFAULT_SELECTION,
     strict_covariates: bool = True,
 ) -> Design:
+    if table.row_ids is None:
+        msg = (
+            "Modeling is per-epoch only; cross-trial/group-row FeatureTables "
+            "have no row_ids and cannot be aligned to targets."
+        )
+        raise ValueError(msg)
+    row_ids = table.row_ids
+
     if selection != _DEFAULT_SELECTION:
         table = select(table, selection)
-
-    if table.row_ids is None:
-        msg = "FeatureTable has no row_ids; cannot align to targets."
-        raise ValueError(msg)
 
     key_columns = ["recording", "epoch", "event"]
     for col in key_columns:
@@ -140,7 +147,7 @@ def build_design(
     else:
         active_covs = list(covariates)
 
-    table_keys = list(table.row_ids)
+    table_keys = list(row_ids)
     if len(set(table_keys)) != len(table_keys):
         msg = "FeatureTable contains duplicate row_ids; join must be one-to-one."
         raise ValueError(msg)
@@ -194,7 +201,7 @@ def build_design(
         y=y,
         groups=groups_arr,
         runs=runs_arr,
-        row_ids=table.row_ids,
+        row_ids=row_ids,
         column_names=column_names,
         feature_columns=feature_columns,
         covariate_columns=covariate_columns,
@@ -241,13 +248,16 @@ def harmonize_fold(
     n_covariates: int = 0,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.bool_]]:
     mode_str = (mode or "union_impute").strip().lower()
+    if mode_str not in ("intersection", "union_impute"):
+        msg = f"Unknown harmonization mode: {mode!r}. Expected 'intersection' or 'union_impute'."
+        raise ValueError(msg)
     Xtr = np.asarray(X_train, dtype=np.float64)
     Xte = np.asarray(X_test, dtype=np.float64)
     if Xtr.shape[1] != Xte.shape[1]:
         msg = f"X_train/X_test feature mismatch: {Xtr.shape[1]} vs {Xte.shape[1]}"
         raise ValueError(msg)
 
-    if mode_str != "intersection":
+    if mode_str == "union_impute":
         keep = np.ones(Xtr.shape[1], dtype=np.bool_)
         return Xtr, Xte, keep
 

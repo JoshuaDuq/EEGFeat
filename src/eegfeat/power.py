@@ -15,6 +15,7 @@ _PSD_MEAN_UNITS: dict[str, str] = {
     "log10": "log10(V^2/Hz)",
     "log_ratio": "log10 ratio",
     "db": "dB",
+    "percent": "%",
 }
 
 _PSD_INTEGRAL_UNITS: dict[str, str] = {
@@ -22,6 +23,7 @@ _PSD_INTEGRAL_UNITS: dict[str, str] = {
     "log10": "log10(V^2)",
     "log_ratio": "log10 ratio",
     "db": "dB",
+    "percent": "%",
 }
 
 _TFR_MEAN_UNITS: dict[str, str] = {
@@ -29,6 +31,7 @@ _TFR_MEAN_UNITS: dict[str, str] = {
     "log10": "log10(V^2)",
     "log_ratio": "log10 ratio",
     "db": "dB",
+    "percent": "%",
 }
 
 
@@ -61,8 +64,8 @@ def mean_psd(
     baseline : str, optional
         Name of the window to normalize against. That window is consumed and
         does not appear in the output.
-    normalize : {"raw", "log10", "log_ratio", "db"}, default "raw"
-        Normalization. ``"log_ratio"`` and ``"db"`` require ``baseline``.
+    normalize : {"raw", "log10", "log_ratio", "db", "percent"}, default "raw"
+        Normalization. ``"log_ratio"``, ``"db"`` and ``"percent"`` require ``baseline``.
 
     Returns
     -------

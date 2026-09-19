@@ -1,14 +1,25 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 import numpy as np
 import numpy.typing as npt
 
-from eegfeat.table import FeatureMeta, FeatureTable
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, Normalization
 
-_LOGARITHMIC = ("log10", "log_ratio", "db")
+_LOG_UNITS: dict[Normalization, str] = {
+    "log10": "log10 ratio",
+    "log_ratio": "log10 ratio",
+    "db": "dB",
+}
+"""Unit of a difference taken on each logarithmic scale.
+
+Subtracting two values already in dB leaves a dB difference, not a bare log
+ratio: the factor of ten is still in there.
+"""
+
+_LOGARITHMIC = tuple(_LOG_UNITS)
 
 
 def band_ratio(table: FeatureTable, numerator: str, denominator: str) -> FeatureTable:
@@ -39,25 +50,27 @@ def band_ratio(table: FeatureTable, numerator: str, denominator: str) -> Feature
             f"and windows; unmatched: {missing}"
         )
 
-    keys = sorted(top)
-    values = np.stack([_combine(table, top[k], bottom[k], ratio=True) for k in keys], axis=1)
-    coverage = np.stack(
-        [np.minimum(table.coverage[:, top[k]], table.coverage[:, bottom[k]]) for k in keys],
-        axis=1,
-    )
+    operands = [(top[k], bottom[k]) for k in sorted(top)]
+    measure = f"ratio_{numerator}_{denominator}"
     meta = tuple(
         replace(
-            table.meta[top[k]],
-            measure=f"ratio_{numerator}_{denominator}",
+            table.meta[i],
+            measure=measure,
             band=None,
-            unit="ratio" if table.meta[top[k]].normalization not in _LOGARITHMIC else "log ratio",
+            unit=_LOG_UNITS.get(table.meta[i].normalization, "ratio"),
+            computation=_derived_spec(
+                measure, table, (i, "numerator"), (j, "denominator"), ratio=True
+            ),
         )
-        for k in keys
+        for i, j in operands
     )
     return FeatureTable(
-        values=values,
-        coverage=coverage,
+        values=np.stack([_combine(table, i, j, ratio=True) for i, j in operands], axis=1),
+        coverage=np.stack(
+            [np.minimum(table.coverage[:, i], table.coverage[:, j]) for i, j in operands], axis=1
+        ),
         meta=meta,
+        flags=_merge_flags(table, operands),
         row_labels=table.row_labels,
         row_ids=table.row_ids,
     )
@@ -82,36 +95,84 @@ def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureT
     FeatureTable
         One column per pair, band and window, with ``space_kind="pair"``.
     """
-    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64], npt.NDArray[np.float64]]] = []
+    operands: list[tuple[int, int]] = []
+    meta: list[FeatureMeta] = []
     for left, right in pairs:
         left_index = _index_by_space(table, left)
         right_index = _index_by_space(table, right)
-        for key, i in sorted(left_index.items()):
+        for key, on_left in sorted(left_index.items()):
             if key not in right_index:
                 continue
-            j = right_index[key]
-            columns.append(
-                (
-                    replace(
-                        table.meta[i],
-                        measure="asymmetry",
-                        space=f"{left}-{right}",
-                        space_kind="pair",
-                        unit="a.u.",
+            on_right = right_index[key]
+            operands.append((on_right, on_left))
+            meta.append(
+                replace(
+                    table.meta[on_left],
+                    measure="asymmetry",
+                    space=f"{left}-{right}",
+                    space_kind="pair",
+                    unit=_LOG_UNITS.get(table.meta[on_left].normalization, "a.u."),
+                    computation=_derived_spec(
+                        "asymmetry", table, (on_right, "right"), (on_left, "left"), ratio=False
                     ),
-                    _combine(table, j, i, ratio=False),
-                    np.minimum(table.coverage[:, i], table.coverage[:, j]),
                 )
             )
-    if not columns:
+    if not operands:
         raise ValueError("no pair matched a band and window present in the table.")
     return FeatureTable(
-        values=np.stack([v for _, v, _ in columns], axis=1),
-        coverage=np.stack([c for _, _, c in columns], axis=1),
-        meta=tuple(m for m, _, _ in columns),
+        values=np.stack([_combine(table, i, j, ratio=False) for i, j in operands], axis=1),
+        coverage=np.stack(
+            [np.minimum(table.coverage[:, i], table.coverage[:, j]) for i, j in operands], axis=1
+        ),
+        meta=tuple(meta),
+        flags=_merge_flags(table, operands),
         row_labels=table.row_labels,
         row_ids=table.row_ids,
     )
+
+
+def _derived_spec(
+    measure: str,
+    table: FeatureTable,
+    first: tuple[int, str],
+    second: tuple[int, str],
+    *,
+    ratio: bool,
+) -> ComputationSpec:
+    """Describe the derivation itself, not the measurement it started from.
+
+    Inheriting the input's spec would name the numerator's algorithm alone, so a
+    theta/beta ratio and a theta/alpha ratio would hash identically. Each operand
+    is recorded whole: its band bounds, scale, window and own computation.
+    """
+    first_index, first_role = first
+    second_index, second_role = second
+    if table.meta[first_index].normalization in _LOGARITHMIC:
+        operation = "difference"
+    else:
+        operation = "quotient" if ratio else "normalized_difference"
+    return ComputationSpec.create(
+        measure,
+        operation=operation,
+        **{
+            first_role: table.meta[first_index].record(),
+            second_role: table.meta[second_index].record(),
+        },
+    )
+
+
+def _merge_flags(
+    table: FeatureTable, operands: Sequence[tuple[int, int]]
+) -> Mapping[str, npt.NDArray[np.bool_]]:
+    """Carry a flag on either operand onto the derived column.
+
+    A ratio built from a flagged input is itself suspect, and dropping the flag
+    would hide that.
+    """
+    return {
+        key: np.stack([array[:, i] | array[:, j] for i, j in operands], axis=1)
+        for key, array in table.flags.items()
+    }
 
 
 def _combine(table: FeatureTable, top: int, bottom: int, *, ratio: bool) -> npt.NDArray[np.float64]:

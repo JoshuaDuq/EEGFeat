@@ -205,15 +205,33 @@ Exporting & BIDS-style Table I/O
 --------------------------------
 
 Tables serialize to BIDS-style TSV files with accompanying JSON sidecars and
-finite-data coverage matrices. This is not a validated BIDS derivative structure;
-descriptive row columns are export-only:
+finite-data coverage matrices. This is not a validated BIDS derivative structure.
+``read_dataset`` restores descriptive row columns for modeling without treating
+them as features:
 
 .. code-block:: python
 
-   from eegfeat.io import read_table, write_table
+   from eegfeat.io import read_dataset, read_table, write_table
 
    # Write values, coverage matrix, and JSON sidecar
    paths = write_table(spectral_features, "sub-01_features.tsv", rows=epochs.metadata)
 
    # Restore exactly with full metadata, flags, and row labels
    restored = read_table("sub-01_features.tsv")
+
+   # Load several per-epoch tables and their descriptors as one modeling dataset
+   dataset = read_dataset(
+       ["sub-01_features.tsv", "sub-02_features.tsv", "sub-03_features.tsv"]
+   )
+
+For in-memory cohort construction, use :func:`eegfeat.stack_rows` on compatible per-epoch
+tables. It preserves input order and rejects duplicate row identities, schema mismatches, and
+cross-trial group tables:
+
+.. code-block:: python
+
+   cohort_features = ef.stack_rows([sub_01_features, sub_02_features, sub_03_features])
+
+The target frame used by :func:`eegfeat.model.build_design` must carry matching
+``recording``, ``epoch``, and ``event`` keys plus the target and grouping columns. See
+:doc:`modeling` for the complete cross-fitting workflow.

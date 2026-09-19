@@ -75,11 +75,18 @@ def _subset_classification_metrics(
     auc = np.nan
     ap = np.nan
     if y_prob is not None and len(np.unique(y_true)) == 2:
-        prob_mask = np.isfinite(y_prob) & np.isfinite(y_true)
+        y_prob_arr = np.asarray(y_prob, dtype=float)
+        if y_prob_arr.ndim == 2 and y_prob_arr.shape[1] >= 2:
+            y_prob_1d = y_prob_arr[:, 1]
+        elif y_prob_arr.ndim == 1:
+            y_prob_1d = y_prob_arr
+        else:
+            y_prob_1d = y_prob_arr.ravel()
+        prob_mask = np.isfinite(y_prob_1d) & np.isfinite(y_true)
         if np.sum(prob_mask) >= 2 and len(np.unique(y_true[prob_mask])) == 2:
             with contextlib.suppress(ValueError, TypeError):
-                auc = float(roc_auc_score(y_true[prob_mask], y_prob[prob_mask]))
-                ap = float(average_precision_score(y_true[prob_mask], y_prob[prob_mask]))
+                auc = float(roc_auc_score(y_true[prob_mask], y_prob_1d[prob_mask]))
+                ap = float(average_precision_score(y_true[prob_mask], y_prob_1d[prob_mask]))
 
     return {
         "accuracy": acc,
@@ -100,6 +107,12 @@ def classification_metrics(
     y_prob: npt.NDArray[np.float64] | None = None,
     groups: npt.NDArray[np.object_] | None = None,
 ) -> ClassificationResult:
+    # The confusion matrix, specificity and the positive class of precision and recall all
+    # assume 0/1 coding, so any other coding is refused instead of scored against it.
+    labels = np.unique(np.concatenate([np.ravel(y_true), np.ravel(y_pred)]))
+    if not set(labels.tolist()) <= {0, 1}:
+        msg = f"classification_metrics expects labels coded 0/1, got {labels.tolist()}."
+        raise ValueError(msg)
     y_t = np.asarray(y_true, dtype=np.intp)
     y_p = np.asarray(y_pred, dtype=np.intp)
     cm = confusion_matrix(y_t, y_p, labels=[0, 1]).astype(np.intp)
@@ -196,12 +209,11 @@ def regression_metrics(
         pred_df = pd.DataFrame(
             {"subject_id": groups_arr, "y_true": yt_f, "y_pred": yp_f}
         )
-        with contextlib.suppress(ValueError):
-            subj_r = subject_level_r(pred_df, config=config)
-            summary["subject_level_r"] = subj_r.r
-            summary["avg_subject_r_fisher_z"] = subj_r.r
-            for s, r in subj_r.per_subject:
-                per_subject_list.append({"subject": s, "r": r})
+        subj_r = subject_level_r(pred_df, config=config)
+        summary["subject_level_r"] = subj_r.r
+        summary["avg_subject_r_fisher_z"] = subj_r.r
+        for s, r in subj_r.per_subject:
+            per_subject_list.append({"subject": s, "r": r})
 
     return summary, per_subject_list
 
@@ -219,27 +231,38 @@ def within_subject_centered_metrics(
     if not (grp.shape == t.shape == f.shape == n.shape):
         raise ValueError("Within-subject prediction metrics require aligned 1D arrays.")
 
-    centered_t = np.empty_like(t)
-    centered_f = np.empty_like(f)
-    centered_n = np.empty_like(n)
-    for subj in np.unique(grp):
-        mask = grp == subj
-        centered_t[mask] = t[mask] - np.mean(t[mask])
-        centered_f[mask] = f[mask] - np.mean(f[mask])
-        centered_n[mask] = n[mask] - np.mean(n[mask])
+    full_scores: list[float] = []
+    nuis_scores: list[float] = []
 
-    denominator = float(centered_t @ centered_t)
-    if denominator <= 1e-12:
+    for subj in pd.unique(grp):
+        if pd.isna(subj):
+            continue
+        mask = grp == subj
+        t_sub = t[mask]
+        f_sub = f[mask]
+        n_sub = n[mask]
+        if len(t_sub) < 2:
+            continue
+        cent_t = t_sub - np.mean(t_sub)
+        denom = float(cent_t @ cent_t)
+        if denom <= 1e-12:
+            continue
+        cent_f = f_sub - np.mean(f_sub)
+        cent_n = n_sub - np.mean(n_sub)
+        res_f = cent_t - cent_f
+        res_n = cent_t - cent_n
+        full_scores.append(1.0 - float(res_f @ res_f) / denom)
+        nuis_scores.append(1.0 - float(res_n @ res_n) / denom)
+
+    if not full_scores:
         return {
             "within_subject_centered_full_r2": float("nan"),
             "within_subject_centered_nuisance_r2": float("nan"),
             "within_subject_centered_delta_r2": float("nan"),
         }
 
-    full_res = centered_t - centered_f
-    nuis_res = centered_t - centered_n
-    full_r2 = 1.0 - float(full_res @ full_res) / denominator
-    nuis_r2 = 1.0 - float(nuis_res @ nuis_res) / denominator
+    full_r2 = float(np.mean(full_scores))
+    nuis_r2 = float(np.mean(nuis_scores))
     return {
         "within_subject_centered_full_r2": full_r2,
         "within_subject_centered_nuisance_r2": nuis_r2,

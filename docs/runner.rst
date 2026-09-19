@@ -184,6 +184,21 @@ Load a table back with its metadata:
    table = read_table("derivatives/eegfeat/sub-01/eeg/sub-01_task-rest_features.tsv")
    alpha = table.select(band=ef.Band("alpha", 8.0, 13.0), space="global")
 
+For predictive modeling across recordings, pass several per-epoch ``*_features.tsv`` paths
+to :func:`eegfeat.io.read_dataset`. The loader stacks compatible tables and restores the
+descriptor columns written by the runner alongside canonical ``recording``, ``epoch``, and
+``event`` keys. Include target and grouping variables in the epoch metadata if they are needed
+by :func:`eegfeat.model.build_design`; descriptor columns are not feature columns.
+
+.. code-block:: python
+
+   from eegfeat.io import read_dataset
+
+   dataset = read_dataset([
+       "derivatives/eegfeat/sub-01/eeg/sub-01_task-rest_features.tsv",
+       "derivatives/eegfeat/sub-02/eeg/sub-02_task-rest_features.tsv",
+   ])
+
 A run refuses to write over earlier results unless given ``--overwrite``, which also
 removes result files the new recipe no longer produces. A recording that fails is
 logged with its error and traceback, and the run moves on.

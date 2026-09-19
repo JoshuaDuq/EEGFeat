@@ -57,7 +57,7 @@ from eegfeat.phase import itpc, pac, ppc
 from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat, stack_rows
 from eegfeat.temporal import (
     area_under_curve,
     mean_amplitude,
@@ -125,6 +125,7 @@ __all__ = [
     "spectral_centroid",
     "spectral_edge",
     "spectral_entropy",
+    "stack_rows",
     "variance",
     "Window",
     "wpli",

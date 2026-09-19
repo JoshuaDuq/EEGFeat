@@ -14,8 +14,6 @@ from eegfeat.model.aggregate import (
 from eegfeat.model.crossfit import (
     FoldClassification,
     FoldPrediction,
-    FoldResult,
-    cross_fit,
     cross_fit_classification,
     cross_fit_regression,
 )
@@ -81,7 +79,6 @@ from eegfeat.model.residualize import (
     residualize_targets,
 )
 from eegfeat.model.scoring import (
-    make_pearsonr_scorer,
     pearsonr_scorer,
     safe_pearsonr,
     scoring_dict,
@@ -109,6 +106,7 @@ from eegfeat.model.transformers import (
     validate_subject_missingness,
 )
 from eegfeat.model.tuning import (
+    FoldFitError,
     TunedFit,
     fit_untuned,
     tune,
@@ -126,9 +124,9 @@ __all__ = [
     "DropAllNaNColumns",
     "Fold",
     "FoldClassification",
+    "FoldFitError",
     "FoldNuisanceFit",
     "FoldPrediction",
-    "FoldResult",
     "Importance",
     "InnerSplit",
     "MissingnessThreshold",
@@ -152,7 +150,6 @@ __all__ = [
     "circular_shift_group",
     "classification_metrics",
     "compute_train_group_intersection_mask",
-    "cross_fit",
     "cross_fit_classification",
     "cross_fit_regression",
     "elasticnet_grid",
@@ -169,7 +166,6 @@ __all__ = [
     "logistic_grid",
     "logistic_pipeline",
     "loso_folds",
-    "make_pearsonr_scorer",
     "paired_signflip_p_value",
     "pearsonr_scorer",
     "permutation_importance",

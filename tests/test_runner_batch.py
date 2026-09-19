@@ -5,10 +5,12 @@ import json
 from io import StringIO
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.io import read_table
+import eegfeat.model as efm
+from eegfeat.io import read_dataset, read_table
 from eegfeat.runner import RunError, check, load_recipe, run
 from eegfeat.runner.progress import JsonReporter
 from synthetic import save_epochs
@@ -46,6 +48,38 @@ def test_each_recording_gets_its_own_table_in_a_mirrored_tree(tmp_path) -> None:
     assert result.ok
     for subject in ("sub-01", "sub-02"):
         assert read_table(_features_path(tmp_path, subject)).n_rows == 12
+
+
+def test_runner_outputs_feed_group_disjoint_modeling_without_manual_reassembly(tmp_path) -> None:
+    for subject in ("sub-01", "sub-02", "sub-03"):
+        save_epochs(tmp_path / f"data/{subject}/eeg/{subject}_task-rest_epo.fif")
+
+    result = run(_recipe(tmp_path, POWER))
+    assert result.ok
+    dataset = read_dataset(
+        [_features_path(tmp_path, subject) for subject in ("sub-01", "sub-02", "sub-03")]
+    )
+    design = efm.build_design(
+        dataset.table,
+        dataset.targets,
+        target="rating",
+        groups="recording",
+    )
+    folds = efm.loso_folds(design.groups)
+    predictions = efm.cross_fit_regression(
+        folds,
+        design.X,
+        design.y,
+        design.groups,
+        efm.ridge_pipeline(efm.PreprocessingConfig(), seed=42),
+        efm.ridge_grid(),
+        inner=efm.InnerSplit(grouping="subject", n_splits=2),
+        seed=42,
+    )
+
+    tested_rows = np.concatenate([prediction.rows for prediction in predictions])
+    np.testing.assert_array_equal(np.sort(tested_rows), np.arange(dataset.table.n_rows))
+    assert len(predictions) == 3
 
 
 def test_feature_rows_carry_each_epochs_event_and_metadata(tmp_path) -> None:

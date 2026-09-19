@@ -12,6 +12,7 @@ from eegfeat.model.aggregate import (
     subject_level_errors,
     subject_level_r,
 )
+from eegfeat.model.crossfit import FoldPrediction
 
 
 def _predictions(per_subject: dict[str, tuple[list[float], list[float]]]) -> pd.DataFrame:
@@ -44,17 +45,18 @@ def test_per_subject_correlations_are_reported_individually() -> None:
     assert dict(result.per_subject) == pytest.approx({"s1": 1.0, "s2": -1.0})
 
 
-def test_a_subject_whose_correlation_is_undefined_does_not_become_zero() -> None:
-    # A flat predictor within a subject is unscored, not scored as no correlation.
-    result = subject_level_r(
-        _predictions(
-            {
-                "s1": ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]),
-                "s2": ([1.0, 2.0, 3.0], [5.0, 5.0, 5.0]),
-            }
+def test_a_subject_whose_correlation_is_undefined_raises() -> None:
+    # A flat predictor within a subject is undefined, raising ValueError rather
+    # than being silently dropped.
+    with pytest.raises(ValueError, match="non-finite correlation"):
+        subject_level_r(
+            _predictions(
+                {
+                    "s1": ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]),
+                    "s2": ([1.0, 2.0, 3.0], [5.0, 5.0, 5.0]),
+                }
+            )
         )
-    )
-    assert result.r == pytest.approx(1.0)
 
 
 def test_aggregation_config_rejects_an_unknown_weighting() -> None:
@@ -68,7 +70,7 @@ def test_subject_level_r_uses_equal_subject_weighting_by_default() -> None:
 
 
 def test_subject_level_r_rejects_invalid_subjects() -> None:
-    # A subject with fewer than 2 finite predictions cannot produce a correlation.
+    # A subject with fewer than 3 finite predictions cannot produce a correlation.
     df = pd.DataFrame(
         {
             "subject_id": ["s1", "s1", "s2", "s2"],
@@ -76,7 +78,7 @@ def test_subject_level_r_rejects_invalid_subjects() -> None:
             "y_pred": [1.0, 2.0, np.nan, np.nan],
         }
     )
-    with pytest.raises(ValueError, match="fewer than 2 finite predictions"):
+    with pytest.raises(ValueError, match="fewer than 3 finite predictions"):
         subject_level_r(df)
 
 
@@ -115,3 +117,129 @@ def test_fold_results_preserves_fold_order() -> None:
     assert grps == ["s1", "s2"]
     assert test_idx == [0, 1]
     assert fold_ids == [1, 2]
+
+
+def test_fold_results_accepts_fold_prediction_dataclass() -> None:
+    pred1 = FoldPrediction(
+        fold=1,
+        subject="s1",
+        rows=np.array([0], dtype=np.intp),
+        y_true=np.array([1.0]),
+        y_pred=np.array([1.1]),
+        best_params={},
+    )
+    pred2 = FoldPrediction(
+        fold=2,
+        subject="s2",
+        rows=np.array([1], dtype=np.intp),
+        y_true=np.array([2.0]),
+        y_pred=np.array([2.1]),
+        best_params={},
+    )
+    yt, yp, grps, test_idx, fold_ids = fold_results([pred2, pred1])
+    np.testing.assert_array_equal(yt, [1.0, 2.0])
+    np.testing.assert_array_equal(yp, [1.1, 2.1])
+    assert grps == ["s1", "s2"]
+    assert test_idx == [0, 1]
+    assert fold_ids == [1, 2]
+
+
+def test_fold_results_rejects_mismatched_lengths() -> None:
+    records = [
+        {
+            "fold": 1,
+            "y_true": [1.0, 2.0],
+            "y_pred": [1.1],
+            "groups": ["s1", "s1"],
+            "test_idx": [0, 1],
+        },
+    ]
+    with pytest.raises(ValueError, match="mismatched lengths"):
+        fold_results(records)
+
+
+def test_an_undefined_subject_can_count_as_no_correlation() -> None:
+    # Permutation nulls score a subject whose predictions do not vary as r = 0 instead of
+    # discarding the whole draw, so the other subjects' correlations still count.
+    df = _predictions(
+        {
+            "s1": ([1.0, 2.0, 3.0], [1.0, 3.0, 2.0]),
+            "s2": ([1.0, 2.0, 3.0], [1.0, 3.0, 2.0]),
+            "s3": ([1.0, 2.0, 3.0], [5.0, 5.0, 5.0]),
+        }
+    )
+    # s1 and s2 each correlate at exactly 0.5; s3 enters Fisher z as 0.
+    expected = np.tanh((2.0 * np.arctanh(0.5) + 0.0) / 3.0)
+    assert subject_level_r(df, undefined="zero").r == pytest.approx(expected)
+
+
+def test_counting_undefined_subjects_as_zero_still_refuses_too_few_trials() -> None:
+    # Too few trials is a property of the design, shared by every permutation, so it
+    # stays an error rather than a zero.
+    df = _predictions({"s1": ([1.0, 2.0], [1.0, 2.0]), "s2": ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])})
+    with pytest.raises(ValueError, match="fewer than 3"):
+        subject_level_r(df, undefined="zero")
+
+
+def test_fold_results_accepts_array_groups_in_dict_records() -> None:
+    records = [
+        {
+            "fold": 1,
+            "y_true": np.array([1.0, 2.0]),
+            "y_pred": np.array([1.1, 2.1]),
+            "groups": np.array(["s1", "s1"], dtype=object),
+            "test_idx": np.array([0, 1]),
+        },
+    ]
+    _, _, grps, _, _ = fold_results(records)
+    assert grps == ["s1", "s1"]
+
+
+def test_fold_results_labels_loso_predictions_from_the_groups_array() -> None:
+    # LOSO folds carry no subject label, so the rows are labelled from the design's groups.
+    groups = np.array(["s1", "s1", "s2", "s2"], dtype=object)
+    predictions = [
+        FoldPrediction(
+            fold=2,
+            subject=None,
+            rows=np.array([0, 1], dtype=np.intp),
+            y_true=np.array([1.0, 2.0]),
+            y_pred=np.array([1.5, 2.5]),
+            best_params={},
+        ),
+        FoldPrediction(
+            fold=1,
+            subject=None,
+            rows=np.array([2, 3], dtype=np.intp),
+            y_true=np.array([3.0, 4.0]),
+            y_pred=np.array([3.5, 4.5]),
+            best_params={},
+        ),
+    ]
+    _, _, grps, test_idx, _ = fold_results(predictions, groups=groups)
+    assert grps == ["s2", "s2", "s1", "s1"]
+    assert test_idx == [2, 3, 0, 1]
+
+
+def test_fold_results_refuses_to_mix_labelled_and_unlabelled_records() -> None:
+    # A groups list shorter than y_true would misalign every subject after the first gap.
+    predictions = [
+        FoldPrediction(
+            fold=1,
+            subject="s1",
+            rows=np.array([0], dtype=np.intp),
+            y_true=np.array([1.0]),
+            y_pred=np.array([1.1]),
+            best_params={},
+        ),
+        FoldPrediction(
+            fold=2,
+            subject=None,
+            rows=np.array([1], dtype=np.intp),
+            y_true=np.array([2.0]),
+            y_pred=np.array([2.1]),
+            best_params={},
+        ),
+    ]
+    with pytest.raises(ValueError, match="subject labels"):
+        fold_results(predictions)

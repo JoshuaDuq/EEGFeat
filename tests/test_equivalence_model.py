@@ -4,7 +4,7 @@ import pathlib
 
 import numpy as np
 import pytest
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model.crossfit import cross_fit_classification, cross_fit_regression
@@ -92,11 +92,14 @@ def test_within_subject_predictions_match_the_reference_pipeline(
 def test_nested_loso_classification_matches_reference(
     reference: dict[str, np.ndarray],
 ) -> None:
+    from eegfeat.model.estimators import logistic_grid, logistic_pipeline
+    from eegfeat.model.transformers import PreprocessingConfig
+
     clf_X = reference["clf_X"]
     clf_y = reference["clf_y"]
     clf_groups = reference["clf_groups"].astype(object)
-    pipe = Pipeline([("classifier", LogisticRegression(max_iter=500, random_state=42))])
-    param_grid = {"classifier__C": [0.1, 1.0]}
+    pipe = logistic_pipeline(PreprocessingConfig(), seed=42)
+    param_grid = logistic_grid()
     folds = loso_folds(clf_groups)
 
     results = cross_fit_classification(
@@ -108,10 +111,11 @@ def test_nested_loso_classification_matches_reference(
         param_grid,
         inner=InnerSplit(grouping="subject", stratified=True, n_splits=2),
         seed=42,
+        scoring="average_precision",
     )
     y_pred = np.concatenate([r.y_pred for r in results])
     y_prob = np.concatenate([r.y_prob for r in results if r.y_prob is not None])
     np.testing.assert_array_equal(y_pred, reference["clf_y_pred"])
-    np.testing.assert_allclose(y_prob, reference["clf_y_prob"], rtol=1e-5, atol=1e-7)
+    np.testing.assert_allclose(y_prob[:, 1], reference["clf_y_prob"], rtol=1e-5, atol=1e-7)
 
 

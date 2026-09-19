@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -22,6 +24,20 @@ def test_selecting_a_band_keeps_only_that_band(alpha_beta_table: FeatureTable) -
 def test_an_empty_field_places_no_restriction(alpha_beta_table: FeatureTable) -> None:
     kept = select(alpha_beta_table, Selection())
     assert kept.values.shape == alpha_beta_table.values.shape
+
+
+def test_selecting_a_space_keeps_only_those_channels(alpha_beta_table: FeatureTable) -> None:
+    # Choosing channels or ROIs is a fixed choice of columns, so it belongs to the design
+    # rather than to a fitted pipeline step, and it matches the metadata field exactly.
+    meta = (alpha_beta_table.meta[0], replace(alpha_beta_table.meta[1], space="C4"))
+    table = FeatureTable(
+        values=alpha_beta_table.values,
+        coverage=alpha_beta_table.coverage,
+        meta=meta,
+        row_ids=alpha_beta_table.row_ids,
+    )
+    kept = select(table, Selection(space=("C4",)))
+    assert [m.space for m in kept.meta] == ["C4"]
 
 
 def test_a_selection_that_matches_nothing_raises_rather_than_returning_empty(
@@ -64,6 +80,39 @@ def test_a_target_row_matching_two_feature_rows_is_refused(
     )
     with pytest.raises(ValueError, match="one-to-one"):
         build_design(alpha_beta_table, targets, target="pain")
+
+
+def test_cross_trial_tables_are_explicitly_outside_the_modeling_boundary(
+    alpha_beta_table: FeatureTable,
+) -> None:
+    grouped = FeatureTable(
+        values=alpha_beta_table.values,
+        coverage=alpha_beta_table.coverage,
+        meta=alpha_beta_table.meta,
+        row_labels=("left", "right"),
+    )
+
+    with pytest.raises(ValueError, match="per-epoch only"):
+        build_design(grouped, pd.DataFrame(), target="pain")
+
+
+def test_cross_trial_boundary_is_checked_before_feature_selection(
+    alpha_beta_table: FeatureTable,
+) -> None:
+    grouped = FeatureTable(
+        values=alpha_beta_table.values,
+        coverage=alpha_beta_table.coverage,
+        meta=alpha_beta_table.meta,
+        row_labels=("left", "right"),
+    )
+
+    with pytest.raises(ValueError, match="per-epoch only"):
+        build_design(
+            grouped,
+            pd.DataFrame(),
+            target="pain",
+            selection=Selection(measure=("absent",)),
+        )
 
 
 def test_covariate_columns_are_identified_not_merely_counted(
@@ -177,3 +226,25 @@ def test_harmonize_fold_rejects_empty_strict_intersection() -> None:
 
     with pytest.raises(ValueError, match="No features are finite for every training group"):
         harmonize_fold(X_tr, X_te, groups, mode="intersection")
+
+
+def test_harmonize_fold_intersection_differs_from_union_impute() -> None:
+    X_tr = np.array([[1.0, np.nan], [2.0, np.nan], [3.0, 10.0], [4.0, 20.0]], dtype=float)
+    X_te = np.array([[5.0, 30.0]], dtype=float)
+    groups = np.array(["s1", "s1", "s2", "s2"], dtype=object)
+
+    X_tr_int, X_te_int, keep_int = harmonize_fold(X_tr, X_te, groups, mode="intersection")
+    assert np.array_equal(keep_int, [True, False])
+    assert X_tr_int.shape == (4, 1)
+
+    X_tr_union, X_te_union, keep_union = harmonize_fold(X_tr, X_te, groups, mode="union_impute")
+    assert np.array_equal(keep_union, [True, True])
+    assert X_tr_union.shape == (4, 2)
+
+
+def test_harmonize_fold_rejects_unknown_mode() -> None:
+    X_tr = np.ones((4, 2))
+    X_te = np.ones((2, 2))
+    groups = np.array(["s1", "s1", "s2", "s2"], dtype=object)
+    with pytest.raises(ValueError, match="Unknown harmonization mode"):
+        harmonize_fold(X_tr, X_te, groups, mode="intersecton")

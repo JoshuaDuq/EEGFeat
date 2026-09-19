@@ -59,6 +59,7 @@ EXPECTED = {
     "spectral_centroid",
     "spectral_edge",
     "spectral_entropy",
+    "stack_rows",
     "variance",
     "wpli",
 }

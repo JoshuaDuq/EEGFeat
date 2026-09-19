@@ -297,6 +297,24 @@ For logarithmic input, the difference of logs corresponds directly to the logari
 
    A_{L, R} = \log_{10} P_R - \log_{10} P_L = \log_{10}\left(\frac{P_R}{P_L}\right)
 
+**Units:** the output unit names the scale the result is on, because the same subtraction means different things on different scales. A ``"db"`` input carries the factor of ten through the subtraction, so the result is a difference in dB rather than a bare log ratio:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Input normalization
+     - Band ratio
+     - Asymmetry
+   * - ``"raw"``, ``"percent"``
+     - ``ratio``
+     - ``a.u.``
+   * - ``"log10"``, ``"log_ratio"``
+     - ``log10 ratio``
+     - ``log10 ratio``
+   * - ``"db"``
+     - ``dB``
+     - ``dB``
+
 
 Inter-Trial Phase Coherence
 ---------------------------

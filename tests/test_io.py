@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import eegfeat.io as io_module
 from eegfeat.bands import Band
 from eegfeat.io import read_table, write_table
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
@@ -195,3 +196,90 @@ def test_read_fails_when_the_values_file_lacks_a_described_column(tmp_path) -> N
 
     with pytest.raises(ValueError, match=missing_name):
         read_table(tmp_path / "t.tsv")
+
+
+def test_read_dataset_stacks_tables_and_restores_aligned_targets(tmp_path) -> None:
+    first = _epoch_table()
+    second = FeatureTable(
+        values=first.values + 10.0,
+        coverage=first.coverage,
+        meta=first.meta,
+        flags=first.flags,
+        row_ids=tuple(("sub-02_task-test", epoch, event) for _, epoch, event in first.row_ids),
+    )
+    paths = [tmp_path / "sub-01_features.tsv", tmp_path / "sub-02_features.tsv"]
+    for path, table, ratings in zip(paths, (first, second), ([3, 5, 4], [2, 1, 0]), strict=True):
+        rows = pd.DataFrame(
+            {"event": [event for _, _, event in table.row_ids], "rating": ratings}
+        )
+        write_table(table, path, rows=rows)
+
+    dataset = io_module.read_dataset(paths)
+
+    assert dataset.table.row_ids == first.row_ids + second.row_ids
+    np.testing.assert_array_equal(dataset.table.values, np.vstack([first.values, second.values]))
+    assert list(dataset.targets.columns) == ["recording", "epoch", "event", "rating"]
+    assert dataset.targets["recording"].tolist() == [
+        "sub-01_task-test",
+        "sub-01_task-test",
+        "sub-01_task-test",
+        "sub-02_task-test",
+        "sub-02_task-test",
+        "sub-02_task-test",
+    ]
+    assert dataset.targets["rating"].tolist() == [3, 5, 4, 2, 1, 0]
+
+
+def test_read_dataset_refuses_descriptor_event_that_disagrees_with_row_identity(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    rows = pd.DataFrame({"event": ["wrong", "right", "left"]})
+    write_table(_epoch_table(), path, rows=rows)
+
+    with pytest.raises(ValueError, match="event.*row_ids"):
+        io_module.read_dataset([path])
+
+
+def test_read_dataset_refuses_epoch_key_that_disagrees_with_row_identity(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path)
+    frame = pd.read_csv(path, sep="\t", keep_default_na=False)
+    frame.loc[0, "epoch"] = 99
+    frame.to_csv(path, sep="\t", index=False)
+
+    with pytest.raises(ValueError, match="epoch.*row_ids"):
+        io_module.read_dataset([path])
+
+
+def test_read_dataset_refuses_fractional_epoch_key_instead_of_truncating_it(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path)
+    frame = pd.read_csv(path, sep="\t", keep_default_na=False)
+    frame["epoch"] = frame["epoch"].astype(float)
+    frame.loc[0, "epoch"] = 0.5
+    frame.to_csv(path, sep="\t", index=False)
+
+    with pytest.raises(ValueError, match="epoch.*row_ids"):
+        io_module.read_dataset([path])
+
+
+def test_read_dataset_refuses_cross_trial_tables(tmp_path) -> None:
+    path = tmp_path / "crosstrial.tsv"
+    write_table(_group_table(), path)
+
+    with pytest.raises(ValueError, match="per-epoch"):
+        io_module.read_dataset([path])
+
+
+def test_read_dataset_refuses_a_missing_descriptor_column(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path, rows=pd.DataFrame({"rating": [3, 5, 4]}))
+    frame = pd.read_csv(path, sep="\t", keep_default_na=False)
+    frame.drop(columns="rating").to_csv(path, sep="\t", index=False)
+
+    with pytest.raises(ValueError, match="descriptor columns.*rating"):
+        io_module.read_dataset([path])
+
+
+def test_read_dataset_of_nothing_raises() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        io_module.read_dataset([])

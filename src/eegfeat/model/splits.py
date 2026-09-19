@@ -67,7 +67,10 @@ def find_run_column(events: pd.DataFrame) -> pd.Series | None:
 
 
 def inner_cv_splits(n_unique_groups: int, *, default: int = 5) -> int:
-    return int(np.clip(default, 2, n_unique_groups))
+    if n_unique_groups < 2:
+        msg = f"Inner CV requires at least 2 training groups, got {n_unique_groups}."
+        raise ValueError(msg)
+    return max(2, min(default, n_unique_groups))
 
 
 def run_aware_cv(
@@ -136,10 +139,11 @@ def within_subject_folds(
 
     folds: list[Fold] = []
     fold_counter = 0
-    unique_subs = [str(s) for s in np.unique(groups_arr)]
 
-    for subject in unique_subs:
-        subject_indices = np.where(groups_arr == subject)[0]
+    for subject_id in np.unique(groups_arr):
+        # Match on the id as stored; only the label is a string, so integer ids still match.
+        subject = str(subject_id)
+        subject_indices = np.where(groups_arr == subject_id)[0]
         n_samples = len(subject_indices)
         requested_splits = outer_splits if outer_splits is not None else inner_splits
         n_splits = min(max(2, requested_splits), n_samples)
@@ -220,6 +224,7 @@ def inner_cv(
     train_groups: npt.NDArray[np.object_],
     split: InnerSplit,
     y_train: npt.NDArray[np.intp] | None = None,
+    random_state: int | None = None,
 ) -> GroupKFold | StratifiedGroupKFold:
     groups_arr = np.asarray(train_groups)
     n_unique = len(np.unique(groups_arr))
@@ -234,5 +239,19 @@ def inner_cv(
     if split.stratified:
         if y_train is None:
             raise ValueError("A stratified inner split requires y_train labels.")
-        return StratifiedGroupKFold(n_splits=effective_splits)
+        y_arr = np.asarray(y_train, dtype=np.intp)
+        classes, counts = np.unique(y_arr, return_counts=True)
+        if len(classes) < 2:
+            raise ValueError("Stratified inner split requires at least 2 classes in y_train.")
+        min_class_count = int(np.min(counts))
+        if min_class_count < effective_splits:
+            raise ValueError(
+                f"StratifiedGroupKFold requires each class to have at least {effective_splits} "
+                f"training samples, got minority class count {min_class_count}."
+            )
+        return StratifiedGroupKFold(
+            n_splits=effective_splits,
+            shuffle=True,
+            random_state=random_state,
+        )
     return GroupKFold(n_splits=effective_splits)

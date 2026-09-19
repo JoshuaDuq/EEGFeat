@@ -1,8 +1,9 @@
 """The ``eegfeat`` command: start a recipe, check it, run it.
 
 Exit status is 0 when everything succeeded, 1 when a run finished but some
-recordings failed (or ``check``'s trial recording failed), and 2 when nothing
-could start: an invalid recipe, missing inputs, or earlier results in the way.
+recordings failed (or ``check``'s trial recording failed, or it found recordings
+that lack channels the recipe names), and 2 when nothing could start: an invalid
+recipe, missing inputs, or earlier results in the way.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from importlib import resources
 from pathlib import Path
 
 from eegfeat.runner.batch import CheckReport, RunError, TrialError, check, run
-from eegfeat.runner.progress import CHECK, JsonReporter, TextReporter
+from eegfeat.runner.progress import CHECK, CROSS, JsonReporter, TextReporter
 from eegfeat.runner.recipe import RecipeError, load_recipe
 
 _LABEL_WIDTH = 15
@@ -104,7 +105,7 @@ def _check(args: argparse.Namespace) -> int:
         return 1
     for line in _check_lines(recipe.path, len(recipe.features), recipe.output.root, report):
         print(line)
-    return 0
+    return 1 if report.missing_channels else 0
 
 
 def _init(args: argparse.Namespace) -> int:
@@ -154,5 +155,13 @@ def _check_lines(
         table = report.features.crosstrial
         groups = ", ".join(table.row_labels or ())
         lines.append(row("Across trials", f"{len(table.meta)} features × groups {groups}"))
+    if report.missing_channels:
+        n_failing = len(report.missing_channels)
+        counted = "1 recording lacks" if n_failing == 1 else f"{n_failing} recordings lack"
+        them = "it" if n_failing == 1 else "them"
+        lines.append(f"{CROSS} {counted} channels the recipe names, so a run would fail {them}:")
+        for label, problems in report.missing_channels.items():
+            lines.extend(f"  {label}: {problem}" for problem in problems)
+        return lines
     lines.append(f"{CHECK} Ready: eegfeat run {recipe_path}")
     return lines

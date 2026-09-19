@@ -15,10 +15,19 @@ from eegfeat.model.execution import set_random_seeds
 from eegfeat.model.splits import InnerSplit, inner_cv
 
 __all__ = [
+    "FoldFitError",
     "TunedFit",
     "fit_untuned",
     "tune",
 ]
+
+
+class FoldFitError(ValueError, RuntimeError):
+    """A fold's estimator could not be fitted: a fault, not a measurement.
+
+    Subclasses ``ValueError`` so existing handlers keep working, and ``RuntimeError`` so a
+    caller can count fit failures separately from designs that cannot be fitted at all.
+    """
 
 
 @dataclass(frozen=True)
@@ -43,7 +52,7 @@ def _raise_for_nonfinite_grid_search_scores(grid: GridSearchCV, fold: int) -> No
 
     if bad_score_keys:
         msg = f"Fold {fold}: non-finite inner CV test scores: {', '.join(bad_score_keys)}."
-        raise ValueError(msg)
+        raise FoldFitError(msg)
 
 
 def _assign_random_state(estimator: object, seed: int) -> None:
@@ -79,7 +88,8 @@ def tune(
         raise ValueError(msg)
 
     y_strat = np.asarray(y_train, dtype=np.intp) if split.stratified else None
-    cv = inner_cv(groups_arr, split, y_train=y_strat)
+    inner_seed = seed + (fold - 1 if fold > 0 else 0)
+    cv = inner_cv(groups_arr, split, y_train=y_strat, random_state=inner_seed)
 
     pipe_clone = cast(Pipeline, clone(pipeline))
     _assign_random_state(pipe_clone, seed)
@@ -99,7 +109,7 @@ def tune(
         gs.fit(X_train, y_train, groups=groups_arr)
     except Exception as exc:
         msg = f"Fold {fold}: inner CV failed: {exc}"
-        raise ValueError(msg) from exc
+        raise FoldFitError(msg) from exc
 
     _raise_for_nonfinite_grid_search_scores(gs, fold)
     return TunedFit(
@@ -119,5 +129,9 @@ def fit_untuned(
     set_random_seeds(seed, fold)
     pipe_clone = cast(Pipeline, clone(pipeline))
     _assign_random_state(pipe_clone, seed)
-    pipe_clone.fit(X, y)
+    try:
+        pipe_clone.fit(X, y)
+    except Exception as exc:
+        msg = f"Fold {fold}: fit failed: {exc}"
+        raise FoldFitError(msg) from exc
     return pipe_clone

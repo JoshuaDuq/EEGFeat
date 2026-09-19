@@ -26,6 +26,7 @@ class AggregationConfig:
     subject_weighting: Literal["equal", "trial_count"] = "equal"
     bootstrap_iterations: int = 10_000
     ci_method: Literal["fixed_effects", "bootstrap"] = "fixed_effects"
+    seed: int = 42
 
     def __post_init__(self) -> None:
         if self.subject_weighting not in ("equal", "trial_count"):
@@ -98,33 +99,87 @@ def paired_signflip_p_value(
     return float((count + 1) / (iterations + 1))
 
 
-def fold_results(results: Sequence[dict[str, object]]) -> tuple[
-    npt.NDArray[np.float64], npt.NDArray[np.float64], list[str], list[int], list[int]
-]:
-    sorted_results = sorted(results, key=lambda r: int(str(r["fold"])))
+def fold_results(
+    results: Sequence[object],
+    groups: npt.NDArray[np.object_] | None = None,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], list[str], list[int], list[int]]:
+    def _get_fold(r: object) -> int:
+        if hasattr(r, "fold"):
+            return int(getattr(r, "fold"))  # noqa: B009
+        if isinstance(r, dict):
+            return int(str(r["fold"]))
+        raise TypeError(f"Unsupported fold result record type: {type(r)}")
+
+    sorted_results = sorted(results, key=_get_fold)
+    # The design's groups label rows by index; without them each record labels itself, and
+    # a leave-one-subject-out prediction has no subject of its own to offer.
+    group_source = None if groups is None else np.asarray(groups, dtype=object)
 
     y_true_all: list[float] = []
     y_pred_all: list[float] = []
     groups_ordered: list[str] = []
     test_indices: list[int] = []
     fold_ids: list[int] = []
+    labelled: list[bool] = []
 
     for record in sorted_results:
-        raw_true = record["y_true"]
-        raw_pred = record["y_pred"]
-        raw_groups = record["groups"]
-        raw_test = record["test_idx"]
-        fold = int(str(record["fold"]))
+        fold = _get_fold(record)
+        raw_groups: Sequence[object] | npt.NDArray[np.object_] | None
+        if hasattr(record, "y_true") and hasattr(record, "y_pred"):
+            raw_true = getattr(record, "y_true")  # noqa: B009
+            raw_pred = getattr(record, "y_pred")  # noqa: B009
+            raw_test = getattr(record, "rows", None)
+            sub = getattr(record, "subject", None)
+            raw_groups = [sub] * len(raw_true) if sub is not None else None
+        elif isinstance(record, dict):
+            raw_true = record["y_true"]
+            raw_pred = record["y_pred"]
+            raw_test = record.get("test_idx", record.get("rows"))
+            raw_groups = record.get("groups")
+        else:
+            raise TypeError(f"Unsupported record type: {type(record)}")
 
-        if isinstance(raw_true, Sequence | np.ndarray):
-            y_true_all.extend(float(v) for v in raw_true)
-        if isinstance(raw_pred, Sequence | np.ndarray):
-            y_pred_all.extend(float(v) for v in raw_pred)
-        if isinstance(raw_groups, Sequence | np.ndarray):
-            groups_ordered.extend(str(g) for g in raw_groups)
-        if isinstance(raw_test, Sequence | np.ndarray):
-            test_indices.extend(int(i) for i in raw_test)
-            fold_ids.extend([fold] * len(raw_test))
+        yt = [float(v) for v in raw_true]
+        yp = [float(v) for v in raw_pred]
+        if len(yt) != len(yp):
+            msg = f"Fold {fold} has mismatched lengths: y_true ({len(yt)}) vs y_pred ({len(yp)})."
+            raise ValueError(msg)
+
+        if raw_test is not None:
+            t_idx = [int(i) for i in raw_test]
+            if len(t_idx) != len(yt):
+                msg = (
+                    f"Fold {fold} has mismatched test_idx length ({len(t_idx)}) "
+                    f"vs y_true ({len(yt)})."
+                )
+                raise ValueError(msg)
+        else:
+            t_idx = []
+
+        if group_source is not None and raw_test is not None:
+            raw_groups = group_source[np.asarray(t_idx, dtype=np.intp)]
+        if raw_groups is not None:
+            g_arr = [str(g) for g in raw_groups]
+            if len(g_arr) != len(yt):
+                msg = (
+                    f"Fold {fold} has mismatched groups length ({len(g_arr)}) "
+                    f"vs y_true ({len(yt)})."
+                )
+                raise ValueError(msg)
+            groups_ordered.extend(g_arr)
+        labelled.append(raw_groups is not None)
+
+        y_true_all.extend(yt)
+        y_pred_all.extend(yp)
+        test_indices.extend(t_idx)
+        fold_ids.extend([fold] * len(yt))
+
+    if any(labelled) and not all(labelled):
+        msg = (
+            "Some fold results carry subject labels and others do not, so the groups could "
+            "not be aligned with y_true; pass groups= to label every row from the design."
+        )
+        raise ValueError(msg)
 
     return (
         np.asarray(y_true_all, dtype=float),
@@ -139,7 +194,10 @@ def subject_level_r(
     predictions: pd.DataFrame,
     *,
     config: AggregationConfig = _DEFAULT_CONFIG,
+    undefined: Literal["raise", "zero"] = "raise",
 ) -> SubjectLevelR:
+    if undefined not in ("raise", "zero"):
+        raise ValueError(f"undefined must be 'raise' or 'zero', got {undefined!r}")
     per_subject: list[tuple[str, float]] = []
     valid_entries: list[tuple[float, int]] = []
     invalid_subjects: list[str] = []
@@ -150,14 +208,19 @@ def subject_level_r(
         finite = np.isfinite(yt) & np.isfinite(yp)
         n_trials = int(finite.sum())
 
-        if n_trials < 2:
-            invalid_subjects.append(f"{subj}: fewer than 2 finite predictions")
+        if n_trials < 3:
+            invalid_subjects.append(f"{subj}: fewer than 3 finite predictions (got {n_trials})")
             continue
 
         r, _ = safe_pearsonr(yt[finite], yp[finite])
+        if undefined == "zero" and not np.isfinite(r):
+            # Nothing varies to correlate with, which is no linear association.
+            r = 0.0
         per_subject.append((str(subj), float(r)))
         if np.isfinite(r):
             valid_entries.append((float(r), n_trials))
+        else:
+            invalid_subjects.append(f"{subj}: non-finite correlation (degenerate subject)")
 
     if invalid_subjects:
         details = "; ".join(invalid_subjects)
@@ -175,7 +238,7 @@ def subject_level_r(
     n_vals = np.array([n for _, n in valid_entries], dtype=int)
 
     # Correlations are averaged in Fisher z rather than in r because r is not additive.
-    clipped_r = np.clip(r_vals, -1.0 + 1e-15, 1.0 - 1e-15)
+    clipped_r = np.clip(r_vals, -0.999999, 0.999999)
     z_vals = np.arctanh(clipped_r)
 
     if config.subject_weighting == "trial_count":
@@ -190,7 +253,7 @@ def subject_level_r(
 
     ci_low, ci_high = np.nan, np.nan
     if config.ci_method == "bootstrap" and len(z_vals) >= 3:
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(config.seed)
         n_sub = len(z_vals)
         boot_means = np.empty(config.bootstrap_iterations, dtype=float)
         for i in range(config.bootstrap_iterations):

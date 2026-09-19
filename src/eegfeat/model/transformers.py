@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import contextlib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -24,7 +23,6 @@ __all__ = [
     "VarianceThreshold",
     "base_preprocessing_steps",
     "transform_feature_names",
-    "transform_feature_names_through_steps",
     "validate_subject_missingness",
 ]
 
@@ -35,7 +33,6 @@ class PreprocessingConfig:
     max_subject_missingness: float = 0.5
     feature_selection_percentile: float | None = None
     deconfound: bool = False
-    spatial_regions_allowed: tuple[str, ...] = ()
     pca_enabled: bool = False
     pca_n_components: int | float | None = None
     pca_whiten: bool = False
@@ -84,6 +81,11 @@ class ReplaceInfWithNaN(BaseEstimator, TransformerMixin):  # type: ignore[misc]
         out = np.asarray(X, dtype=float).copy()
         out[np.isinf(out)] = np.nan
         return out
+
+    def get_feature_names_out(self, input_features: Sequence[str] | None = None) -> list[str]:
+        if input_features is None:
+            raise ValueError("input_features is required for get_feature_names_out.")
+        return list(input_features)
 
 
 class DropAllNaNColumns(BaseEstimator, TransformerMixin):  # type: ignore[misc]
@@ -280,32 +282,21 @@ def base_preprocessing_steps(
     n_covariates: int = 0,
     score_func: Callable[..., object] | None = None,
 ) -> list[tuple[str, object]]:
+    # Choosing channels or ROIs is a fixed choice of columns, made with Selection(space=...)
+    # when the design is built, so no spatial step is fitted here.
     feature_steps: list[tuple[str, object]] = [
         ("finite", ReplaceInfWithNaN()),
         ("drop_all_nan", DropAllNaNColumns()),
-    ]
-
-    if config.spatial_regions_allowed:
-        feature_steps.append(
-            (
-                "spatial_filter",
-                SpatialFeatureSelector(allowed_regions=config.spatial_regions_allowed),
-            )
-        )
-
-    feature_steps.extend(
-        [
-            (
-                "missingness",
-                MissingnessThreshold(
-                    max_feature_missingness=config.max_feature_missingness,
-                    max_subject_missingness=config.max_subject_missingness,
-                ),
+        (
+            "missingness",
+            MissingnessThreshold(
+                max_feature_missingness=config.max_feature_missingness,
+                max_subject_missingness=config.max_subject_missingness,
             ),
-            ("impute", SimpleImputer(strategy="median")),
-            ("var", VarianceThreshold()),
-        ]
-    )
+        ),
+        ("impute", SimpleImputer(strategy="median")),
+        ("var", VarianceThreshold()),
+    ]
 
     if (
         config.feature_selection_percentile is not None
@@ -349,7 +340,12 @@ def base_preprocessing_steps(
         if include_scaling:
             cov_steps.append(("scaler", StandardScaler()))
         else:
-            cov_steps.append(("passthrough", FunctionTransformer(func=None, validate=False)))
+            cov_steps.append(
+                (
+                    "passthrough",
+                    FunctionTransformer(func=None, validate=False, feature_names_out="one-to-one"),
+                )
+            )
 
         def feature_idx(X: npt.NDArray[Any]) -> list[int]:
             return list(range(X.shape[1] - n_covariates))
@@ -363,6 +359,7 @@ def base_preprocessing_steps(
                 ("cov", Pipeline(cov_steps), cov_idx),
             ],
             remainder="drop",
+            verbose_feature_names_out=False,
         )
         steps: list[tuple[str, object]] = [("preprocessing", preprocessor)]
         if config.deconfound:
@@ -376,16 +373,48 @@ def transform_feature_names(
     steps: Sequence[tuple[str, object]],
     feature_names: Sequence[str],
 ) -> list[str]:
+    # A step that cannot report its output names raises: keeping the input names would
+    # silently attribute values to the wrong columns.
     names = list(feature_names)
     for _name, step in steps:
         if hasattr(step, "get_feature_names_out"):
-            with contextlib.suppress(AttributeError, TypeError, ValueError):
-                names = list(step.get_feature_names_out(names))
+            names = list(step.get_feature_names_out(names))
         elif hasattr(step, "get_support"):
-            with contextlib.suppress(AttributeError, TypeError, ValueError):
-                support = step.get_support()
-                names = [f for f, keep in zip(names, support, strict=True) if keep]
+            support = step.get_support()
+            names = [f for f, keep in zip(names, support, strict=True) if keep]
     return names
 
 
-transform_feature_names_through_steps = transform_feature_names
+def _missingness_inputs(
+    estimator: object, X: npt.NDArray[np.float64]
+) -> Iterator[tuple[npt.NDArray[np.float64], MissingnessThreshold]]:
+    # Each fitted MissingnessThreshold, with the data it saw when it was fitted.
+    if isinstance(estimator, MissingnessThreshold):
+        yield X, estimator
+    elif isinstance(estimator, Pipeline):
+        data = X
+        for _, step in estimator.steps:
+            if step is None or step == "passthrough":
+                continue
+            yield from _missingness_inputs(step, data)
+            if not hasattr(step, "transform"):
+                break
+            data = step.transform(data)
+    elif isinstance(estimator, ColumnTransformer):
+        for _, transformer, columns in estimator.transformers_:
+            if not isinstance(transformer, str) and len(columns):
+                yield from _missingness_inputs(transformer, X[:, columns])
+
+
+def _check_subject_missingness(
+    model: object,
+    X: npt.NDArray[np.float64],
+    groups: npt.NDArray[np.object_],
+) -> None:
+    # Pipelines never route groups to their steps, so max_subject_missingness is applied to
+    # the fitted model instead, against the columns each missingness step kept.
+    for seen, step in _missingness_inputs(model, np.asarray(X, dtype=np.float64)):
+        if np.any(step.support_mask_):
+            validate_subject_missingness(
+                seen[:, step.support_mask_], groups, maximum=step.max_subject_missingness
+            )

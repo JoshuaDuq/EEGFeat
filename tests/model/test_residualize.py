@@ -89,7 +89,7 @@ def test_missing_column_raises_error() -> None:
 
 
 def test_reconstruct_staged_permutation_target_shifts_residuals_within_fold() -> None:
-    y = np.asarray([10.0, 20.0, 30.0, 40.0], dtype=float)
+    y = np.asarray([10.0, 25.0, 30.0, 40.0], dtype=float)
     covariates = np.asarray([1.0, 2.0, 3.0, 4.0], dtype=float).reshape(-1, 1)
     train_idx = np.asarray([0, 1, 2], dtype=np.intp)
     test_idx = np.asarray([3], dtype=np.intp)
@@ -103,13 +103,15 @@ def test_reconstruct_staged_permutation_target_shifts_residuals_within_fold() ->
         permutation_indices=perm_indices,
     )
     assert y_perm.shape == y.shape
+    assert not np.allclose(y_perm, y)
+    np.testing.assert_allclose(y_perm, [15.0, 20.0, 30.0, 40.0])
 
 
 def test_staged_preprocessor_transforms_features_and_target() -> None:
     rng = np.random.default_rng(42)
     n = 30
     nuisance = rng.normal(size=n)
-    X = np.column_stack([rng.normal(size=n), rng.normal(size=n)])
+    X = np.column_stack([nuisance * 3.0, rng.normal(size=n)])
     y = 5.0 + 2.0 * nuisance + rng.normal(scale=0.1, size=n)
     groups = np.repeat(["sub-01", "sub-02", "sub-03"], 10)
     meta = pd.DataFrame({"nuisance": nuisance})
@@ -126,6 +128,9 @@ def test_staged_preprocessor_transforms_features_and_target() -> None:
     )
     X_train_res = preprocessor.transform_features(X, meta, train_rows, groups)
     assert X_train_res.shape == (20, 2)
+    assert not np.allclose(X_train_res, X[train_rows])
+    np.testing.assert_allclose(X_train_res[:, 0], 0.0, atol=1e-10)
+
     y_test_trans = preprocessor.transform_target(y, meta, test_rows)
     assert y_test_trans.shape == (10,)
     y_test_inv = preprocessor.inverse_transform_target(y_test_trans)
@@ -154,4 +159,20 @@ def test_staged_imputation_rejects_excessive_subject_missingness() -> None:
             rows=train_rows,
             columns=["nuisance"],
             config=PreprocessingConfig(max_subject_missingness=0.10),
+        )
+
+
+def test_a_constant_covariate_is_refused_even_when_its_value_is_inexact_in_binary() -> None:
+    # 0.1 has no exact binary form, so centring twelve copies leaves rounding residue
+    # rather than zeros. The rank check must still see a constant column instead of
+    # rescaling the residue into one that looks informative.
+    y = np.arange(16, dtype=float)
+    covariates = np.full((16, 1), 0.1)
+    with pytest.raises(ValueError, match="rank deficient"):
+        residualize_targets(
+            y,
+            covariates,
+            np.arange(12, dtype=np.intp),
+            np.arange(12, 16, dtype=np.intp),
+            columns=["c"],
         )

@@ -9,18 +9,19 @@ from scipy.stats import pearsonr
 from sklearn.metrics import make_scorer
 
 __all__ = [
-    "make_pearsonr_scorer",
     "pearsonr_scorer",
     "safe_pearsonr",
     "scoring_dict",
 ]
+
+_MIN_VARIANCE = 1e-10
 
 
 def safe_pearsonr(
     x: npt.NDArray[np.float64],
     y: npt.NDArray[np.float64],
     *,
-    min_variance: float = 1e-10,
+    min_variance: float = _MIN_VARIANCE,
 ) -> tuple[float, float]:
     x_arr = np.asarray(x, dtype=float)
     y_arr = np.asarray(y, dtype=float)
@@ -46,15 +47,24 @@ def safe_pearsonr(
     return float(np.clip(r, -1.0, 1.0)), float(p)
 
 
+def _selection_pearsonr(y_true: npt.NDArray[np.float64], y_pred: npt.NDArray[np.float64]) -> float:
+    yt = np.asarray(y_true, dtype=float)
+    yp = np.asarray(y_pred, dtype=float)
+    r, _ = safe_pearsonr(yt, yp)
+    finite = np.isfinite(yt) & np.isfinite(yp)
+    if np.isfinite(r) or int(finite.sum()) < 2:
+        return r
+    # A candidate whose predictions do not vary has no linear association with the target,
+    # so it scores 0 and loses the search; NaN would make the non-finite-score guard abort
+    # the whole fold. A target that does not vary is a data fault and stays undefined.
+    if np.var(yp[finite], ddof=1) < _MIN_VARIANCE <= np.var(yt[finite], ddof=1):
+        return 0.0
+    return r
+
+
 def pearsonr_scorer() -> Callable[..., float]:
-    scorer = make_scorer(
-        lambda yt, yp: safe_pearsonr(np.asarray(yt, dtype=float), np.asarray(yp, dtype=float))[0],
-        greater_is_better=True,
-    )
+    scorer = make_scorer(_selection_pearsonr, greater_is_better=True)
     return cast(Callable[..., float], scorer)
-
-
-make_pearsonr_scorer = pearsonr_scorer
 
 
 def scoring_dict() -> dict[str, object]:

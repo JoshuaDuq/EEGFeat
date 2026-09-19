@@ -319,27 +319,18 @@ def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
         ws_y_pred_list.append(gs.best_estimator_.predict(ws_X[te_idx]))
     ws_y_pred = np.concatenate(ws_y_pred_list)
 
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.model_selection import LeaveOneGroupOut, StratifiedGroupKFold
+    from eeg_pipeline.analysis.machine_learning.classification import nested_loso_classification
+    from eeg_pipeline.utils.config.loader import load_config
 
     clf_subs = [f"sub-{i:04d}" for i in range(4)]
     clf_groups = np.repeat(clf_subs, 6).astype(object)
     clf_y = np.tile([0, 1], clf_groups.size // 2).astype(np.intp)
     clf_X = rng.normal(size=(clf_groups.size, 3)) + clf_y[:, None]
-    clf_grid = {"classifier__C": [0.1, 1.0]}
 
-    logo = LeaveOneGroupOut()
-    clf_preds: list[np.ndarray] = []
-    clf_probs: list[np.ndarray] = []
-    for fold, (tr_idx, te_idx) in enumerate(logo.split(clf_X, clf_y, clf_groups), start=1):
-        cv_inner = StratifiedGroupKFold(n_splits=2)
-        pipe_fold = Pipeline(
-            [("classifier", LogisticRegression(max_iter=500, random_state=42 + fold))]
-        )
-        gs_clf = GridSearchCV(pipe_fold, clf_grid, cv=cv_inner, refit=True)
-        gs_clf.fit(clf_X[tr_idx], clf_y[tr_idx], groups=clf_groups[tr_idx])
-        clf_preds.append(gs_clf.predict(clf_X[te_idx]))
-        clf_probs.append(gs_clf.predict_proba(clf_X[te_idx]))
+    cfg = load_config()
+    res, _ = nested_loso_classification(
+        clf_X, clf_y, clf_groups, model="lr", inner_splits=2, seed=42, config=cfg
+    )
 
     return {
         "X": X,
@@ -359,8 +350,8 @@ def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
         "clf_X": clf_X,
         "clf_y": clf_y,
         "clf_groups": clf_groups.astype("U16"),
-        "clf_y_pred": np.concatenate(clf_preds),
-        "clf_y_prob": np.concatenate(clf_probs),
+        "clf_y_pred": res.y_pred,
+        "clf_y_prob": res.y_prob if res.y_prob is not None else np.zeros(0, dtype=float),
         "reference_commit": np.array(_reference_commit()),
     }
 

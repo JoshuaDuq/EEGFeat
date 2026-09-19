@@ -1,6 +1,9 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
+import eegfeat.table as table_module
 from eegfeat.bands import Band
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat
 
@@ -168,6 +171,61 @@ def test_concat_preserves_matching_epoch_identities() -> None:
 def test_concat_of_nothing_raises() -> None:
     with pytest.raises(ValueError, match="at least one"):
         concat([])
+
+
+def _identified_table(recording: str, *, start: float = 0.0) -> FeatureTable:
+    return FeatureTable(
+        values=np.arange(start, start + 6.0).reshape(3, 2),
+        coverage=np.full((3, 2), 0.75),
+        meta=(_meta("C3"), _meta("C4")),
+        flags={"edge_hit": np.array([[True, False], [False, False], [False, True]])},
+        row_ids=tuple((recording, epoch, "stim") for epoch in range(3)),
+    )
+
+
+def test_stack_rows_combines_compatible_epoch_tables() -> None:
+    first = _identified_table("recording-01")
+    second = replace(_identified_table("recording-02", start=6.0), flags={})
+
+    stacked = table_module.stack_rows([first, second])
+
+    np.testing.assert_array_equal(stacked.values, np.arange(12.0).reshape(6, 2))
+    np.testing.assert_array_equal(stacked.coverage, np.full((6, 2), 0.75))
+    assert stacked.meta == first.meta
+    assert stacked.row_ids == first.row_ids + second.row_ids
+    np.testing.assert_array_equal(stacked.flags["edge_hit"][:3], first.flags["edge_hit"])
+    assert not stacked.flags["edge_hit"][3:].any()
+
+
+def test_stack_rows_refuses_incompatible_feature_schemas() -> None:
+    incompatible = replace(_identified_table("recording-02"), meta=(_meta("C3"), _meta("Pz")))
+
+    with pytest.raises(ValueError, match="same ordered feature metadata"):
+        table_module.stack_rows([_identified_table("recording-01"), incompatible])
+
+
+def test_stack_rows_refuses_duplicate_row_identities() -> None:
+    table = _identified_table("recording-01")
+
+    with pytest.raises(ValueError, match="duplicate row_ids"):
+        table_module.stack_rows([table, table])
+
+
+def test_stack_rows_refuses_cross_trial_tables() -> None:
+    grouped = FeatureTable(
+        values=np.zeros((2, 2)),
+        coverage=np.ones((2, 2)),
+        meta=(_meta("C3"), _meta("C4")),
+        row_labels=("left", "right"),
+    )
+
+    with pytest.raises(ValueError, match="per-epoch"):
+        table_module.stack_rows([grouped])
+
+
+def test_stack_rows_of_nothing_raises() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        table_module.stack_rows([])
 
 
 # --- row semantics --------------------------------------------------------------------

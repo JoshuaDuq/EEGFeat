@@ -27,9 +27,10 @@ def test_probability_columns_are_pinned_to_the_recorded_classes() -> None:
 
 def test_a_single_class_training_fold_raises() -> None:
     y_degenerate = np.where(GROUPS == "s1", 1, 0).astype(np.intp)
-    with pytest.raises(ValueError, match="one class"):
+    fold_s1 = [f for f in loso_folds(GROUPS) if set(GROUPS[f.test]) == {"s1"}][:1]
+    with pytest.raises(ValueError, match="only one class in training for subject s1"):
         cross_fit_classification(
-            [f for f in loso_folds(GROUPS) if set(GROUPS[f.test]) != {"s1"}][:1],
+            fold_s1,
             X,
             y_degenerate,
             GROUPS,

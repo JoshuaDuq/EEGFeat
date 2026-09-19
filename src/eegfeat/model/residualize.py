@@ -64,7 +64,10 @@ def _validate_training_nuisance_rank(
 ) -> None:
     centered = nuisance_design - np.mean(nuisance_design, axis=0, keepdims=True)
     column_norms = np.linalg.norm(centered, axis=0)
-    if np.any(column_norms <= 0.0):
+    # Centring a constant with no exact binary form leaves rounding residue, not zeros, so
+    # a column is judged constant relative to its own magnitude.
+    column_scales = np.max(np.abs(nuisance_design), axis=0) * np.sqrt(nuisance_design.shape[0])
+    if np.any(column_norms <= float(tolerance) * column_scales):
         msg = (
             "Target residualization design is rank deficient. "
             f"Columns={list(columns)} contain constant training-fold nuisance terms."
@@ -218,10 +221,6 @@ def residualize_targets(
     return fit.train_residual, fit.test_residual
 
 
-fit_nuisance_model_for_fold = fit_nuisance_model
-residualize_targets_for_fold = residualize_targets
-
-
 def _finite_feature_block(
     X: npt.NDArray[np.float64], rows: npt.NDArray[np.intp]
 ) -> npt.NDArray[np.float64]:
@@ -297,9 +296,6 @@ class StagedResidualPreprocessor:
             np.asarray(values, dtype=np.float64).reshape(-1, 1)
         ).flatten()
         return cast(npt.NDArray[np.float64], inversed)
-
-
-_StagedResidualPreprocessor = StagedResidualPreprocessor
 
 
 def fit_staged_residual_preprocessor(
@@ -390,9 +386,6 @@ def fit_staged_residual_preprocessor(
         n_fit_rows=int(fit_rows.size),
         max_subject_missingness=max_subject_missingness,
     )
-
-
-_fit_staged_residual_preprocessor = fit_staged_residual_preprocessor
 
 
 def reconstruct_staged_permutation_target_for_fold(

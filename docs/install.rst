@@ -73,6 +73,14 @@ Install optional components as needed depending on your analysis scope:
    * - ``[microstates]``
      - ``scikit-learn>=1.3``
      - GFP peak clustering and microstate segmentation (:mod:`eegfeat.microstates`).
+   * - ``[model]``
+     - ``scikit-learn>=1.3``
+     - Design matrices, leakage-safe cross-fitting, metrics, nulls, uncertainty, and model
+       selection (:mod:`eegfeat.model`).
+   * - ``[importance]``
+     - ``scikit-learn>=1.3``, ``shap>=0.44``
+     - Held-out permutation importance and SHAP explanations
+       (:mod:`eegfeat.model.importance`).
    * - ``[knee]``
      - ``specparam>=2.0.0rc7,<3``
      - Spectral knee parameterization.
@@ -80,14 +88,17 @@ Install optional components as needed depending on your analysis scope:
      - ``pytest``, ``ruff``, ``black``, ``mypy``, type stubs
      - Test suite execution, type checking, and linting.
    * - ``[docs]``
-     - ``furo``, ``myst-parser``, ``sphinx-copybutton``, ``sphinx-design``
-     - Building the Sphinx documentation locally.
+     - ``furo``, ``myst-parser``, ``sphinx-copybutton``, ``sphinx-design``, ``scikit-learn``
+     - Building the Sphinx documentation locally, including the modeling API reference.
 
 To install with all extras:
 
 .. code-block:: bash
 
    pip install -e ".[connectivity,microstates,knee,dev,docs]"
+
+For predictive modeling, install ``.[model]``. Add ``.[importance]`` when SHAP explanations
+are needed; permutation importance itself is available with the model extra.
 
 Verification
 ------------

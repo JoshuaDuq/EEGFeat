@@ -16,23 +16,32 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
 from eegfeat.bands import Band
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, stack_rows
 
 _NA = "n/a"
 """Missing-value marker, following the BIDS convention for tabular files."""
 
 _EPOCH_KEY = "epoch"
 _GROUP_KEY = "group"
+
+
+@dataclass(frozen=True)
+class FeatureDataset:
+    """Per-epoch features and their aligned target descriptors."""
+
+    table: FeatureTable
+    targets: pd.DataFrame
 
 
 def write_table(
@@ -54,8 +63,9 @@ def write_table(
     rows : DataFrame, optional
         Descriptive columns written between the row key and the features, one
         row per table row, e.g. the event and metadata of each epoch. They are
-        for joining the values to other data and are not read back. The output
-        is BIDS-style tabular data, not a validated BIDS derivative dataset.
+        restored as aligned targets by :func:`read_dataset`, but are not feature
+        columns returned by :func:`read_table`. The output is BIDS-style tabular
+        data, not a validated BIDS derivative dataset.
     provenance : mapping, optional
         JSON-serializable record of how the table was produced, stored in the
         sidecar as given.
@@ -113,7 +123,7 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
         Values, coverage, metadata, flags and row labels as they were written.
     """
     source = Path(path)
-    sidecar = json.loads(source.with_suffix(".json").read_text())
+    sidecar = _read_sidecar(source)
     meta = tuple(_meta_from_record(record) for record in sidecar["columns"])
     names = [m.name for m in meta]
 
@@ -143,6 +153,73 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
             )
         ),
     )
+
+
+def read_dataset(paths: Sequence[str | os.PathLike[str]]) -> FeatureDataset:
+    """Load and vertically combine runner-generated per-epoch feature bundles."""
+    if not paths:
+        raise ValueError("read_dataset requires at least one feature table path.")
+
+    tables: list[FeatureTable] = []
+    target_frames: list[pd.DataFrame] = []
+    for path in paths:
+        source = Path(path)
+        table = read_table(source)
+        if table.row_ids is None:
+            raise ValueError("read_dataset accepts per-epoch feature tables only.")
+        tables.append(table)
+        target_frames.append(_read_targets(source, table, _read_sidecar(source)))
+
+    return FeatureDataset(
+        table=stack_rows(tables),
+        targets=pd.concat(target_frames, ignore_index=True),
+    )
+
+
+def _read_targets(
+    source: Path,
+    table: FeatureTable,
+    sidecar: Mapping[str, Any],
+) -> pd.DataFrame:
+    row_columns = [str(column) for column in sidecar["row_columns"]]
+    if not row_columns or row_columns[0] != _EPOCH_KEY:
+        raise ValueError(f"{source.name} sidecar does not declare an epoch row key.")
+    descriptor_columns = row_columns[1:]
+    frame = pd.read_csv(source, sep="\t", na_values=[_NA], keep_default_na=False)
+    if _EPOCH_KEY not in frame.columns:
+        raise ValueError(f"{source.name} lacks the epoch row key its sidecar describes.")
+    missing_descriptors = [
+        column for column in descriptor_columns if column not in frame.columns
+    ]
+    if missing_descriptors:
+        raise ValueError(
+            f"{source.name} lacks descriptor columns its sidecar describes: "
+            f"{missing_descriptors}"
+        )
+
+    identifiers = pd.DataFrame(table.row_ids, columns=["recording", "epoch", "event"])
+    serialized_epochs = pd.to_numeric(frame[_EPOCH_KEY], errors="raise").to_numpy()
+    epochs_are_integral = np.equal(serialized_epochs, np.floor(serialized_epochs))
+    canonical_epochs = identifiers[_EPOCH_KEY].to_numpy()
+    if not np.all(epochs_are_integral) or not np.array_equal(
+        serialized_epochs, canonical_epochs
+    ):
+        raise ValueError(f"{source.name} epoch row key disagrees with canonical row_ids.")
+
+    descriptors = frame[descriptor_columns].copy()
+    for column in identifiers.columns.intersection(descriptors.columns):
+        actual = descriptors[column].to_numpy()
+        expected = identifiers[column].to_numpy()
+        if not np.array_equal(actual, expected):
+            raise ValueError(
+                f"{source.name} descriptor {column!r} disagrees with canonical row_ids."
+            )
+    descriptors = descriptors.drop(columns=identifiers.columns, errors="ignore")
+    return pd.concat([identifiers, descriptors], axis=1)
+
+
+def _read_sidecar(source: Path) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(source.with_suffix(".json").read_text()))
 
 
 def _row_key(table: FeatureTable) -> tuple[str, list[int] | list[str]]:
