@@ -16,7 +16,7 @@ Labelled spectral, temporal, oscillatory burst, connectivity, complexity, and mi
 
 `eegfeat` eliminates common electrophysiological feature extraction failure modes:
 
-- **Support-restricted wavelets**: Per-frequency temporal support masks ($n_\text{cycles} / (2 f)$) prevent edge artifacts and pre-stimulus leakage into task windows.
+- **Support-restricted wavelets**: Per-frequency temporal support masks ($`n_{\text{cycles}} / (2 f)`$) prevent edge artifacts and pre-stimulus leakage into task windows.
 - **Aperiodic-whitened peaks**: Iteratively fitted robust linear $1/f$ baselines and parabolic interpolation remove low-frequency spectral tilt bias.
 - **Baseline-calibrated thresholds**: Burst detection and ERDS baselines are calibrated on unperturbed reference windows to avoid stimulus-induced circularity.
 - **Strict row semantics**: Cross-trial measures (ITPC, wPLI, AEC) return one row per trial group with explicit labels, preventing single-trial pseudo-replication.
@@ -235,7 +235,7 @@ eegfeat run recipe.toml --n-jobs 4
 
 ## Verification & Documentation
 
-The test suite validates continuous feature values against analytic derivations and standard reference algorithms to floating-point precision ($r_\text{tol} \le 10^{-6}$, $a_\text{tol} \le 10^{-9}$), with discrete edge searches matching bit-identically.
+The test suite validates continuous feature values against analytic derivations and standard reference algorithms to floating-point precision ($`r_{\text{tol}} \le 10^{-6}`$, $`a_{\text{tol}} \le 10^{-9}`$), with discrete edge searches matching bit-identically.
 
 ```bash
 # Run unit & regression test suite
