@@ -156,7 +156,9 @@ def test_create_within_subject_folds_supports_forward_ordering() -> None:
         seed=42,
         ordered_runs=True,
     )
-    assert len(folds) == 2
+    assert len(folds) == 1
+    assert set(blocks[folds[0].train]) == {1.0, 2.0}
+    assert set(blocks[folds[0].test]) == {3.0}
     for fold in folds:
         train_blocks = blocks[fold.train]
         test_blocks = blocks[fold.test]
@@ -166,7 +168,7 @@ def test_create_within_subject_folds_supports_forward_ordering() -> None:
 def test_create_within_subject_folds_raises_when_ordered_runs_cannot_be_formed() -> None:
     groups = np.array(["sub-0001"] * 4, dtype=object)
     blocks = np.array(["run-a", "run-a", "run-b", "run-b"], dtype=object)
-    with pytest.raises(ValueError, match="ordered within-subject CV requested"):
+    with pytest.raises(ValueError, match="at least three ordered runs"):
         within_subject_folds(
             groups=groups,
             blocks=blocks,

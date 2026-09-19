@@ -167,13 +167,15 @@ def within_subject_folds(
                     num_blocks = np.array([float(p) for p in parsed if p is not None], dtype=float)
 
             unique_nums = sorted(np.unique(num_blocks[np.isfinite(num_blocks)]))
-            if len(unique_nums) < 2:
+            if len(unique_nums) < 3:
                 raise ValueError(
-                    f"Subject {subject}: ordered within-subject CV requested but no valid "
-                    "ordered run folds were found."
+                    f"Subject {subject}: at least three ordered runs are required for "
+                    f"nested forward CV, got {len(unique_nums)}."
                 )
             ordered_splits: list[tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]] = []
-            for block_idx in range(1, len(unique_nums)):
+            # The first evaluated fold needs at least two training runs
+            # so that run-disjoint inner tuning is possible.
+            for block_idx in range(2, len(unique_nums)):
                 train_mask = np.isin(num_blocks, [float(u) for u in unique_nums[:block_idx]])
                 test_mask = num_blocks == float(unique_nums[block_idx])
                 if np.any(train_mask) and np.any(test_mask):
