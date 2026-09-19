@@ -193,8 +193,8 @@ Permutation nulls
 draw. ``NullConfig.scheme`` supports ``"within_subject"``, ``"run_wise"``,
 ``"within_subject_within_run"``, and ``"circular_shift_within_run"``. Run-aware schemes
 require ``runs``; circular shifts additionally require finite within-run trial indices.
-Incomplete fits are counted in ``NullResult.n_incomplete`` and a minimum completion fraction
-is enforced instead of silently changing the null distribution.
+Incomplete fits abort the procedure with an error instead of dropping failed draws,
+preventing distortion of the null distribution.
 
 .. code-block:: python
 

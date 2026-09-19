@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model.aggregate import AggregationConfig, subject_level_r
-from eegfeat.model.crossfit import cross_fit_regression
+from eegfeat.model.crossfit import FoldPrediction, cross_fit_regression
 from eegfeat.model.splits import Fold, InnerSplit
 from eegfeat.model.tuning import FoldFitError
 
@@ -37,7 +37,6 @@ Scheme = Literal[
 class NullConfig:
     scheme: Scheme = "within_subject"
     n_permutations: int = 1000
-    min_complete_fraction: float = 0.9
     min_retained_trials: int = 8
 
     def __post_init__(self) -> None:
@@ -52,9 +51,6 @@ class NullConfig:
             raise ValueError(msg)
         if self.n_permutations <= 0:
             msg = f"n_permutations must be > 0, got {self.n_permutations}."
-            raise ValueError(msg)
-        if not (0.0 <= self.min_complete_fraction <= 1.0):
-            msg = f"min_complete_fraction must be in [0, 1], got {self.min_complete_fraction}."
             raise ValueError(msg)
         if self.min_retained_trials < 1:
             msg = f"min_retained_trials must be >= 1, got {self.min_retained_trials}."
@@ -203,6 +199,43 @@ def permute(
     return values[source_indices]
 
 
+def _prediction_statistic(
+    predictions: Sequence[FoldPrediction],
+    groups: npt.NDArray[np.object_],
+    aggregation: AggregationConfig,
+    metric_fn: Callable[
+        [npt.NDArray[np.float64], npt.NDArray[np.float64]],
+        float,
+    ] | None,
+) -> float:
+    yt = np.concatenate([p.y_true for p in predictions])
+    yp = np.concatenate([p.y_pred for p in predictions])
+
+    if not np.all(np.isfinite(yt)) or not np.all(np.isfinite(yp)):
+        raise ValueError("Permutation statistic requires finite predictions.")
+
+    if metric_fn is not None:
+        score = float(metric_fn(yt, yp))
+    else:
+        frame = pd.DataFrame({
+            "subject_id": np.concatenate(
+                [groups[p.rows] for p in predictions]
+            ),
+            "y_true": yt,
+            "y_pred": yp,
+        })
+        score = subject_level_r(
+            frame,
+            config=aggregation,
+            undefined="zero",
+        ).r
+
+    if not np.isfinite(score):
+        raise ValueError("Permutation statistic is undefined.")
+
+    return score
+
+
 def permutation_test(
     folds: Sequence[Fold],
     X: npt.NDArray[np.float64],
@@ -244,80 +277,79 @@ def permutation_test(
         msg = "Permutation scheme never changes any labels under this design."
         raise ValueError(msg)
 
+    if not np.isfinite(observed):
+        raise ValueError("observed statistic must be finite.")
+
+    def fit_targets(
+        target_values: npt.NDArray[np.float64],
+        fit_seed: int,
+    ) -> tuple[FoldPrediction, ...]:
+        return cross_fit_regression(
+            folds,
+            X,
+            target_values,
+            groups,
+            pipeline,
+            grid,
+            inner=inner,
+            seed=fit_seed,
+            runs=runs,
+            outer_n_jobs=outer_n_jobs,
+            harmonization=harmonization,
+            covariates=covariates,
+            residualize_on=residualize_on,
+            scoring=scoring,
+            refit=refit,
+        )
+
+    observed_predictions = fit_targets(y, seed)
+    recomputed_observed = _prediction_statistic(
+        observed_predictions,
+        groups_arr,
+        null_aggregation,
+        metric_fn,
+    )
+
+    if not np.isclose(
+        observed,
+        recomputed_observed,
+        rtol=1e-6,
+        atol=1e-8,
+    ):
+        raise ValueError(
+            "The supplied observed statistic differs from the statistic "
+            "computed by this permutation procedure. Use the same folds, "
+            "model, seed, aggregation, and metric for both."
+        )
+
     null_scores: list[float] = []
-    completed_changed_fractions: list[float] = []
-    n_incomplete = 0
 
-    for b, (y_perm, cf) in enumerate(zip(permuted_targets, sampled_changed_fractions, strict=True)):
+    for b, y_perm in enumerate(permuted_targets):
         try:
-            predictions = cross_fit_regression(
-                folds,
-                X,
-                y_perm,
-                groups,
-                pipeline,
-                grid,
-                inner=inner,
-                seed=seed + b,
-                runs=runs,
-                outer_n_jobs=outer_n_jobs,
-                harmonization=harmonization,
-                covariates=covariates,
-                residualize_on=residualize_on,
-                scoring=scoring,
-                refit=refit,
+            predictions = fit_targets(y_perm, seed + b)
+            score = _prediction_statistic(
+                predictions,
+                groups_arr,
+                null_aggregation,
+                metric_fn,
             )
-        except FoldFitError:
-            n_incomplete += 1
-            continue
-        y_true_all = np.concatenate([p.y_true for p in predictions])
-        y_pred_all = np.concatenate([p.y_pred for p in predictions])
-        if not np.all(np.isfinite(y_pred_all)):
-            n_incomplete += 1
-            continue
-
-        if metric_fn is not None:
-            score = float(metric_fn(y_true_all, y_pred_all))
-            if not np.isfinite(score):
-                score = 0.0
-        else:
-            # The same statistic as the documented observed value: subject-level r over the
-            # design's subjects, whatever the fold source. A subject whose predictions do
-            # not vary counts as no correlation instead of voiding the other subjects.
-            pred_df = pd.DataFrame(
-                {
-                    "subject_id": np.concatenate([groups_arr[p.rows] for p in predictions]),
-                    "y_true": y_true_all,
-                    "y_pred": y_pred_all,
-                }
-            )
-            score = subject_level_r(pred_df, config=null_aggregation, undefined="zero").r
+        except (FoldFitError, ValueError) as exc:
+            raise RuntimeError(
+                f"Permutation {b + 1} failed. No p-value is returned "
+                "because dropping a failed permutation could alter "
+                "the null distribution."
+            ) from exc
 
         null_scores.append(score)
-        completed_changed_fractions.append(cf)
-
-    n_completed = len(null_scores)
-    completion_rate = n_completed / config.n_permutations
-    if completion_rate < config.min_complete_fraction:
-        msg = (
-            f"Insufficient valid permutations ({n_completed}/{config.n_permutations}, "
-            f"rate={completion_rate:.3f} < required {config.min_complete_fraction:.3f})."
-        )
-        raise ValueError(msg)
 
     null_arr = np.asarray(null_scores, dtype=np.float64)
-    if np.isnan(observed):
-        p_value = float("nan")
-    else:
-        # Incomplete draws are faults, not draws that fell short of the observed value, so
-        # they are left out of both terms.
-        count_extreme = int(np.sum(null_arr >= observed))
-        p_value = float((count_extreme + 1) / (null_arr.size + 1))
+    count_extreme = int(np.sum(null_arr >= observed))
+    p_value = float((count_extreme + 1) / (len(null_arr) + 1))
 
     return NullResult(
         p_value=p_value,
         observed=observed,
         null=null_arr,
-        changed_fractions=np.asarray(completed_changed_fractions, dtype=np.float64),
-        n_incomplete=n_incomplete,
+        changed_fractions=changed_arr,
+        n_incomplete=0,
     )

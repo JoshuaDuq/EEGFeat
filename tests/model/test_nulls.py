@@ -8,14 +8,18 @@ from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model.aggregate import AggregationConfig
+from eegfeat.model.crossfit import cross_fit_regression
 from eegfeat.model.nulls import (
+    _DEFAULT_AGGREGATION,
     NullConfig,
+    _prediction_statistic,
     changed_fraction,
     circular_shift_group,
     permutation_test,
     permute,
 )
 from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegfeat.model.tuning import FoldFitError
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 GRID = {"regressor__strategy": ["mean"]}
@@ -133,20 +137,69 @@ def test_a_scheme_under_which_nothing_ever_changes_is_refused() -> None:
         )
 
 
+def test_infinite_observed_statistic_is_rejected() -> None:
+    with pytest.raises(ValueError, match="observed statistic must be finite"):
+        permutation_test(
+            FOLDS,
+            X,
+            Y,
+            GROUPS,
+            RUNS,
+            PIPE,
+            GRID,
+            observed=np.inf,
+            config=NullConfig(n_permutations=19),
+            inner=BY_SUBJECT,
+            seed=0,
+        )
+
+
+def test_mismatched_observed_statistic_is_rejected() -> None:
+    with pytest.raises(
+        ValueError,
+        match="The supplied observed statistic differs from the statistic computed",
+    ):
+        permutation_test(
+            FOLDS,
+            X,
+            Y,
+            GROUPS,
+            RUNS,
+            PIPE,
+            GRID,
+            observed=999.0,
+            config=NullConfig(n_permutations=5),
+            inner=BY_SUBJECT,
+            seed=0,
+        )
+
+
 def test_the_p_value_counts_the_observed_statistic_in_both_terms() -> None:
+    rng = np.random.default_rng(42)
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 10).astype(object)
+    x = rng.normal(size=(40, 2))
+    y = 3.0 * x[:, 0] + rng.normal(size=40) * 0.1
+    folds = loso_folds(groups)
+    pipe = Pipeline([("regressor", LinearRegression())])
+    inner = InnerSplit(grouping="subject", n_splits=2)
+
+    preds = cross_fit_regression(folds, x, y, groups, pipe, {}, inner=inner, seed=0)
+    observed = _prediction_statistic(preds, groups, _DEFAULT_AGGREGATION, None)
+
     result = permutation_test(
-        FOLDS,
-        X,
-        Y,
-        GROUPS,
-        RUNS,
-        PIPE,
-        GRID,
-        observed=np.inf,
+        folds,
+        x,
+        y,
+        groups,
+        None,
+        pipe,
+        {},
+        observed=observed,
         config=NullConfig(n_permutations=19),
-        inner=BY_SUBJECT,
+        inner=inner,
         seed=0,
     )
+    assert np.all(result.null < result.observed)
     assert result.p_value == pytest.approx(1.0 / 20.0)
 
 
@@ -274,13 +327,13 @@ def test_sampled_shifts_cover_the_whole_cycle() -> None:
     assert observed == set(range(11))
 
 
-def test_permutation_completion_threshold_enforces_failure_fraction() -> None:
+def test_permutation_test_fails_on_pipeline_fit_failure() -> None:
     class FailingPipeline(Pipeline):
         def fit(self, *args: object, **kwargs: object) -> FailingPipeline:
             raise RuntimeError("Intentional fold failure")
 
     bad_pipe = FailingPipeline([("regressor", DummyRegressor())])
-    with pytest.raises(ValueError, match="Insufficient valid permutations"):
+    with pytest.raises(FoldFitError):
         permutation_test(
             FOLDS,
             X,
@@ -290,7 +343,7 @@ def test_permutation_completion_threshold_enforces_failure_fraction() -> None:
             bad_pipe,
             {},
             observed=0.0,
-            config=NullConfig(n_permutations=5, min_complete_fraction=0.8),
+            config=NullConfig(n_permutations=5),
             inner=BY_SUBJECT,
             seed=0,
         )
@@ -328,15 +381,19 @@ def test_the_loso_null_scores_subject_level_r_like_the_observed_statistic() -> N
     offsets = np.repeat(np.arange(6) * 3.0, 12)
     x = np.column_stack([rng.normal(size=72), offsets])
     y = 0.5 * x[:, 0] + rng.normal(size=72) + offsets
+    folds = loso_folds(groups)
+    pipe = Pipeline([("regressor", LinearRegression())])
+    preds = cross_fit_regression(folds, x, y, groups, pipe, {}, inner=BY_SUBJECT, seed=0)
+    observed = _prediction_statistic(preds, groups, _DEFAULT_AGGREGATION, None)
     result = permutation_test(
-        loso_folds(groups),
+        folds,
         x,
         y,
         groups,
         None,
-        Pipeline([("regressor", LinearRegression())]),
+        pipe,
         {},
-        observed=0.0,
+        observed=observed,
         config=NullConfig(n_permutations=30),
         inner=BY_SUBJECT,
         seed=0,
@@ -351,16 +408,21 @@ def test_the_null_aggregates_subjects_with_the_callers_weighting() -> None:
     groups = np.array(["s1"] * 30 + ["s2"] * 6 + ["s3"] * 6, dtype=object)
     x = rng.normal(size=(42, 2))
     y = x[:, 0] + rng.normal(size=42)
+    folds = loso_folds(groups)
+    pipe = Pipeline([("regressor", LinearRegression())])
+    preds = cross_fit_regression(folds, x, y, groups, pipe, {}, inner=BY_SUBJECT, seed=0)
     nulls = [
         permutation_test(
-            loso_folds(groups),
+            folds,
             x,
             y,
             groups,
             None,
-            Pipeline([("regressor", LinearRegression())]),
+            pipe,
             {},
-            observed=0.0,
+            observed=_prediction_statistic(
+                preds, groups, AggregationConfig(subject_weighting=weighting), None
+            ),
             config=NullConfig(n_permutations=10),
             inner=BY_SUBJECT,
             seed=0,
@@ -372,42 +434,39 @@ def test_the_null_aggregates_subjects_with_the_callers_weighting() -> None:
 
 
 def test_the_p_value_is_taken_over_completed_permutations_only() -> None:
-    # A draw that failed to fit is a fault, not a draw that fell short of the observed
-    # value. Counting it in the denominator would shrink every p-value.
-    result = permutation_test(
-        FOLDS,
-        X,
-        Y,
-        GROUPS,
-        RUNS,
-        Pipeline([("regressor", _DivergesOnSomeTargets(strategy="mean"))]),
-        {},
-        observed=np.inf,
-        config=NullConfig(n_permutations=20, min_complete_fraction=0.0),
-        inner=BY_SUBJECT,
-        seed=0,
-    )
-    assert result.n_incomplete > 0 and result.null.size > 0
-    assert result.p_value == pytest.approx(1.0 / (result.null.size + 1))
+    # A draw that failed to fit aborts the permutation test rather than biasing the null.
+    with pytest.raises(RuntimeError, match="No p-value is returned"):
+        permutation_test(
+            FOLDS,
+            X,
+            Y,
+            GROUPS,
+            RUNS,
+            Pipeline([("regressor", _DivergesOnSomeTargets(strategy="mean"))]),
+            {},
+            observed=0.0,
+            config=NullConfig(n_permutations=20),
+            inner=BY_SUBJECT,
+            seed=0,
+        )
 
 
 def test_a_draw_whose_inner_search_fails_counts_as_incomplete() -> None:
-    # tune reports a failed search as a fit failure, and min_complete_fraction exists to
-    # count exactly those; the null must not abort on the first one.
-    result = permutation_test(
-        FOLDS,
-        X,
-        Y,
-        GROUPS,
-        RUNS,
-        Pipeline([("regressor", _DivergesOnSomeTargets(strategy="mean"))]),
-        {"regressor__strategy": ["mean", "median"]},
-        observed=0.0,
-        config=NullConfig(n_permutations=20, min_complete_fraction=0.0),
-        inner=BY_SUBJECT,
-        seed=0,
-    )
-    assert result.n_incomplete > 0
+    # An inner tuning failure aborts the permutation test.
+    with pytest.raises(RuntimeError, match="No p-value is returned"):
+        permutation_test(
+            FOLDS,
+            X,
+            Y,
+            GROUPS,
+            RUNS,
+            Pipeline([("regressor", _DivergesOnSomeTargets(strategy="mean"))]),
+            {"regressor__strategy": ["mean", "median"]},
+            observed=0.0,
+            config=NullConfig(n_permutations=20),
+            inner=BY_SUBJECT,
+            seed=0,
+        )
 
 
 def test_one_subject_with_constant_predictions_does_not_zero_the_whole_draw() -> None:
@@ -418,15 +477,29 @@ def test_one_subject_with_constant_predictions_does_not_zero_the_whole_draw() ->
     runs = np.tile(np.repeat(["r1", "r2", "r3"], 8), 4).astype(object)
     x = np.column_stack([np.repeat(np.arange(4.0), 24), rng.normal(size=96)])
     y = x[:, 1] + rng.normal(size=96)
+    folds = within_subject_folds(groups, runs, inner_splits=3, seed=0)
+    pipe = Pipeline([("regressor", _ConstantForFirstSubject())])
+    preds = cross_fit_regression(
+        folds,
+        x,
+        y,
+        groups,
+        pipe,
+        {},
+        inner=InnerSplit(grouping="run", n_splits=2),
+        seed=0,
+        runs=runs,
+    )
+    observed = _prediction_statistic(preds, groups, _DEFAULT_AGGREGATION, None)
     result = permutation_test(
-        within_subject_folds(groups, runs, inner_splits=3, seed=0),
+        folds,
         x,
         y,
         groups,
         runs,
-        Pipeline([("regressor", _ConstantForFirstSubject())]),
+        pipe,
         {},
-        observed=0.0,
+        observed=observed,
         config=NullConfig(n_permutations=10),
         inner=InnerSplit(grouping="run", n_splits=2),
         seed=0,
