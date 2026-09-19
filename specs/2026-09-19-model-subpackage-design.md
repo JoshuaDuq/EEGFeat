@@ -83,6 +83,7 @@ importance, and conformal prediction intervals.
 | `load_active_matrix` and the loading layer | BIDS trees, subject discovery, events |
 | `config.py`, `get_ml_config` | Replaced by typed recipe dataclasses |
 | `cv_hygiene.py` (fold-local IAF) | Deferred; see section 3.6 |
+| The permutation effectiveness filter | Replaced, not ported; see section 3.6 |
 
 ---
 
@@ -92,7 +93,9 @@ importance, and conformal prediction intervals.
 
 The pipeline keeps everything behind `load_active_matrix`. `eegfeat` never learns what a
 subject directory is. Its entry point is a `FeatureTable` plus a target and a groups
-vector, aligned on trial index.
+vector, joined on the table's own `RowId` — the `(recording, epoch, event)` triple at
+`table.py:18`. An epoch index alone is not unique across recordings, so the join key is
+composite; see section 4's `design.py` entry.
 
 ### 3.2 Layout and size budget
 
@@ -113,7 +116,7 @@ src/eegfeat/model/
   aggregate.py      subject-level aggregation, bootstrap CI, sign-flip    ~300
   metrics.py        metric computation, ClassificationResult              ~350
   tuning.py         inner-CV tuning of one estimator on one fold          ~250
-  crossfit.py       the outer fold loop                                   ~250
+  crossfit.py       the outer fold loop, regression and classification    ~350
   execution.py      seeds and parallelism                                 ~120
   importance.py     SHAP and permutation importance                       ~450
   uncertainty.py    conformal prediction intervals                        ~400
@@ -168,7 +171,7 @@ KMeans call, so a function-level guard is proportionate. Every transformer and e
 in `model/` subclasses `BaseEstimator`. Lazy-importing inside every function would fight
 the design, so the guard moves up to the subpackage boundary.
 
-### 3.6 Fold-local IAF is deferred, deliberately
+### 3.6 Two deliberate deviations from equivalence
 
 `analysis/features/cv_hygiene.py` (340 lines) estimates individual alpha frequency from
 training trials only and derives band edges from it. It is a natural fit for `eegfeat`
@@ -185,6 +188,99 @@ whose entire premise is "prove nothing changed" is how a migration loses its war
 
 `design.py` therefore accepts fold-specific band parameters when supplied, honouring
 safeguard 2, while their estimation lands in a follow-up with its own verification.
+
+#### The permutation effectiveness filter is removed
+
+Upstream computes a permutation, measures what fraction of labels it changed, and
+**skips** it when that fraction is below a threshold (`cv.py:1238`, a bare `continue`).
+The skipped permutation never enters the null, and the p-value's denominator is the
+post-filter count.
+
+This contradicts the randomization argument the code itself states. `circular_shift.py`'s
+docstring argues that the admissible shifts must form a group under composition, with the
+observed statistic as the identity, and that any strict subset generally is not closed —
+so the upper-tail calculation loses its warrant. A filter keyed on how much a shift
+changed the target is exactly such a subset, and it is selected *on the permuted values*,
+which is the thing the null is supposed to hold fixed.
+
+The port therefore **counts every sampled permutation** and reports the changed fraction
+as a diagnostic rather than a filter. One guard survives in a different form: if no
+permutation in the whole run changes anything, the scheme cannot test the hypothesis and
+`permutation_test` raises — the same protection upstream got from `n_effective == 0`,
+computed from the diagnostic instead of from filtering.
+
+This is a behaviour change. P-values on the null path will not match the reference
+pipeline, by design, and section 8 excludes that path from equivalence. Upstream's
+`regression_permutation_requires_effective_label_shuffling` encodes the old behaviour and
+is **replaced**, not ported.
+
+Nothing else changes: `min_complete_fraction` governs folds that *failed to fit*, which
+are faults rather than measurements, and it stays (safeguard 6).
+
+### 3.7 The inner-CV contract
+
+The inner splitter varies along two axes, and both must be explicit in the interface
+rather than inferred from the data.
+
+| | Inner grouping | Splitter |
+|---|---|---|
+| Leave-one-subject-out, regression | subject | `GroupKFold` |
+| Leave-one-subject-out, classification | subject | `StratifiedGroupKFold` |
+| Within-subject, regression | run | `GroupKFold` over runs |
+| Within-subject, classification | run | `StratifiedGroupKFold` over runs |
+
+A within-subject outer fold trains on **one subject**, so a subject-grouped inner split
+cannot produce two groups. Upstream handles this by tuning with
+`create_run_aware_inner_cv(blocks_train, ...)` and passing `groups=blocks_train`
+(`orchestration.py:868`); the grouping is runs, not subjects. Classification additionally
+requires stratification, pinned upstream by
+`nested_loso_classification_requires_stratified_inner_cv_support`.
+
+So `tune` does not take "the groups". It takes an explicit `InnerSplit` naming the
+grouping and whether to stratify, plus the array to group by:
+
+```python
+@dataclass(frozen=True)
+class InnerSplit:
+    grouping: Literal["subject", "run"]
+    stratified: bool = False
+    n_splits: int = 5
+```
+
+`cross_fit` selects the array once, before the loop — subjects or runs — so the loop body
+still branches on neither fold source nor task. An incoherent combination
+(within-subject folds with `grouping="subject"`) is refused at the boundary, which
+replaces a puzzling "at least 2 groups" failure raised deep inside tuning.
+
+### 3.8 The unit of inference
+
+Each operation states its independent unit, because trials, runs and subjects are not
+interchangeable and the choice changes what is being estimated.
+
+| Operation | Independent unit | Estimand |
+|---|---|---|
+| Outer folds | subject (LOSO) or run (within-subject) | generalization to an unseen subject, or to an unseen run of a seen subject |
+| Subject-level r, balanced accuracy | subject | cohort mean of a within-subject effect, each subject weighted equally |
+| Bootstrap CI | subject | uncertainty of that cohort mean across subjects |
+| Sign-flip test | subject | paired difference between two models across subjects |
+| Permutation null | as the scheme declares: trials within subject, runs, or shifts within run | the label-exchangeability hypothesis that scheme encodes |
+| Conformal intervals | trial | marginal coverage over trials, not per-subject and not for an unseen subject |
+
+The conformal row is the one most easily over-read; see section 3.9.
+
+### 3.9 What conformal intervals do and do not promise
+
+Split conformal, CV+ and conformalized quantile regression all rest on exchangeability.
+Trials nested within a participant are not exchangeable with trials from a participant
+the model has never seen, so a 90% interval computed over pooled trials gives **marginal
+coverage across trials**. It does not promise 90% coverage within each subject, and it
+does not promise 90% coverage for a new subject.
+
+`prediction_intervals` therefore names its `coverage` as marginal in its return type and
+in the documentation, and accepts `groups` so the calibration split can be made
+subject-disjoint when the intended estimand is a new subject. Neither the API nor the
+docs claim subject-conditional coverage, because none of the three methods delivers it
+without adaptation.
 
 ---
 
@@ -281,6 +377,18 @@ From `orchestration.py`: `_target_covariate_aliases`,
 `design.py` owns the feature axis — which columns are in `X`, globally through `[select]`
 and per fold through harmonization.
 
+Two requirements the upstream loader met implicitly and this module must meet explicitly:
+
+- **The join is on the composite `RowId`**, `(recording, epoch, event)` (`table.py:18`),
+  validated one-to-one. An epoch index is unique only within a recording, so joining on it
+  alone silently mismatches rows across subjects.
+  `load_active_matrix_preserves_canonical_trial_ids` is the upstream constraint.
+- **`Design` carries covariate identity, not just a count.** Column names, the row ids in
+  order, and explicit index arrays separating feature columns from covariate columns. The
+  upstream `n_covariates: int` convention — covariates are the last *n* columns — is what
+  forces `_variance_param_prefix` to recompute positions in `estimators.py`, and it makes
+  the leakage checks and the nuisance design harder to verify than they need to be.
+
 ### `model/execution.py` — from `cv.py`
 
 `set_random_seeds`, `determine_inner_n_jobs`, `should_parallelize_folds`,
@@ -295,8 +403,15 @@ From `orchestration.py`: `_fit_tuned_regression_estimator`, `_fit_within_subject
 `_fit_estimator_with_optional_groups`, `_fit_subject_weighted_inner_cv_estimator`,
 `_InnerSplitData`.
 
-`_fit_default_pipeline` crosses as an explicit, named path. It must never be reachable as
-a silent fallback from a failed fit; see safeguard 6.
+`tune` takes an explicit `InnerSplit` (section 3.7) and the array to group by, not "the
+groups". A within-subject fold trains on one subject, so subject-grouped inner splitting
+is impossible there; upstream groups on runs (`orchestration.py:868`), and classification
+additionally stratifies.
+
+`_fit_default_pipeline` crosses as an explicit, named path, reachable when a fold has no
+run structure to split on. It must never be reachable as a fallback from a *failed* inner
+search; see safeguard 6. Upstream preserves exactly that distinction — absent runs return
+the default fit, a failed `GridSearchCV` raises — and the port keeps it.
 
 ### `model/crossfit.py` — from `cv.py`, `classification.py`, `orchestration.py`
 
@@ -327,10 +442,18 @@ So `crossfit.py` extracts it. The four paths differ on two axes only:
 - **Task** — which estimator is tuned, whether prediction is `predict` or
   `predict_proba`, and which metric set is computed afterwards.
 
-Neither axis needs a branch inside the loop. One outer loop takes a fold iterator, a
-tuner and a predictor; task-specific metrics are computed after it returns. Four inlined
-loops become one parameterized loop, and the leave-one-out versus within-subject
-distinction returns to `splits.py` where it belongs.
+The fold-source axis needs no branch at all: `cross_fit` selects the inner grouping array
+once, before the loop, from the `InnerSplit` it is given.
+
+The task axis is not merely a flag. Classification needs integer labels rather than
+floats, a stratified inner splitter, a one-class training-fold check and a probability
+column whose ordering is defined; a `predict_proba: bool` expresses none of that. So the
+module exposes **two thin wrappers over one private loop** — `cross_fit_regression` and
+`cross_fit_classification` — each with its own target type and result record. The engine
+is shared; the statistical contract is not blurred.
+
+Four inlined loops become one parameterized loop plus two typed entry points, and the
+leave-one-out versus within-subject distinction returns to `splits.py` where it belongs.
 
 That is a genuine improvement and it is also a redesign. Redesign during migration is how
 behaviour silently changes, so it carries the strictest verification burden in section
@@ -397,9 +520,13 @@ the same section. These seven are what the 123 validity tests encode.
    computed per subject and aggregated with equal subject weight — never pooled across
    trials, and with no fallback to a pooled AUC when the subject-level computation fails.
 
-5. **Honest nulls.** A permutation must actually change labels. The circular-shift set is
-   the full group under composition, not a filtered subset. A scheme mismatch raises
-   rather than silently downgrading. An incomplete permutation run fails a configured
+5. **Honest nulls.** Every sampled permutation enters the null. The admissible
+   transformations are fixed by the study design before the permuted values are looked
+   at, so the circular-shift set is the full group under composition and no permutation
+   is dropped for having changed too little — that fraction is reported as a diagnostic
+   (section 3.6). A scheme mismatch raises rather than silently downgrading. A scheme
+   under which nothing ever changes raises, because it cannot test the hypothesis. An
+   incomplete permutation run — folds that *failed to fit* — fails a configured
    completion threshold instead of being averaged over.
 
 6. **Failures surface.** A fold that fails to fit raises; it does not fall back to a
@@ -407,6 +534,23 @@ the same section. These seven are what the 123 validity tests encode.
 
 7. **Non-finite guards.** Grid search rejects non-finite scores. A single-class training
    fold is an error, not a silent NaN.
+
+### What safeguard 2 does and does not cover
+
+Scaling, imputation, PCA, variance and missingness feature selection are steps of the
+scikit-learn `Pipeline` that `GridSearchCV` tunes, so they are refitted inside **every
+inner split** automatically (`pipelines.py:32`). Nothing extra is required for them.
+
+Two operations sit outside the pipeline and are fitted once per **outer** training fold:
+feature harmonization and target residualization. Both take explicit `train`/`test`
+indices and never see the outer test fold, so the reported test estimate is clean. What
+they do touch is the inner-validation portion of the outer-training set, which makes
+*hyperparameter selection* mildly optimistic — not the headline score.
+
+This is upstream's behaviour and the port keeps it, so that it stays inside the
+equivalence net. Moving them inside the inner split is a real improvement and a real
+behaviour change; it is section 12's business, not this migration's. The limitation is
+stated here so that a reader does not assume a tighter guarantee than the code makes.
 
 ### A distinction to preserve in safeguard 6
 
@@ -533,6 +677,17 @@ most of the migration: `make_fixtures.py` imports the pipeline's functions and c
 directly on synthetic arrays — no BIDS tree, no patching, no mounted drive. Seeds are set
 per fold, so the deterministic paths must match exactly.
 
+Fixtures are stored with `allow_pickle=False`, as `tests/test_equivalence.py:43` already
+requires. Ragged per-fold index arrays are stored flattened with an offsets array rather
+than as object arrays, so no pickling is needed.
+
+**Two paths are excluded from equivalence, both deliberately** (section 3.6): fold-local
+IAF, which is deferred, and the permutation null, whose effectiveness filter is replaced.
+Excluded means the fixture is not generated and the difference is expected, not that the
+behaviour is unverified — the null path is covered by the independent tests in section
+8.1, which is the stronger check for the one component where the reference is known to be
+wrong.
+
 ### 8.3 Equivalence for the within-subject path
 
 The four `run_*_ml` shells call `load_active_matrix` themselves and cannot be driven on
@@ -606,6 +761,9 @@ Every gate is measured against this.
 | SHAP's optional dependency leaks into core tests | Low | `importance` extra, skipped like the existing microstate tests |
 | Recipe grammar drifts from `FeatureMeta` | Low | `[select]` keys are field names; a test asserts every key resolves to a real field |
 | Equivalence fixtures silently stop being regenerated | Low | Fixtures carry the pipeline commit hash; the test reports it on failure |
+| The corrected null is assumed verified because the rest of the port is | Medium | The null path has no equivalence fixture by construction; it is covered only by independent tests, and section 8.2 says so explicitly |
+| Inner-split grouping is inferred rather than declared, and a within-subject fold silently subject-groups | Medium | `InnerSplit` is required, not defaulted; an incoherent fold-source/grouping pair is refused before the loop |
+| Reproducing the reference reproduces its mistakes | Medium | Already realized once, in the permutation filter. Every module carries independent constraint tests alongside its fixtures; equivalence is a check, not the specification |
 
 ### The honest summary
 
@@ -614,6 +772,13 @@ fixtures are direct, and the work is mostly deleting configuration plumbing. The
 within-subject path is a genuine rewrite of 1,231 lines that have no extractable core,
 and that is where this migration can go wrong. Everything in the sequencing and
 verification above is arranged around that single fact.
+
+The permutation null is a second, smaller risk of a different kind. It is the one place
+the port deliberately diverges from the reference, so equivalence cannot be its safety
+net, and its independent tests have to carry the whole weight. That divergence is a
+correction rather than a regression — the reference conditions its null on the permuted
+values — but a correction with no fixture behind it deserves the same scrutiny as an
+extraction.
 
 ---
 
@@ -639,6 +804,12 @@ decided before implementation starts rather than discovered at the end.
 ## 12. Open questions
 
 - Which bridge in section 11, and whether it is in scope for this migration.
+- Whether feature harmonization and target residualization should move inside the inner
+  split (section 5). Doing so tightens hyperparameter selection and changes numbers, so it
+  wants its own before/after measurement once this migration's equivalence net is in place.
+- Whether any conformal variant should offer subject-conditional coverage (section 3.9).
+  None of the three ported methods does, and claiming it would need an adapted method
+  rather than a parameter.
 - Whether `time_generalization.py` and `cnn.py` should follow, and whether the CNN belongs
   in `eegfeat` at all rather than in a package depending on it.
 - Whether EEG_fMRI_Pipeline should eventually import `eegfeat` rather than keeping its own
