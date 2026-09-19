@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="docs/_static/favicon.svg" width="56" height="56" alt="eegfeat logo" />
-</p>
-
-# eegfeat
+# <img src="docs/_static/favicon.svg" width="32" height="32" valign="middle" alt="EEGFeat logo" /> EEGFeat
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue.svg)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
