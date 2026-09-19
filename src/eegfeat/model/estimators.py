@@ -41,7 +41,7 @@ def _append_classification_resampler(
         return
     if resampler_choice == "undersample":
         try:
-            from imblearn.under_sampling import (  # type: ignore[import-untyped]
+            from imblearn.under_sampling import (  # type: ignore
                 RandomUnderSampler,
             )
         except ImportError as err:
@@ -50,7 +50,7 @@ def _append_classification_resampler(
         steps.append(("resampler", RandomUnderSampler(random_state=resampler_seed)))
     elif resampler_choice == "smote":
         try:
-            from imblearn.over_sampling import SMOTE  # type: ignore[import-untyped]
+            from imblearn.over_sampling import SMOTE  # type: ignore
         except ImportError as err:
             msg = "imblearn is required for resampling 'smote'."
             raise ImportError(msg) from err
@@ -82,7 +82,7 @@ def _get_lr_kwargs(penalty: str, l1_ratio: float | None = None) -> dict[str, Any
 def _assemble_pipeline(steps: list[tuple[str, object]], resampler: str) -> Pipeline:
     if resampler.strip().lower() != "none":
         try:
-            from imblearn.pipeline import (  # type: ignore[import-untyped]
+            from imblearn.pipeline import (  # type: ignore
                 Pipeline as ImbPipeline,
             )
 

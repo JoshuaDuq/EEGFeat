@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from heapq import heapify, heappop, heappush
 from typing import Any
 
 import numpy as np
@@ -364,50 +365,119 @@ def _runs(states: npt.NDArray[np.int_]) -> list[tuple[int, int, int]]:
     return out
 
 
+@dataclass
+class _Run:
+    start: int
+    stop: int
+    state: int
+    previous: int | None
+    following: int | None
+    version: int = 0
+    active: bool = True
+
+    @property
+    def length(self) -> int:
+        return self.stop - self.start
+
+
 def _smooth(states: npt.NDArray[np.int_], min_samples: int) -> npt.NDArray[np.int_]:
     if states.size == 0 or min_samples <= 1:
         return states
-    out = states.copy()
-    while True:
-        runs = _runs(out)
-        short_positions = [
-            position
-            for position, (start, stop, _state) in enumerate(runs)
-            if stop - start < min_samples
-        ]
-        if not short_positions:
-            return out
-        if len(runs) == 1:
-            return out
 
-        position = min(
-            short_positions,
-            key=lambda index: runs[index][1] - runs[index][0],
+    runs = _runs(states)
+    nodes = [
+        _Run(
+            start=start,
+            stop=stop,
+            state=state,
+            previous=index - 1 if index > 0 else None,
+            following=index + 1 if index < len(runs) - 1 else None,
         )
-        start, stop, _state = runs[position]
-        previous = runs[position - 1] if position > 0 else None
-        following = runs[position + 1] if position < len(runs) - 1 else None
+        for index, (start, stop, state) in enumerate(runs)
+    ]
+    queue = [
+        (run.length, run.start, index, run.version)
+        for index, run in enumerate(nodes)
+        if run.length < min_samples
+    ]
+    heapify(queue)
+    out = states.copy()
+
+    def changed(index: int) -> None:
+        run = nodes[index]
+        run.version += 1
+        if run.active and run.length < min_samples:
+            heappush(queue, (run.length, run.start, index, run.version))
+
+    while queue:
+        _length, _start, index, version = heappop(queue)
+        run = nodes[index]
+        if not run.active or run.version != version:
+            continue
+
+        previous_index = run.previous
+        following_index = run.following
+        if previous_index is None and following_index is None:
+            return out
+        previous = nodes[previous_index] if previous_index is not None else None
+        following = nodes[following_index] if following_index is not None else None
+
         if previous is None:
-            out[start:stop] = following[2]  # type: ignore[index]
+            assert following is not None and following_index is not None
+            out[run.start : run.stop] = following.state
+            following.start = run.start
+            following.previous = None
+            run.active = False
+            changed(following_index)
             continue
         if following is None:
-            out[start:stop] = previous[2]
+            assert previous_index is not None
+            out[run.start : run.stop] = previous.state
+            previous.stop = run.stop
+            previous.following = None
+            run.active = False
+            changed(previous_index)
             continue
-        if previous[2] == following[2]:
-            out[start:stop] = previous[2]
+        if previous.state == following.state:
+            assert previous_index is not None
+            out[run.start : run.stop] = previous.state
+            previous.stop = following.stop
+            previous.following = following.following
+            if following.following is not None:
+                nodes[following.following].previous = previous_index
+            run.active = False
+            following.active = False
+            changed(previous_index)
             continue
-        previous_length = previous[1] - previous[0]
-        following_length = following[1] - following[0]
-        if previous_length > following_length:
-            out[start:stop] = previous[2]
-        elif following_length > previous_length:
-            out[start:stop] = following[2]
+        if previous.length > following.length:
+            assert previous_index is not None
+            out[run.start : run.stop] = previous.state
+            previous.stop = run.stop
+            previous.following = following_index
+            following.previous = previous_index
+            run.active = False
+            changed(previous_index)
+        elif following.length > previous.length:
+            assert following_index is not None
+            out[run.start : run.stop] = following.state
+            following.start = run.start
+            following.previous = previous_index
+            previous.following = following_index
+            run.active = False
+            changed(following_index)
         else:
-            # A tie splits the segment between its neighbours rather than
-            # arbitrarily favouring one.
-            middle = start + (stop - start) // 2
-            out[start:middle] = previous[2]
-            out[middle:stop] = following[2]
+            assert previous_index is not None and following_index is not None
+            middle = run.start + run.length // 2
+            out[run.start : middle] = previous.state
+            out[middle : run.stop] = following.state
+            previous.stop = middle
+            previous.following = following_index
+            following.start = middle
+            following.previous = previous_index
+            run.active = False
+            changed(previous_index)
+            changed(following_index)
+    return out
 
 
 def _coverage(states: npt.NDArray[np.int_], n_states: int, sfreq: float) -> npt.NDArray[np.float64]:
