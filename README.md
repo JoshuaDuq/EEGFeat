@@ -1,12 +1,18 @@
+<p align="center">
+  <img src="docs/_static/favicon.svg" width="56" height="56" alt="eegfeat logo" />
+</p>
+
 # eegfeat
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue.svg)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![MNE-Python ≥ 1.8](https://img.shields.io/badge/mne--python-≥1.8-blue.svg)](https://mne.tools/stable/)
 [![Typing: Strict](https://img.shields.io/badge/typing-mypy%20strict-blue.svg)](https://mypy.readthedocs.io/)
-[![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](docs/)
+[![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](https://joshuaduq.github.io/eegfeat/)
 
 Labelled spectral, temporal, oscillatory burst, connectivity, complexity, and microstate feature extraction for MNE-Python objects, with group-disjoint predictive modeling and statistical inference (`eegfeat.model`).
+
+The [Sphinx documentation](https://joshuaduq.github.io/eegfeat/) is the canonical guide for installation, configuration, methods, command references, and output formats.
 
 `eegfeat` maps precomputed MNE structures (`Spectrum`, `EpochsTFR`, and `Epochs`) to self-describing `FeatureTable` outputs: numeric value matrices paired with column-level `FeatureMeta` records (measure, numerical window bounds, frequency bands or band pairs, channel/ROI or node pair, normalization, units, computation parameters, and stable hashes) and parallel finite-data `coverage` matrices.
 
@@ -429,7 +435,7 @@ pytest
 mypy src
 ```
 
-Comprehensive documentation is available under `docs/` and built via Sphinx:
+Comprehensive documentation is hosted online at **[https://joshuaduq.github.io/eegfeat/](https://joshuaduq.github.io/eegfeat/)** and available under `docs/`:
 - **[Quick Start](docs/quickstart.rst)**: Walkthroughs and end-to-end extraction recipes.
 - **[Methods](docs/methods.rst)**: Mathematical formulations and algorithm specifications.
 - **[Modeling](docs/modeling.rst)**: Per-epoch design matrices, leakage-safe cross-fitting,

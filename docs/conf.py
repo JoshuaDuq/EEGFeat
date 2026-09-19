@@ -53,6 +53,7 @@ napoleon_preprocess_types = True
 # ---------------------------------------------------------------------------
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
+autodoc_mock_imports = ["mne_connectivity", "specparam", "shap"]
 
 # ---------------------------------------------------------------------------
 # MyST (Markdown support)
@@ -87,6 +88,7 @@ copybutton_prompt_text = r"\$ |>>> |\.\.\. "
 copybutton_prompt_is_regexp = True
 copybutton_line_continuation_character = "\\"
 html_favicon = "_static/favicon.svg"
+html_logo = "_static/favicon.svg"
 
 html_theme_options = {
     "dark_css_variables": {

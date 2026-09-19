@@ -235,6 +235,19 @@ em, i {
   margin-bottom: 0.5rem;
 }
 
+.sidebar-logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
 .sidebar-brand-text {
   font-weight: 600;
   font-size: 0.875rem;
