@@ -326,7 +326,7 @@ def permutation_test(
 
     for b, y_perm in enumerate(permuted_targets):
         try:
-            predictions = fit_targets(y_perm, seed + b)
+            predictions = fit_targets(y_perm, seed)
             score = _prediction_statistic(
                 predictions,
                 groups_arr,

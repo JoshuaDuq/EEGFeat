@@ -49,7 +49,7 @@ def run_folds(
         if should_parallelize(outer_n_jobs, len(folds)):
             from joblib import Parallel, delayed
 
-            results = Parallel(n_jobs=outer_n_jobs, prefer="threads")(
+            results = Parallel(n_jobs=outer_n_jobs, prefer="processes")(
                 delayed(work)(fold) for fold in folds
             )
             return list(results)
