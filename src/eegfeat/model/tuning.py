@@ -61,7 +61,7 @@ def tune(
     pipeline: Pipeline,
     grid: Mapping[str, Sequence[object]],
     X_train: npt.NDArray[np.float64],
-    y_train: npt.NDArray[np.float64],
+    y_train: npt.NDArray[np.float64] | npt.NDArray[np.intp],
     inner_groups_train: npt.NDArray[np.object_],
     *,
     split: InnerSplit,
@@ -111,7 +111,7 @@ def tune(
 def fit_untuned(
     pipeline: Pipeline,
     X: npt.NDArray[np.float64],
-    y: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64] | npt.NDArray[np.intp],
     *,
     seed: int,
     fold: int = 0,

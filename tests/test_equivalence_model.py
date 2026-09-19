@@ -4,10 +4,10 @@ import pathlib
 
 import numpy as np
 import pytest
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.crossfit import cross_fit_regression
+from eegfeat.model.crossfit import cross_fit_classification, cross_fit_regression
 from eegfeat.model.scoring import scoring_dict
 from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
 
@@ -87,4 +87,31 @@ def test_within_subject_predictions_match_the_reference_pipeline(
     )
     y_pred = np.concatenate([r.y_pred for r in results])
     np.testing.assert_allclose(y_pred, reference["ws_y_pred"], rtol=1e-5, atol=1e-7)
+
+
+def test_nested_loso_classification_matches_reference(
+    reference: dict[str, np.ndarray],
+) -> None:
+    clf_X = reference["clf_X"]
+    clf_y = reference["clf_y"]
+    clf_groups = reference["clf_groups"].astype(object)
+    pipe = Pipeline([("classifier", LogisticRegression(max_iter=500, random_state=42))])
+    param_grid = {"classifier__C": [0.1, 1.0]}
+    folds = loso_folds(clf_groups)
+
+    results = cross_fit_classification(
+        folds,
+        clf_X,
+        clf_y,
+        clf_groups,
+        pipe,
+        param_grid,
+        inner=InnerSplit(grouping="subject", stratified=True, n_splits=2),
+        seed=42,
+    )
+    y_pred = np.concatenate([r.y_pred for r in results])
+    y_prob = np.concatenate([r.y_prob for r in results if r.y_prob is not None])
+    np.testing.assert_array_equal(y_pred, reference["clf_y_pred"])
+    np.testing.assert_allclose(y_prob, reference["clf_y_prob"], rtol=1e-5, atol=1e-7)
+
 

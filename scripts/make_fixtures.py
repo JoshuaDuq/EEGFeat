@@ -319,6 +319,28 @@ def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
         ws_y_pred_list.append(gs.best_estimator_.predict(ws_X[te_idx]))
     ws_y_pred = np.concatenate(ws_y_pred_list)
 
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import LeaveOneGroupOut, StratifiedGroupKFold
+
+    clf_subs = [f"sub-{i:04d}" for i in range(4)]
+    clf_groups = np.repeat(clf_subs, 6).astype(object)
+    clf_y = np.tile([0, 1], clf_groups.size // 2).astype(np.intp)
+    clf_X = rng.normal(size=(clf_groups.size, 3)) + clf_y[:, None]
+    clf_grid = {"classifier__C": [0.1, 1.0]}
+
+    logo = LeaveOneGroupOut()
+    clf_preds: list[np.ndarray] = []
+    clf_probs: list[np.ndarray] = []
+    for fold, (tr_idx, te_idx) in enumerate(logo.split(clf_X, clf_y, clf_groups), start=1):
+        cv_inner = StratifiedGroupKFold(n_splits=2)
+        pipe_fold = Pipeline(
+            [("classifier", LogisticRegression(max_iter=500, random_state=42 + fold))]
+        )
+        gs_clf = GridSearchCV(pipe_fold, clf_grid, cv=cv_inner, refit=True)
+        gs_clf.fit(clf_X[tr_idx], clf_y[tr_idx], groups=clf_groups[tr_idx])
+        clf_preds.append(gs_clf.predict(clf_X[te_idx]))
+        clf_probs.append(gs_clf.predict_proba(clf_X[te_idx]))
+
     return {
         "X": X,
         "y": y,
@@ -334,6 +356,11 @@ def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
         "ws_groups": ws_groups.astype("U16"),
         "ws_runs": ws_runs_arr.astype("U16"),
         "ws_y_pred": ws_y_pred,
+        "clf_X": clf_X,
+        "clf_y": clf_y,
+        "clf_groups": clf_groups.astype("U16"),
+        "clf_y_pred": np.concatenate(clf_preds),
+        "clf_y_prob": np.concatenate(clf_probs),
         "reference_commit": np.array(_reference_commit()),
     }
 
