@@ -157,6 +157,86 @@ def _fit_fold(
     )
 
 
+def _validate_outer_folds(
+    folds: Sequence[Fold],
+    n_rows: int,
+    groups: npt.NDArray[np.object_],
+    runs: npt.NDArray[np.object_] | None,
+) -> None:
+    if not folds:
+        raise ValueError("At least one outer fold is required.")
+
+    if len(groups) != n_rows:
+        raise ValueError("groups length does not match X.")
+
+    if runs is not None and len(runs) != n_rows:
+        raise ValueError("runs length does not match X.")
+
+    tested: set[int] = set()
+
+    for fold in folds:
+        tr = np.asarray(fold.train)
+        te = np.asarray(fold.test)
+
+        for label, idx in (("train", tr), ("test", te)):
+            if idx.ndim != 1 or idx.size == 0:
+                raise ValueError(
+                    f"Fold {fold.index}: {label} must be a nonempty 1-D array."
+                )
+            if not np.issubdtype(idx.dtype, np.integer):
+                raise ValueError(
+                    f"Fold {fold.index}: {label} indices must be integers."
+                )
+            if np.any(idx < 0) or np.any(idx >= n_rows):
+                raise ValueError(
+                    f"Fold {fold.index}: {label} contains out-of-range indices."
+                )
+            if np.unique(idx).size != idx.size:
+                raise ValueError(
+                    f"Fold {fold.index}: duplicate {label} indices."
+                )
+
+        if np.intersect1d(tr, te).size:
+            raise ValueError(f"Fold {fold.index}: train/test overlap.")
+
+        duplicated_tests = tested.intersection(map(int, te))
+        if duplicated_tests:
+            raise ValueError(
+                f"Fold {fold.index}: observations tested in multiple folds."
+            )
+        tested.update(map(int, te))
+
+        train_subjects = set(groups[tr])
+        test_subjects = set(groups[te])
+
+        if fold.subject is None:
+            # Convention used by loso_folds().
+            if train_subjects & test_subjects:
+                raise ValueError(
+                    f"Fold {fold.index}: subject overlap in a LOSO fold."
+                )
+        else:
+            expected = {fold.subject}
+            if {str(v) for v in train_subjects} != expected:
+                raise ValueError(
+                    f"Fold {fold.index}: training subjects do not match "
+                    f"{fold.subject!r}."
+                )
+            if {str(v) for v in test_subjects} != expected:
+                raise ValueError(
+                    f"Fold {fold.index}: test subjects do not match "
+                    f"{fold.subject!r}."
+                )
+            if runs is None:
+                raise ValueError(
+                    f"Fold {fold.index}: within-subject folds require runs."
+                )
+            if set(runs[tr]) & set(runs[te]):
+                raise ValueError(
+                    f"Fold {fold.index}: train/test run overlap."
+                )
+
+
 def _cross_fit_engine(
     task: str,
     folds: Sequence[Fold],
@@ -176,6 +256,11 @@ def _cross_fit_engine(
     scoring: object = None,
     refit: str | bool | None = None,
 ) -> list[FoldPrediction] | list[FoldClassification]:
+    _validate_outer_folds(folds, len(X), groups, runs)
+
+    if len(y) != len(X):
+        raise ValueError("y length does not match X.")
+
     inner_groups_all = _validate_and_resolve_inner_groups(folds, inner, groups, runs)
 
     def _execute_fold(f: Fold) -> FoldPrediction | FoldClassification:

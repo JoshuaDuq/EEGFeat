@@ -160,3 +160,26 @@ def test_a_training_subject_above_the_missingness_limit_fails_the_fold(
             inner=BY_SUBJECT,
             seed=0,
         )
+
+
+def test_custom_fold_with_overlap_is_rejected() -> None:
+    from eegfeat.model.splits import Fold
+
+    bad = Fold(
+        index=1,
+        train=np.array([0, 1, 2]),
+        test=np.array([2, 3]),
+    )
+
+    with pytest.raises(ValueError, match="train/test overlap"):
+        cross_fit_regression(
+            [bad],
+            X,
+            Y,
+            GROUPS,
+            PIPE,
+            {},
+            inner=BY_SUBJECT,
+            seed=0,
+        )
+
