@@ -38,7 +38,7 @@ def test_the_calibration_unit_is_recorded_so_coverage_cannot_be_over_read() -> N
     assert prediction_intervals(PIPE, X, y, X[:5], cv_splits=4).calibration_unit == "trial"
     assert (
         prediction_intervals(PIPE, X, y, X[:5], cv_splits=4, groups=groups).calibration_unit
-        == "subject"
+        == "trial"
     )
 
 
@@ -84,7 +84,7 @@ def test_split_conformal_with_groups() -> None:
     y = np.arange(40.0)
     groups = np.repeat(["s1", "s2", "s3", "s4"], 10).astype(object)
     result = prediction_intervals(PIPE, X, y, X[:5], alpha=0.1, method="split", groups=groups)
-    assert result.calibration_unit == "subject"
+    assert result.calibration_unit == "trial"
     assert len(result.lower) == 5
 
 

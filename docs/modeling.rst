@@ -220,10 +220,12 @@ Conformal prediction intervals
 ------------------------------
 
 :func:`eegfeat.model.prediction_intervals` returns lower and upper bounds using ``"split"``,
-``"cv_plus"``, or ``"quantile"`` conformal calibration. With ``groups`` supplied,
-calibration is group-aware and ``PredictionIntervals.calibration_unit`` is ``"subject"``;
-without it, the calibration unit is ``"trial"``. The returned object stores ``lower``,
-``upper``, ``alpha``, and ``method``; it does not contain realized test-set coverage.
+``"cv_plus"``, or ``"quantile"`` conformal calibration. Providing ``groups`` makes the
+model-fitting and calibration splits group-disjoint. Calibration scores are nevertheless
+pooled across trials, so participants with more trials contribute more scores. The
+implementation does not establish a distribution-free coverage guarantee for a new
+participant. The returned object stores ``lower``, ``upper``, ``alpha``, and ``method``;
+it does not contain realized test-set coverage.
 
 .. code-block:: python
 

@@ -281,7 +281,8 @@ def prediction_intervals(
         msg = "Training and test arrays must not be empty."
         raise ValueError(msg)
 
-    cal_unit: Literal["trial", "subject"] = "subject" if groups is not None else "trial"
+    # Scores remain one per trial, even with group-disjoint splits.
+    cal_unit: Literal["trial", "subject"] = "trial"
 
     if method == "split":
         lower, upper = _split_conformal(model, X_tr, y_tr, X_te, alpha, seed, groups)
