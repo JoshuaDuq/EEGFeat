@@ -290,4 +290,3 @@ def test_from_spectrum_accepts_method_in_estimator_parameters() -> None:
     )
     assert spectra.source == "welch"
     assert spectra.computation.method == "welch"
-
