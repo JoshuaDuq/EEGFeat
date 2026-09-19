@@ -192,9 +192,7 @@ def test_permutation_importance_stage_requires_min_valid_fold_fraction() -> None
                 ),
             ],
         ),
-        pytest.raises(
-            ValueError, match="Insufficient successful folds for permutation importance"
-        ),
+        pytest.raises(ValueError, match="Insufficient successful folds for permutation importance"),
     ):
         permutation_importance_over_folds(
             folds,

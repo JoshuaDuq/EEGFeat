@@ -63,9 +63,7 @@ def _subset_classification_metrics(
     prec = float(precision_score(y_true, y_pred, zero_division=0)) if len(y_true) > 0 else np.nan
     rec = float(recall_score(y_true, y_pred, zero_division=0)) if len(y_true) > 0 else np.nan
     b_acc = (
-        float(balanced_accuracy_score(y_true, y_pred))
-        if len(np.unique(y_true)) >= 2
-        else np.nan
+        float(balanced_accuracy_score(y_true, y_pred)) if len(np.unique(y_true)) >= 2 else np.nan
     )
 
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
@@ -206,9 +204,7 @@ def regression_metrics(
 
     if groups is not None:
         groups_arr = np.asarray(groups)[finite]
-        pred_df = pd.DataFrame(
-            {"subject_id": groups_arr, "y_true": yt_f, "y_pred": yp_f}
-        )
+        pred_df = pd.DataFrame({"subject_id": groups_arr, "y_true": yt_f, "y_pred": yp_f})
         subj_r = subject_level_r(pred_df, config=config)
         summary["subject_level_r"] = subj_r.r
         summary["avg_subject_r_fisher_z"] = subj_r.r

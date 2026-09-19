@@ -5,6 +5,7 @@ from eegfeat.microstates import (
     _coverage,
     _duration,
     _occurrence,
+    _runs,
     _smooth,
     _transitions,
     microstate_coverage,
@@ -195,6 +196,21 @@ def test_a_tie_splits_the_run_and_an_odd_sample_goes_to_the_later_state() -> Non
 
 def test_a_short_run_at_the_edge_takes_its_only_neighbour() -> None:
     np.testing.assert_array_equal(_smooth(np.array([1, 0, 0, 0, 0]), 2), [0, 0, 0, 0, 0])
+
+
+def test_consecutive_short_runs_are_absorbed_until_none_is_left() -> None:
+    # Flicker 1 2 1 between a 6-sample state 0 and a 7-sample state 2. A single pass over
+    # the original runs relabels it 0 1 2, leaving a one-sample run of state 1. Absorbing
+    # the shortest run first and re-reading its neighbours after every merge hands all
+    # three samples to state 0, which is each time the longer neighbour (7, 8, then 8 > 7).
+    states = np.array([0] * 6 + [1, 2, 1] + [2] * 7)
+    np.testing.assert_array_equal(_smooth(states, 3), [0] * 9 + [2] * 7)
+
+
+def test_no_run_shorter_than_the_minimum_survives_rapid_flicker() -> None:
+    states = np.random.default_rng(0).integers(0, 4, size=500)
+    lengths = [stop - start for start, stop, _ in _runs(_smooth(states, 10))]
+    assert len(lengths) == 1 or min(lengths) >= 10
 
 
 def test_duration_is_nan_for_an_absent_state_but_occurrence_is_zero() -> None:

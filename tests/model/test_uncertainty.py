@@ -150,4 +150,3 @@ def test_order_stat_quantile_formulas() -> None:
     assert np.isfinite(upper)
     assert np.isfinite(lower)
     assert lower <= upper
-

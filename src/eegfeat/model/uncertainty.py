@@ -288,9 +288,7 @@ def prediction_intervals(
     elif method == "cv_plus":
         lower, upper = _conformal_cv_plus(model, X_tr, y_tr, X_te, alpha, cv_splits, seed, groups)
     else:
-        lower, upper = _conformal_quantile(
-            model, X_tr, y_tr, X_te, alpha, cv_splits, seed, groups
-        )
+        lower, upper = _conformal_quantile(model, X_tr, y_tr, X_te, alpha, cv_splits, seed, groups)
 
     return PredictionIntervals(
         lower=lower,

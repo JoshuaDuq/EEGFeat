@@ -112,4 +112,3 @@ def test_within_subject_classification_raises_when_training_fold_has_one_class()
             seed=0,
             runs=runs,
         )
-

@@ -368,14 +368,25 @@ def _smooth(states: npt.NDArray[np.int_], min_samples: int) -> npt.NDArray[np.in
     if states.size == 0 or min_samples <= 1:
         return states
     out = states.copy()
-    runs = _runs(out)
-    for position, (start, stop, _state) in enumerate(runs):
-        if stop - start >= min_samples:
-            continue
+    while True:
+        runs = _runs(out)
+        short_positions = [
+            position
+            for position, (start, stop, _state) in enumerate(runs)
+            if stop - start < min_samples
+        ]
+        if not short_positions:
+            return out
+        if len(runs) == 1:
+            return out
+
+        position = min(
+            short_positions,
+            key=lambda index: runs[index][1] - runs[index][0],
+        )
+        start, stop, _state = runs[position]
         previous = runs[position - 1] if position > 0 else None
         following = runs[position + 1] if position < len(runs) - 1 else None
-        if previous is None and following is None:
-            continue
         if previous is None:
             out[start:stop] = following[2]  # type: ignore[index]
             continue
@@ -397,7 +408,6 @@ def _smooth(states: npt.NDArray[np.int_], min_samples: int) -> npt.NDArray[np.in
             middle = start + (stop - start) // 2
             out[start:middle] = previous[2]
             out[middle:stop] = following[2]
-    return out
 
 
 def _coverage(states: npt.NDArray[np.int_], n_states: int, sfreq: float) -> npt.NDArray[np.float64]:

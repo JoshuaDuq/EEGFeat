@@ -77,4 +77,3 @@ def alpha_beta_meta() -> tuple[FeatureMeta, FeatureMeta]:
         computation=ComputationSpec.create("band_power", weighting="trapezoid"),
     )
     return (meta_alpha, meta_beta)
-

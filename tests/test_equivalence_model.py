@@ -117,5 +117,3 @@ def test_nested_loso_classification_matches_reference(
     y_prob = np.concatenate([r.y_prob for r in results if r.y_prob is not None])
     np.testing.assert_array_equal(y_pred, reference["clf_y_pred"])
     np.testing.assert_allclose(y_prob[:, 1], reference["clf_y_prob"], rtol=1e-5, atol=1e-7)
-
-

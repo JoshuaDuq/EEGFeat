@@ -209,9 +209,7 @@ def test_read_dataset_stacks_tables_and_restores_aligned_targets(tmp_path) -> No
     )
     paths = [tmp_path / "sub-01_features.tsv", tmp_path / "sub-02_features.tsv"]
     for path, table, ratings in zip(paths, (first, second), ([3, 5, 4], [2, 1, 0]), strict=True):
-        rows = pd.DataFrame(
-            {"event": [event for _, _, event in table.row_ids], "rating": ratings}
-        )
+        rows = pd.DataFrame({"event": [event for _, _, event in table.row_ids], "rating": ratings})
         write_table(table, path, rows=rows)
 
     dataset = io_module.read_dataset(paths)

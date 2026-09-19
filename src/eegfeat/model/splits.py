@@ -160,9 +160,7 @@ def within_subject_folds(
             )
 
         if ordered_runs:
-            num_blocks = np.asarray(
-                pd.to_numeric(subject_blocks, errors="coerce"), dtype=float
-            )
+            num_blocks = np.asarray(pd.to_numeric(subject_blocks, errors="coerce"), dtype=float)
             if not np.all(np.isfinite(num_blocks)):
                 parsed = [parse_run_label_to_int(b) for b in subject_blocks]
                 if all(p is not None for p in parsed):

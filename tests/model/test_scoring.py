@@ -26,9 +26,7 @@ def test_fewer_than_two_finite_pairs_gives_nan() -> None:
 
 
 def test_non_finite_pairs_are_dropped_not_propagated() -> None:
-    r, _ = safe_pearsonr(
-        np.array([1.0, 2.0, 3.0, np.nan]), np.array([2.0, 4.0, 6.0, 1.0])
-    )
+    r, _ = safe_pearsonr(np.array([1.0, 2.0, 3.0, np.nan]), np.array([2.0, 4.0, 6.0, 1.0]))
     assert r == pytest.approx(1.0)
 
 

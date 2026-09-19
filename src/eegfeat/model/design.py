@@ -127,9 +127,7 @@ def build_design(
 
     target_lower = target.strip().lower()
     leaking = [
-        c
-        for c in covariates
-        if str(c).strip().lower() in {target_lower, "outcome", "target"}
+        c for c in covariates if str(c).strip().lower() in {target_lower, "outcome", "target"}
     ]
     if leaking:
         msg = (

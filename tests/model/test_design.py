@@ -163,7 +163,10 @@ def test_missing_covariates_raises_when_strict(
     )
     with pytest.raises(ValueError, match="missing"):
         build_design(
-            alpha_beta_table, targets, target="pain", covariates=["missing_col"],
+            alpha_beta_table,
+            targets,
+            target="pain",
+            covariates=["missing_col"],
             strict_covariates=True,
         )
 
@@ -181,7 +184,10 @@ def test_missing_covariates_dropped_when_not_strict(
         }
     )
     design = build_design(
-        alpha_beta_table, targets, target="pain", covariates=["missing_col"],
+        alpha_beta_table,
+        targets,
+        target="pain",
+        covariates=["missing_col"],
         strict_covariates=False,
     )
     assert design.covariate_columns.size == 0

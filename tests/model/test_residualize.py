@@ -72,7 +72,10 @@ def test_residualize_targets_checks_rank_only_on_training_design() -> None:
     y = np.asarray([0.0, 1.0, 2.0, 3.0, 10.0], dtype=float)
     meta = pd.DataFrame({"nuisance": [0.0, 1.0, 2.0, 3.0, 1.0]})
     y_train, y_test = residualize_targets(
-        y, meta, np.asarray([0, 1, 2, 3], dtype=np.intp), np.asarray([4], dtype=np.intp),
+        y,
+        meta,
+        np.asarray([0, 1, 2, 3], dtype=np.intp),
+        np.asarray([4], dtype=np.intp),
         columns=["nuisance"],
     )
     assert np.allclose(y_train, 0.0)
@@ -83,8 +86,11 @@ def test_missing_column_raises_error() -> None:
     meta = pd.DataFrame({"nuisance": [1.0, 2.0, 3.0]})
     with pytest.raises(ValueError, match="missing"):
         residualize_targets(
-            np.arange(3.0), meta, np.asarray([0, 1], dtype=np.intp),
-            np.asarray([2], dtype=np.intp), columns=["unknown"],
+            np.arange(3.0),
+            meta,
+            np.asarray([0, 1], dtype=np.intp),
+            np.asarray([2], dtype=np.intp),
+            columns=["unknown"],
         )
 
 

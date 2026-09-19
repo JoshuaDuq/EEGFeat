@@ -38,9 +38,7 @@ class AggregationConfig:
                 f"ci_method must be 'fixed_effects' or 'bootstrap', got {self.ci_method!r}"
             )
         if self.bootstrap_iterations <= 0:
-            raise ValueError(
-                f"bootstrap_iterations must be > 0, got {self.bootstrap_iterations}"
-            )
+            raise ValueError(f"bootstrap_iterations must be > 0, got {self.bootstrap_iterations}")
 
 
 _DEFAULT_CONFIG = AggregationConfig()

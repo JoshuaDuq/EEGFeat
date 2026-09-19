@@ -188,9 +188,7 @@ def _read_targets(
     frame = pd.read_csv(source, sep="\t", na_values=[_NA], keep_default_na=False)
     if _EPOCH_KEY not in frame.columns:
         raise ValueError(f"{source.name} lacks the epoch row key its sidecar describes.")
-    missing_descriptors = [
-        column for column in descriptor_columns if column not in frame.columns
-    ]
+    missing_descriptors = [column for column in descriptor_columns if column not in frame.columns]
     if missing_descriptors:
         raise ValueError(
             f"{source.name} lacks descriptor columns its sidecar describes: "
@@ -201,9 +199,7 @@ def _read_targets(
     serialized_epochs = pd.to_numeric(frame[_EPOCH_KEY], errors="raise").to_numpy()
     epochs_are_integral = np.equal(serialized_epochs, np.floor(serialized_epochs))
     canonical_epochs = identifiers[_EPOCH_KEY].to_numpy()
-    if not np.all(epochs_are_integral) or not np.array_equal(
-        serialized_epochs, canonical_epochs
-    ):
+    if not np.all(epochs_are_integral) or not np.array_equal(serialized_epochs, canonical_epochs):
         raise ValueError(f"{source.name} epoch row key disagrees with canonical row_ids.")
 
     descriptors = frame[descriptor_columns].copy()

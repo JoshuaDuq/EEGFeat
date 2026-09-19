@@ -18,4 +18,3 @@ def require_shap() -> None:
             "SHAP is required for SHAP-based feature importance. "
             "Install it with: pip install shap"
         )
-
