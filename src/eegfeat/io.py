@@ -34,6 +34,33 @@ _NA = "n/a"
 
 _EPOCH_KEY = "epoch"
 _GROUP_KEY = "group"
+_ROW_UID = "__eegfeat_row_id"
+
+
+def _row_uids(
+    row_ids: Sequence[Sequence[object]] | None,
+    row_labels: Sequence[str] | None,
+    n_rows: int,
+) -> list[str]:
+    if row_ids is not None:
+        return [
+            json.dumps(
+                [str(recording), int(cast(Any, epoch)), str(event)],
+                separators=(",", ":"),
+            )
+            for recording, epoch, event in row_ids
+        ]
+
+    if row_labels is not None:
+        return [
+            json.dumps(["group", str(label)], separators=(",", ":"))
+            for label in row_labels
+        ]
+
+    return [
+        json.dumps(["epoch", i], separators=(",", ":"))
+        for i in range(n_rows)
+    ]
 
 
 @dataclass(frozen=True)
@@ -82,17 +109,28 @@ def write_table(
     key, key_values = _row_key(table)
     descriptors = _descriptors(rows, table, key)
     names = table.names
+    uid_frame = pd.DataFrame({
+        _ROW_UID: _row_uids(
+            table.row_ids, table.row_labels, table.n_rows
+        )
+    })
 
     values_frame = pd.concat(
         [
             pd.DataFrame({key: key_values}),
             descriptors,
+            uid_frame,
             pd.DataFrame(table.values, columns=names),
         ],
         axis=1,
     )
     coverage_frame = pd.concat(
-        [pd.DataFrame({key: key_values}), pd.DataFrame(table.coverage, columns=names)], axis=1
+        [
+            pd.DataFrame({key: key_values}),
+            uid_frame,
+            pd.DataFrame(table.coverage, columns=names),
+        ],
+        axis=1,
     )
 
     coverage_path = target.with_name(f"{target.stem}_coverage.tsv")
@@ -127,8 +165,23 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
     meta = tuple(_meta_from_record(record) for record in sidecar["columns"])
     names = [m.name for m in meta]
 
-    values = _read_matrix(source, names)
-    coverage = _read_matrix(source.with_name(sidecar["coverage"]), names)
+    if "n_rows" not in sidecar:
+        raise ValueError(
+            "Legacy feature bundle has no row-identity manifest; regenerate it."
+        )
+
+    expected_uids = _row_uids(
+        sidecar["row_ids"],
+        sidecar["row_labels"],
+        int(sidecar["n_rows"]),
+    )
+
+    values = _read_matrix(source, names, expected_uids)
+    coverage = _read_matrix(
+        source.with_name(sidecar["coverage"]),
+        names,
+        expected_uids,
+    )
     column_index = {name: i for i, name in enumerate(names)}
     flags: dict[str, npt.NDArray[np.bool_]] = {}
     for key, cells in sidecar["flags"].items():
@@ -231,7 +284,7 @@ def _descriptors(rows: pd.DataFrame | None, table: FeatureTable, key: str) -> pd
         return pd.DataFrame(index=range(table.n_rows))
     if len(rows) != table.n_rows:
         raise ValueError(f"rows has {len(rows)} entries but the table has {table.n_rows} rows.")
-    reserved = {key, *table.names}
+    reserved = {key, _ROW_UID, *table.names}
     clashes = sorted(str(column) for column in rows.columns if column in reserved)
     if clashes:
         raise ValueError(
@@ -260,6 +313,7 @@ def _sidecar(
     }
     sidecar: dict[str, Any] = {
         "eegfeat_version": __version__,
+        "n_rows": table.n_rows,
         "rows": "epochs" if table.row_labels is None else "groups",
         "row_labels": None if table.row_labels is None else list(table.row_labels),
         "row_ids": None if table.row_ids is None else list(table.row_ids),
@@ -350,12 +404,41 @@ def _band_from_record(record: Mapping[str, Any] | None) -> Band | None:
     return Band(str(record["name"]), float(record["fmin"]), float(record["fmax"]))
 
 
-def _read_matrix(path: Path, names: list[str]) -> npt.NDArray[np.float64]:
-    frame = pd.read_csv(path, sep="\t", na_values=[_NA], keep_default_na=False)
+def _read_matrix(
+    path: Path,
+    names: list[str],
+    expected_uids: Sequence[str],
+) -> npt.NDArray[np.float64]:
+    frame = pd.read_csv(
+        path,
+        sep="\t",
+        na_values=[_NA],
+        keep_default_na=False,
+    )
+
     missing = [name for name in names if name not in frame.columns]
     if missing:
-        raise ValueError(f"{path.name} lacks columns its sidecar describes: {missing}")
-    return np.asarray(frame[names].to_numpy(dtype=float), dtype=np.float64)
+        raise ValueError(
+            f"{path.name} lacks columns its sidecar describes: {missing}"
+        )
+
+    if _ROW_UID not in frame.columns:
+        raise ValueError(
+            f"{path.name} has no {_ROW_UID} column; "
+            "regenerate this legacy feature bundle."
+        )
+
+    actual_uids = frame[_ROW_UID].astype(str).tolist()
+    if actual_uids != list(expected_uids):
+        raise ValueError(
+            f"{path.name}: row identities or row order disagree "
+            "with the JSON sidecar."
+        )
+
+    return np.asarray(
+        frame[names].to_numpy(dtype=float),
+        dtype=np.float64,
+    )
 
 
 def _write_tsv(frame: pd.DataFrame, path: Path) -> None:
