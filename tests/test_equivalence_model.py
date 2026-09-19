@@ -4,8 +4,12 @@ import pathlib
 
 import numpy as np
 import pytest
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
 
-from eegfeat.model.splits import loso_folds
+from eegfeat.model.crossfit import cross_fit_regression
+from eegfeat.model.scoring import scoring_dict
+from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "model_reference.npz"
 
@@ -29,3 +33,58 @@ def test_loso_folds_match_the_reference_pipeline(reference: dict[str, np.ndarray
     for fold, expected_train, expected_test in zip(folds, train, test, strict=True):
         np.testing.assert_array_equal(fold.train, expected_train)
         np.testing.assert_array_equal(fold.test, expected_test)
+
+
+def test_nested_loso_predictions_match_the_reference_pipeline(
+    reference: dict[str, np.ndarray],
+) -> None:
+    X = reference["X"]
+    y = reference["y"]
+    groups = reference["groups"].astype(object)
+    pipe = Pipeline([("regressor", Ridge())])
+    param_grid = {"regressor__alpha": [0.1, 1.0, 10.0]}
+    folds = loso_folds(groups)
+
+    results = cross_fit_regression(
+        folds,
+        X,
+        y,
+        groups,
+        pipe,
+        param_grid,
+        inner=InnerSplit(grouping="subject", n_splits=3),
+        seed=42,
+        scoring=scoring_dict(),
+        refit="neg_mse",
+    )
+    y_pred = np.concatenate([r.y_pred for r in results])
+    np.testing.assert_allclose(y_pred, reference["loso_y_pred"], rtol=1e-5, atol=1e-7)
+
+
+def test_within_subject_predictions_match_the_reference_pipeline(
+    reference: dict[str, np.ndarray],
+) -> None:
+    ws_X = reference["ws_X"]
+    ws_y = reference["ws_y"]
+    ws_groups = reference["ws_groups"].astype(object)
+    ws_runs = reference["ws_runs"].astype(object)
+    pipe = Pipeline([("regressor", Ridge())])
+    param_grid = {"regressor__alpha": [0.1, 1.0, 10.0]}
+    folds = within_subject_folds(ws_groups, ws_runs, inner_splits=2, outer_splits=2, seed=42)
+
+    results = cross_fit_regression(
+        folds,
+        ws_X,
+        ws_y,
+        ws_groups,
+        pipe,
+        param_grid,
+        inner=InnerSplit(grouping="run", n_splits=2),
+        seed=42,
+        runs=ws_runs,
+        scoring=scoring_dict(),
+        refit="neg_mse",
+    )
+    y_pred = np.concatenate([r.y_pred for r in results])
+    np.testing.assert_allclose(y_pred, reference["ws_y_pred"], rtol=1e-5, atol=1e-7)
+

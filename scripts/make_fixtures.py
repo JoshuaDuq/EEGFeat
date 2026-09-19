@@ -270,11 +270,55 @@ def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
     y = X[:, 0] * 2.0 + rng.normal(scale=0.1, size=groups.size)
 
     folds = cv.create_loso_folds(X, groups)
-    # Fold index arrays are ragged. Flattening them with an offsets array keeps the
-    # fixture free of object arrays, so it loads with allow_pickle=False as
-    # tests/test_equivalence.py:43 already requires.
     train = np.concatenate([f[1] for f in folds])
     test = np.concatenate([f[2] for f in folds])
+
+    from sklearn.linear_model import Ridge
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.pipeline import Pipeline
+
+    pipe = Pipeline([("regressor", Ridge())])
+    param_grid = {"regressor__alpha": [0.1, 1.0, 10.0]}
+    y_true_loso, y_pred_loso, _, _, _ = cv.nested_loso_predictions_matrix(
+        X, y, groups, pipe, param_grid, inner_cv_splits=3, n_jobs=1, outer_n_jobs=1, seed=42
+    )
+
+    # Within-subject fixtures
+    ws_subjects, ws_runs, ws_trials, ws_features = 2, 4, 4, 3
+    ws_subs = [f"sub-{i:04d}" for i in range(ws_subjects)]
+    ws_groups = np.repeat(ws_subs, ws_runs * ws_trials).astype(object)
+    ws_runs_arr = np.tile(
+        np.repeat([f"run-{j:02d}" for j in range(ws_runs)], ws_trials), ws_subjects
+    ).astype(object)
+    ws_X = rng.normal(size=(ws_groups.size, ws_features))
+    ws_y = ws_X[:, 0] * 1.5 + rng.normal(scale=0.1, size=ws_groups.size)
+
+    ws_folds = cv.create_within_subject_folds(
+        groups=ws_groups,
+        blocks_all=ws_runs_arr,
+        inner_cv_splits=2,
+        seed=42,
+        outer_cv_splits=2,
+        apply_hygiene=False,
+    )
+    ws_y_pred_list: list[np.ndarray] = []
+    for f_idx, tr_idx, te_idx, sub_id, _ in ws_folds:
+        cv.set_random_seeds(42, f_idx)
+        inner_splits = cv.create_run_aware_inner_cv(ws_runs_arr[tr_idx], 2, 42, f_idx, sub_id)
+        scoring = cv.create_scoring_dict()
+        gs = GridSearchCV(
+            estimator=pipe,
+            param_grid=param_grid,
+            scoring=scoring,
+            cv=inner_splits,
+            n_jobs=1,
+            refit="neg_mse",
+            error_score="raise",
+        )
+        gs.fit(ws_X[tr_idx], ws_y[tr_idx], groups=ws_runs_arr[tr_idx])
+        ws_y_pred_list.append(gs.best_estimator_.predict(ws_X[te_idx]))
+    ws_y_pred = np.concatenate(ws_y_pred_list)
+
     return {
         "X": X,
         "y": y,
@@ -283,6 +327,13 @@ def model_fixtures(rng: np.random.Generator) -> dict[str, np.ndarray]:
         "loso_train_offsets": np.cumsum([0] + [f[1].size for f in folds]),
         "loso_test": test,
         "loso_test_offsets": np.cumsum([0] + [f[2].size for f in folds]),
+        "loso_y_true": y_true_loso,
+        "loso_y_pred": y_pred_loso,
+        "ws_X": ws_X,
+        "ws_y": ws_y,
+        "ws_groups": ws_groups.astype("U16"),
+        "ws_runs": ws_runs_arr.astype("U16"),
+        "ws_y_pred": ws_y_pred,
         "reference_commit": np.array(_reference_commit()),
     }
 
