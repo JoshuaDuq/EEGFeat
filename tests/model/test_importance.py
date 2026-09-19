@@ -68,9 +68,23 @@ def test_importance_aggregates_by_a_metadata_field_not_a_name_fragment(
     alpha_beta_meta: tuple[FeatureMeta, FeatureMeta],
 ) -> None:
     importance = Importance(
-        feature_names=("a", "b"), values=np.array([1.0, 3.0]), per_fold=np.empty((0, 2))
+        feature_names=(alpha_beta_meta[0].name, alpha_beta_meta[1].name),
+        values=np.array([1.0, 3.0]),
+        per_fold=np.empty((0, 2)),
     )
     assert aggregate_by(importance, alpha_beta_meta, "band") == {"alpha": 1.0, "beta": 3.0}
+
+
+def test_importance_aggregation_is_invariant_to_metadata_order(
+    alpha_beta_meta: tuple[FeatureMeta, FeatureMeta],
+) -> None:
+    importance = Importance(
+        feature_names=(alpha_beta_meta[0].name, alpha_beta_meta[1].name),
+        values=np.array([1.0, 3.0]),
+        per_fold=np.empty((0, 2)),
+    )
+    reversed_meta = (alpha_beta_meta[1], alpha_beta_meta[0])
+    assert aggregate_by(importance, reversed_meta, "band") == {"alpha": 1.0, "beta": 3.0}
 
 
 def test_shap_importance_raises_when_shap_missing() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import numpy as np
 import numpy.typing as npt
@@ -39,22 +39,36 @@ def aggregate_by(
     meta: Sequence[FeatureMeta],
     field: str,
 ) -> dict[str, float]:
-    if len(importance.values) != len(meta):
-        msg = (
-            f"Length mismatch: {len(importance.values)} importance values "
-            f"vs {len(meta)} metadata records."
+    valid_fields = {f.name for f in fields(FeatureMeta)}
+    if field not in valid_fields:
+        raise ValueError(f"Unknown FeatureMeta field: {field!r}")
+
+    names = tuple(importance.feature_names)
+    if len(names) != len(set(names)):
+        raise ValueError("Importance contains duplicate feature names.")
+
+    metadata_by_name = {m.name: m for m in meta}
+    if len(metadata_by_name) != len(meta):
+        raise ValueError("Metadata contains duplicate feature names.")
+
+    if set(names) != set(metadata_by_name):
+        raise ValueError(
+            "Importance and metadata must contain exactly the same feature names."
         )
-        raise ValueError(msg)
+
     totals: dict[str, float] = {}
-    for val, m in zip(importance.values, meta, strict=True):
-        raw_key = getattr(m, field, None)
-        if raw_key is None:
-            key = "unknown"
-        elif hasattr(raw_key, "name"):
-            key = str(raw_key.name)
-        else:
-            key = str(raw_key)
-        totals[key] = totals.get(key, 0.0) + float(val)
+    for name, value in zip(names, importance.values, strict=True):
+        m = metadata_by_name[name]
+        raw = getattr(m, field)
+        key = (
+            "unknown"
+            if raw is None
+            else str(raw.name)
+            if hasattr(raw, "name")
+            else str(raw)
+        )
+        totals[key] = totals.get(key, 0.0) + float(value)
+
     return totals
 
 
