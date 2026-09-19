@@ -183,3 +183,128 @@ def test_custom_fold_with_overlap_is_rejected() -> None:
             seed=0,
         )
 
+
+def test_target_residualization_is_refitted_inside_inner_cv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import eegfeat.model.crossfit as module
+
+    rng = np.random.default_rng(42)
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 8).astype(object)
+    x = rng.normal(size=(32, 3))
+    y = rng.normal(size=32)
+    covariates = rng.normal(size=(32, 1))
+
+    folds = loso_folds(groups)
+    training_sizes: list[int] = []
+
+    original = module.residualize_targets
+
+    def record_fit(y_all, cov_all, train, test, *, columns):
+        training_sizes.append(len(train))
+        return original(
+            y_all,
+            cov_all,
+            train,
+            test,
+            columns=columns,
+        )
+
+    monkeypatch.setattr(module, "residualize_targets", record_fit)
+
+    module.cross_fit_regression(
+        folds,
+        x,
+        y,
+        groups,
+        PIPE,
+        GRID,
+        inner=InnerSplit(grouping="subject", n_splits=2),
+        seed=42,
+        covariates=covariates,
+        residualize_on=("nuisance",),
+        scoring="neg_mean_squared_error",
+    )
+
+    outer_training_size = len(folds[0].train)
+
+    assert training_sizes
+    assert any(
+        size < outer_training_size for size in training_sizes
+    ), "Nuisance fitting never occurred inside the inner CV folds."
+
+
+def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import eegfeat.model.crossfit as module
+
+    rng = np.random.default_rng(42)
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 8).astype(object)
+    x = rng.normal(size=(32, 3))
+    y1 = rng.normal(size=32)
+    y2 = y1.copy()
+    y2[groups == "s2"] += 500.0
+    covariates = rng.normal(size=(32, 1))
+
+    folds = [loso_folds(groups)[0]]  # fold where s1 is test, s2/s3/s4 are train
+
+    recorded_inner_fits_y1: dict[tuple[int, ...], np.ndarray] = {}
+    recorded_inner_fits_y2: dict[tuple[int, ...], np.ndarray] = {}
+
+    original = module.residualize_targets
+
+    def record_fit(store: dict[tuple[int, ...], np.ndarray]):
+        def fit_wrapper(y_all, cov_all, train, test, *, columns):
+            res_tr, res_te = original(y_all, cov_all, train, test, columns=columns)
+            store[tuple(int(i) for i in train)] = res_tr.copy()
+            return res_tr, res_te
+
+        return fit_wrapper
+
+    monkeypatch.setattr(module, "residualize_targets", record_fit(recorded_inner_fits_y1))
+    module.cross_fit_regression(
+        folds,
+        x,
+        y1,
+        groups,
+        PIPE,
+        GRID,
+        inner=InnerSplit(grouping="subject", n_splits=2),
+        seed=42,
+        covariates=covariates,
+        residualize_on=("nuisance",),
+        scoring="neg_mean_squared_error",
+    )
+
+    monkeypatch.setattr(module, "residualize_targets", record_fit(recorded_inner_fits_y2))
+    module.cross_fit_regression(
+        folds,
+        x,
+        y2,
+        groups,
+        PIPE,
+        GRID,
+        inner=InnerSplit(grouping="subject", n_splits=2),
+        seed=42,
+        covariates=covariates,
+        residualize_on=("nuisance",),
+        scoring="neg_mean_squared_error",
+    )
+
+    s2_indices = set(np.flatnonzero(groups == "s2"))
+    # In inner CV splits where s2 was NOT in train (i.e. s2 was in validation),
+    # the training residuals must be bit-for-bit identical between y1 and y2
+    matches = [
+        train_idx
+        for train_idx in recorded_inner_fits_y1
+        if not s2_indices.intersection(train_idx)
+    ]
+    assert matches, "Expected at least one inner split where s2 was held out in validation"
+    for train_idx in matches:
+        np.testing.assert_array_equal(
+            recorded_inner_fits_y1[train_idx],
+            recorded_inner_fits_y2[train_idx],
+        )
+
+

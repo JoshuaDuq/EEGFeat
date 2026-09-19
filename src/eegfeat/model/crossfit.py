@@ -6,15 +6,18 @@ from typing import cast
 
 import numpy as np
 import numpy.typing as npt
+from sklearn.base import clone
+from sklearn.metrics import check_scoring
+from sklearn.model_selection import ParameterGrid
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model import _deps as _deps
 from eegfeat.model.design import harmonize_fold
 from eegfeat.model.execution import run_folds
 from eegfeat.model.residualize import residualize_targets
-from eegfeat.model.splits import Fold, InnerSplit
+from eegfeat.model.splits import Fold, InnerSplit, inner_cv
 from eegfeat.model.transformers import _check_subject_missingness
-from eegfeat.model.tuning import fit_untuned, tune
+from eegfeat.model.tuning import FoldFitError, fit_untuned, tune
 
 __all__ = [
     "FoldClassification",
@@ -75,6 +78,146 @@ class _FittedFold:
     best_params: dict[str, object]
 
 
+def _select_fold_local_params(
+    f: Fold,
+    X: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64] | npt.NDArray[np.intp],
+    groups: npt.NDArray[np.object_],
+    inner_groups: npt.NDArray[np.object_],
+    pipeline: Pipeline,
+    grid: Mapping[str, Sequence[object]],
+    *,
+    inner: InnerSplit,
+    seed: int,
+    harmonization: str | None,
+    covariates: npt.NDArray[np.float64] | None,
+    residualize_on: Sequence[str],
+    scoring: object,
+    refit: str | bool | None,
+) -> dict[str, object]:
+    """Select hyperparameters with every external transform fitted per inner fold."""
+    if refit is False:
+        raise ValueError("refit=False cannot return a fitted outer-fold model.")
+
+    chosen_scoring = scoring
+    if isinstance(scoring, Mapping):
+        if not isinstance(refit, str) or refit not in scoring:
+            raise ValueError(
+                "Multi-metric scoring requires refit to name a scoring metric."
+            )
+        chosen_scoring = scoring[refit]
+
+    outer_train = np.asarray(f.train, dtype=np.intp)
+    train_groups = inner_groups[outer_train]
+    strat_labels = (
+        np.asarray(y[outer_train], dtype=np.intp)
+        if inner.stratified else None
+    )
+
+    splitter = inner_cv(
+        train_groups,
+        inner,
+        y_train=strat_labels,
+        random_state=seed + max(f.index - 1, 0),
+    )
+
+    local_splits = list(
+        splitter.split(
+            X[outer_train],
+            y[outer_train],
+            groups=train_groups,
+        )
+    )
+    if not local_splits:
+        raise ValueError(f"Fold {f.index}: no inner CV splits.")
+
+    best_score = -np.inf
+    best_params: dict[str, object] | None = None
+
+    for parameters in ParameterGrid(dict(grid)):
+        fold_scores: list[float] = []
+
+        for local_train, local_valid in local_splits:
+            train_idx = outer_train[local_train]
+            valid_idx = outer_train[local_valid]
+
+            X_train = np.asarray(X[train_idx], dtype=np.float64)
+            X_valid = np.asarray(X[valid_idx], dtype=np.float64)
+            y_train = y[train_idx]
+            y_valid = y[valid_idx]
+
+            if harmonization is not None:
+                X_train, X_valid, _ = harmonize_fold(
+                    X_train,
+                    X_valid,
+                    groups[train_idx],
+                    mode=harmonization,
+                    n_covariates=0,
+                )
+
+            if residualize_on:
+                if covariates is None:
+                    raise ValueError(
+                        "Target residualization requested via residualize_on, "
+                        "but covariates is None."
+                    )
+
+                y_train, y_valid = residualize_targets(
+                    np.asarray(y, dtype=np.float64),
+                    covariates,
+                    train_idx,
+                    valid_idx,
+                    columns=residualize_on,
+                )
+
+            candidate = clone(pipeline)
+            candidate.set_params(**parameters)
+
+            try:
+                fitted = fit_untuned(
+                    candidate,
+                    X_train,
+                    y_train,
+                    seed=seed,
+                    fold=f.index,
+                )
+                _check_subject_missingness(
+                    fitted, X_train, groups[train_idx]
+                )
+
+                scorer = check_scoring(
+                    fitted, scoring=chosen_scoring
+                )
+                score = float(
+                    scorer(fitted, X_valid, y_valid)
+                )
+            except Exception as exc:
+                raise FoldFitError(
+                    f"Outer fold {f.index}: inner fold failed for "
+                    f"parameters {parameters}: {exc}"
+                ) from exc
+
+            if not np.isfinite(score):
+                raise FoldFitError(
+                    f"Outer fold {f.index}: non-finite inner CV "
+                    f"score for parameters {parameters}."
+                )
+
+            fold_scores.append(score)
+
+        mean_score = float(np.mean(fold_scores))
+        if mean_score > best_score:
+            best_score = mean_score
+            best_params = dict(parameters)
+
+    if best_params is None:
+        raise FoldFitError(
+            f"Outer fold {f.index}: no valid hyperparameter candidate."
+        )
+
+    return best_params
+
+
 def _fit_fold(
     task: str,
     f: Fold,
@@ -128,22 +271,53 @@ def _fit_fold(
         )
 
     if grid:
-        tuned = tune(
-            pipeline,
-            grid,
-            X_tr,
-            y_tr,
-            inner_groups_all[train_idx],
-            split=inner,
-            seed=seed,
-            fold=f.index,
-            scoring=scoring,
-            refit=refit,
-        )
-        model = tuned.estimator
-        best_params = tuned.best_params
+        if harmonization is not None or residualize_on:
+            best_params = _select_fold_local_params(
+                f,
+                X,
+                y,
+                groups,
+                inner_groups_all,
+                pipeline,
+                grid,
+                inner=inner,
+                seed=seed,
+                harmonization=harmonization,
+                covariates=covariates,
+                residualize_on=residualize_on,
+                scoring=scoring,
+                refit=refit,
+            )
+
+            selected_pipeline = clone(pipeline)
+            selected_pipeline.set_params(**best_params)
+
+            model = fit_untuned(
+                selected_pipeline,
+                X_tr,
+                y_tr,
+                seed=seed,
+                fold=f.index,
+            )
+        else:
+            tuned = tune(
+                pipeline,
+                grid,
+                X_tr,
+                y_tr,
+                inner_groups_all[train_idx],
+                split=inner,
+                seed=seed,
+                fold=f.index,
+                scoring=scoring,
+                refit=refit,
+            )
+            model = tuned.estimator
+            best_params = tuned.best_params
     else:
-        model = fit_untuned(pipeline, X_tr, y_tr, seed=seed, fold=f.index)
+        model = fit_untuned(
+            pipeline, X_tr, y_tr, seed=seed, fold=f.index
+        )
         best_params = {}
 
     _check_subject_missingness(model, X_tr, groups[train_idx])
