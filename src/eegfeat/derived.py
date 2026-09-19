@@ -43,14 +43,14 @@ def band_ratio(table: FeatureTable, numerator: str, denominator: str) -> Feature
     """
     top = _index_by_position(table, numerator)
     bottom = _index_by_position(table, denominator)
-    missing = sorted(set(top) ^ set(bottom))
+    missing = set(top) ^ set(bottom)
     if missing:
         raise ValueError(
             f"bands {numerator!r} and {denominator!r} do not cover the same spatial units "
             f"and windows; unmatched: {missing}"
         )
 
-    operands = [(top[k], bottom[k]) for k in sorted(top)]
+    operands = [(top[k], bottom[k]) for k in top]
     measure = f"ratio_{numerator}_{denominator}"
     meta = tuple(
         replace(
@@ -100,9 +100,13 @@ def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureT
     for left, right in pairs:
         left_index = _index_by_space(table, left)
         right_index = _index_by_space(table, right)
-        for key, on_left in sorted(left_index.items()):
-            if key not in right_index:
-                continue
+        if set(left_index) != set(right_index):
+            raise ValueError(
+                f"Channels {left!r} and {right!r} do not have "
+                "matching measurement specifications."
+            )
+
+        for key, on_left in left_index.items():
             on_right = right_index[key]
             operands.append((on_right, on_left))
             meta.append(
@@ -111,9 +115,15 @@ def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureT
                     measure="asymmetry",
                     space=f"{left}-{right}",
                     space_kind="pair",
-                    unit=_LOG_UNITS.get(table.meta[on_left].normalization, "a.u."),
+                    unit=_LOG_UNITS.get(
+                        table.meta[on_left].normalization, "a.u."
+                    ),
                     computation=_derived_spec(
-                        "asymmetry", table, (on_right, "right"), (on_left, "left"), ratio=False
+                        "asymmetry",
+                        table,
+                        (on_right, "right"),
+                        (on_left, "left"),
+                        ratio=False,
                     ),
                 )
             )
@@ -187,23 +197,73 @@ def _combine(table: FeatureTable, top: int, bottom: int, *, ratio: bool) -> npt.
         return np.where(total != 0.0, (a - b) / total, np.nan)
 
 
-def _index_by_position(table: FeatureTable, band_name: str) -> dict[tuple[str, str | None], int]:
-    found = {
-        (m.space, m.window): i
-        for i, m in enumerate(table.meta)
-        if m.band is not None and m.band.name == band_name
-    }
+def _matching_signature(meta: FeatureMeta) -> tuple[object, ...]:
+    """Fields that must agree between two comparable measurements."""
+    return (
+        meta.measure,
+        meta.space_kind,
+        meta.window,
+        meta.window_bounds,
+        meta.normalization,
+        meta.unit,
+        meta.source,
+        meta.computation.method,
+        meta.computation.parameters_json,
+        meta.phase_band,
+        meta.amplitude_band,
+    )
+
+
+def _index_by_position(
+    table: FeatureTable,
+    band_name: str,
+) -> dict[tuple[object, ...], int]:
+    found: dict[tuple[object, ...], int] = {}
+
+    for i, meta in enumerate(table.meta):
+        if meta.band is None or meta.band.name != band_name:
+            continue
+
+        key = (meta.space, *_matching_signature(meta))
+        if key in found:
+            raise ValueError(
+                f"Ambiguous {band_name!r} features at "
+                f"{meta.space!r}, window={meta.window!r}. "
+                "Select one feature family before deriving ratios."
+            )
+        found[key] = i
+
     if not found:
         raise ValueError(f"band {band_name!r} is not present in the table.")
+
     return found
 
 
-def _index_by_space(table: FeatureTable, channel: str) -> dict[tuple[str, str | None], int]:
-    found = {
-        (m.band.name if m.band else "", m.window): i
-        for i, m in enumerate(table.meta)
-        if m.space == channel
-    }
+def _index_by_space(
+    table: FeatureTable,
+    channel: str,
+) -> dict[tuple[object, ...], int]:
+    found: dict[tuple[object, ...], int] = {}
+
+    for i, meta in enumerate(table.meta):
+        if meta.space != channel or meta.space_kind != "channel":
+            continue
+
+        band_key = (
+            None if meta.band is None
+            else (meta.band.name, meta.band.fmin, meta.band.fmax)
+        )
+        key = (band_key, *_matching_signature(meta))
+
+        if key in found:
+            raise ValueError(
+                f"Ambiguous measurements for channel {channel!r}, "
+                f"band={band_key!r}, window={meta.window!r}."
+            )
+
+        found[key] = i
+
     if not found:
         raise KeyError(f"channel {channel!r} is not present in the table.")
+
     return found

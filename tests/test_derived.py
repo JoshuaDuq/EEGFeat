@@ -165,3 +165,88 @@ def test_an_asymmetry_keeps_a_flag_raised_on_either_operand() -> None:
     table = _flagged(np.array([[1.0, 3.0]]), [THETA, THETA], ["F3", "F4"])
     out = asymmetry(table, pairs=[("F3", "F4")])
     assert out.flags["artifact"].tolist() == [[True]]
+
+
+def test_asymmetry_rejects_mismatched_channel_specifications() -> None:
+    meta_left = FeatureMeta(
+        measure="power",
+        band=THETA,
+        space="F3",
+        space_kind="channel",
+        window="stim",
+        normalization="raw",
+        unit="V^2/Hz",
+        source="test",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("test"),
+    )
+    meta_right = FeatureMeta(
+        measure="power",
+        band=THETA,
+        space="F4",
+        space_kind="channel",
+        window="stim",
+        normalization="log10",
+        unit="log10",
+        source="test",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("test"),
+    )
+    table = FeatureTable(
+        values=np.array([[1.0, 3.0]]),
+        coverage=np.ones((1, 2)),
+        meta=(meta_left, meta_right),
+        row_ids=(("test", 0, "event"),),
+    )
+    with pytest.raises(ValueError, match="matching measurement specifications"):
+        asymmetry(table, pairs=[("F3", "F4")])
+
+
+def test_band_ratio_rejects_ambiguous_features() -> None:
+    meta_theta1 = FeatureMeta(
+        measure="power",
+        band=THETA,
+        space="C3",
+        space_kind="channel",
+        window="stim",
+        normalization="raw",
+        unit="V^2/Hz",
+        source="welch",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("welch", n_fft=256),
+        freq_resolution_hz=0.5,
+    )
+    meta_theta2 = FeatureMeta(
+        measure="power",
+        band=THETA,
+        space="C3",
+        space_kind="channel",
+        window="stim",
+        normalization="raw",
+        unit="V^2/Hz",
+        source="welch",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("welch", n_fft=256),
+        freq_resolution_hz=1.0,
+    )
+    meta_beta = FeatureMeta(
+        measure="power",
+        band=BETA,
+        space="C3",
+        space_kind="channel",
+        window="stim",
+        normalization="raw",
+        unit="V^2/Hz",
+        source="welch",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("welch", n_fft=256),
+        freq_resolution_hz=0.5,
+    )
+    table = FeatureTable(
+        values=np.array([[1.0, 2.0, 3.0]]),
+        coverage=np.ones((1, 3)),
+        meta=(meta_theta1, meta_theta2, meta_beta),
+        row_ids=(("test", 0, "event"),),
+    )
+    with pytest.raises(ValueError, match="Ambiguous"):
+        band_ratio(table, "theta", "beta")
