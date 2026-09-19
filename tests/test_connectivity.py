@@ -197,6 +197,12 @@ def test_the_clustering_threshold_is_recorded() -> None:
     assert "0.2" in clustering_coefficient(pairs, threshold=0.2).meta[0].unit
 
 
+def test_negative_clustering_threshold_raises() -> None:
+    pairs = envelope_correlation([_shared_driver(5.0)], windows=[WINDOW])
+    with pytest.raises(ValueError, match="non-negative"):
+        clustering_coefficient(pairs, threshold=-0.1)
+
+
 def test_graph_measures_refuse_a_non_pairwise_table() -> None:
     signal = _shared_driver(1.0)
     per_epoch = ef.variance([signal], windows=[WINDOW], include_global=False)

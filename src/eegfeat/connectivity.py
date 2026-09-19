@@ -175,8 +175,10 @@ def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureT
     FeatureTable
         One column per band and window, with ``space="global"``.
     """
-    if not np.isfinite(threshold):
-        raise ValueError(f"threshold must be finite, got {threshold}.")
+    if not np.isfinite(threshold) or threshold < 0:
+        raise ValueError(
+            f"threshold must be finite and non-negative, got {threshold}."
+        )
     return _graph_measure(
         pairs,
         "clustering",
