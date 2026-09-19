@@ -115,9 +115,7 @@ def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureT
                     measure="asymmetry",
                     space=f"{left}-{right}",
                     space_kind="pair",
-                    unit=_LOG_UNITS.get(
-                        table.meta[on_left].normalization, "a.u."
-                    ),
+                    unit=_LOG_UNITS.get(table.meta[on_left].normalization, "a.u."),
                     computation=_derived_spec(
                         "asymmetry",
                         table,
@@ -249,10 +247,7 @@ def _index_by_space(
         if meta.space != channel or meta.space_kind != "channel":
             continue
 
-        band_key = (
-            None if meta.band is None
-            else (meta.band.name, meta.band.fmin, meta.band.fmax)
-        )
+        band_key = None if meta.band is None else (meta.band.name, meta.band.fmin, meta.band.fmax)
         key = (band_key, *_matching_signature(meta))
 
         if key in found:

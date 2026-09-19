@@ -288,12 +288,8 @@ def test_reordered_coverage_rows_are_rejected(tmp_path) -> None:
     write_table(_epoch_table(), path)
 
     coverage_path = tmp_path / "features_coverage.tsv"
-    frame = pd.read_csv(
-        coverage_path, sep="\t", keep_default_na=False
-    )
-    frame.iloc[::-1].to_csv(
-        coverage_path, sep="\t", index=False
-    )
+    frame = pd.read_csv(coverage_path, sep="\t", keep_default_na=False)
+    frame.iloc[::-1].to_csv(coverage_path, sep="\t", index=False)
 
     with pytest.raises(ValueError, match="row identities"):
         read_table(path)

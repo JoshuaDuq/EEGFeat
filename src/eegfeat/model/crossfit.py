@@ -102,17 +102,12 @@ def _select_fold_local_params(
     chosen_scoring = scoring
     if isinstance(scoring, Mapping):
         if not isinstance(refit, str) or refit not in scoring:
-            raise ValueError(
-                "Multi-metric scoring requires refit to name a scoring metric."
-            )
+            raise ValueError("Multi-metric scoring requires refit to name a scoring metric.")
         chosen_scoring = scoring[refit]
 
     outer_train = np.asarray(f.train, dtype=np.intp)
     train_groups = inner_groups[outer_train]
-    strat_labels = (
-        np.asarray(y[outer_train], dtype=np.intp)
-        if inner.stratified else None
-    )
+    strat_labels = np.asarray(y[outer_train], dtype=np.intp) if inner.stratified else None
 
     splitter = inner_cv(
         train_groups,
@@ -181,16 +176,10 @@ def _select_fold_local_params(
                     seed=seed,
                     fold=f.index,
                 )
-                _check_subject_missingness(
-                    fitted, X_train, groups[train_idx]
-                )
+                _check_subject_missingness(fitted, X_train, groups[train_idx])
 
-                scorer = check_scoring(
-                    fitted, scoring=chosen_scoring
-                )
-                score = float(
-                    scorer(fitted, X_valid, y_valid)
-                )
+                scorer = check_scoring(fitted, scoring=chosen_scoring)
+                score = float(scorer(fitted, X_valid, y_valid))
             except Exception as exc:
                 raise FoldFitError(
                     f"Outer fold {f.index}: inner fold failed for "
@@ -211,9 +200,7 @@ def _select_fold_local_params(
             best_params = dict(parameters)
 
     if best_params is None:
-        raise FoldFitError(
-            f"Outer fold {f.index}: no valid hyperparameter candidate."
-        )
+        raise FoldFitError(f"Outer fold {f.index}: no valid hyperparameter candidate.")
 
     return best_params
 
@@ -315,9 +302,7 @@ def _fit_fold(
             model = tuned.estimator
             best_params = tuned.best_params
     else:
-        model = fit_untuned(
-            pipeline, X_tr, y_tr, seed=seed, fold=f.index
-        )
+        model = fit_untuned(pipeline, X_tr, y_tr, seed=seed, fold=f.index)
         best_params = {}
 
     _check_subject_missingness(model, X_tr, groups[train_idx])
@@ -354,30 +339,20 @@ def _validate_outer_folds(
 
         for label, idx in (("train", tr), ("test", te)):
             if idx.ndim != 1 or idx.size == 0:
-                raise ValueError(
-                    f"Fold {fold.index}: {label} must be a nonempty 1-D array."
-                )
+                raise ValueError(f"Fold {fold.index}: {label} must be a nonempty 1-D array.")
             if not np.issubdtype(idx.dtype, np.integer):
-                raise ValueError(
-                    f"Fold {fold.index}: {label} indices must be integers."
-                )
+                raise ValueError(f"Fold {fold.index}: {label} indices must be integers.")
             if np.any(idx < 0) or np.any(idx >= n_rows):
-                raise ValueError(
-                    f"Fold {fold.index}: {label} contains out-of-range indices."
-                )
+                raise ValueError(f"Fold {fold.index}: {label} contains out-of-range indices.")
             if np.unique(idx).size != idx.size:
-                raise ValueError(
-                    f"Fold {fold.index}: duplicate {label} indices."
-                )
+                raise ValueError(f"Fold {fold.index}: duplicate {label} indices.")
 
         if np.intersect1d(tr, te).size:
             raise ValueError(f"Fold {fold.index}: train/test overlap.")
 
         duplicated_tests = tested.intersection(map(int, te))
         if duplicated_tests:
-            raise ValueError(
-                f"Fold {fold.index}: observations tested in multiple folds."
-            )
+            raise ValueError(f"Fold {fold.index}: observations tested in multiple folds.")
         tested.update(map(int, te))
 
         train_subjects = set(groups[tr])
@@ -386,29 +361,21 @@ def _validate_outer_folds(
         if fold.subject is None:
             # Convention used by loso_folds().
             if train_subjects & test_subjects:
-                raise ValueError(
-                    f"Fold {fold.index}: subject overlap in a LOSO fold."
-                )
+                raise ValueError(f"Fold {fold.index}: subject overlap in a LOSO fold.")
         else:
             expected = {fold.subject}
             if {str(v) for v in train_subjects} != expected:
                 raise ValueError(
-                    f"Fold {fold.index}: training subjects do not match "
-                    f"{fold.subject!r}."
+                    f"Fold {fold.index}: training subjects do not match " f"{fold.subject!r}."
                 )
             if {str(v) for v in test_subjects} != expected:
                 raise ValueError(
-                    f"Fold {fold.index}: test subjects do not match "
-                    f"{fold.subject!r}."
+                    f"Fold {fold.index}: test subjects do not match " f"{fold.subject!r}."
                 )
             if runs is None:
-                raise ValueError(
-                    f"Fold {fold.index}: within-subject folds require runs."
-                )
+                raise ValueError(f"Fold {fold.index}: within-subject folds require runs.")
             if set(runs[tr]) & set(runs[te]):
-                raise ValueError(
-                    f"Fold {fold.index}: train/test run overlap."
-                )
+                raise ValueError(f"Fold {fold.index}: train/test run overlap.")
 
 
 def _cross_fit_engine(

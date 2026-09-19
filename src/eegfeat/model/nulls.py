@@ -203,10 +203,13 @@ def _prediction_statistic(
     predictions: Sequence[FoldPrediction],
     groups: npt.NDArray[np.object_],
     aggregation: AggregationConfig,
-    metric_fn: Callable[
-        [npt.NDArray[np.float64], npt.NDArray[np.float64]],
-        float,
-    ] | None,
+    metric_fn: (
+        Callable[
+            [npt.NDArray[np.float64], npt.NDArray[np.float64]],
+            float,
+        ]
+        | None
+    ),
 ) -> float:
     yt = np.concatenate([p.y_true for p in predictions])
     yp = np.concatenate([p.y_pred for p in predictions])
@@ -217,13 +220,13 @@ def _prediction_statistic(
     if metric_fn is not None:
         score = float(metric_fn(yt, yp))
     else:
-        frame = pd.DataFrame({
-            "subject_id": np.concatenate(
-                [groups[p.rows] for p in predictions]
-            ),
-            "y_true": yt,
-            "y_pred": yp,
-        })
+        frame = pd.DataFrame(
+            {
+                "subject_id": np.concatenate([groups[p.rows] for p in predictions]),
+                "y_true": yt,
+                "y_pred": yp,
+            }
+        )
         score = subject_level_r(
             frame,
             config=aggregation,

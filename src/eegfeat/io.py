@@ -58,15 +58,9 @@ def _row_uids(
         ]
 
     if row_labels is not None:
-        return [
-            json.dumps(["group", str(label)], separators=(",", ":"))
-            for label in row_labels
-        ]
+        return [json.dumps(["group", str(label)], separators=(",", ":")) for label in row_labels]
 
-    return [
-        json.dumps(["epoch", i], separators=(",", ":"))
-        for i in range(n_rows)
-    ]
+    return [json.dumps(["epoch", i], separators=(",", ":")) for i in range(n_rows)]
 
 
 @dataclass(frozen=True)
@@ -115,11 +109,7 @@ def write_table(
     key, key_values = _row_key(table)
     descriptors = _descriptors(rows, table, key)
     names = table.names
-    uid_frame = pd.DataFrame({
-        _ROW_UID: _row_uids(
-            table.row_ids, table.row_labels, table.n_rows
-        )
-    })
+    uid_frame = pd.DataFrame({_ROW_UID: _row_uids(table.row_ids, table.row_labels, table.n_rows)})
 
     values_frame = pd.concat(
         [
@@ -172,9 +162,7 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
     names = [m.name for m in meta]
 
     if "n_rows" not in sidecar:
-        raise ValueError(
-            "Legacy feature bundle has no row-identity manifest; regenerate it."
-        )
+        raise ValueError("Legacy feature bundle has no row-identity manifest; regenerate it.")
 
     expected_uids = _row_uids(
         sidecar["row_ids"],
@@ -426,21 +414,17 @@ def _read_matrix(
 
     missing = [name for name in names if name not in frame.columns]
     if missing:
-        raise ValueError(
-            f"{path.name} lacks columns its sidecar describes: {missing}"
-        )
+        raise ValueError(f"{path.name} lacks columns its sidecar describes: {missing}")
 
     if _ROW_UID not in frame.columns:
         raise ValueError(
-            f"{path.name} has no {_ROW_UID} column; "
-            "regenerate this legacy feature bundle."
+            f"{path.name} has no {_ROW_UID} column; " "regenerate this legacy feature bundle."
         )
 
     actual_uids = frame[_ROW_UID].astype(str).tolist()
     if actual_uids != list(expected_uids):
         raise ValueError(
-            f"{path.name}: row identities or row order disagree "
-            "with the JSON sidecar."
+            f"{path.name}: row identities or row order disagree " "with the JSON sidecar."
         )
 
     return np.asarray(

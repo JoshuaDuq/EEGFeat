@@ -52,21 +52,13 @@ def aggregate_by(
         raise ValueError("Metadata contains duplicate feature names.")
 
     if set(names) != set(metadata_by_name):
-        raise ValueError(
-            "Importance and metadata must contain exactly the same feature names."
-        )
+        raise ValueError("Importance and metadata must contain exactly the same feature names.")
 
     totals: dict[str, float] = {}
     for name, value in zip(names, importance.values, strict=True):
         m = metadata_by_name[name]
         raw = getattr(m, field)
-        key = (
-            "unknown"
-            if raw is None
-            else str(raw.name)
-            if hasattr(raw, "name")
-            else str(raw)
-        )
+        key = "unknown" if raw is None else str(raw.name) if hasattr(raw, "name") else str(raw)
         totals[key] = totals.get(key, 0.0) + float(value)
 
     return totals

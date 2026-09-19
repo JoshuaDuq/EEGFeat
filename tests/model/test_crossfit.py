@@ -296,9 +296,7 @@ def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
     # In inner CV splits where s2 was NOT in train (i.e. s2 was in validation),
     # the training residuals must be bit-for-bit identical between y1 and y2
     matches = [
-        train_idx
-        for train_idx in recorded_inner_fits_y1
-        if not s2_indices.intersection(train_idx)
+        train_idx for train_idx in recorded_inner_fits_y1 if not s2_indices.intersection(train_idx)
     ]
     assert matches, "Expected at least one inner split where s2 was held out in validation"
     for train_idx in matches:
@@ -306,5 +304,3 @@ def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
             recorded_inner_fits_y1[train_idx],
             recorded_inner_fits_y2[train_idx],
         )
-
-
