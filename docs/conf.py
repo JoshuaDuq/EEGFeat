@@ -139,7 +139,7 @@ html_theme_options = {
     },
     "sidebar_hide_name": False,
     "navigation_with_keys": True,
-    "source_repository": "https://github.com/JoshuaDuq/eegfeat",
+    "source_repository": "https://github.com/JoshuaDuq/EEGFeatML",
     "source_branch": "main",
     "source_directory": "docs/",
 }
