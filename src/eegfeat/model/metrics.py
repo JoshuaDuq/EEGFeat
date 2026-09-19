@@ -23,6 +23,14 @@ from sklearn.metrics import (
 from eegfeat.model.aggregate import AggregationConfig, subject_level_r
 from eegfeat.model.scoring import safe_pearsonr
 
+__all__ = [
+    "ClassificationResult",
+    "classification_metrics",
+    "regression_metrics",
+    "within_condition_metrics",
+    "within_subject_centered_metrics",
+]
+
 _DEFAULT_AGGREGATION_CONFIG = AggregationConfig()
 
 

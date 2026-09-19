@@ -17,6 +17,8 @@ from eegfeat.model.tuning import fit_untuned, tune
 __all__ = [
     "FoldClassification",
     "FoldPrediction",
+    "FoldResult",
+    "cross_fit",
     "cross_fit_classification",
     "cross_fit_regression",
 ]
@@ -228,3 +230,7 @@ def cross_fit_classification(
 
     results = run_folds(folds, _execute_fold, outer_n_jobs=outer_n_jobs)
     return tuple(results)
+
+
+FoldResult = FoldPrediction
+cross_fit = cross_fit_regression

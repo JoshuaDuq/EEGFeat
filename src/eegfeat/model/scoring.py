@@ -8,6 +8,13 @@ import numpy.typing as npt
 from scipy.stats import pearsonr
 from sklearn.metrics import make_scorer
 
+__all__ = [
+    "make_pearsonr_scorer",
+    "pearsonr_scorer",
+    "safe_pearsonr",
+    "scoring_dict",
+]
+
 
 def safe_pearsonr(
     x: npt.NDArray[np.float64],

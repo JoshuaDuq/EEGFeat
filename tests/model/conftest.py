@@ -42,3 +42,33 @@ def alpha_beta_table() -> FeatureTable:
         meta=(meta_alpha, meta_beta),
         row_ids=(("sub-01", 0, "stim"), ("sub-02", 0, "stim")),
     )
+
+
+@pytest.fixture
+def alpha_beta_meta() -> tuple[FeatureMeta, FeatureMeta]:
+    meta_alpha = FeatureMeta(
+        measure="power",
+        band=ALPHA,
+        space="C3",
+        space_kind="channel",
+        window="stim",
+        normalization="log_ratio",
+        unit="log10",
+        source="morlet",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("band_power", weighting="trapezoid"),
+    )
+    meta_beta = FeatureMeta(
+        measure="power",
+        band=BETA,
+        space="C3",
+        space_kind="channel",
+        window="stim",
+        normalization="log_ratio",
+        unit="log10",
+        source="morlet",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("band_power", weighting="trapezoid"),
+    )
+    return (meta_alpha, meta_beta)
+

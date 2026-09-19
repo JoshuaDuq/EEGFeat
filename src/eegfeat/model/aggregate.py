@@ -10,6 +10,16 @@ import pandas as pd
 
 from eegfeat.model.scoring import safe_pearsonr
 
+__all__ = [
+    "AggregationConfig",
+    "SubjectLevelR",
+    "bootstrap_mean_ci",
+    "fold_results",
+    "paired_signflip_p_value",
+    "subject_level_errors",
+    "subject_level_r",
+]
+
 
 @dataclass(frozen=True)
 class AggregationConfig:

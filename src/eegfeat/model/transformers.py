@@ -14,6 +14,20 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
+__all__ = [
+    "Deconfounder",
+    "DropAllNaNColumns",
+    "MissingnessThreshold",
+    "PreprocessingConfig",
+    "ReplaceInfWithNaN",
+    "SpatialFeatureSelector",
+    "VarianceThreshold",
+    "base_preprocessing_steps",
+    "transform_feature_names",
+    "transform_feature_names_through_steps",
+    "validate_subject_missingness",
+]
+
 
 @dataclass(frozen=True)
 class PreprocessingConfig:
