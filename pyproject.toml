@@ -48,7 +48,7 @@ strict = true
 files = ["src/eegfeat"]
 
 [[tool.mypy.overrides]]
-module = ["mne_connectivity.*", "specparam.*", "sklearn.*", "shap.*"]
+module = ["mne_connectivity.*", "specparam.*", "sklearn.*", "shap.*", "joblib.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
