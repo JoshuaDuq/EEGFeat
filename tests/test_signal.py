@@ -11,7 +11,12 @@ BETA = Band("beta", 13.0, 30.0)
 def _signal(analytic: np.ndarray, sfreq: float = 100.0) -> BandSignal:
     times = np.arange(analytic.shape[-1]) / sfreq
     return BandSignal.from_arrays(
-        analytic=analytic, times=times, ch_names=("C3", "C4"), band=BETA, sfreq=sfreq
+        analytic=analytic,
+        times=times,
+        ch_names=("C3", "C4"),
+        band=BETA,
+        sfreq=sfreq,
+        row_ids=tuple(("test", index, "event") for index in range(analytic.shape[0])),
     )
 
 
@@ -44,6 +49,7 @@ def test_shape_mismatches_raise() -> None:
         ch_names=("C3", "C4"),
         band=BETA,
         sfreq=100.0,
+        row_ids=(("test", 0, "event"), ("test", 1, "event")),
     )
     with pytest.raises(ValueError, match="ch_names"):
         BandSignal.from_arrays(**{**good, "ch_names": ("C3",)})
@@ -63,6 +69,7 @@ def test_a_real_valued_input_raises_rather_than_silently_losing_phase() -> None:
             ch_names=("C3", "C4"),
             band=BETA,
             sfreq=100.0,
+            row_ids=(("test", 0, "event"),),
         )
 
 
@@ -74,6 +81,7 @@ def test_non_positive_sfreq_raises() -> None:
             ch_names=("C3", "C4"),
             band=BETA,
             sfreq=0.0,
+            row_ids=(("test", 0, "event"),),
         )
 
 
@@ -90,20 +98,30 @@ def _epochs(freq_hz: float, n_epochs: int = 3, sfreq: float = 200.0, dur: float 
 
 
 def test_a_sine_inside_the_band_yields_a_flat_envelope_at_its_amplitude() -> None:
-    signal = BandSignal.from_epochs(_epochs(10.0), ALPHA)
+    signal = BandSignal.from_epochs(_epochs(10.0), ALPHA, recording="test")
     interior = signal.envelope[:, :, 100:-100]
     np.testing.assert_allclose(interior, 1.0, rtol=0.05)
 
 
 def test_a_sine_outside_the_band_is_attenuated() -> None:
-    inside = BandSignal.from_epochs(_epochs(10.0), ALPHA).envelope[:, :, 100:-100].mean()
-    outside = BandSignal.from_epochs(_epochs(40.0), ALPHA).envelope[:, :, 100:-100].mean()
+    inside = (
+        BandSignal.from_epochs(_epochs(10.0), ALPHA, recording="test")
+        .envelope[:, :, 100:-100]
+        .mean()
+    )
+    outside = (
+        BandSignal.from_epochs(_epochs(40.0), ALPHA, recording="test")
+        .envelope[:, :, 100:-100]
+        .mean()
+    )
     assert outside < inside / 20.0
 
 
 def test_padding_protects_the_edges() -> None:
-    padded = BandSignal.from_epochs(_epochs(10.0), ALPHA)
-    unpadded = BandSignal.from_epochs(_epochs(10.0), ALPHA, pad_sec=0.0, pad_cycles=0.0)
+    padded = BandSignal.from_epochs(_epochs(10.0), ALPHA, recording="test")
+    unpadded = BandSignal.from_epochs(
+        _epochs(10.0), ALPHA, recording="test", pad_sec=0.0, pad_cycles=0.0
+    )
     edge = slice(0, 20)
     assert abs(padded.envelope[0, 0, edge].mean() - 1.0) < abs(
         unpadded.envelope[0, 0, edge].mean() - 1.0
@@ -112,7 +130,7 @@ def test_padding_protects_the_edges() -> None:
 
 def test_shape_times_and_band_are_carried_through() -> None:
     epochs = _epochs(10.0)
-    signal = BandSignal.from_epochs(epochs, ALPHA)
+    signal = BandSignal.from_epochs(epochs, ALPHA, recording="test")
     assert signal.analytic.shape == (3, 2, len(epochs.times))
     np.testing.assert_allclose(signal.times, epochs.times)
     assert signal.ch_names == ("C3", "C4")
@@ -122,7 +140,7 @@ def test_shape_times_and_band_are_carried_through() -> None:
 
 def test_a_band_above_nyquist_raises() -> None:
     with pytest.raises(ValueError, match="Nyquist"):
-        BandSignal.from_epochs(_epochs(10.0), Band("vhf", 90.0, 150.0))
+        BandSignal.from_epochs(_epochs(10.0), Band("vhf", 90.0, 150.0), recording="test")
 
 
 def test_coverage_reflects_the_filtered_output_not_the_raw_input() -> None:
@@ -133,7 +151,7 @@ def test_coverage_reflects_the_filtered_output_not_the_raw_input() -> None:
     data = np.asarray(epochs.get_data())
     data[0, 0, data.shape[2] // 2] = np.nan
     dirty = mne.EpochsArray(data, epochs.info, tmin=epochs.tmin, verbose="ERROR")
-    signal = BandSignal.from_epochs(dirty, ALPHA)
+    signal = BandSignal.from_epochs(dirty, ALPHA, recording="test")
     assert not np.isfinite(signal.envelope[0, 0]).any()
     assert signal.coverage[0, 0].max() == 0.0
     assert signal.coverage[1, 0].min() == 1.0
@@ -144,32 +162,53 @@ def test_coverage_reflects_the_filtered_output_not_the_raw_input() -> None:
 
 def test_signal_wraps_epochs_without_transforming_them() -> None:
     epochs = _epochs(10.0)
-    signal = Signal.from_epochs(epochs)
+    signal = Signal.from_epochs(epochs, recording="sub-01_task-test")
     np.testing.assert_allclose(signal.data, np.asarray(epochs.get_data()))
     np.testing.assert_allclose(signal.times, epochs.times)
     assert signal.ch_names == ("C3", "C4")
     assert signal.sfreq == 200.0
     assert signal.band is None
     assert signal.source == "signal"
+    assert signal.row_ids == (
+        ("sub-01_task-test", 0, "1"),
+        ("sub-01_task-test", 1, "1"),
+        ("sub-01_task-test", 2, "1"),
+    )
+
+
+def test_from_epochs_selects_good_eeg_channels_by_default() -> None:
+    mne = pytest.importorskip("mne")
+    info = mne.create_info(["C3", "C4", "EOG"], 100.0, ["eeg", "eeg", "eog"])
+    info["bads"] = ["C4"]
+    epochs = mne.EpochsArray(np.ones((2, 3, 20)), info, verbose="ERROR")
+
+    signal = Signal.from_epochs(epochs, recording="test")
+
+    assert signal.ch_names == ("C3",)
+    assert signal.data.shape == (2, 1, 20)
 
 
 def test_both_containers_satisfy_the_time_series_protocol() -> None:
     epochs = _epochs(10.0)
-    assert isinstance(Signal.from_epochs(epochs), TimeSeries)
-    assert isinstance(BandSignal.from_epochs(epochs, ALPHA), TimeSeries)
+    assert isinstance(Signal.from_epochs(epochs, recording="test"), TimeSeries)
+    assert isinstance(BandSignal.from_epochs(epochs, ALPHA, recording="test"), TimeSeries)
 
 
 def test_a_band_signal_reports_its_band_and_a_raw_signal_does_not() -> None:
     epochs = _epochs(10.0)
-    assert BandSignal.from_epochs(epochs, ALPHA).band is ALPHA
-    assert Signal.from_epochs(epochs).band is None
+    assert BandSignal.from_epochs(epochs, ALPHA, recording="test").band is ALPHA
+    assert Signal.from_epochs(epochs, recording="test").band is None
 
 
 def test_signal_coverage_marks_non_finite_samples() -> None:
     data = np.ones((1, 2, 5))
     data[0, 1, 3] = np.nan
     signal = Signal.from_arrays(
-        data=data, times=np.arange(5) / 100.0, ch_names=("C3", "C4"), sfreq=100.0
+        data=data,
+        times=np.arange(5) / 100.0,
+        ch_names=("C3", "C4"),
+        sfreq=100.0,
+        row_ids=(("test", 0, "event"),),
     )
     assert signal.coverage[0, 1, 3] == 0.0
     assert signal.coverage.sum() == 9.0
@@ -181,6 +220,7 @@ def test_signal_shape_mismatches_raise() -> None:
         times=np.arange(4) / 100.0,
         ch_names=("C3", "C4"),
         sfreq=100.0,
+        row_ids=(("test", 0, "event"), ("test", 1, "event")),
     )
     with pytest.raises(ValueError, match="ch_names"):
         Signal.from_arrays(**{**good, "ch_names": ("C3",)})

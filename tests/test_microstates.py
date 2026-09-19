@@ -48,6 +48,7 @@ def _planted(n_epochs: int = 6, n_times: int = 400, noise: float = 0.05) -> tupl
         times=np.arange(n_times) / SFREQ,
         ch_names=tuple(f"E{i}" for i in range(N_CHANNELS)),
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(n_epochs)),
     )
     return signal, truth
 
@@ -66,10 +67,17 @@ def test_planted_topographies_are_recovered() -> None:
 
 
 @requires_sklearn
-def test_four_states_get_canonical_labels_and_others_do_not() -> None:
+def test_cluster_indices_never_claim_canonical_microstate_labels() -> None:
     signal, _ = _planted()
-    assert segment(signal, n_states=4).labels == ("a", "b", "c", "d")
+    assert segment(signal, n_states=4).labels == ("state1", "state2", "state3", "state4")
     assert segment(signal, n_states=3).labels == ("state1", "state2", "state3")
+
+
+@requires_sklearn
+def test_segmentation_exposes_global_explained_variance() -> None:
+    signal, _ = _planted(noise=0.01)
+    segmentation = segment(signal, n_states=4)
+    assert 0.0 <= segmentation.global_explained_variance <= 1.0
 
 
 @requires_sklearn
@@ -77,7 +85,11 @@ def test_a_topography_and_its_inversion_are_the_same_state() -> None:
     signal, _ = _planted(noise=0.0)
     seg = segment(signal, n_states=4)
     flipped = Signal.from_arrays(
-        data=-signal.data, times=signal.times, ch_names=signal.ch_names, sfreq=signal.sfreq
+        data=-signal.data,
+        times=signal.times,
+        ch_names=signal.ch_names,
+        sfreq=signal.sfreq,
+        row_ids=signal.row_ids,
     )
     from eegfeat.microstates import _assign
 
@@ -118,7 +130,7 @@ def test_transitions_are_ordered_pairs_excluding_self() -> None:
     table = microstate_transitions(segment(signal, n_states=4), windows=[WINDOW])
     spaces = [m.space for m in table.meta]
     assert len(spaces) == 12  # 4 states, ordered, no self-transitions
-    assert "a-to-a" not in spaces
+    assert "state1-to-state1" not in spaces
     assert all(m.space_kind == "pair" for m in table.meta)
 
 

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -6,7 +7,7 @@ import pytest
 
 from eegfeat.bands import Band
 from eegfeat.io import read_table, write_table
-from eegfeat.table import FeatureMeta, FeatureTable
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
 
 ALPHA = Band("alpha", 8.0, 13.0)
 
@@ -21,6 +22,8 @@ def _meta(**overrides: object) -> FeatureMeta:
         "normalization": "log10",
         "unit": "log10(V^2/Hz)",
         "source": "welch",
+        "window_bounds": (0.0, 1.0),
+        "computation": ComputationSpec.create("welch", n_fft=512, window="hann"),
         "freq_resolution_hz": 0.5,
     }
     fields.update(overrides)
@@ -40,12 +43,18 @@ def _epoch_table() -> FeatureTable:
                 space="global",
                 space_kind="global",
                 window=None,
+                window_bounds=None,
                 normalization="raw",
                 unit="a.u.",
                 freq_resolution_hz=None,
             ),
         ),
         flags={"cog_fallback": np.array([[False, False], [True, False], [False, True]])},
+        row_ids=(
+            ("sub-01_task-test", 0, "left"),
+            ("sub-01_task-test", 1, "right"),
+            ("sub-01_task-test", 2, "left"),
+        ),
     )
 
 
@@ -63,6 +72,7 @@ def _assert_same_table(actual: FeatureTable, expected: FeatureTable) -> None:
     np.testing.assert_array_equal(actual.coverage, expected.coverage)
     assert actual.meta == expected.meta
     assert actual.row_labels == expected.row_labels
+    assert actual.row_ids == expected.row_ids
     assert set(actual.flags) == set(expected.flags)
     for key, flag in expected.flags.items():
         np.testing.assert_array_equal(actual.flags[key], flag)
@@ -91,6 +101,31 @@ def test_write_returns_values_coverage_and_sidecar_paths(tmp_path) -> None:
         tmp_path / "sub-01_features.json",
     )
     assert all(path.is_file() for path in written)
+
+
+def test_bundle_publish_failure_restores_all_previous_files(tmp_path, monkeypatch) -> None:
+    target = tmp_path / "sub-01_features.tsv"
+    write_table(_epoch_table(), target)
+    paths = (target, target.with_name(f"{target.stem}_coverage.tsv"), target.with_suffix(".json"))
+    previous = {path: path.read_bytes() for path in paths}
+
+    import eegfeat.io as io
+
+    real_replace = io.os.replace
+    failed = False
+
+    def fail_during_publish(source, destination):
+        nonlocal failed
+        destination = Path(destination)
+        if not failed and destination == paths[1] and Path(source).parent != destination.parent:
+            failed = True
+            raise OSError("intentional publish failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(io.os, "replace", fail_during_publish)
+    with pytest.raises(OSError, match="intentional"):
+        write_table(_epoch_table(), target)
+    assert all(path.read_bytes() == content for path, content in previous.items())
 
 
 def test_values_file_leads_with_the_row_key_then_descriptors(tmp_path) -> None:
@@ -130,7 +165,7 @@ def test_sidecar_describes_every_column_with_its_band_bounds(tmp_path) -> None:
 
     sidecar = json.loads((tmp_path / "t.json").read_text())
     power, slope = sidecar["columns"]
-    assert power["name"] == "eeg_power_alpha_cz_stim_log10"
+    assert power["name"] == _meta().name
     assert power["band"] == {"name": "alpha", "fmin": 8.0, "fmax": 13.0}
     assert slope["band"] is None
     assert sidecar["provenance"] == {"input": "sub-01_epo.fif"}
@@ -155,9 +190,8 @@ def test_rejects_a_descriptor_that_shadows_the_row_key(tmp_path) -> None:
 def test_read_fails_when_the_values_file_lacks_a_described_column(tmp_path) -> None:
     write_table(_epoch_table(), tmp_path / "t.tsv")
     frame = pd.read_csv(tmp_path / "t.tsv", sep="\t", keep_default_na=False)
-    frame.drop(columns=["eeg_slope_broadband_global_all_raw"]).to_csv(
-        tmp_path / "t.tsv", sep="\t", index=False
-    )
+    missing_name = _epoch_table().names[1]
+    frame.drop(columns=[missing_name]).to_csv(tmp_path / "t.tsv", sep="\t", index=False)
 
-    with pytest.raises(ValueError, match="eeg_slope_broadband_global_all_raw"):
+    with pytest.raises(ValueError, match=missing_name):
         read_table(tmp_path / "t.tsv")

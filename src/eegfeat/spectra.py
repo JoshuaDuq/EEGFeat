@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Any
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
+
+from eegfeat.identity import epoch_row_ids
+from eegfeat.table import ComputationSpec, RowId
 
 
 @dataclass(frozen=True)
@@ -87,13 +90,38 @@ def gradient_weights(freqs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return out
 
 
+def band_integration_weights(
+    freqs: npt.NDArray[np.float64], fmin: float, fmax: float
+) -> npt.NDArray[np.float64]:
+    """Piecewise-linear quadrature weights over exact frequency bounds."""
+    axis = np.asarray(freqs, dtype=float)
+    if axis.size < 2 or axis[0] > fmin or axis[-1] < fmax:
+        raise ValueError(
+            f"frequency axis ({axis[0]}, {axis[-1]}) does not span the complete "
+            f"band [{fmin}, {fmax}]."
+        )
+    weights = np.zeros(axis.size)
+    for index, (left, right) in enumerate(zip(axis[:-1], axis[1:], strict=True)):
+        start = max(left, fmin)
+        stop = min(right, fmax)
+        if stop <= start:
+            continue
+        width = right - left
+        start_fraction = (start - left) / width
+        stop_fraction = (stop - left) / width
+        square_difference = stop_fraction**2 - start_fraction**2
+        weights[index] += width * (stop_fraction - start_fraction - square_difference / 2.0)
+        weights[index + 1] += width * square_difference / 2.0
+    return weights
+
+
 @dataclass(frozen=True, eq=False)
 class Spectra:
     """Power spectra over epochs, channels and time windows.
 
-    This is the single input type for every measure in the library. It is built
-    from an MNE ``Spectrum`` or ``EpochsTFR``; past those constructors the two
-    are indistinguishable.
+    This is the single spectral container for the library. It is built from an
+    MNE ``Spectrum`` or ``EpochsTFR`` while retaining whether values are a PSD or
+    time-frequency power, so dimensionally incompatible reductions are rejected.
 
     Parameters
     ----------
@@ -106,11 +134,15 @@ class Spectra:
     windows : tuple of Window
         Time windows, one per window axis entry.
     coverage : ndarray, same shape as ``data``
-        Fraction of contributing samples that were finite, per frequency.
-        Per-frequency rather than per-window because a Morlet kernel is wider at
-        low frequencies, so frequencies drop out of a window individually.
+        Fraction of support-valid coefficients that were finite, per frequency.
+    support : ndarray, same shape as ``data``
+        Fraction of the requested window whose coefficients have complete
+        temporal support inside that window. This is distinct from numerical
+        finiteness: clean data can have full ``coverage`` but partial ``support``.
     source : str
         Provenance, e.g. ``"morlet"``, ``"multitaper"``, ``"welch"``.
+    representation : {"psd", "time_frequency_power"}
+        A density per Hz or wavelet time-frequency power.
     """
 
     data: npt.NDArray[np.float64]
@@ -119,6 +151,11 @@ class Spectra:
     windows: tuple[Window, ...]
     coverage: npt.NDArray[np.float64]
     source: str
+    representation: Literal["psd", "time_frequency_power"]
+    support: npt.NDArray[np.float64]
+    row_ids: tuple[RowId, ...]
+    computation: ComputationSpec
+    flags: Mapping[str, npt.NDArray[np.bool_]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.data.ndim != 4:
@@ -126,6 +163,8 @@ class Spectra:
                 "data must be 4-D (n_epochs, n_channels, n_windows, n_freqs), "
                 f"got {self.data.shape}."
             )
+        if self.representation not in ("psd", "time_frequency_power"):
+            raise ValueError(f"unknown spectral representation {self.representation!r}.")
         n_channels, n_windows, n_freqs = self.data.shape[1:]
         if len(self.ch_names) != n_channels:
             raise ValueError(
@@ -145,6 +184,20 @@ class Spectra:
             raise ValueError(
                 f"coverage shape {self.coverage.shape} does not match data {self.data.shape}."
             )
+        if self.support.shape != self.data.shape:
+            raise ValueError(
+                f"support shape {self.support.shape} does not match data {self.data.shape}."
+            )
+        if len(self.row_ids) != self.n_epochs:
+            raise ValueError(
+                f"row_ids has {len(self.row_ids)} entries but data has {self.n_epochs} epochs."
+            )
+        for name, flag in self.flags.items():
+            if flag.shape != self.data.shape[:3]:
+                raise ValueError(
+                    f"flag {name!r} shape {flag.shape} does not match spectral cells "
+                    f"{self.data.shape[:3]}."
+                )
 
     @property
     def n_epochs(self) -> int:
@@ -152,7 +205,9 @@ class Spectra:
         return int(self.data.shape[0])
 
     @classmethod
-    def from_spectrum(cls, spectrum: Any) -> Spectra:
+    def from_spectrum(
+        cls, spectrum: Any, *, recording: str, estimator_parameters: dict[str, object]
+    ) -> Spectra:
         """Build from an MNE ``Spectrum`` or ``EpochsSpectrum``.
 
         Parameters
@@ -182,6 +237,12 @@ class Spectra:
             windows=(Window("all", -np.inf, np.inf),),
             coverage=np.isfinite(data).astype(float),
             source=str(getattr(spectrum, "method", "unknown")),
+            representation="psd",
+            support=np.ones(data.shape, dtype=float),
+            row_ids=epoch_row_ids(spectrum, recording, data.shape[0]),
+            computation=ComputationSpec.create(
+                str(getattr(spectrum, "method", "unknown")), **estimator_parameters
+            ),
         )
 
     @classmethod
@@ -190,7 +251,8 @@ class Spectra:
         tfr: Any,
         windows: Sequence[Window],
         *,
-        n_cycles: float | npt.NDArray[np.float64] | None = None,
+        recording: str,
+        n_cycles: float | npt.NDArray[np.float64],
     ) -> Spectra:
         """Build from an MNE ``EpochsTFR`` by averaging over time windows.
 
@@ -200,12 +262,10 @@ class Spectra:
             Real-valued power, not baseline-corrected.
         windows : sequence of Window
             Time windows to average over, inclusive of both bounds.
-        n_cycles : float or ndarray, optional
-            Morlet cycle count used to compute the TFR. When given, each window
-            is narrowed to the coefficients it can account for; see
-            :func:`support_restricted_mask`. MNE does not store this on the TFR
-            object, so it cannot be inferred and must be passed to enable the
-            restriction.
+        n_cycles : float or ndarray
+            Morlet cycle count used to compute the TFR. Required because MNE
+            does not store it on the TFR object and safe temporal attribution
+            cannot be inferred without it.
 
         Returns
         -------
@@ -235,12 +295,20 @@ class Spectra:
         freqs = np.asarray(tfr.freqs, dtype=float)
         per_window = [_reduce_window(data, times, freqs, window, n_cycles) for window in windows]
         return cls(
-            data=np.stack([values for values, _ in per_window], axis=2),
+            data=np.stack([values for values, _, _ in per_window], axis=2),
             freqs=freqs,
             ch_names=tuple(tfr.ch_names),
             windows=tuple(windows),
-            coverage=np.stack([cover for _, cover in per_window], axis=2),
+            coverage=np.stack([cover for _, cover, _ in per_window], axis=2),
             source=str(getattr(tfr, "method", "unknown")),
+            representation="time_frequency_power",
+            support=np.stack([support for _, _, support in per_window], axis=2),
+            row_ids=epoch_row_ids(tfr, recording, data.shape[0]),
+            computation=ComputationSpec.create(
+                "morlet",
+                n_cycles=np.asarray(n_cycles, dtype=float),
+                frequencies_hz=freqs,
+            ),
         )
 
 
@@ -252,11 +320,11 @@ def support_restricted_mask(
 ) -> npt.NDArray[np.bool_]:
     """Per-frequency time mask of coefficients a window can account for.
 
-    A Morlet wavelet at frequency ``f`` with ``n_cycles`` cycles has a temporal
-    half-support of ``n_cycles / (2 f)`` seconds, so a coefficient at time ``t``
-    draws on data from ``t +/- half_support``. Only coefficients whose whole span
-    lies inside the window are attributable to it, which narrows the usable range
-    at low frequencies and can empty it altogether.
+    MNE constructs a Morlet wavelet to five Gaussian standard deviations in
+    either direction. With ``sigma_t = n_cycles / (2*pi*f)``, its temporal
+    half-support is therefore ``5*n_cycles / (2*pi*f)`` seconds. Only
+    coefficients whose complete wavelet lies inside the window are attributable
+    to it.
 
     Parameters
     ----------
@@ -277,7 +345,7 @@ def support_restricted_mask(
     """
     f = np.asarray(freqs, dtype=float)
     cycles = np.broadcast_to(np.asarray(n_cycles, dtype=float), f.shape)
-    half_support = cycles / (2.0 * f)
+    half_support = 5.0 * cycles / (2.0 * np.pi * f)
     lower = window.tmin + half_support
     upper = window.tmax - half_support
     t = np.asarray(times, dtype=float)[np.newaxis, :]
@@ -289,24 +357,25 @@ def _reduce_window(
     times: npt.NDArray[np.float64],
     freqs: npt.NDArray[np.float64],
     window: Window,
-    n_cycles: float | npt.NDArray[np.float64] | None,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    if n_cycles is None:
-        mask_1d = (times >= window.tmin) & (times <= window.tmax)
-        if not mask_1d.any():
-            raise ValueError(
-                f"window {window.name!r} ({window.tmin}, {window.tmax}) selects no samples "
-                f"from a time axis spanning ({times[0]}, {times[-1]})."
-            )
-        mask_2d = np.broadcast_to(mask_1d, (freqs.size, times.size))
-    else:
-        mask_2d = support_restricted_mask(times, freqs, window, n_cycles)
-        if not mask_2d.any():
-            raise ValueError(
-                f"window {window.name!r} ({window.tmin}, {window.tmax}) retains no coefficients "
-                f"at any frequency once Morlet support is accounted for. Widen the window or "
-                f"lower n_cycles."
-            )
+    n_cycles: float | npt.NDArray[np.float64],
+) -> tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
+    requested = (times >= window.tmin) & (times <= window.tmax)
+    if not requested.any():
+        raise ValueError(
+            f"window {window.name!r} ({window.tmin}, {window.tmax}) selects no samples "
+            f"from a time axis spanning ({times[0]}, {times[-1]})."
+        )
+    mask_2d = support_restricted_mask(times, freqs, window, n_cycles)
+    if not mask_2d.any():
+        raise ValueError(
+            f"window {window.name!r} ({window.tmin}, {window.tmax}) retains no coefficients "
+            f"at any frequency once Morlet support is accounted for. Widen the window or "
+            f"lower n_cycles."
+        )
     selected = np.where(mask_2d[np.newaxis, np.newaxis, :, :], data, np.nan)
     finite = np.isfinite(selected)
     n_selected = mask_2d.sum(axis=1).astype(float)
@@ -319,4 +388,6 @@ def _reduce_window(
             finite.any(axis=3), np.nanmean(np.where(finite, selected, np.nan), axis=3), np.nan
         )
     coverage = finite.sum(axis=3) / np.where(n_selected > 0, n_selected, np.nan)
-    return values, np.nan_to_num(coverage, nan=0.0)
+    support_by_frequency = n_selected / float(requested.sum())
+    support = np.broadcast_to(support_by_frequency, values.shape)
+    return values, np.nan_to_num(coverage, nan=0.0), support

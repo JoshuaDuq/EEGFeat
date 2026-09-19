@@ -32,7 +32,7 @@ def _problems(tmp_path: Path, body: str, head: str = HEAD) -> str:
 
 
 def test_minimal_recipe_takes_the_library_defaults(tmp_path) -> None:
-    recipe = _load(tmp_path, '[[features]]\nmeasure = "band_power"\n')
+    recipe = _load(tmp_path, '[[features]]\nmeasure = "integrated_band_power"\n')
 
     assert recipe.bands == BANDS_STANDARD
     assert recipe.windows == ()
@@ -40,13 +40,13 @@ def test_minimal_recipe_takes_the_library_defaults(tmp_path) -> None:
     assert recipe.inputs.picks == "eeg"
     assert recipe.inputs.exclude_bads is True
     (spec,) = recipe.features
-    assert spec.measure == "band_power"
+    assert spec.measure == "integrated_band_power"
     assert spec.bands == BANDS_STANDARD
     assert spec.spatial == ("channels", "global")
 
 
 def test_roots_resolve_against_the_recipe_directory(tmp_path) -> None:
-    recipe = _load(tmp_path, '[[features]]\nmeasure = "band_power"\n')
+    recipe = _load(tmp_path, '[[features]]\nmeasure = "integrated_band_power"\n')
 
     assert recipe.inputs.root == tmp_path / "data"
     assert recipe.output.root == tmp_path / "out"
@@ -64,7 +64,7 @@ def test_spectra_default_to_the_span_of_the_recipe_bands(tmp_path) -> None:
     recipe = _load(
         tmp_path,
         "[bands]\ntheta = [4.0, 8.0]\nbeta = [13.0, 30.0]\n\n"
-        '[[features]]\nmeasure = "band_power"\n',
+        '[[features]]\nmeasure = "integrated_band_power"\n',
     )
 
     assert recipe.spectra.method == "welch"
@@ -75,7 +75,7 @@ def test_bands_keep_recipe_order(tmp_path) -> None:
     recipe = _load(
         tmp_path,
         "[bands]\nbeta = [13.0, 30.0]\ntheta = [4.0, 8.0]\n\n"
-        '[[features]]\nmeasure = "band_power"\n',
+        '[[features]]\nmeasure = "integrated_band_power"\n',
     )
 
     assert [b.name for b in recipe.bands] == ["beta", "theta"]
@@ -138,7 +138,9 @@ def test_wrongly_typed_parameter_is_rejected(tmp_path) -> None:
 
 
 def test_parameter_outside_its_allowed_values_is_rejected(tmp_path) -> None:
-    problems = _problems(tmp_path, '[[features]]\nmeasure = "band_power"\nnormalize = "zscore"\n')
+    problems = _problems(
+        tmp_path, '[[features]]\nmeasure = "integrated_band_power"\nnormalize = "zscore"\n'
+    )
 
     assert "normalize" in problems and "'log10'" in problems
 
@@ -159,7 +161,9 @@ def test_unknown_measure_is_rejected(tmp_path) -> None:
 
 
 def test_undefined_band_is_rejected(tmp_path) -> None:
-    problems = _problems(tmp_path, '[[features]]\nmeasure = "band_power"\nbands = ["mu"]\n')
+    problems = _problems(
+        tmp_path, '[[features]]\nmeasure = "integrated_band_power"\nbands = ["mu"]\n'
+    )
 
     assert "'mu'" in problems
 
@@ -191,7 +195,8 @@ def test_band_power_cannot_both_consume_and_report_its_baseline(tmp_path) -> Non
     problems = _problems(
         tmp_path,
         "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
-        '[[features]]\nmeasure = "band_power"\nbaseline = "base"\nwindows = ["base", "stim"]\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'baseline = "base"\nwindows = ["base", "stim"]\n'
         'normalize = "db"\n',
     )
 
@@ -199,7 +204,9 @@ def test_band_power_cannot_both_consume_and_report_its_baseline(tmp_path) -> Non
 
 
 def test_roi_level_requires_rois(tmp_path) -> None:
-    problems = _problems(tmp_path, '[[features]]\nmeasure = "band_power"\nspatial = ["rois"]\n')
+    problems = _problems(
+        tmp_path, '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n'
+    )
 
     assert "[rois]" in problems
 
@@ -234,21 +241,23 @@ def test_pac_requires_pairs(tmp_path) -> None:
 
 
 def test_unknown_section_is_rejected(tmp_path) -> None:
-    problems = _problems(tmp_path, '[plots]\nsize = 3\n\n[[features]]\nmeasure = "band_power"\n')
+    problems = _problems(
+        tmp_path, '[plots]\nsize = 3\n\n[[features]]\nmeasure = "integrated_band_power"\n'
+    )
 
     assert "plots" in problems
 
 
 def test_unknown_input_key_is_rejected(tmp_path) -> None:
     head = '[inputs]\nroot = "data"\nglob = "*.fif"\n\n[output]\nroot = "out"\n'
-    problems = _problems(tmp_path, '[[features]]\nmeasure = "band_power"\n', head)
+    problems = _problems(tmp_path, '[[features]]\nmeasure = "integrated_band_power"\n', head)
 
     assert "glob" in problems
 
 
 def test_input_root_is_required(tmp_path) -> None:
     problems = _problems(
-        tmp_path, '[[features]]\nmeasure = "band_power"\n', '[output]\nroot = "out"\n'
+        tmp_path, '[[features]]\nmeasure = "integrated_band_power"\n', '[output]\nroot = "out"\n'
     )
 
     assert "inputs" in problems and "root" in problems
@@ -260,7 +269,8 @@ def test_a_recipe_without_features_is_rejected(tmp_path) -> None:
 
 def test_invalid_band_bounds_are_rejected(tmp_path) -> None:
     problems = _problems(
-        tmp_path, '[bands]\nalpha = [13.0, 8.0]\n\n[[features]]\nmeasure = "band_power"\n'
+        tmp_path,
+        '[bands]\nalpha = [13.0, 8.0]\n\n[[features]]\nmeasure = "integrated_band_power"\n',
     )
 
     assert "alpha" in problems
@@ -276,7 +286,7 @@ def test_all_is_reserved_for_the_whole_epoch(tmp_path) -> None:
 
 def test_global_is_reserved_among_rois(tmp_path) -> None:
     problems = _problems(
-        tmp_path, '[rois]\nglobal = ["Fz"]\n\n[[features]]\nmeasure = "band_power"\n'
+        tmp_path, '[rois]\nglobal = ["Fz"]\n\n[[features]]\nmeasure = "integrated_band_power"\n'
     )
 
     assert "'global'" in problems
@@ -291,7 +301,7 @@ def test_metadata_trials_need_a_column(tmp_path) -> None:
 def test_spectral_option_of_another_method_is_rejected(tmp_path) -> None:
     problems = _problems(
         tmp_path,
-        '[spectra]\nmethod = "morlet"\nn_fft = 512\n\n[[features]]\nmeasure = "band_power"\n',
+        '[spectra]\nmethod = "morlet"\nn_fft = 512\n\n[[features]]\nmeasure = "mean_tfr_power"\n',
     )
 
     assert "n_fft" in problems and "welch" in problems
@@ -309,7 +319,7 @@ def test_microstate_settings_are_type_checked(tmp_path) -> None:
 def test_every_problem_is_reported_at_once(tmp_path) -> None:
     problems = _problems(
         tmp_path,
-        '[[features]]\nmeasure = "band_power"\nbands = ["mu"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["mu"]\n\n'
         '[[features]]\nmeasure = "burst_rate"\nthreshold = "high"\n',
     )
 

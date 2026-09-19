@@ -407,9 +407,10 @@ def erds_onset_latency(
 ) -> FeatureTable:
     """Time the trace first leaves the baseline's own variability.
 
-    The first sample where ``abs(trace)`` exceeds the baseline coefficient of variation in
-    percent, so a noisy baseline demands a correspondingly larger excursion. A first crossing,
-    not a sustained one. NaN when the trace never crosses.
+    The first sample where absolute raw-power departure from the baseline mean
+    exceeds one baseline standard deviation. The criterion is independent of
+    percent versus decibel output. This is a first crossing, not a sustained one;
+    NaN when the trace never crosses.
 
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
@@ -510,17 +511,24 @@ def _erds_measure(
         raise ValueError(f"normalize must be 'percent' or 'db', got {normalize!r}.")
 
     def trace_of(signal: BandSignal) -> npt.NDArray[np.float64]:
-        return _trace(signal, baseline, normalize)[0]
+        return _trace(signal, baseline, normalize)
 
     def kernel(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        threshold = _baseline_threshold(signal, baseline)
+        reference, deviation = _baseline_stats(signal, baseline)
+        selected = np.isin(signal.times, times)
+        power = signal.power[:, :, selected]
+        onset_crossing = (
+            np.isfinite(power)
+            & np.isfinite(reference[:, :, np.newaxis])
+            & (np.abs(power - reference[:, :, np.newaxis]) > deviation[:, :, np.newaxis])
+        )
         # Every measure derives from the same trace, so computing the set and
         # taking one is cheaper than it looks and keeps the definitions together.
-        return {measure: _measures(signal, trace, times, threshold)[measure]}
+        return {measure: _measures(signal, trace, times, onset_crossing)[measure]}
 
     return expand_signal(
         signals,
@@ -531,12 +539,16 @@ def _erds_measure(
         groups=groups,
         include_global=include_global,
         mode=normalize,
+        parameters={
+            "baseline": {"name": baseline.name, "tmin": baseline.tmin, "tmax": baseline.tmax},
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd",
+        },
     )
 
 
-def _baseline_threshold(signal: BandSignal, baseline: Window) -> npt.NDArray[np.float64]:
-    # The baseline's coefficient of variation in percent: a noisy baseline demands
-    # a larger excursion before onset is declared.
+def _baseline_stats(
+    signal: BandSignal, baseline: Window
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     mask = window_mask(signal.times, baseline)
     power = signal.power[:, :, mask]
     with warnings.catch_warnings():
@@ -544,31 +556,21 @@ def _baseline_threshold(signal: BandSignal, baseline: Window) -> npt.NDArray[np.
         warnings.filterwarnings("ignore", "Degrees of freedom <= 0", RuntimeWarning)
         reference = np.nanmean(power, axis=2)
         deviation = np.nanstd(power, axis=2)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(reference > _MIN_BASELINE_POWER, deviation / reference * 100.0, np.nan)
-
-
-def _trace(
-    signal: BandSignal, baseline: Window, mode: ErdsScale
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    power = signal.power
-    mask = window_mask(signal.times, baseline)
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
-        reference = np.nanmean(power[:, :, mask], axis=2)
-        deviation = np.nanstd(power[:, :, mask], axis=2)
-    # A baseline at the power floor cannot anchor a ratio; say so rather than
-    # returning a number that is arithmetically valid and physically meaningless.
     reference = np.where(reference > _MIN_BASELINE_POWER, reference, np.nan)
-    threshold = deviation / reference * 100.0
-    return _normalize(power, baseline=reference, mode=mode), threshold
+    return reference, deviation
+
+
+def _trace(signal: BandSignal, baseline: Window, mode: ErdsScale) -> npt.NDArray[np.float64]:
+    power = signal.power
+    reference, _ = _baseline_stats(signal, baseline)
+    return _normalize(power, baseline=reference, mode=mode)
 
 
 def _measures(
     signal: BandSignal,
     trace: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
-    threshold: npt.NDArray[np.float64],
+    onset_crossing: npt.NDArray[np.bool_],
 ) -> dict[str, npt.NDArray[np.float64]]:
     finite = np.isfinite(trace)
     usable: npt.NDArray[np.bool_] = np.asarray(finite.any(axis=2), dtype=np.bool_)
@@ -584,7 +586,7 @@ def _measures(
         "ers_magnitude": _signed_magnitude(trace, finite, usable, negative=False),
         "ers_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=False),
         "peak_latency": np.where(usable, times[peak_index], np.nan),
-        "onset_latency": _onset(trace, times, finite, usable, threshold),
+        "onset_latency": _onset(times, usable, onset_crossing),
         "rebound_latency": _rebound(trace, times, finite, usable, peak_index),
     }
 
@@ -596,13 +598,10 @@ def _argmax_masked(
 
 
 def _onset(
-    trace: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
-    finite: npt.NDArray[np.bool_],
     usable: npt.NDArray[np.bool_],
-    threshold: npt.NDArray[np.float64],
+    crossed: npt.NDArray[np.bool_],
 ) -> npt.NDArray[np.float64]:
-    crossed = finite & (np.abs(trace) > threshold[:, :, np.newaxis])
     any_crossing: npt.NDArray[np.bool_] = np.asarray(crossed.any(axis=2), dtype=np.bool_)
     index = np.argmax(crossed, axis=2)
     return np.where(usable & any_crossing, times[index], np.nan)

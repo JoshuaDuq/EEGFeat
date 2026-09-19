@@ -4,6 +4,7 @@ from scipy.signal import welch
 
 from eegfeat.bands import Band
 from eegfeat.descriptors import (
+    _smooth,
     peak_frequency,
     spectral_bandwidth,
     spectral_centroid,
@@ -11,6 +12,7 @@ from eegfeat.descriptors import (
     spectral_entropy,
 )
 from eegfeat.spectra import Spectra, Window
+from eegfeat.table import ComputationSpec
 
 ALPHA = Band("alpha", 8.0, 13.0)
 
@@ -28,6 +30,10 @@ def _spectra(power: np.ndarray, freqs: np.ndarray) -> Spectra:
         windows=(Window("all", -np.inf, np.inf),),
         coverage=np.isfinite(data).astype(float),
         source="test",
+        representation="psd",
+        support=np.ones(data.shape),
+        row_ids=(("test", 0, "event"),),
+        computation=ComputationSpec.create("test"),
     )
 
 
@@ -189,6 +195,10 @@ def _wide(power: np.ndarray) -> Spectra:
         windows=(Window("all", -np.inf, np.inf),),
         coverage=np.isfinite(data).astype(float),
         source="test",
+        representation="psd",
+        support=np.ones(data.shape),
+        row_ids=(("test", 0, "event"),),
+        computation=ComputationSpec.create("test"),
     )
 
 
@@ -232,6 +242,16 @@ def test_smoothing_does_not_move_a_peak_that_sits_on_a_bin(smoothing_hz: float) 
         _spectra(power, freqs), band=ALPHA, smoothing_hz=smoothing_hz, include_global=False
     )
     assert table.values.item() == pytest.approx(10.0, abs=0.05)
+
+
+def test_smoothing_bandwidth_is_constant_in_hertz_on_a_log_grid() -> None:
+    freqs = np.geomspace(1.0, 100.0, 120)
+    values = np.zeros((1, 1, 1, freqs.size))
+    centre = int(np.argmin(np.abs(freqs - 75.0)))
+    values[..., centre] = 1.0
+    smoothed = _smooth(values, freqs, smoothing_hz=10.0).ravel()
+    affected = freqs[smoothed > 0.0]
+    assert affected.max() - affected.min() <= 10.0 + np.max(np.diff(freqs))
 
 
 def test_a_spectrum_with_no_oscillation_falls_back_to_centre_of_gravity() -> None:

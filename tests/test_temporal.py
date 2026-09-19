@@ -19,7 +19,13 @@ WINDOW = Window("all", 0.0, 2.0)
 
 def _signal(data: np.ndarray) -> Signal:
     times = np.arange(data.shape[-1]) / SFREQ
-    return Signal.from_arrays(data=data, times=times, ch_names=("C3",), sfreq=SFREQ)
+    return Signal.from_arrays(
+        data=data,
+        times=times,
+        ch_names=("C3",),
+        sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(data.shape[0])),
+    )
 
 
 def test_variance_of_a_known_series() -> None:
@@ -132,6 +138,7 @@ def test_measures_work_on_a_band_envelope_too() -> None:
         ch_names=("C3",),
         band=Band("beta", 13.0, 30.0),
         sfreq=SFREQ,
+        row_ids=(("test", 0, "event"),),
     )
     table = mean_amplitude([band_signal], windows=[WINDOW], include_global=False)
     assert table.values.item() == pytest.approx(2.0)

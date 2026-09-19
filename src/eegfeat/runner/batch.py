@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import time
 import traceback
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import mne  # type: ignore[import-untyped]
@@ -268,7 +270,9 @@ def check(recipe: Recipe, *, n_jobs: int = 1) -> CheckReport:
     trial = recordings[0]
     try:
         epochs = load_epochs(trial.source, recipe.inputs)
-        features = compute_features(epochs, recipe, n_jobs=n_jobs)
+        features = compute_features(
+            epochs, recipe, recording=trial.source.as_posix(), n_jobs=n_jobs
+        )
         if features.epochs is not None:
             epoch_rows(epochs, recipe.output.epoch_metadata)
     except Exception as exc:  # noqa: BLE001 - reported with the recording it came from
@@ -307,19 +311,17 @@ def _process(
     clock = time.perf_counter()
     total = len(recipe.features) + 2
     try:
-        if overwrite:
-            for path in recording.files():
-                path.unlink(missing_ok=True)
         report.step(label, "read", 1, total)
         epochs = load_epochs(recording.source, recipe.inputs)
         features = compute_features(
             epochs,
             recipe,
+            recording=recording.source.as_posix(),
             n_jobs=n_jobs,
             on_step=lambda measure, current, _: report.step(label, measure, current + 1, total),
         )
         report.step(label, "write", total, total)
-        outputs = _write(recording, features, epochs, recipe)
+        outputs = _stage_and_publish(recording, features, epochs, recipe, overwrite=overwrite)
     except Exception as exc:  # noqa: BLE001 - one bad recording must not end the batch
         return RecordingResult(
             recording,
@@ -336,6 +338,70 @@ def _process(
         outputs=outputs,
         summary=_describe(len(epochs), features, seconds),
     )
+
+
+def _stage_and_publish(
+    recording: Recording,
+    features: RecordingFeatures,
+    epochs: Any,
+    recipe: Recipe,
+    *,
+    overwrite: bool,
+) -> tuple[Path, ...]:
+    destination = recording.base.parent
+    destination.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".eegfeat-", dir=destination) as temporary:
+        staging = Path(temporary)
+        staged = Recording(
+            source=recording.source,
+            label=recording.label,
+            base=staging / recording.base.name,
+        )
+        staged_outputs = _write(staged, features, epochs, recipe)
+        _validate_staged_tables(staged_outputs)
+        final_outputs = tuple(destination / path.name for path in staged_outputs)
+        _publish(
+            staged_outputs,
+            final_outputs,
+            existing=recording.files() if overwrite else (),
+            backup_root=staging / "backup",
+        )
+    return final_outputs
+
+
+def _validate_staged_tables(outputs: tuple[Path, ...]) -> None:
+    from eegfeat.io import read_table
+
+    for path in outputs:
+        if path.suffix == ".tsv" and not path.stem.endswith("_coverage"):
+            read_table(path)
+
+
+def _publish(
+    staged: tuple[Path, ...],
+    final: tuple[Path, ...],
+    *,
+    existing: tuple[Path, ...],
+    backup_root: Path,
+) -> None:
+    backup_root.mkdir()
+    backups: list[tuple[Path, Path]] = []
+    published: list[Path] = []
+    try:
+        for path in existing:
+            if path.exists():
+                backup = backup_root / path.name
+                os.replace(path, backup)
+                backups.append((backup, path))
+        for source, target in zip(staged, final, strict=True):
+            os.replace(source, target)
+            published.append(target)
+    except Exception:
+        for path in published:
+            path.unlink(missing_ok=True)
+        for backup, target in backups:
+            os.replace(backup, target)
+        raise
 
 
 def _write(

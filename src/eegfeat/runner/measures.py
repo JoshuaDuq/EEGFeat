@@ -102,7 +102,9 @@ def _measures(*names: str) -> dict[str, Measure]:
 
 
 MEASURES: dict[str, Measure] = _measures(
-    "band_power",
+    "integrated_band_power",
+    "mean_psd",
+    "mean_tfr_power",
     "aperiodic",
     "peak_frequency",
     "spectral_centroid",
@@ -132,6 +134,7 @@ MEASURES: dict[str, Measure] = _measures(
     "erds_onset_latency",
     "erds_rebound_latency",
     "itpc",
+    "ppc",
     "pac",
     "envelope_correlation",
     "wpli",

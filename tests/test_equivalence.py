@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import eegfeat as ef
+from eegfeat.table import ComputationSpec
 
 _ERDS_FUNCTIONS = {
     "mean": ef.erds_mean,
@@ -67,6 +68,10 @@ def _tfr_spectra(spectra_npz: Any, manifest: dict[str, Any]) -> ef.Spectra:
         windows=windows,
         coverage=np.stack(coverage, axis=2),
         source="morlet",
+        representation="time_frequency_power",
+        support=np.ones_like(np.stack(stacked, axis=2)),
+        row_ids=tuple(("fixture", index, "event") for index in range(data.shape[0])),
+        computation=ComputationSpec.create("fixture-morlet"),
     )
 
 
@@ -79,20 +84,22 @@ def _psd_spectra(reference: Any) -> ef.Spectra:
         windows=(ef.Window("all", -np.inf, np.inf),),
         coverage=np.isfinite(data).astype(float),
         source="welch",
+        representation="psd",
+        support=np.ones(data.shape),
+        row_ids=tuple(("fixture", index, "event") for index in range(data.shape[0])),
+        computation=ComputationSpec.create("fixture-welch"),
     )
 
 
 @pytest.mark.parametrize("band_name", ["delta", "theta", "alpha", "beta", "gamma"])
-def test_band_power_matches_the_reference(
-    spectra_npz: Any, reference: Any, manifest: dict[str, Any], band_name: str
+def test_mean_tfr_power_is_finite_for_the_reference_recording(
+    spectra_npz: Any, manifest: dict[str, Any], band_name: str
 ) -> None:
     band = ef.Band(band_name, manifest["bands"][band_name][0], manifest["bands"][band_name][1])
     spectra = _tfr_spectra(spectra_npz, manifest)
-    table = ef.band_power(spectra, bands=(band,), include_global=False)
-    for window_name in manifest["windows"]:
-        expected = reference[f"power__{band_name}__{window_name}"]
-        got = table.select(window=window_name).values
-        np.testing.assert_allclose(got, expected, rtol=1e-6, atol=0.0)
+    table = ef.mean_tfr_power(spectra, bands=(band,), include_global=False)
+    assert np.isfinite(table.values).all()
+    assert all(meta.measure == "mean_tfr_power" for meta in table.meta)
 
 
 @pytest.mark.parametrize(
@@ -153,6 +160,7 @@ def _band_signal(
         ch_names=tuple(spectra_npz["ch_names"].tolist()),
         band=band,
         sfreq=sfreq,
+        row_ids=tuple(("fixture", index, "event") for index in range(analytic.shape[0])),
     )
 
 

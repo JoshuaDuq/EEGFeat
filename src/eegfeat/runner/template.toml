@@ -35,7 +35,7 @@ epoch_metadata = true               # copy each epoch's metadata into its row
 # frontal = ["Fz", "F3", "F4"]
 # parietal = ["Pz", "P3", "P4"]
 
-# How spectra are estimated for band_power, aperiodic, peak_frequency and the
+# How spectra are estimated for power, aperiodic, peak_frequency and the
 # spectral_* measures: "welch" (default), "multitaper" or "morlet". Morlet
 # restricts each window to the coefficients its wavelets can account for.
 [spectra]
@@ -50,11 +50,11 @@ method = "welch"
 # Keys every entry may use, where the measure supports them:
 #   bands     band names; defaults to every band
 #   windows   window names; defaults to every window except the baseline
-#   baseline  a window name, for band_power, bursts and ERDS
+#   baseline  a window name, for power, bursts and ERDS
 #   spatial   any of "channels", "rois", "global"; defaults to channels and global
 
 [[features]]
-measure = "band_power"
+measure = "integrated_band_power"
 normalize = "log10"
 
 [[features]]

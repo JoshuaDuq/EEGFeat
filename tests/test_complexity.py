@@ -13,7 +13,11 @@ WINDOW = Window("all", 0.0, 2.0)
 def _signal(values: np.ndarray) -> Signal:
     data = values.reshape(1, 1, values.size)
     return Signal.from_arrays(
-        data=data, times=np.arange(values.size) / SFREQ, ch_names=("C3",), sfreq=SFREQ
+        data=data,
+        times=np.arange(values.size) / SFREQ,
+        ch_names=("C3",),
+        sfreq=SFREQ,
+        row_ids=(("test", 0, "event"),),
     )
 
 
@@ -46,12 +50,14 @@ def test_coarse_graining_averages_non_overlapping_blocks() -> None:
     np.testing.assert_allclose(_coarse_grain(x, 1), x)
 
 
-def test_coarse_graining_drops_non_finite_samples_before_blocking() -> None:
-    # Removing the NaN leaves three finite samples, so one block of two fits and
-    # the trailing sample is discarded. Note this closes the gap rather than
-    # preserving sample positions.
+def test_coarse_graining_preserves_gaps_in_the_time_axis() -> None:
     x = np.array([1.0, np.nan, 3.0, 5.0])
-    np.testing.assert_allclose(_coarse_grain(x, 2), [2.0])
+    np.testing.assert_allclose(_coarse_grain(x, 2), [np.nan, 4.0], equal_nan=True)
+
+
+def test_sample_entropy_does_not_make_templates_across_a_gap() -> None:
+    separated = np.r_[np.zeros(10), [np.nan] * 3, np.ones(10) * 10.0]
+    assert _sample_entropy(separated, 2, 0.2) == pytest.approx(0.0)
 
 
 def test_multiscale_scale_one_equals_sample_entropy() -> None:
@@ -60,6 +66,42 @@ def test_multiscale_scale_one_equals_sample_entropy() -> None:
     mse = multiscale_entropy([signal], windows=[WINDOW], scales=(1,), include_global=False)
     plain = sample_entropy([signal], windows=[WINDOW], include_global=False)
     np.testing.assert_allclose(mse.values, plain.values)
+
+
+def test_multiscale_entropy_exposes_both_tolerance_definitions() -> None:
+    rng = np.random.RandomState(11)
+    signal = _signal(rng.randn(201))
+    classical = multiscale_entropy(
+        [signal],
+        windows=[WINDOW],
+        scales=(3,),
+        tolerance_mode="original_sd",
+        include_global=False,
+    )
+    varying = multiscale_entropy(
+        [signal],
+        windows=[WINDOW],
+        scales=(3,),
+        tolerance_mode="scale_sd",
+        include_global=False,
+    )
+    assert classical.meta[0].computation.parameters["parameters"]["tolerance_mode"] == "original_sd"
+    assert varying.meta[0].computation.parameters["parameters"]["tolerance_mode"] == "scale_sd"
+    assert classical.values.item() != pytest.approx(varying.values.item())
+
+
+def test_classical_tolerance_is_the_multiscale_default() -> None:
+    rng = np.random.RandomState(12)
+    signal = _signal(rng.randn(201))
+    default = multiscale_entropy([signal], windows=[WINDOW], scales=(3,), include_global=False)
+    classical = multiscale_entropy(
+        [signal],
+        windows=[WINDOW],
+        scales=(3,),
+        tolerance_mode="original_sd",
+        include_global=False,
+    )
+    np.testing.assert_allclose(default.values, classical.values)
 
 
 def test_multiscale_emits_one_column_per_scale() -> None:
@@ -88,6 +130,7 @@ def test_entropy_works_on_a_band_envelope() -> None:
         ch_names=("C3",),
         band=Band("beta", 13.0, 30.0),
         sfreq=SFREQ,
+        row_ids=(("test", 0, "event"),),
     )
     table = sample_entropy([band_signal], windows=[WINDOW], include_global=False)
     assert np.isfinite(table.values).all()

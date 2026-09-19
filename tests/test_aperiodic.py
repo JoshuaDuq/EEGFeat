@@ -3,6 +3,7 @@ import pytest
 
 from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.spectra import Spectra, Window
+from eegfeat.table import ComputationSpec
 
 FREQS = np.logspace(np.log10(2.0), np.log10(40.0), 60)
 
@@ -16,6 +17,10 @@ def _spectra(power: np.ndarray) -> Spectra:
         windows=(Window("all", -np.inf, np.inf),),
         coverage=np.isfinite(data).astype(float),
         source="test",
+        representation="psd",
+        support=np.ones(data.shape),
+        row_ids=(("test", 0, "event"),),
+        computation=ComputationSpec.create("test"),
     )
 
 
@@ -98,9 +103,10 @@ def test_a_fit_range_holding_too_few_bins_raises() -> None:
         aperiodic_ratio(_spectra(10.0 * FREQS**-1.7), fit_range=(2.0, 2.2))
 
 
-def test_a_cell_that_cannot_be_fitted_passes_through_unchanged() -> None:
+def test_a_cell_that_cannot_be_fitted_is_withheld() -> None:
     power = np.full(FREQS.size, np.nan)
     power[:4] = 1.0
     spectra = _spectra(power)
     ratio = aperiodic_ratio(spectra)
-    np.testing.assert_array_equal(ratio.data[np.isfinite(ratio.data)], [1.0, 1.0, 1.0, 1.0])
+    assert np.isnan(ratio.data).all()
+    assert ratio.flags["aperiodic_fit_failed"].all()

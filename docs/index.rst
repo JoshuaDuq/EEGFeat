@@ -48,7 +48,7 @@ Core Capabilities
       Trapezoidal frequency-weighted band power, spectral centroid,
       bandwidth, Shannon entropy, and spectral edge frequency (SEF95).
 
-      ``eegfeat.band_power`` · ``eegfeat.spectral_centroid``
+      ``eegfeat.integrated_band_power`` · ``eegfeat.mean_psd`` · ``eegfeat.spectral_centroid``
 
    .. grid-item-card:: 02 — Wavelet Support Restriction
       :link: methods

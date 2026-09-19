@@ -14,7 +14,12 @@ def _signal(band: Band, value: float) -> BandSignal:
     times = np.arange(400) / SFREQ - 1.0
     analytic = np.full((3, 2, 400), value + 0j)
     return BandSignal.from_arrays(
-        analytic=analytic, times=times, ch_names=("C3", "C4"), band=band, sfreq=SFREQ
+        analytic=analytic,
+        times=times,
+        ch_names=("C3", "C4"),
+        band=band,
+        sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(analytic.shape[0])),
     )
 
 
@@ -33,6 +38,7 @@ def _run(**kw: object) -> object:
         groups=None,
         include_global=False,
         mode="raw",
+        parameters={},
     )
     return expand_signal(**{**defaults, **kw})  # type: ignore[arg-type]
 
@@ -81,6 +87,7 @@ def test_signals_disagreeing_on_the_time_axis_raise() -> None:
         ch_names=other.ch_names,
         band=other.band,
         sfreq=other.sfreq,
+        row_ids=other.row_ids,
     )
     with pytest.raises(ValueError, match="same time axis"):
         _run(signals=[_signal(ALPHA, 2.0), shifted])
@@ -94,6 +101,7 @@ def test_signals_disagreeing_on_channels_raise() -> None:
         ch_names=("Cz", "Pz"),
         band=other.band,
         sfreq=other.sfreq,
+        row_ids=other.row_ids,
     )
     with pytest.raises(ValueError, match="same channels"):
         _run(signals=[_signal(ALPHA, 2.0), renamed])

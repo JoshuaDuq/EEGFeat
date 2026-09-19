@@ -49,7 +49,7 @@ are errors, and every problem found is reported at once.
    by = "event"
 
    [[features]]
-   measure = "band_power"
+   measure = "integrated_band_power"
    normalize = "log10"
    ratios = [["theta", "beta"]]
 
@@ -116,7 +116,7 @@ own keyword parameters, checked against its annotations (``normalize``, ``fit_ra
    * - ``windows``
      - Window names. Default: every window except the entry's baseline.
    * - ``baseline``
-     - A window name. ``band_power`` consumes it for normalization; burst and ERDS
+     - A window name. Power measures consume it for normalization; burst and ERDS
        measures calibrate against it.
    * - ``spatial``
      - Any of ``"channels"``, ``"rois"``, ``"global"``. Default ``["channels", "global"]``;
@@ -128,7 +128,7 @@ own keyword parameters, checked against its annotations (``normalize``, ``fit_ra
      - ``pac`` only: ``[["theta", "gamma"], ...]`` as ``[phase, amplitude]``. PAC
        columns are named by amplitude band, so pairs in one entry need distinct ones.
    * - ``ratios``, ``asymmetry``
-     - ``band_power`` only: ``[[numerator, denominator], ...]`` band pairs and
+     - Power measures only: ``[[numerator, denominator], ...]`` band pairs and
        ``[[left, right], ...]`` channel pairs, through :func:`eegfeat.band_ratio` and
        :func:`eegfeat.asymmetry`.
    * - ``graph``, ``clustering_threshold``

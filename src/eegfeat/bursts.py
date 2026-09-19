@@ -341,6 +341,15 @@ def _burst_measure(
         groups=groups,
         include_global=include_global,
         mode="raw",
+        parameters={
+            "baseline": (
+                None
+                if baseline is None
+                else {"name": baseline.name, "tmin": baseline.tmin, "tmax": baseline.tmax}
+            ),
+            "threshold": threshold,
+            "min_duration_ms": min_duration_ms,
+        },
     )
 
 

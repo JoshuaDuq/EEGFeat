@@ -23,12 +23,13 @@ from mne.time_frequency import (  # type: ignore[import-untyped]
 from eegfeat._expand import window_mask
 from eegfeat.bands import Band
 from eegfeat.derived import asymmetry, band_ratio
+from eegfeat.identity import epoch_row_ids
 from eegfeat.microstates import MicrostateSegmentation, segment
 from eegfeat.runner.measures import GRAPH, MEASURES, Measure
 from eegfeat.runner.recipe import WHOLE_EPOCH, FeatureSpec, Recipe
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
-from eegfeat.table import FeatureTable, concat
+from eegfeat.table import ComputationSpec, FeatureTable, concat
 
 OnStep = Callable[[str, int, int], None]
 """Called before each entry with its measure, its position and the entry count."""
@@ -59,6 +60,7 @@ def compute_features(
     epochs: Any,
     recipe: Recipe,
     *,
+    recording: str,
     n_jobs: int = 1,
     on_step: OnStep | None = None,
 ) -> RecordingFeatures:
@@ -79,7 +81,7 @@ def compute_features(
     -------
     RecordingFeatures
     """
-    inputs = RecordingInputs(epochs, recipe, n_jobs=n_jobs)
+    inputs = RecordingInputs(epochs, recipe, recording=recording, n_jobs=n_jobs)
     per_epoch: list[FeatureTable] = []
     crosstrial: list[FeatureTable] = []
     for position, spec in enumerate(recipe.features, start=1):
@@ -102,9 +104,10 @@ def event_names(epochs: Any) -> list[str]:
 class RecordingInputs:
     """The inputs a recording's measures draw on, each built on first use."""
 
-    def __init__(self, epochs: Any, recipe: Recipe, *, n_jobs: int) -> None:
+    def __init__(self, epochs: Any, recipe: Recipe, *, recording: str, n_jobs: int) -> None:
         self.epochs = epochs
         self.recipe = recipe
+        self.recording = recording
         self.n_jobs = n_jobs
         self.times: npt.NDArray[np.float64] = np.asarray(epochs.times, dtype=float)
         self.sfreq = float(epochs.info["sfreq"])
@@ -135,7 +138,7 @@ class RecordingInputs:
     def signal(self) -> Signal:
         """The broadband epochs."""
         if self._signal is None:
-            self._signal = Signal.from_epochs(self.epochs)
+            self._signal = Signal.from_epochs(self.epochs, recording=self.recording)
         return self._signal
 
     def band_signal(self, band: Band) -> BandSignal:
@@ -145,6 +148,7 @@ class RecordingInputs:
             self._band_signals[band] = BandSignal.from_epochs(
                 self.epochs,
                 band,
+                recording=self.recording,
                 pad_sec=settings.pad_sec,
                 pad_cycles=settings.pad_cycles,
                 n_jobs=self.n_jobs,
@@ -156,7 +160,7 @@ class RecordingInputs:
         finite = self.windows(windows)
         if self.recipe.spectra.method == "morlet":
             tfr, n_cycles = self._morlet()
-            return Spectra.from_tfr(tfr, finite, n_cycles=n_cycles)
+            return Spectra.from_tfr(tfr, finite, recording=self.recording, n_cycles=n_cycles)
 
         estimates = [self._window_psd(window) for window in finite]
         freqs = estimates[0][1]
@@ -175,6 +179,17 @@ class RecordingInputs:
             windows=finite,
             coverage=np.isfinite(data).astype(float),
             source=self.recipe.spectra.method,
+            representation="psd",
+            support=np.ones(data.shape, dtype=float),
+            row_ids=epoch_row_ids(self.epochs, self.recording, data.shape[0]),
+            computation=ComputationSpec.create(
+                self.recipe.spectra.method,
+                settings={
+                    key: value
+                    for key, value in self.recipe.spectra.__dict__.items()
+                    if value is not None
+                },
+            ),
         )
 
     def trials(self) -> tuple[str, ...] | None:
@@ -225,11 +240,12 @@ class RecordingInputs:
                     f"n_fft = {n_fft} is longer than window {window.name!r}, which holds "
                     f"{data.shape[-1]} samples; lower n_fft or widen the window."
                 )
+            resolution = self.sfreq / n_fft
             psd, freqs = psd_array_welch(
                 data,
                 self.sfreq,
-                fmin=settings.fmin,
-                fmax=settings.fmax,
+                fmin=max(0.0, settings.fmin - resolution),
+                fmax=min(self.sfreq / 2.0, settings.fmax + resolution),
                 n_fft=n_fft,
                 n_overlap=n_fft // 2 if settings.n_overlap is None else settings.n_overlap,
                 window=_WELCH_TAPER,
@@ -237,11 +253,12 @@ class RecordingInputs:
                 verbose=False,
             )
         else:
+            resolution = self.sfreq / data.shape[-1]
             psd, freqs = psd_array_multitaper(
                 data,
                 self.sfreq,
-                fmin=settings.fmin,
-                fmax=settings.fmax,
+                fmin=max(0.0, settings.fmin - resolution),
+                fmax=min(self.sfreq / 2.0, settings.fmax + resolution),
                 bandwidth=settings.bandwidth,
                 n_jobs=self.n_jobs,
                 verbose=False,
@@ -370,7 +387,7 @@ def _spectral(
     rois: Mapping[str, tuple[str, ...]],
 ) -> FeatureTable:
     function = measure.function
-    # band_power consumes its baseline window, so the spectra must include it.
+    # Power reductions consume their baseline window, so spectra must include it.
     spectra = inputs.spectra((*spec.windows, *((spec.baseline,) if spec.baseline else ())))
 
     if measure.takes("bands"):

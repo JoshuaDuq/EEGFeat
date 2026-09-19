@@ -3,22 +3,23 @@ Methods
 
 This document details the mathematical formulation and implementation of each spectral feature in ``eegfeat``.
 
-Band Power
-----------
+Spectral Power
+--------------
 
-Band power is computed as a trapezoidally weighted mean across the in-band frequency bins:
-
-.. math::
-
-   \bar{P} = \frac{\sum_{i} P(f_i) w_i}{\sum_{i} w_i}
-
-where :math:`w_i` are the trapezoidal integration weights along the frequency axis:
+``integrated_band_power`` integrates a PSD over exact numerical band boundaries:
 
 .. math::
 
-   w_0 = \frac{f_1 - f_0}{2}, \quad w_i = \frac{f_{i+1} - f_{i-1}}{2}, \quad w_{N-1} = \frac{f_{N-1} - f_{N-2}}{2}
+   P_B = \int_{f_{\min}}^{f_{\max}} S(f)\,df
 
-This weights each spectral estimate by the width of the frequency interval it represents, estimating the band integral divided by the band width :math:`\int_{f_{\min}}^{f_{\max}} P(f) df / (f_{\max} - f_{\min})`. Weighting by interval width is essential on logarithmic or non-uniform frequency grids, where unweighted bin averaging disproportionately biases power toward densely sampled lower frequencies.
+Piecewise-linear quadrature includes interpolated contributions at both boundaries,
+so changing from a linear to a logarithmic grid does not silently change the
+represented interval. For EEG PSD in V²/Hz the result is V².
+
+``mean_psd`` divides that integral by band width and retains V²/Hz units.
+``mean_tfr_power`` is the corresponding frequency-weighted mean for Morlet
+time-frequency power. :class:`~eegfeat.Spectra` records which representation it
+contains, and these operations reject the wrong one instead of conflating units.
 
 Normalization
 -------------
@@ -41,7 +42,7 @@ When computing spectral power or features across time-frequency representations 
 
 .. math::
 
-   \tau(f) = \frac{n_{\text{cycles}}}{2 f}
+   \tau(f) = \frac{5 n_{\text{cycles}}}{2 \pi f}
 
 A time-frequency coefficient at time coordinate :math:`t` draws upon underlying signal data from :math:`[t - \tau(f), t + \tau(f)]`. Consequently, a coefficient is mathematically attributable to an analysis window :math:`[t_{\min}, t_{\max}]` if and only if its full temporal support is contained entirely within the window bounds:
 
@@ -66,10 +67,10 @@ simply the leftmost one. The fit spans ``fit_range``, defaulting to
 outside the band: a 1/f slope estimated from a five-hertz window is not a 1/f
 slope. This sets the measure name to ``peak_freq_adjusted``.
 
-**Smoothing.** The spectrum is averaged over a window of ``smoothing_hz`` before
-the search, so a single noisy bin cannot win. The average ignores non-finite bins
-and renormalizes by how many contributed, rather than closing the gap and
-averaging across it.
+**Smoothing.** The spectrum is averaged over frequencies within the requested
+``smoothing_hz`` interval around each output frequency. Distances are measured in
+hertz, so bandwidth stays fixed on linear and logarithmic grids. Non-finite bins
+are excluded without closing the gap.
 
 **Prominence guard.** If the maximum stands less than ``min_prominence`` above
 the band median, in :math:`\log_{10}` units, the centre of gravity
@@ -151,6 +152,10 @@ The aperiodic (1/f) background is modeled in log-log space:
 
 Fitting uses iterative peak rejection: an initial least-squares line is fit over ``fit_range``, residuals :math:`r(f) = \log_{10} P(f) - (\text{offset} + \text{slope} \log_{10} f)` are computed, and points with positive residuals exceeding :math:`z \cdot \text{MAD}(r)` (default :math:`z = 2.5`) are rejected before refitting, repeated up to ``max_iterations`` times. Only positive residuals are excluded because oscillatory peaks project above the aperiodic component and would otherwise artificially flatten the estimated slope.
 
+If the fit cannot be estimated, ``aperiodic_ratio`` returns NaNs for that cell
+and marks ``aperiodic_fit_failed``. It never labels an unchanged raw spectrum as
+aperiodic-adjusted.
+
 Event-Related Desynchronization and Synchronization (ERDS)
 ----------------------------------------------------------
 
@@ -174,7 +179,10 @@ Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}
 - **ers_magnitude**: Mean magnitude of positive excursions: :math:`\frac{1}{|K_+|} \sum_{t_k \in K_+} \text{ERDS}(t_k)`, where :math:`K_+ = \{t_k : \text{ERDS}(t_k) > 0\}` (returns :math:`0.0` if :math:`K_+ = \emptyset`).
 - **ers_duration**: Cumulative synchronization duration: :math:`|K_+| / f_s` in seconds.
 - **peak_latency**: Latency of the maximum absolute excursion: :math:`t^* = \arg\max_{t_k} |\text{ERDS}(t_k)|`.
-- **onset_latency**: Earliest latency where :math:`|\text{ERDS}(t_k)|` exceeds the baseline coefficient of variation: :math:`\min \{t_k : |\text{ERDS}(t_k)| > \theta_\text{baseline}\}`, where :math:`\theta_\text{baseline} = \frac{\sigma_B}{\mu_B} \cdot 100`.
+- **onset_latency**: Earliest latency where the absolute raw-power departure from
+  baseline exceeds one baseline standard deviation:
+  :math:`\min \{t_k : |P(t_k)-B| > \sigma_B\}`. The criterion is evaluated before
+  percent or decibel reporting, so normalization choice cannot move the onset.
 - **rebound_latency**: Latency of the maximal excursion occurring strictly after the peak latency: :math:`\arg\max_{t_k > t^*} \text{ERDS}(t_k)`.
 
 Oscillatory Bursts
@@ -204,7 +212,9 @@ summarize a series within a window. They accept a raw :class:`~eegfeat.Signal` o
 a :class:`~eegfeat.BandSignal`, reading the signal itself in the first case and
 the envelope in the second.
 
-Non-finite samples are excluded and reported through ``coverage``, ensuring
+Non-finite samples are excluded and reported through ``coverage``. Coverage is
+a finite-data measure, not an artifact detector: large finite artifacts remain
+numerically valid unless rejected before feature extraction. This ensures
 window summaries reflect only valid, finite electrophysiological data without
 silent zero-filling or whole-window invalidation.
 
@@ -248,10 +258,12 @@ length-:math:`m+1` pair does; neither case is reported as zero, because zero
 entropy means perfect regularity rather than absent evidence.
 
 ``multiscale_entropy`` applies the same measure after coarse-graining by
-non-overlapping block averages, one column per scale. The tolerance is recomputed
-from each coarse-grained series so it tracks the variance surviving the averaging.
-Note that coarse-graining removes non-finite samples before blocking, which closes
-gaps rather than preserving sample positions.
+non-overlapping block averages, one column per scale. ``tolerance_mode="original_sd"``
+(the default) holds :math:`r\sigma_x` from the original signal fixed across scales,
+matching classical MSE. ``"scale_sd"`` recomputes it after coarse-graining and is
+recorded as a distinct estimator definition. Coarse blocks containing non-finite
+samples remain non-finite, and embedding templates crossing a gap are excluded;
+missing samples are never removed in a way that creates new temporal neighbours.
 
 Cost grows with the square of the window length, so entropy on long windows is
 markedly slower than the spectral measures.
@@ -302,7 +314,10 @@ the reverse.
 
 Under the null of uniform phase the expected value is about
 :math:`1/\sqrt{N}`, not zero, so coherence from a small number of trials is
-biased upward and values from different trial counts are not comparable.
+biased upward and values from different trial counts are not comparable. ITPC
+requires at least two valid trials by default and flags cells that do not meet
+``min_valid_trials``. ``ppc`` is a distinct estimator of squared population phase
+locking without the same finite-sample mean bias.
 
 **ITPC has one row per trial group, not one per epoch.** Because phase coherence
 is estimated across trials, assigning a per-epoch row would replicate the identical
@@ -357,7 +372,10 @@ reduce it to one summary value per band and window, analogous to how :func:`~eeg
 summarizes a power table. Both graph metrics are computed directly without
 third-party network graph dependencies.
 
-Global efficiency converts edge weights :math:`w_{ij}` into path distances :math:`L_{ij} = \frac{1}{|w_{ij}| + \epsilon}` (where :math:`\epsilon = 10^{-9}`), computes the all-pairs shortest path matrix :math:`D = [d_{ij}]` via the Floyd-Warshall algorithm, and averages the harmonic mean of distances across all node pairs:
+Global efficiency converts nonzero edge weights :math:`w_{ij}` into path distances
+:math:`L_{ij} = 1/|w_{ij}|`, treats zero and non-finite weights as absent edges,
+computes all-pairs shortest paths via Floyd-Warshall, and averages inverse distance
+across all node pairs. A disconnected pair contributes exactly zero:
 
 .. math::
 
@@ -398,7 +416,11 @@ Segments shorter than ``min_duration_ms`` are absorbed into neighbouring states:
 
 **Template fitting pools across trials; the measures do not.** ``fit_on`` names which trials may contribute topographies, as a cross-validation fold requires. The default uses every trial, which is right for description and leaks for prediction. Assignment and every measure derived from it are per epoch, so the returned feature tables have one row per epoch.
 
-From the resulting symbolic state sequence :math:`s(t)`, four canonical microstate statistics are derived:
+Cluster indices are arbitrary, so unmatched templates are labelled ``state1``
+onward. A-D labels require one-to-one topographic matching to an identified
+reference set and are not assigned automatically. The segmentation exposes its
+templates and global explained variance. From the resulting sequence :math:`s(t)`,
+four temporal statistics are derived:
 
 - **coverage**: Fractional occupancy time: :math:`\frac{1}{T} \sum_t \mathbb{I}[s(t) = k]` (compositional, sums to 1 across states).
 - **duration**: Mean continuous dwell time per visit in milliseconds (evaluates to NaN if state :math:`k` was never entered).

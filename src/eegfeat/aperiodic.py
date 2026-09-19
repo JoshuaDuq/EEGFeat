@@ -10,7 +10,7 @@ from scipy import stats
 from eegfeat._expand import Kernel, expand
 from eegfeat.bands import Band
 from eegfeat.spectra import Spectra
-from eegfeat.table import FeatureTable, concat
+from eegfeat.table import ComputationSpec, FeatureTable, concat
 
 _MIN_FIT_POINTS = 5
 
@@ -82,6 +82,11 @@ def aperiodic(
             baseline=None,
             mode="raw",
             min_bins=_MIN_FIT_POINTS,
+            parameters={
+                "fit_range": fit_range,
+                "peak_rejection_z": peak_rejection_z,
+                "max_iterations": max_iterations,
+            },
         )
         tables.append(table)
 
@@ -92,6 +97,8 @@ def aperiodic(
             coverage=t.coverage,
             meta=tuple(replace(m, band=None) for m in t.meta),
             flags=t.flags,
+            row_labels=t.row_labels,
+            row_ids=t.row_ids,
         )
         for t in tables
     ]
@@ -113,8 +120,8 @@ def aperiodic_ratio(
     value at the low edge of any band, whatever the oscillation is doing.
 
     The fit is the same iterative, positive-residual-rejecting fit used by
-    :func:`aperiodic`. A cell whose fit does not converge passes through unchanged
-    rather than being dropped.
+    :func:`aperiodic`. A cell whose fit cannot be estimated is entirely NaN and
+    carries ``aperiodic_fit_failed``; raw spectra are never silently substituted.
 
     Parameters
     ----------
@@ -148,16 +155,30 @@ def aperiodic_ratio(
     np.log10(spectra.freqs, where=positive, out=log_f)
 
     data = spectra.data
-    out = np.array(data, dtype=float)
+    out = np.full(data.shape, np.nan)
+    failed = np.ones(data.shape[:3], dtype=bool)
     for index in np.ndindex(data.shape[:3]):
         slope, offset = _fit_one(log_f[mask], data[index][mask], peak_rejection_z, max_iterations)
         if not (np.isfinite(slope) and np.isfinite(offset)):
-            # Nothing was fitted, so there is nothing to divide out.
             continue
         curve = 10.0 ** (offset + slope * log_f)
         out[index] = np.where(positive, data[index] / curve, data[index])
+        failed[index] = False
 
-    return replace(spectra, data=out, source=f"{spectra.source}+aperiodic_ratio")
+    return replace(
+        spectra,
+        data=out,
+        coverage=np.where(failed[:, :, :, np.newaxis], 0.0, spectra.coverage),
+        source=f"{spectra.source}+aperiodic_ratio",
+        computation=ComputationSpec.create(
+            "aperiodic_ratio",
+            input_computation=spectra.computation.record(),
+            fit_range=fit_range,
+            peak_rejection_z=peak_rejection_z,
+            max_iterations=max_iterations,
+        ),
+        flags={**spectra.flags, "aperiodic_fit_failed": failed},
+    )
 
 
 def _fit_kernel(

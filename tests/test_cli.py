@@ -9,10 +9,10 @@ from eegfeat.runner import load_recipe
 from eegfeat.runner.cli import main
 from synthetic import save_epochs
 
-POWER = '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
+POWER = '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
 FRONTAL_ROI = (
     '[rois]\nfront = ["Fz", "F3"]\n\n'
-    '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n'
+    '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n'
 )
 
 

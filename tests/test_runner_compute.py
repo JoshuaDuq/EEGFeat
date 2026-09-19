@@ -27,11 +27,15 @@ root = "out"
 def features(tmp_path, body: str, epochs: mne.EpochsArray | None = None):
     path = tmp_path / "recipe.toml"
     path.write_text(HEAD + body)
-    return compute_features(make_epochs() if epochs is None else epochs, load_recipe(path))
+    return compute_features(
+        make_epochs() if epochs is None else epochs,
+        load_recipe(path),
+        recording="sub-test_task-test",
+    )
 
 
 def test_per_epoch_measures_give_one_row_per_epoch(tmp_path) -> None:
-    result = features(tmp_path, '[[features]]\nmeasure = "band_power"\n')
+    result = features(tmp_path, '[[features]]\nmeasure = "integrated_band_power"\n')
 
     assert result.epochs is not None and result.epochs.n_rows == 12
     assert result.crosstrial is None
@@ -50,7 +54,9 @@ def test_peak_frequency_finds_the_simulated_oscillation(tmp_path) -> None:
 
 
 def test_band_power_puts_the_oscillation_in_its_band(tmp_path) -> None:
-    result = features(tmp_path, '[[features]]\nmeasure = "band_power"\nspatial = ["global"]\n')
+    result = features(
+        tmp_path, '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["global"]\n'
+    )
 
     assert result.epochs is not None
     alpha = result.epochs.select(band=ef.Band("alpha", 8.0, 13.0)).values
@@ -62,7 +68,8 @@ def test_spatial_levels_choose_the_columns(tmp_path) -> None:
     result = features(
         tmp_path,
         '[rois]\nfrontal = ["Fz", "F3", "F4"]\n\n'
-        '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nspatial = ["rois", "global"]\n',
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["rois", "global"]\n',
     )
 
     assert result.epochs is not None
@@ -105,7 +112,8 @@ def test_welch_spectra_are_computed_per_window(tmp_path) -> None:
     result = features(
         tmp_path,
         "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
-        '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nspatial = ["global"]\n',
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n',
     )
 
     assert result.epochs is not None
@@ -121,7 +129,7 @@ def test_morlet_spectra_restrict_each_window_to_its_support(tmp_path) -> None:
         tmp_path,
         '[spectra]\nmethod = "morlet"\nfmin = 4.0\nn_freqs = 20\n\n'
         "[windows]\nstim = [0.0, 1.0]\n\n"
-        '[[features]]\nmeasure = "band_power"\nbands = ["theta", "alpha", "beta"]\n'
+        '[[features]]\nmeasure = "mean_tfr_power"\nbands = ["theta", "alpha", "beta"]\n'
         'spatial = ["global"]\n',
     )
 
@@ -136,7 +144,7 @@ def test_baseline_normalized_power_consumes_the_baseline(tmp_path) -> None:
     result = features(
         tmp_path,
         "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
-        '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nbaseline = "base"\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nbaseline = "base"\n'
         'normalize = "db"\nspatial = ["global"]\n',
     )
 
@@ -148,13 +156,13 @@ def test_baseline_normalized_power_consumes_the_baseline(tmp_path) -> None:
 def test_band_ratios_and_asymmetry_follow_band_power(tmp_path) -> None:
     result = features(
         tmp_path,
-        '[[features]]\nmeasure = "band_power"\nbands = ["theta", "alpha"]\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["theta", "alpha"]\n'
         'ratios = [["alpha", "theta"]]\nasymmetry = [["F3", "F4"]]\n',
     )
 
     assert result.epochs is not None
     measures = {m.measure for m in result.epochs.meta}
-    assert {"power", "ratio_alpha_theta", "asymmetry"} <= measures
+    assert {"band_power", "ratio_alpha_theta", "asymmetry"} <= measures
 
 
 def test_cross_trial_measures_have_one_row_per_trial_group(tmp_path) -> None:
@@ -217,10 +225,13 @@ def test_microstate_coverage_sums_to_one_in_every_window(tmp_path) -> None:
 
 def test_recipe_parameters_reach_the_library(tmp_path) -> None:
     # Channel columns: the global column averages channels after the log, not before.
-    raw = features(tmp_path, '[[features]]\nmeasure = "band_power"\nspatial = ["channels"]\n')
+    raw = features(
+        tmp_path, '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["channels"]\n'
+    )
     logged = features(
         tmp_path,
-        '[[features]]\nmeasure = "band_power"\nspatial = ["channels"]\nnormalize = "log10"\n',
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'spatial = ["channels"]\nnormalize = "log10"\n',
     )
 
     assert raw.epochs is not None and logged.epochs is not None
@@ -237,27 +248,33 @@ def test_roi_naming_an_absent_channel_is_an_error(tmp_path) -> None:
         features(
             tmp_path,
             '[rois]\nback = ["Pz", "Oz"]\n\n'
-            '[[features]]\nmeasure = "band_power"\nspatial = ["rois"]\n',
+            '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n',
         )
 
 
 def test_each_entry_is_reported_as_a_step(tmp_path) -> None:
     path = tmp_path / "recipe.toml"
     path.write_text(
-        HEAD + '[[features]]\nmeasure = "band_power"\n\n[[features]]\nmeasure = "variance"\n'
+        HEAD
+        + '[[features]]\nmeasure = "integrated_band_power"\n\n[[features]]\nmeasure = "variance"\n'
     )
     steps: list[tuple[str, int, int]] = []
 
-    compute_features(make_epochs(), load_recipe(path), on_step=lambda *s: steps.append(s))
+    compute_features(
+        make_epochs(),
+        load_recipe(path),
+        recording="sub-test_task-test",
+        on_step=lambda *s: steps.append(s),
+    )
 
-    assert steps == [("band_power", 1, 2), ("variance", 2, 2)]
+    assert steps == [("integrated_band_power", 1, 2), ("variance", 2, 2)]
 
 
 def test_multitaper_spectra_span_the_whole_epoch_by_default(tmp_path) -> None:
     result = features(
         tmp_path,
         '[spectra]\nmethod = "multitaper"\n\n'
-        '[[features]]\nmeasure = "band_power"\nspatial = ["global"]\n',
+        '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["global"]\n',
     )
 
     assert result.epochs is not None
@@ -275,7 +292,7 @@ def test_multitaper_windows_measured_together_must_be_equally_long(tmp_path) -> 
             tmp_path,
             '[spectra]\nmethod = "multitaper"\n\n'
             "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
-            '[[features]]\nmeasure = "band_power"\n',
+            '[[features]]\nmeasure = "integrated_band_power"\n',
         )
 
 
@@ -284,7 +301,7 @@ def test_welch_segment_longer_than_a_window_is_an_error(tmp_path) -> None:
         features(
             tmp_path,
             "[spectra]\nn_fft = 400\n\n[windows]\nbase = [-0.5, 0.0]\n\n"
-            '[[features]]\nmeasure = "band_power"\n',
+            '[[features]]\nmeasure = "integrated_band_power"\n',
         )
 
 

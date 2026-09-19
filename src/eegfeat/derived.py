@@ -54,7 +54,13 @@ def band_ratio(table: FeatureTable, numerator: str, denominator: str) -> Feature
         )
         for k in keys
     )
-    return FeatureTable(values=values, coverage=coverage, meta=meta)
+    return FeatureTable(
+        values=values,
+        coverage=coverage,
+        meta=meta,
+        row_labels=table.row_labels,
+        row_ids=table.row_ids,
+    )
 
 
 def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureTable:
@@ -103,6 +109,8 @@ def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureT
         values=np.stack([v for _, v, _ in columns], axis=1),
         coverage=np.stack([c for _, _, c in columns], axis=1),
         meta=tuple(m for m, _, _ in columns),
+        row_labels=table.row_labels,
+        row_ids=table.row_ids,
     )
 
 

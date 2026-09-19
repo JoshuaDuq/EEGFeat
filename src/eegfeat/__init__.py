@@ -53,11 +53,11 @@ from eegfeat.microstates import (
     microstate_transitions,
     segment,
 )
-from eegfeat.phase import itpc, pac
-from eegfeat.power import band_power
+from eegfeat.phase import itpc, pac, ppc
+from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
-from eegfeat.table import FeatureMeta, FeatureTable, concat
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat
 from eegfeat.temporal import (
     area_under_curve,
     mean_amplitude,
@@ -76,7 +76,6 @@ __all__ = [
     "area_under_curve",
     "asymmetry",
     "Band",
-    "band_power",
     "band_ratio",
     "BANDS_STANDARD",
     "BandSignal",
@@ -86,6 +85,7 @@ __all__ = [
     "burst_rate",
     "clustering_coefficient",
     "concat",
+    "ComputationSpec",
     "envelope_correlation",
     "erd_duration",
     "erd_magnitude",
@@ -101,7 +101,10 @@ __all__ = [
     "fraction_above_threshold",
     "global_efficiency",
     "itpc",
+    "integrated_band_power",
     "mean_amplitude",
+    "mean_psd",
+    "mean_tfr_power",
     "microstate_coverage",
     "microstate_duration",
     "microstate_occurrence",
@@ -113,6 +116,7 @@ __all__ = [
     "peak_frequency",
     "peak_latency",
     "peak_to_peak",
+    "ppc",
     "sample_entropy",
     "segment",
     "Signal",

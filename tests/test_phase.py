@@ -3,7 +3,7 @@ import pytest
 
 import eegfeat as ef
 from eegfeat.bands import Band
-from eegfeat.phase import itpc, pac
+from eegfeat.phase import itpc, pac, ppc
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
@@ -23,6 +23,7 @@ def _from_phase(
         ch_names=("C3",),
         band=band,
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(phase.shape[0])),
     )
 
 
@@ -117,6 +118,21 @@ def test_coherence_is_bounded() -> None:
     assert 0.0 <= table.values.item() <= 1.0
 
 
+def test_itpc_requires_at_least_two_valid_trials() -> None:
+    phase = np.zeros((1, 1, 201))
+    table = itpc([_from_phase(phase)], windows=[WINDOW], include_global=False)
+    assert np.isnan(table.values).all()
+    assert table.flags["insufficient_trials"].all()
+
+
+def test_ppc_is_a_distinct_sample_size_unbiased_estimator() -> None:
+    rng = np.random.RandomState(15)
+    phase = rng.uniform(-np.pi, np.pi, (40, 1, 201))
+    table = ppc([_from_phase(phase)], windows=[WINDOW], include_global=False)
+    assert table.meta[0].measure == "ppc"
+    assert abs(table.values.item()) < 0.05
+
+
 # --- phase-amplitude coupling ---------------------------------------------------------
 
 
@@ -131,6 +147,7 @@ def _coupled(strength: float, n_epochs: int = 6, n_times: int = 401) -> tuple:
         ch_names=("C3",),
         band=GAMMA,
         sfreq=SFREQ,
+        row_ids=slow.row_ids,
     )
     return slow, fast
 
@@ -150,6 +167,7 @@ def test_normalized_coupling_is_invariant_to_overall_amplitude() -> None:
         ch_names=fast.ch_names,
         band=fast.band,
         sfreq=fast.sfreq,
+        row_ids=fast.row_ids,
     )
     a = pac(slow, fast, windows=[WINDOW], include_global=False)
     b = pac(slow, louder, windows=[WINDOW], include_global=False)
@@ -164,6 +182,7 @@ def test_unnormalized_coupling_scales_with_amplitude() -> None:
         ch_names=fast.ch_names,
         band=fast.band,
         sfreq=fast.sfreq,
+        row_ids=fast.row_ids,
     )
     a = pac(slow, fast, windows=[WINDOW], normalize=False, include_global=False)
     b = pac(slow, louder, windows=[WINDOW], normalize=False, include_global=False)
@@ -183,6 +202,35 @@ def test_the_amplitude_band_is_recorded_on_the_column() -> None:
     assert table.meta[0].band is GAMMA
 
 
+def test_both_pac_bands_are_first_class_metadata_and_names() -> None:
+    slow, fast = _coupled(0.5)
+    table = pac(slow, fast, windows=[WINDOW], include_global=False)
+    assert table.meta[0].phase_band is ALPHA
+    assert table.meta[0].amplitude_band is GAMMA
+    assert "phase-alpha" in table.names[0]
+    assert "amp-gamma" in table.names[0]
+
+
+def test_pac_pairs_with_the_same_amplitude_band_do_not_collide() -> None:
+    slow, fast = _coupled(0.5)
+    theta = Band("theta", 4.0, 7.0)
+    other = BandSignal.from_arrays(
+        analytic=slow.analytic,
+        times=slow.times,
+        ch_names=slow.ch_names,
+        band=theta,
+        sfreq=slow.sfreq,
+        row_ids=slow.row_ids,
+    )
+    joined = ef.concat(
+        [
+            pac(slow, fast, windows=[WINDOW], include_global=False),
+            pac(other, fast, windows=[WINDOW], include_global=False),
+        ]
+    )
+    assert len(set(joined.names)) == 2
+
+
 def test_a_phase_band_faster_than_the_amplitude_band_raises() -> None:
     slow, fast = _coupled(0.5)
     with pytest.raises(ValueError, match="must be slower"):
@@ -197,6 +245,7 @@ def test_mismatched_channels_or_times_raise() -> None:
         ch_names=("Cz",),
         band=fast.band,
         sfreq=fast.sfreq,
+        row_ids=fast.row_ids,
     )
     with pytest.raises(ValueError, match="same channels"):
         pac(slow, renamed, windows=[WINDOW])
@@ -206,9 +255,65 @@ def test_mismatched_channels_or_times_raise() -> None:
         ch_names=fast.ch_names,
         band=fast.band,
         sfreq=fast.sfreq,
+        row_ids=fast.row_ids,
     )
     with pytest.raises(ValueError, match="same time axis"):
         pac(slow, shifted, windows=[WINDOW])
+
+
+def test_mismatched_pac_epochs_sampling_or_row_identity_raise() -> None:
+    slow, fast = _coupled(0.5)
+    fewer = BandSignal.from_arrays(
+        analytic=fast.analytic[:-1],
+        times=fast.times,
+        ch_names=fast.ch_names,
+        band=fast.band,
+        sfreq=fast.sfreq,
+        row_ids=fast.row_ids[:-1],
+    )
+    with pytest.raises(ValueError, match="same shape"):
+        pac(slow, fewer, windows=[WINDOW])
+    wrong_rate = BandSignal.from_arrays(
+        analytic=fast.analytic,
+        times=fast.times,
+        ch_names=fast.ch_names,
+        band=fast.band,
+        sfreq=fast.sfreq * 2.0,
+        row_ids=fast.row_ids,
+    )
+    with pytest.raises(ValueError, match="sampling frequency"):
+        pac(slow, wrong_rate, windows=[WINDOW])
+    reordered = BandSignal.from_arrays(
+        analytic=fast.analytic,
+        times=fast.times,
+        ch_names=fast.ch_names,
+        band=fast.band,
+        sfreq=fast.sfreq,
+        row_ids=tuple(reversed(fast.row_ids)),
+    )
+    with pytest.raises(ValueError, match="row identities"):
+        pac(slow, reordered, windows=[WINDOW])
+
+
+def test_overlapping_pac_bands_are_rejected_unless_explicitly_allowed() -> None:
+    slow, _ = _coupled(0.5)
+    overlap = Band("overlap", 12.0, 30.0)
+    amplitude = BandSignal.from_arrays(
+        analytic=slow.analytic,
+        times=slow.times,
+        ch_names=slow.ch_names,
+        band=overlap,
+        sfreq=slow.sfreq,
+        row_ids=slow.row_ids,
+    )
+    with pytest.raises(ValueError, match="overlap"):
+        pac(slow, amplitude, windows=[WINDOW])
+    assert (
+        pac(
+            slow, amplitude, windows=[WINDOW], allow_overlap=True, include_global=False
+        ).values.shape[0]
+        == slow.n_epochs
+    )
 
 
 def test_a_silent_amplitude_band_yields_nan_rather_than_zero() -> None:
@@ -219,6 +324,7 @@ def test_a_silent_amplitude_band_yields_nan_rather_than_zero() -> None:
         ch_names=fast.ch_names,
         band=fast.band,
         sfreq=fast.sfreq,
+        row_ids=fast.row_ids,
     )
     table = pac(slow, silent, windows=[WINDOW], include_global=False)
     assert np.isnan(table.values).all()

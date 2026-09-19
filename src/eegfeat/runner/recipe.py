@@ -742,7 +742,7 @@ def _entry_keys(measure: Measure) -> set[str]:
         keys.add("series")
     if measure.kind == "pac":
         keys.add("pairs")
-    if measure.name == "band_power":
+    if measure.name in ("integrated_band_power", "mean_psd", "mean_tfr_power"):
         keys |= {"ratios", "asymmetry"}
     if measure.name in ("envelope_correlation", "wpli"):
         keys |= {"graph", "clustering_threshold"}

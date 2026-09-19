@@ -3,7 +3,7 @@ import pytest
 
 from eegfeat.bands import Band
 from eegfeat.derived import asymmetry, band_ratio
-from eegfeat.table import FeatureMeta, FeatureTable, Normalization
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, Normalization
 
 THETA, BETA = Band("theta", 4.0, 8.0), Band("beta", 13.0, 30.0)
 
@@ -19,10 +19,17 @@ def _table(values: np.ndarray, bands, spaces, norm: Normalization = "raw") -> Fe
             normalization=norm,
             unit="V^2/Hz",
             source="test",
+            window_bounds=(0.0, 1.0),
+            computation=ComputationSpec.create("test"),
         )
         for b, s in zip(bands, spaces, strict=True)
     )
-    return FeatureTable(values=values, coverage=np.ones(values.shape), meta=meta)
+    return FeatureTable(
+        values=values,
+        coverage=np.ones(values.shape),
+        meta=meta,
+        row_ids=tuple(("test", index, "event") for index in range(values.shape[0])),
+    )
 
 
 def test_raw_power_ratio_divides() -> None:

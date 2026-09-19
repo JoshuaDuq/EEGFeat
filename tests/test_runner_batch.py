@@ -13,7 +13,7 @@ from eegfeat.runner import RunError, check, load_recipe, run
 from eegfeat.runner.progress import JsonReporter
 from synthetic import save_epochs
 
-POWER = '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
+POWER = '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
 ITPC = (
     '[trials]\nby = "event"\n\n'
     '[[features]]\nmeasure = "itpc"\nbands = ["alpha"]\nspatial = ["global"]\n'
@@ -129,7 +129,7 @@ def test_a_failing_recording_does_not_stop_the_others(tmp_path) -> None:
     recipe = _recipe(
         tmp_path,
         '[rois]\nfront = ["Fz", "F3"]\n\n'
-        '[[features]]\nmeasure = "band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n',
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n',
     )
 
     result = run(recipe)
@@ -164,6 +164,33 @@ def test_overwrite_replaces_results_and_clears_stale_ones(tmp_path) -> None:
     assert _features_path(tmp_path, "sub-01").exists()
     assert not stale.exists()
     assert not stale.with_suffix(".json").exists()
+
+
+def test_failed_overwrite_preserves_the_previous_complete_result(tmp_path, monkeypatch) -> None:
+    save_epochs(tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif")
+    recipe = _recipe(tmp_path, POWER)
+    first = run(recipe)
+    assert first.ok
+    values = _features_path(tmp_path, "sub-01")
+    existing = {
+        path: path.read_bytes()
+        for path in (
+            values,
+            values.with_suffix(".json"),
+            values.with_name(f"{values.stem}_coverage.tsv"),
+        )
+    }
+
+    import eegfeat.runner.batch as batch
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("intentional replacement failure")
+
+    monkeypatch.setattr(batch, "compute_features", fail)
+    result = run(recipe, overwrite=True)
+
+    assert not result.ok
+    assert all(path.read_bytes() == content for path, content in existing.items())
 
 
 def test_hidden_files_are_not_recordings(tmp_path) -> None:
@@ -217,13 +244,13 @@ def test_progress_events_follow_the_tui_protocol(tmp_path) -> None:
         ("start", None, None),
         ("subject_start", one, None),
         ("progress", one, "read"),
-        ("progress", one, "band_power"),
+        ("progress", one, "integrated_band_power"),
         ("progress", one, "write"),
         ("log", one, None),
         ("subject_done", one, None),
         ("subject_start", two, None),
         ("progress", two, "read"),
-        ("progress", two, "band_power"),
+        ("progress", two, "integrated_band_power"),
         ("progress", two, "write"),
         ("log", two, None),
         ("subject_done", two, None),
@@ -243,7 +270,7 @@ def test_a_failed_recording_is_reported_as_such(tmp_path) -> None:
     recipe = _recipe(
         tmp_path,
         '[rois]\nfront = ["Fz", "F3"]\n\n'
-        '[[features]]\nmeasure = "band_power"\nspatial = ["rois"]\n',
+        '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n',
     )
 
     run(recipe, reporter=JsonReporter(stream))

@@ -56,15 +56,24 @@ When working with stationary resting-state or whole-epoch recordings, start from
    spectrum = epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0, n_fft=1024)
 
    # 3. Wrap into an eegfeat Spectra container
-   spectra = ef.Spectra.from_spectrum(spectrum)
+   spectra = ef.Spectra.from_spectrum(
+       spectrum,
+       recording="sample-epo.fif",
+       estimator_parameters={
+           "method": "welch",
+           "fmin": 1.0,
+           "fmax": 45.0,
+           "n_fft": 1024,
+       },
+   )
 
-   # 4. Extract standard band powers (trapezoidally frequency-weighted)
+   # 4. Integrate the PSD over exact numerical band boundaries
    bands = [
        ef.Band("theta", 4.0, 8.0),
        ef.Band("alpha", 8.0, 13.0),
        ef.Band("beta", 13.0, 30.0),
    ]
-   power_table = ef.band_power(spectra, bands=bands, include_global=True)
+   power_table = ef.integrated_band_power(spectra, bands=bands, include_global=True)
 
    # 5. Extract aperiodic-whitened peak frequency
    # Divides out fitted 1/f background, applies parabolic interpolation,
@@ -108,14 +117,19 @@ with support restriction:
 
    # 3. Build Spectra with exact Morlet support restriction
    # Coefficients contaminated by temporal edge leakage are automatically masked out
-   spectra_tfr = ef.Spectra.from_tfr(tfr, windows=windows, n_cycles=n_cycles)
+   spectra_tfr = ef.Spectra.from_tfr(
+       tfr,
+       windows=windows,
+       recording="sub-01_task-test",
+       n_cycles=n_cycles,
+   )
 
    # 4. Extract baseline-normalized power (log ratio relative to reference window)
-   norm_power = ef.band_power(
+   norm_power = ef.mean_tfr_power(
        spectra_tfr,
        bands=[ef.Band("alpha", 8.0, 13.0)],
-       baseline=ef.Window("baseline", -0.5, -0.1),
-       mode="log_ratio",
+       baseline="baseline",
+       normalize="log_ratio",
    )
 
 ----
@@ -171,7 +185,7 @@ and safe against accidental mislabeling:
    # Query columns using structured metadata
    alpha_rois = spectral_features.select(band=ef.Band("alpha", 8.0, 13.0), space_kind="roi")
 
-   # Inspect data coverage (fraction of finite contributing samples)
+   # Inspect finite-data coverage (not an artifact-rejection metric)
    valid_fractions = spectral_features.coverage
 
    # Inspect boolean quality flags (e.g. where peak prominence fell back to CoG)
@@ -187,11 +201,12 @@ and safe against accidental mislabeling:
 
 ----
 
-Exporting & BIDS Table I/O
---------------------------
+Exporting & BIDS-style Table I/O
+--------------------------------
 
-Tables serialize directly to BIDS-compliant TSV files with accompanying JSON sidecars
-and coverage matrices:
+Tables serialize to BIDS-style TSV files with accompanying JSON sidecars and
+finite-data coverage matrices. This is not a validated BIDS derivative structure;
+descriptive row columns are export-only:
 
 .. code-block:: python
 
@@ -202,4 +217,3 @@ and coverage matrices:
 
    # Restore exactly with full metadata, flags, and row labels
    restored = read_table("sub-01_features.tsv")
-

@@ -11,9 +11,7 @@ from scipy.signal import find_peaks
 from eegfeat._expand import window_mask
 from eegfeat.signal import Signal
 from eegfeat.spectra import Window
-from eegfeat.table import FeatureMeta, FeatureTable
-
-_CANONICAL = ("a", "b", "c", "d")
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, RowId
 
 
 @dataclass(frozen=True, eq=False)
@@ -43,6 +41,8 @@ class MicrostateSegmentation:
     labels: tuple[str, ...]
     times: npt.NDArray[np.float64]
     sfreq: float
+    row_ids: tuple[RowId, ...]
+    global_explained_variance: float
 
     @property
     def n_states(self) -> int:
@@ -83,8 +83,9 @@ def segment(
         Broadband epochs. Topographies are demeaned across channels per sample,
         which is equivalent to an average reference.
     n_states : int, default 4
-        Number of microstate classes. Four is conventional and gets the labels
-        ``a`` to ``d``; other counts get ``state1`` onward.
+        Number of microstate classes. Unmatched clusters are named ``state1``
+        onward. Canonical A-D labels require explicit matching to an identified
+        reference-template set.
     fit_on : ndarray of bool, optional
         Which epochs may contribute topographies to the clustering. None uses all.
     min_duration_ms : float, default 20.0
@@ -140,14 +141,39 @@ def segment(
     states = np.stack(
         [_smooth(_assign(data[epoch], templates), min_samples) for epoch in range(data.shape[0])]
     )
-    labels = (
-        _CANONICAL
-        if n_states == len(_CANONICAL)
-        else tuple(f"state{i + 1}" for i in range(n_states))
-    )
+    labels = tuple(f"state{i + 1}" for i in range(n_states))
     return MicrostateSegmentation(
-        templates=templates, states=states, labels=labels, times=signal.times, sfreq=signal.sfreq
+        templates=templates,
+        states=states,
+        labels=labels,
+        times=signal.times,
+        sfreq=signal.sfreq,
+        row_ids=signal.row_ids,
+        global_explained_variance=_global_explained_variance(data, templates, states),
     )
+
+
+def _global_explained_variance(
+    data: npt.NDArray[np.float64],
+    templates: npt.NDArray[np.float64],
+    states: npt.NDArray[np.int_],
+) -> float:
+    centred = data - np.nanmean(data, axis=1, keepdims=True)
+    field_power = np.nanstd(centred, axis=1)
+    norm = np.linalg.norm(centred, axis=1)
+    unit = np.divide(
+        centred,
+        norm[:, np.newaxis, :],
+        out=np.zeros_like(centred),
+        where=norm[:, np.newaxis, :] > 0.0,
+    )
+    all_correlations = np.abs(np.einsum("ect,kc->ekt", unit, templates))
+    assigned = np.take_along_axis(all_correlations, states[:, np.newaxis, :], axis=1)[:, 0, :]
+    weights = field_power**2
+    denominator = float(np.nansum(weights))
+    if denominator <= 0.0:
+        return float("nan")
+    return float(np.nansum(weights * assigned**2) / denominator)
 
 
 def microstate_coverage(
@@ -263,7 +289,7 @@ def microstate_transitions(
                         matrices[:, source, target],
                     )
                 )
-    return _assemble(columns)
+    return _assemble(columns, segmentation.row_ids)
 
 
 def _require_sklearn() -> Any:
@@ -424,6 +450,8 @@ def _meta(measure: str, space: str, kind: Any, window: Window, unit: str) -> Fea
         normalization="raw",
         unit=unit,
         source="microstates",
+        window_bounds=(window.tmin, window.tmax),
+        computation=ComputationSpec.create(measure),
         freq_resolution_hz=None,
     )
 
@@ -446,13 +474,16 @@ def _per_state(
         )
         for index, label in enumerate(segmentation.labels):
             columns.append((_meta(measure, label, "state", window, unit), values[:, index]))
-    return _assemble(columns)
+    return _assemble(columns, segmentation.row_ids)
 
 
-def _assemble(columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]]) -> FeatureTable:
+def _assemble(
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]], row_ids: tuple[RowId, ...]
+) -> FeatureTable:
     values = np.stack([column for _, column in columns], axis=1)
     return FeatureTable(
         values=values,
         coverage=np.isfinite(values).astype(float),
         meta=tuple(meta for meta, _ in columns),
+        row_ids=row_ids,
     )

@@ -10,15 +10,29 @@ from eegfeat.bands import BANDS_STANDARD, Band
 from eegfeat.spectra import Spectra
 from eegfeat.table import FeatureTable, Normalization
 
-_UNITS: dict[str, str] = {
+_PSD_MEAN_UNITS: dict[str, str] = {
     "raw": "V^2/Hz",
     "log10": "log10(V^2/Hz)",
     "log_ratio": "log10 ratio",
     "db": "dB",
 }
 
+_PSD_INTEGRAL_UNITS: dict[str, str] = {
+    "raw": "V^2",
+    "log10": "log10(V^2)",
+    "log_ratio": "log10 ratio",
+    "db": "dB",
+}
 
-def band_power(
+_TFR_MEAN_UNITS: dict[str, str] = {
+    "raw": "V^2",
+    "log10": "log10(V^2)",
+    "log_ratio": "log10 ratio",
+    "db": "dB",
+}
+
+
+def mean_psd(
     spectra: Spectra,
     *,
     bands: Sequence[Band] = BANDS_STANDARD,
@@ -27,7 +41,7 @@ def band_power(
     baseline: str | None = None,
     normalize: Normalization = "raw",
 ) -> FeatureTable:
-    """Mean power in each band.
+    """Frequency-weighted mean power spectral density in each band.
 
     The band value is a trapezoidally weighted mean over the frequencies in the
     band, which makes it an estimate of the integral over the band divided by
@@ -55,17 +69,79 @@ def band_power(
     FeatureTable
         One column per band, spatial unit and emitted window.
     """
+    _require_representation(spectra, "psd", "mean_psd")
     return expand(
         spectra,
         _weighted_band_mean,
-        measure="power",
-        unit=_UNITS[normalize],
+        measure="mean_psd",
+        unit=_PSD_MEAN_UNITS[normalize],
         bands=bands,
         groups=groups,
         include_global=include_global,
         baseline=baseline,
         mode=normalize,
         min_bins=1,
+        parameters={"quantity": "mean_power_spectral_density"},
+        weighting="band_integral",
+    )
+
+
+def integrated_band_power(
+    spectra: Spectra,
+    *,
+    bands: Sequence[Band] = BANDS_STANDARD,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    baseline: str | None = None,
+    normalize: Normalization = "raw",
+) -> FeatureTable:
+    """Integral of a power spectral density over exact band boundaries.
+
+    Piecewise-linear quadrature integrates from each band's numerical ``fmin``
+    through ``fmax``, including interpolated boundary contributions. Raw EEG PSD
+    input therefore yields V² rather than V²/Hz.
+    """
+    _require_representation(spectra, "psd", "integrated_band_power")
+    return expand(
+        spectra,
+        _weighted_band_integral,
+        measure="band_power",
+        unit=_PSD_INTEGRAL_UNITS[normalize],
+        bands=bands,
+        groups=groups,
+        include_global=include_global,
+        baseline=baseline,
+        mode=normalize,
+        min_bins=2,
+        parameters={"quantity": "integrated_power_spectral_density"},
+        weighting="band_integral",
+    )
+
+
+def mean_tfr_power(
+    spectra: Spectra,
+    *,
+    bands: Sequence[Band] = BANDS_STANDARD,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    baseline: str | None = None,
+    normalize: Normalization = "raw",
+) -> FeatureTable:
+    """Frequency-weighted mean of wavelet time-frequency power in each band."""
+    _require_representation(spectra, "time_frequency_power", "mean_tfr_power")
+    return expand(
+        spectra,
+        _weighted_band_mean,
+        measure="mean_tfr_power",
+        unit=_TFR_MEAN_UNITS[normalize],
+        bands=bands,
+        groups=groups,
+        include_global=include_global,
+        baseline=baseline,
+        mode=normalize,
+        min_bins=1,
+        parameters={"quantity": "mean_time_frequency_power"},
+        weighting="band_integral",
     )
 
 
@@ -85,3 +161,24 @@ def _weighted_band_mean(
     with np.errstate(invalid="ignore", divide="ignore"):
         values = np.where(denominator > 0.0, numerator / denominator, np.nan)
     return values, {}
+
+
+def _weighted_band_integral(
+    data: npt.NDArray[np.float64],
+    freqs: npt.NDArray[np.float64],
+    weights: npt.NDArray[np.float64],
+) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
+    del freqs
+    finite = np.isfinite(data)
+    complete = finite.all(axis=3)
+    spread = np.asarray(np.broadcast_to(weights, data.shape), dtype=np.float64)
+    values = np.sum(np.where(finite, data * spread, 0.0), axis=3)
+    return np.where(complete, values, np.nan), {}
+
+
+def _require_representation(spectra: Spectra, expected: str, operation: str) -> None:
+    if spectra.representation != expected:
+        raise ValueError(
+            f"{operation} requires spectral representation {expected!r}, got "
+            f"{spectra.representation!r}."
+        )

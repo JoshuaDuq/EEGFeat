@@ -54,6 +54,7 @@ def _signal(envelope: np.ndarray) -> BandSignal:
         ch_names=("C3",),
         band=ALPHA,
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(envelope.shape[0])),
     )
 
 
@@ -162,6 +163,22 @@ def test_onset_latency_is_the_first_crossing_of_the_baseline_variability() -> No
     envelope[:, :, 130:] = np.sqrt(2.0)  # steps at t = +0.3 s
     table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
     assert table.select(measure="onset_latency").values.item() == pytest.approx(0.3, abs=0.02)
+
+
+def test_onset_is_independent_of_the_reported_normalization_scale() -> None:
+    n = 201
+    rng = np.random.RandomState(22)
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, :100] += rng.normal(0.0, 0.03, (1, 1, 100))
+    envelope[:, :, 140:] = np.sqrt(1.25)
+    signal = _signal(envelope)
+    percent = erds_onset_latency(
+        [signal], baseline=BASE, windows=[STIM], normalize="percent", include_global=False
+    )
+    db = erds_onset_latency(
+        [signal], baseline=BASE, windows=[STIM], normalize="db", include_global=False
+    )
+    np.testing.assert_allclose(percent.values, db.values, equal_nan=True)
 
 
 def test_a_trace_that_never_crosses_has_no_onset() -> None:

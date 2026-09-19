@@ -12,10 +12,7 @@ from eegfeat._expand import window_mask
 from eegfeat.bands import Band
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Window
-from eegfeat.table import FeatureMeta, FeatureTable
-
-_EPS = 1e-9
-"""Edge-weight floor to avoid division by zero when converting weights to path distances."""
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
 
 
 def envelope_correlation(
@@ -141,9 +138,9 @@ def wpli(
 def global_efficiency(pairs: FeatureTable) -> FeatureTable:
     """Average inverse shortest path length over the network.
 
-    Edge length is ``1 / (|weight| + 1e-9)`` and paths are shortest by that
-    length, so a strong connection is a short step. Higher means information can
-    traverse the network in fewer effective steps.
+    Nonzero edge strength is transformed to distance as ``1 / |weight|`` and
+    paths are shortest by that distance. Zero and non-finite weights are absent
+    edges; disconnected pairs contribute exactly zero efficiency.
 
     Parameters
     ----------
@@ -234,10 +231,10 @@ def _correlation_matrix(
 ) -> npt.NDArray[np.float64]:
     # One series per node: a channel, or an ROI's mean envelope.
     series = np.stack([envelope[:, pick, :].mean(axis=1) for pick in picks], axis=1)
-    flat = series.transpose(1, 0, 2).reshape(series.shape[1], -1)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        matrix = np.corrcoef(flat)
+        per_trial = np.stack([np.atleast_2d(np.corrcoef(trial)) for trial in series])
+        matrix = np.nanmean(per_trial, axis=0)
     return np.asarray(np.atleast_2d(matrix), dtype=float)
 
 
@@ -292,7 +289,15 @@ def _pair_columns(
                 normalization="raw",
                 unit=unit,
                 source=source,
+                window_bounds=(window.tmin, window.tmax),
+                computation=ComputationSpec.create(
+                    measure,
+                    estimator=(
+                        "per-trial-pearson-mean" if measure == "aec" else "mne-connectivity-wpli"
+                    ),
+                ),
                 freq_resolution_hz=None,
+                nodes=(node_names[i], node_names[j]),
             )
             columns.append((meta, matrices[:, i, j]))
     return columns
@@ -370,6 +375,12 @@ def _graph_measure(
                     space="global",
                     space_kind="global",
                     unit=f"a.u.{suffix}",
+                    computation=ComputationSpec.create(
+                        measure,
+                        input_computation=template.computation.record(),
+                        threshold=suffix if suffix else None,
+                    ),
+                    nodes=None,
                 ),
                 values,
             )
@@ -389,7 +400,10 @@ def _by_band_window(pairs: FeatureTable) -> dict[tuple[str, str | None], list[in
 def _node_order(pairs: FeatureTable, indices: list[int]) -> list[str]:
     seen: list[str] = []
     for index in indices:
-        for name in pairs.meta[index].space.split("-", 1):
+        nodes = pairs.meta[index].nodes
+        if nodes is None:
+            raise ValueError("pair metadata must carry its two node identities.")
+        for name in nodes:
             if name not in seen:
                 seen.append(name)
     return seen
@@ -401,7 +415,10 @@ def _square(
     position = {name: i for i, name in enumerate(nodes)}
     matrix = np.zeros((len(nodes), len(nodes)))
     for index in indices:
-        left, right = pairs.meta[index].space.split("-", 1)
+        nodes_pair = pairs.meta[index].nodes
+        if nodes_pair is None:
+            raise ValueError("pair metadata must carry its two node identities.")
+        left, right = nodes_pair
         value = pairs.values[row, index]
         matrix[position[left], position[right]] = value
         matrix[position[right], position[left]] = value
@@ -413,18 +430,22 @@ def _global_efficiency(matrix: npt.NDArray[np.float64]) -> float:
     if n <= 1:
         return float("nan")
     weights = np.abs(np.nan_to_num(matrix, nan=0.0))
-    length = 1.0 / (weights + _EPS)
+    length = np.full_like(weights, np.inf)
+    present = weights > 0.0
+    length[present] = 1.0 / weights[present]
     np.fill_diagonal(length, 0.0)
     # Floyd-Warshall: exact all-pairs shortest paths, and n is the node count.
     distance = length.copy()
     for k in range(n):
         distance = np.minimum(distance, distance[:, k, None] + distance[None, k, :])
     upper = np.triu_indices(n, k=1)
-    finite = distance[upper]
-    finite = finite[np.isfinite(finite) & (finite > 0)]
-    if finite.size == 0:
-        return float("nan")
-    return float(2.0 / (n * (n - 1)) * np.sum(1.0 / finite))
+    pair_distances = distance[upper]
+    efficiencies = np.where(
+        np.isfinite(pair_distances) & (pair_distances > 0.0),
+        1.0 / pair_distances,
+        0.0,
+    )
+    return float(efficiencies.mean())
 
 
 def _clustering(matrix: npt.NDArray[np.float64], threshold: float) -> float:
@@ -435,6 +456,5 @@ def _clustering(matrix: npt.NDArray[np.float64], threshold: float) -> float:
     eligible = degree >= 2
     if not eligible.any():
         return float("nan")
-    coefficients = np.zeros(matrix.shape[0])
-    coefficients[eligible] = triangles[eligible] / (degree[eligible] * (degree[eligible] - 1.0))
+    coefficients = triangles[eligible] / (degree[eligible] * (degree[eligible] - 1.0))
     return float(coefficients.mean())

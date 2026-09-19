@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from eegfeat.bands import Band
-from eegfeat.table import FeatureMeta, FeatureTable, concat
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat
 
 ALPHA = Band("alpha", 8.0, 13.0)
 
@@ -17,6 +17,8 @@ def _meta(space: str = "C3", measure: str = "power") -> FeatureMeta:
         normalization="log_ratio",
         unit="log10",
         source="morlet",
+        window_bounds=(0.0, 1.0),
+        computation=ComputationSpec.create("band_power", weighting="trapezoid"),
     )
 
 
@@ -30,15 +32,40 @@ def _table(spaces: tuple[str, ...] = ("C3", "C4")) -> FeatureTable:
 
 
 def test_name_is_derived_from_metadata_fields() -> None:
-    assert _meta().name == "eeg_power_alpha_c3_stim_log-ratio"
+    assert _meta().name.startswith("eeg_power_alpha_c3_stim_log-ratio_p")
+
+
+def test_parameter_hash_is_canonical_and_stable() -> None:
+    left = ComputationSpec.create("burst", threshold=0.75, minimum_duration=0.1)
+    right = ComputationSpec.create("burst", minimum_duration=0.1, threshold=0.75)
+
+    assert left == right
+    assert left.parameter_hash == right.parameter_hash
+
+
+def test_window_bounds_and_parameters_distinguish_feature_identifiers() -> None:
+    base = _meta()
+    shifted = FeatureMeta(
+        **{
+            **base.__dict__,
+            "window_bounds": (0.25, 1.25),
+        }
+    )
+    thresholded = FeatureMeta(
+        **{
+            **base.__dict__,
+            "computation": ComputationSpec.create(
+                "band_power", weighting="trapezoid", threshold=0.75
+            ),
+        }
+    )
+
+    assert len({base.name, shifted.name, thresholded.name}) == 3
 
 
 def test_dataframe_columns_are_the_canonical_names() -> None:
     df = _table().to_dataframe()
-    assert list(df.columns) == [
-        "eeg_power_alpha_c3_stim_log-ratio",
-        "eeg_power_alpha_c4_stim_log-ratio",
-    ]
+    assert list(df.columns) == [_meta("C3").name, _meta("C4").name]
     assert df.shape == (3, 2)
 
 
@@ -79,13 +106,20 @@ def test_flags_must_match_the_value_shape() -> None:
 
 
 def test_concat_joins_columns_and_preserves_flags() -> None:
+    identities = tuple(("recording", epoch, "event") for epoch in range(3))
     left = FeatureTable(
         values=np.zeros((3, 1)),
         coverage=np.ones((3, 1)),
         meta=(_meta("C3"),),
         flags={"edge_hit": np.ones((3, 1), dtype=bool)},
+        row_ids=identities,
     )
-    right = _table(("C4",))
+    right = FeatureTable(
+        values=np.zeros((3, 1)),
+        coverage=np.ones((3, 1)),
+        meta=(_meta("C4"),),
+        row_ids=identities,
+    )
     joined = concat([left, right])
     assert joined.values.shape == (3, 2)
     assert joined.flags["edge_hit"].shape == (3, 2)
@@ -97,6 +131,38 @@ def test_concat_refuses_to_align_mismatched_epoch_counts() -> None:
     small = FeatureTable(np.zeros((2, 1)), np.ones((2, 1)), (_meta("C3"),))
     with pytest.raises(ValueError, match="n_rows"):
         concat([small, _table(("C4",))])
+
+
+def test_concat_refuses_unidentified_epoch_rows() -> None:
+    with pytest.raises(ValueError, match="row_ids"):
+        concat([_table(("C3",)), _table(("C4",))])
+
+
+def test_concat_requires_exact_epoch_identity_and_order() -> None:
+    identities = (("sub-01_task-rest", 4, "eyes-open"), ("sub-01_task-rest", 9, "eyes-closed"))
+    left = FeatureTable(
+        np.zeros((2, 1)),
+        np.ones((2, 1)),
+        (_meta("C3"),),
+        row_ids=identities,
+    )
+    reordered = FeatureTable(
+        np.zeros((2, 1)),
+        np.ones((2, 1)),
+        (_meta("C4"),),
+        row_ids=tuple(reversed(identities)),
+    )
+
+    with pytest.raises(ValueError, match="row identities"):
+        concat([left, reordered])
+
+
+def test_concat_preserves_matching_epoch_identities() -> None:
+    identities = (("sub-01_task-rest", 4, "eyes-open"), ("sub-01_task-rest", 9, "eyes-closed"))
+    left = FeatureTable(np.zeros((2, 1)), np.ones((2, 1)), (_meta("C3"),), row_ids=identities)
+    right = FeatureTable(np.zeros((2, 1)), np.ones((2, 1)), (_meta("C4"),), row_ids=identities)
+
+    assert concat([left, right]).row_ids == identities
 
 
 def test_concat_of_nothing_raises() -> None:

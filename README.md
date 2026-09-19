@@ -8,7 +8,7 @@
 
 Labelled spectral, temporal, oscillatory burst, connectivity, complexity, and microstate feature extraction for MNE-Python objects.
 
-`eegfeat` maps precomputed MNE structures (`Spectrum`, `EpochsTFR`, and `Epochs`) to self-describing `FeatureTable` outputs: numeric value matrices paired with column-level `FeatureMeta` records (measure, frequency band, channel/ROI, window, normalization, unit, and frequency resolution) and parallel `coverage` quality matrices.
+`eegfeat` maps precomputed MNE structures (`Spectrum`, `EpochsTFR`, and `Epochs`) to self-describing `FeatureTable` outputs: numeric value matrices paired with column-level `FeatureMeta` records (measure, numerical window bounds, frequency bands or band pairs, channel/ROI or node pair, normalization, units, computation parameters, and stable hashes) and parallel finite-data `coverage` matrices.
 
 ---
 
@@ -16,11 +16,11 @@ Labelled spectral, temporal, oscillatory burst, connectivity, complexity, and mi
 
 `eegfeat` eliminates common electrophysiological feature extraction failure modes:
 
-- **Support-restricted wavelets**: Per-frequency temporal support masks ($`n_{\text{cycles}} / (2 f)`$) prevent edge artifacts and pre-stimulus leakage into task windows.
+- **Support-restricted wavelets**: Per-frequency temporal support masks ($`5 n_{\text{cycles}} / (2 \pi f)`$) match MNE's Morlet extent and prevent information outside a window from entering its features.
 - **Aperiodic-whitened peaks**: Iteratively fitted robust linear $1/f$ baselines and parabolic interpolation remove low-frequency spectral tilt bias.
 - **Baseline-calibrated thresholds**: Burst detection and ERDS baselines are calibrated on unperturbed reference windows to avoid stimulus-induced circularity.
 - **Strict row semantics**: Cross-trial measures (ITPC, wPLI, AEC) return one row per trial group with explicit labels, preventing single-trial pseudo-replication.
-- **Coverage accounting**: Parallel coverage matrices track the exact fraction of finite, artifact-free samples contributing to every feature cell.
+- **Finite-data accounting**: Parallel coverage matrices report numerical finiteness, not artifact rejection. Morlet spectra separately expose the fraction of each requested window with complete wavelet support.
 
 ---
 
@@ -61,11 +61,22 @@ base_win = ef.Window("baseline", -0.5, 0.0)
 task_win = ef.Window("stimulus", 0.0, 1.0)
 
 # 3. Wrap MNE structures into eegfeat containers
-spectra = ef.Spectra.from_spectrum(epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0))
-raw_sig = ef.Signal.from_epochs(epochs)
-alpha_sig = ef.BandSignal.from_epochs(epochs, band=alpha)
-theta_sig = ef.BandSignal.from_epochs(epochs, band=theta)
-gamma_sig = ef.BandSignal.from_epochs(epochs, band=gamma)
+spectrum = epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0)
+spectra = ef.Spectra.from_spectrum(
+    spectrum,
+    recording="sub-01_task-test",
+    estimator_parameters={"method": "welch", "fmin": 1.0, "fmax": 45.0},
+)
+raw_sig = ef.Signal.from_epochs(epochs, recording="sub-01_task-test")
+alpha_sig = ef.BandSignal.from_epochs(
+    epochs, band=alpha, recording="sub-01_task-test"
+)
+theta_sig = ef.BandSignal.from_epochs(
+    epochs, band=theta, recording="sub-01_task-test"
+)
+gamma_sig = ef.BandSignal.from_epochs(
+    epochs, band=gamma, recording="sub-01_task-test"
+)
 ```
 
 ---
@@ -76,7 +87,9 @@ gamma_sig = ef.BandSignal.from_epochs(epochs, band=gamma)
 
 ```python
 # Absolute or normalized band power across channels and global average
-power = ef.band_power(spectra, bands=[theta, alpha, beta], include_global=True)
+power = ef.integrated_band_power(
+    spectra, bands=[theta, alpha, beta], include_global=True
+)
 
 # Inter-band power ratio (e.g., theta / beta)
 ratio = ef.band_ratio(power, numerator="theta", denominator="beta")
@@ -193,7 +206,7 @@ m_trans = ef.microstate_transitions(seg, windows=[task_win])
 
 ---
 
-## Table Operations & BIDS I/O
+## Table Operations & BIDS-style I/O
 
 ```python
 from eegfeat.io import read_table, write_table
@@ -207,7 +220,7 @@ alpha_cols = features.select(band=alpha, space_kind="channel")
 # Export to pandas DataFrame with canonical structured column names
 df = features.to_dataframe()
 
-# Write BIDS-compliant values TSV, coverage TSV, and JSON sidecar
+# Write BIDS-style values TSV, finite-data coverage TSV, and JSON sidecar
 paths = write_table(features, "sub-01_features.tsv", rows=epochs.metadata)
 
 # Restore FeatureTable losslessly with metadata, flags, and row labels
@@ -235,7 +248,7 @@ eegfeat run recipe.toml --n-jobs 4
 
 ## Verification & Documentation
 
-The test suite validates continuous feature values against analytic derivations and standard reference algorithms to floating-point precision ($`r_{\text{tol}} \le 10^{-6}`$, $`a_{\text{tol}} \le 10^{-9}`$), with discrete edge searches matching bit-identically.
+The test suite checks continuous values against analytic derivations and selected independently executed reference implementations. Formula-derived fixtures are regression evidence, not by themselves evidence of scientific validity.
 
 ```bash
 # Run unit & regression test suite

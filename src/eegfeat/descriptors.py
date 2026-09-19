@@ -10,7 +10,7 @@ from scipy.ndimage import uniform_filter1d
 from eegfeat._expand import Kernel, expand
 from eegfeat.aperiodic import aperiodic_ratio
 from eegfeat.bands import Band
-from eegfeat.spectra import Spectra
+from eegfeat.spectra import Spectra, band_integration_weights
 from eegfeat.table import FeatureTable
 
 _POWER_FLOOR = 1e-20
@@ -114,6 +114,13 @@ def peak_frequency(
         baseline=None,
         mode="raw",
         min_bins=3,
+        parameters={
+            "aperiodic_adjusted": aperiodic_adjusted,
+            "smoothing_hz": smoothing_hz,
+            "min_prominence": min_prominence,
+            "interpolate": interpolate,
+            "fit_range": fit_range,
+        },
     )
 
 
@@ -124,19 +131,22 @@ def _smooth(
 ) -> npt.NDArray[np.float64]:
     if smoothing_hz <= 0.0 or freqs.size <= 3:
         return values
-    spacing = float(np.median(np.diff(freqs)))
-    if spacing <= 0.0:
-        return values
-    width = max(1, int(smoothing_hz / spacing))
-    if width <= 1:
-        return values
     finite = np.isfinite(values)
-    # A moving average renormalized by how many bins were finite, so a gap neither
-    # poisons its neighbours nor is silently closed up and averaged across.
-    total = _centred_boxcar(np.where(finite, values, 0.0), width)
-    count = _centred_boxcar(finite.astype(float), width)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(count > 0.0, total / count, np.nan)
+    radius = smoothing_hz / 2.0
+    out = np.full(values.shape, np.nan)
+    for index, frequency in enumerate(freqs):
+        weights = band_integration_weights(
+            freqs,
+            max(float(freqs[0]), frequency - radius),
+            min(float(freqs[-1]), frequency + radius),
+        )
+        spread = np.broadcast_to(weights, values.shape)
+        selected = finite & (spread > 0.0)
+        count = np.where(selected, spread, 0.0).sum(axis=3)
+        total = np.where(selected, values * spread, 0.0).sum(axis=3)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[..., index] = np.where(count > 0, total / count, np.nan)
+    return out
 
 
 def _centred_boxcar(values: npt.NDArray[np.float64], width: int) -> npt.NDArray[np.float64]:
@@ -378,7 +388,16 @@ def spectral_edge(
         index = np.where(reached.any(axis=3), reached.argmax(axis=3), freqs.size - 1)
         return np.where(total > 0.0, freqs[index], np.nan), {}
 
-    return _descriptor(spectra, kernel, "spectral_edge", "Hz", band, groups, include_global)
+    return _descriptor(
+        spectra,
+        kernel,
+        "spectral_edge",
+        "Hz",
+        band,
+        groups,
+        include_global,
+        {"percentile": percentile},
+    )
 
 
 def _descriptor(
@@ -389,6 +408,7 @@ def _descriptor(
     band: Band,
     groups: Mapping[str, Sequence[str]] | None,
     include_global: bool,
+    parameters: Mapping[str, object] | None = None,
 ) -> FeatureTable:
     return expand(
         spectra,
@@ -401,6 +421,7 @@ def _descriptor(
         baseline=None,
         mode="raw",
         min_bins=3,
+        parameters={} if parameters is None else parameters,
         weighting="gradient",
     )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
 import numpy as np
 import numpy.typing as npt
@@ -20,6 +21,7 @@ def itpc(
     trials: Sequence[str] | npt.NDArray[np.str_] | None = None,
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
+    min_valid_trials: int = 2,
 ) -> FeatureTable:
     """Inter-trial phase coherence.
 
@@ -62,6 +64,8 @@ def itpc(
     FeatureTable
         Coherence in ``[0, 1]``, with one row per trial group.
     """
+    if min_valid_trials < 2:
+        raise ValueError(f"min_valid_trials must be at least 2, got {min_valid_trials}.")
     n_epochs = signals[0].n_epochs if signals else 0
     row_groups, labels = _resolve_rows(trials, n_epochs)
 
@@ -71,9 +75,9 @@ def itpc(
         times: npt.NDArray[np.float64],
     ) -> dict[str, npt.NDArray[np.float64]]:
         del signal, times
-        return {"itpc": _itpc(trace, row_groups, len(labels))}
+        return {"itpc": _itpc(trace, row_groups, len(labels), min_valid_trials)}
 
-    return expand_signal(
+    table = expand_signal(
         signals,
         # The kernel needs phase, and the expander hands it whatever this returns.
         trace_of=lambda signal: signal.phase,
@@ -83,9 +87,63 @@ def itpc(
         groups=groups,
         include_global=include_global,
         mode="raw",
+        parameters={
+            "trials": None if trials is None else list(trials),
+            "min_valid_trials": min_valid_trials,
+        },
         row_groups=row_groups,
         row_labels=labels,
     )
+    return replace(table, flags={**table.flags, "insufficient_trials": np.isnan(table.values)})
+
+
+def ppc(
+    signals: Sequence[BandSignal],
+    *,
+    windows: Sequence[Window],
+    trials: Sequence[str] | npt.NDArray[np.str_] | None = None,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    min_valid_trials: int = 2,
+) -> FeatureTable:
+    """Pairwise phase consistency across trials.
+
+    PPC averages the cosine of every unordered trial-phase difference at each
+    latency, then averages over the requested window. Unlike ITPC, its expected
+    value is not inflated solely by a smaller number of trials. PPC estimates
+    squared population phase locking and is not numerically interchangeable with
+    ITPC.
+    """
+    if min_valid_trials < 2:
+        raise ValueError(f"min_valid_trials must be at least 2, got {min_valid_trials}.")
+    n_epochs = signals[0].n_epochs if signals else 0
+    row_groups, labels = _resolve_rows(trials, n_epochs)
+
+    def kernel(
+        signal: BandSignal,
+        trace: npt.NDArray[np.float64],
+        times: npt.NDArray[np.float64],
+    ) -> dict[str, npt.NDArray[np.float64]]:
+        del signal, times
+        return {"ppc": _ppc(trace, row_groups, len(labels), min_valid_trials)}
+
+    table = expand_signal(
+        signals,
+        trace_of=lambda signal: signal.phase,
+        kernel=kernel,
+        units={"ppc": "a.u."},
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        mode="raw",
+        parameters={
+            "trials": None if trials is None else list(trials),
+            "min_valid_trials": min_valid_trials,
+        },
+        row_groups=row_groups,
+        row_labels=labels,
+    )
+    return replace(table, flags={**table.flags, "insufficient_trials": np.isnan(table.values)})
 
 
 def pac(
@@ -96,6 +154,7 @@ def pac(
     normalize: bool = True,
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
+    allow_overlap: bool = False,
 ) -> FeatureTable:
     """Phase-amplitude coupling by mean vector length.
 
@@ -134,21 +193,38 @@ def pac(
     Returns
     -------
     FeatureTable
-        Coupling strength, dimensionless when normalized. The band recorded on
-        each column is the amplitude band.
+        Coupling strength, dimensionless when normalized. Phase and amplitude
+        bands are separate metadata fields and both appear in the feature name.
     """
     if phase_signal.ch_names != amplitude_signal.ch_names:
         raise ValueError("phase_signal and amplitude_signal must share the same channels.")
+    if phase_signal.analytic.shape != amplitude_signal.analytic.shape:
+        raise ValueError(
+            "phase_signal and amplitude_signal must have the same shape; got "
+            f"{phase_signal.analytic.shape} and {amplitude_signal.analytic.shape}."
+        )
     if phase_signal.times.shape != amplitude_signal.times.shape or not np.allclose(
         phase_signal.times, amplitude_signal.times
     ):
         raise ValueError("phase_signal and amplitude_signal must share the same time axis.")
-    slow, fast = phase_signal.band, amplitude_signal.band
-    if slow is not None and fast is not None and slow.fmin >= fast.fmin:
+    if not np.isclose(phase_signal.sfreq, amplitude_signal.sfreq):
         raise ValueError(
-            f"phase_signal band {slow.name!r} must be slower than amplitude_signal "
-            f"band {fast.name!r}; got {slow.fmin} Hz and {fast.fmin} Hz."
+            "phase_signal and amplitude_signal must share the same sampling frequency."
         )
+    if phase_signal.row_ids != amplitude_signal.row_ids:
+        raise ValueError("phase_signal and amplitude_signal must share exact row identities.")
+    slow, fast = phase_signal.band, amplitude_signal.band
+    if slow is not None and fast is not None:
+        if slow.fmin >= fast.fmin:
+            raise ValueError(
+                f"phase_signal band {slow.name!r} must be slower than amplitude_signal "
+                f"band {fast.name!r}; got {slow.fmin} Hz and {fast.fmin} Hz."
+            )
+        if slow.fmax > fast.fmin and not allow_overlap:
+            raise ValueError(
+                f"phase band {slow.name!r} and amplitude band {fast.name!r} overlap; "
+                "pass allow_overlap=True only for a prespecified specialized estimator."
+            )
 
     unit_phase = np.exp(1j * phase_signal.phase)
 
@@ -161,7 +237,7 @@ def pac(
         window = np.isin(amplitude_signal.times, times)
         return {"pac": _mean_vector_length(unit_phase[:, :, window], trace, normalize)}
 
-    return expand_signal(
+    table = expand_signal(
         [amplitude_signal],
         trace_of=lambda signal: signal.envelope,
         kernel=kernel,
@@ -170,6 +246,16 @@ def pac(
         groups=groups,
         include_global=include_global,
         mode="raw",
+        parameters={
+            "normalize": normalize,
+            "allow_overlap": allow_overlap,
+            "phase_band": None if slow is None else (slow.name, slow.fmin, slow.fmax),
+            "amplitude_band": None if fast is None else (fast.name, fast.fmin, fast.fmax),
+        },
+    )
+    return replace(
+        table,
+        meta=tuple(replace(meta, phase_band=slow, amplitude_band=fast) for meta in table.meta),
     )
 
 
@@ -192,18 +278,53 @@ def _itpc(
     phase: npt.NDArray[np.float64],
     row_groups: npt.NDArray[np.int_],
     n_rows: int,
+    min_valid_trials: int,
 ) -> npt.NDArray[np.float64]:
     unit_vectors = np.where(np.isfinite(phase), np.exp(1j * phase), np.nan)
     out = np.full((n_rows, phase.shape[1]), np.nan)
     for row in range(n_rows):
         member = unit_vectors[row_groups == row]
-        if member.shape[0] == 0:
+        if member.shape[0] < min_valid_trials:
             continue
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
             # Trials first, then time: the coherence at each latency, averaged.
-            coherence = np.abs(np.nanmean(member, axis=0))
+            valid = np.isfinite(member)
+            count = valid.sum(axis=0)
+            coherence = np.where(
+                count >= min_valid_trials,
+                np.abs(np.nansum(member, axis=0) / np.maximum(count, 1)),
+                np.nan,
+            )
             out[row] = np.nanmean(np.where(np.isfinite(coherence), coherence, np.nan), axis=1)
+    return out
+
+
+def _ppc(
+    phase: npt.NDArray[np.float64],
+    row_groups: npt.NDArray[np.int_],
+    n_rows: int,
+    min_valid_trials: int,
+) -> npt.NDArray[np.float64]:
+    unit_vectors = np.where(np.isfinite(phase), np.exp(1j * phase), np.nan)
+    out = np.full((n_rows, phase.shape[1]), np.nan)
+    for row in range(n_rows):
+        member = unit_vectors[row_groups == row]
+        if member.shape[0] < min_valid_trials:
+            continue
+        valid = np.isfinite(member)
+        count = valid.sum(axis=0)
+        resultant_squared = np.abs(np.nansum(member, axis=0)) ** 2
+        denominator = count * (count - 1)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            consistency = np.where(
+                count >= min_valid_trials,
+                (resultant_squared - count) / denominator,
+                np.nan,
+            )
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
+            out[row] = np.nanmean(consistency, axis=1)
     return out
 
 

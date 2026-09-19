@@ -235,6 +235,7 @@ def _measure(
         groups=groups,
         include_global=include_global,
         mode="raw",
+        parameters={},
     )
 
 
@@ -273,6 +274,7 @@ def _peak(
         groups=groups,
         include_global=include_global,
         mode="raw",
+        parameters={"polarity": polarity, "prominence": prominence},
     )
 
 

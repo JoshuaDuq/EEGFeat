@@ -26,6 +26,7 @@ def _signal(envelope: np.ndarray) -> BandSignal:
         ch_names=CHANNELS,
         band=ALPHA,
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(envelope.shape[0])),
     )
 
 
@@ -96,6 +97,20 @@ def test_correlation_is_bounded() -> None:
     assert np.all(np.abs(table.values) <= 1.0 + 1e-12)
 
 
+def test_trial_correlations_are_averaged_instead_of_pooling_samples() -> None:
+    x = np.linspace(0.0, 1.0, 401)
+    envelope = np.ones((2, 4, x.size))
+    envelope[0, 0] = 10.0 + x
+    envelope[0, 1] = 10.0 + x
+    envelope[1, 0] = 1.0 + x
+    envelope[1, 1] = 2.0 - x
+
+    table = envelope_correlation([_signal(envelope)], windows=[WINDOW])
+    values = dict(zip([meta.space for meta in table.meta], table.values[0], strict=True))
+
+    assert values["C3-C4"] == pytest.approx(0.0, abs=1e-12)
+
+
 # --- graph measures -------------------------------------------------------------------
 
 
@@ -124,6 +139,11 @@ def test_global_efficiency_uses_paths_not_direct_edges() -> None:
     assert 0.0 < _global_efficiency(chain) < _global_efficiency(complete)
 
 
+def test_disconnected_node_pairs_contribute_exactly_zero_efficiency() -> None:
+    disconnected = np.zeros((2, 2))
+    assert _global_efficiency(disconnected) == 0.0
+
+
 def test_clustering_of_a_triangle_is_one_and_of_a_chain_is_zero() -> None:
     triangle = np.ones((3, 3))
     np.fill_diagonal(triangle, 0.0)
@@ -137,6 +157,28 @@ def test_clustering_is_nan_when_no_node_has_two_neighbours() -> None:
     sparse = np.zeros((4, 4))
     sparse[0, 1] = sparse[1, 0] = 1.0
     assert np.isnan(_clustering(sparse, 0.5))
+
+
+def test_clustering_average_excludes_nodes_with_fewer_than_two_neighbours() -> None:
+    triangle_and_isolate = np.zeros((4, 4))
+    triangle_and_isolate[:3, :3] = 1.0
+    np.fill_diagonal(triangle_and_isolate, 0.0)
+    assert _clustering(triangle_and_isolate, 0.5) == pytest.approx(1.0)
+
+
+def test_hyphenated_node_names_are_not_parsed_from_display_strings() -> None:
+    envelope = np.random.RandomState(21).rand(4, 2, 401)
+    signal = BandSignal.from_arrays(
+        analytic=envelope.astype(complex),
+        times=np.arange(401) / SFREQ,
+        ch_names=("EEG-C3", "EEG-C4"),
+        band=ALPHA,
+        sfreq=SFREQ,
+        row_ids=tuple(("test", i, "event") for i in range(4)),
+    )
+    pairs = envelope_correlation([signal], windows=[WINDOW])
+    assert pairs.meta[0].nodes == ("EEG-C3", "EEG-C4")
+    assert np.isfinite(global_efficiency(pairs).values).all()
 
 
 def test_graph_measures_reduce_a_pair_table_to_one_global_column() -> None:
@@ -173,6 +215,7 @@ def test_wpli_reports_its_missing_dependency_clearly() -> None:
         times=np.arange(401) / SFREQ,
         ch_names=CHANNELS,
         sfreq=SFREQ,
+        row_ids=(("test", 0, "event"), ("test", 1, "event")),
     )
     with pytest.raises(ImportError, match=r"eegfeat\[connectivity\]"):
         wpli(signal, bands=[ALPHA], windows=[WINDOW])
@@ -192,7 +235,13 @@ def test_wpli_places_a_planted_coupling_on_the_right_pair() -> None:
     data = rng.randn(n_epochs, 4, n) * 0.5
     data[:, 0, :] += np.sin(2 * np.pi * 10 * times)
     data[:, 1, :] += np.sin(2 * np.pi * 10 * times + 0.8)  # constant lag with C3
-    signal = Signal.from_arrays(data=data, times=times, ch_names=CHANNELS, sfreq=200.0)
+    signal = Signal.from_arrays(
+        data=data,
+        times=times,
+        ch_names=CHANNELS,
+        sfreq=200.0,
+        row_ids=tuple(("test", index, "event") for index in range(n_epochs)),
+    )
     table = wpli(signal, bands=[ALPHA], windows=[Window("all", 0.0, 3.995)])
     values = dict(zip([m.space for m in table.meta], table.values[0], strict=True))
     assert max(values, key=lambda name: values[name]) == "C3-C4"

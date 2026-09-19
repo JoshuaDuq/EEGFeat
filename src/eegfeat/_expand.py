@@ -12,8 +12,14 @@ from eegfeat.baseline import normalize
 from eegfeat.groups import SpatialUnit, aggregate
 from eegfeat.qc import band_coverage
 from eegfeat.signal import TimeSeries
-from eegfeat.spectra import Spectra, Window, gradient_weights, trapezoid_weights
-from eegfeat.table import FeatureMeta, FeatureTable, Normalization
+from eegfeat.spectra import (
+    Spectra,
+    Window,
+    band_integration_weights,
+    gradient_weights,
+    trapezoid_weights,
+)
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, Normalization, RowId
 
 Kernel = Callable[
     [npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]],
@@ -61,6 +67,7 @@ def _assemble(
     columns: Sequence[_Column],
     flag_columns: Mapping[str, Sequence[npt.NDArray[np.bool_]]],
     row_labels: tuple[str, ...] | None = None,
+    row_ids: tuple[RowId, ...] | None = None,
 ) -> FeatureTable:
     return FeatureTable(
         values=np.stack([c.values for c in columns], axis=1),
@@ -68,6 +75,7 @@ def _assemble(
         meta=tuple(c.meta for c in columns),
         flags={key: np.stack(list(arrays), axis=1) for key, arrays in flag_columns.items()},
         row_labels=row_labels,
+        row_ids=row_ids,
     )
 
 
@@ -83,22 +91,33 @@ def expand(
     baseline: str | None,
     mode: Normalization,
     min_bins: int,
-    weighting: Literal["trapezoid", "gradient"] = "trapezoid",
+    parameters: Mapping[str, object],
+    weighting: Literal["trapezoid", "gradient", "band_integral"] = "trapezoid",
 ) -> FeatureTable:
     baseline_index = _baseline_index(spectra, baseline)
     columns: list[_Column] = []
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
     for band in bands if bands is not None else (None,):
-        mask = band.mask(spectra.freqs) if band is not None else np.ones(spectra.freqs.size, bool)
+        integration_weights = None
+        if weighting == "band_integral":
+            if band is None:
+                raise ValueError("band_integral weighting requires a finite frequency band.")
+            integration_weights = band_integration_weights(spectra.freqs, band.fmin, band.fmax)
+            mask = integration_weights > 0.0
+        else:
+            mask = (
+                band.mask(spectra.freqs) if band is not None else np.ones(spectra.freqs.size, bool)
+            )
         _check_band(band, mask, min_bins, spectra.freqs)
 
         sub_freqs = spectra.freqs[mask]
-        weights = (
-            trapezoid_weights(sub_freqs)
-            if weighting == "trapezoid"
-            else gradient_weights(sub_freqs)
-        )
+        if integration_weights is not None:
+            weights = integration_weights[mask]
+        elif weighting == "trapezoid":
+            weights = trapezoid_weights(sub_freqs)
+        else:
+            weights = gradient_weights(sub_freqs)
         values, flags = kernel(spectra.data[:, :, :, mask], sub_freqs, weights)
         coverage = band_coverage(spectra.coverage[:, :, :, mask], weights)
 
@@ -123,17 +142,30 @@ def expand(
                 normalization=mode,
                 unit=unit,
                 source=spectra.source,
+                window_bounds=(window.tmin, window.tmax),
+                computation=ComputationSpec.create(
+                    measure,
+                    input_source=spectra.source,
+                    input_computation=spectra.computation.record(),
+                    baseline=baseline,
+                    normalization=mode,
+                    minimum_bins=min_bins,
+                    weighting=weighting,
+                    spatial_aggregation="arithmetic_mean_of_channel_features",
+                    parameters=parameters,
+                ),
                 freq_resolution_hz=_r,
             )
 
+        all_flags = {**spectra.flags, **flags}
         band_columns, band_flags = _collect(
-            units, spectra.windows, flags, make_meta, skip_window=baseline_index
+            units, spectra.windows, all_flags, make_meta, skip_window=baseline_index
         )
         columns.extend(band_columns)
         for key, arrays in band_flags.items():
             flag_columns.setdefault(key, []).extend(arrays)
 
-    return _assemble(columns, flag_columns)
+    return _assemble(columns, flag_columns, row_ids=spectra.row_ids)
 
 
 def _baseline_index(spectra: Spectra, baseline: str | None) -> int | None:
@@ -190,6 +222,7 @@ def expand_signal(
     groups: Mapping[str, Sequence[str]] | None,
     include_global: bool,
     mode: Normalization,
+    parameters: Mapping[str, object],
     row_groups: npt.NDArray[np.int_] | None = None,
     row_labels: tuple[str, ...] | None = None,
 ) -> FeatureTable:
@@ -243,6 +276,15 @@ def expand_signal(
                     normalization=mode,
                     unit=units[_m],
                     source=_s.source,
+                    window_bounds=(window.tmin, window.tmax),
+                    computation=ComputationSpec.create(
+                        _m,
+                        input_source=_s.source,
+                        input_computation=_s.computation.record(),
+                        normalization=mode,
+                        spatial_aggregation="arithmetic_mean_of_channel_features",
+                        parameters=parameters,
+                    ),
                     freq_resolution_hz=None,
                 )
 
@@ -253,7 +295,12 @@ def expand_signal(
             for key, arrays in new_flags.items():
                 flag_columns.setdefault(key, []).extend(arrays)
 
-    return _assemble(columns, flag_columns, row_labels)
+    return _assemble(
+        columns,
+        flag_columns,
+        row_labels,
+        row_ids=None if row_labels is not None else signals[0].row_ids,
+    )
 
 
 def _reduce_rows(

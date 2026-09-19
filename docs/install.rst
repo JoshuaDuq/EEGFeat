@@ -74,7 +74,7 @@ Install optional components as needed depending on your analysis scope:
      - ``scikit-learn>=1.3``
      - GFP peak clustering and microstate segmentation (:mod:`eegfeat.microstates`).
    * - ``[knee]``
-     - ``specparam>=2.0``
+     - ``specparam>=2.0.0rc7,<3``
      - Spectral knee parameterization.
    * - ``[dev]``
      - ``pytest``, ``ruff``, ``black``, ``mypy``, type stubs

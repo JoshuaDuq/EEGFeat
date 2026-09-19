@@ -18,6 +18,7 @@ import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import numpy as np
@@ -25,7 +26,7 @@ import numpy.typing as npt
 import pandas as pd
 
 from eegfeat.bands import Band
-from eegfeat.table import FeatureMeta, FeatureTable
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
 
 _NA = "n/a"
 """Missing-value marker, following the BIDS convention for tabular files."""
@@ -53,7 +54,8 @@ def write_table(
     rows : DataFrame, optional
         Descriptive columns written between the row key and the features, one
         row per table row, e.g. the event and metadata of each epoch. They are
-        for joining the values to other data and are not read back.
+        for joining the values to other data and are not read back. The output
+        is BIDS-style tabular data, not a validated BIDS derivative dataset.
     provenance : mapping, optional
         JSON-serializable record of how the table was produced, stored in the
         sidecar as given.
@@ -87,9 +89,13 @@ def write_table(
     sidecar_path = target.with_suffix(".json")
     sidecar = _sidecar(table, key, list(descriptors.columns), coverage_path.name, provenance)
 
-    _write_tsv(values_frame, target)
-    _write_tsv(coverage_frame, coverage_path)
-    _write_text(json.dumps(sidecar, indent=2, allow_nan=False) + "\n", sidecar_path)
+    with TemporaryDirectory(prefix=".eegfeat-", dir=target.parent) as temporary:
+        staging = Path(temporary)
+        staged = tuple(staging / path.name for path in (target, coverage_path, sidecar_path))
+        _write_tsv(values_frame, staged[0])
+        _write_tsv(coverage_frame, staged[1])
+        _write_text(json.dumps(sidecar, indent=2, allow_nan=False) + "\n", staged[2])
+        _publish_bundle(staged, (target, coverage_path, sidecar_path), staging / "backup")
     return target, coverage_path, sidecar_path
 
 
@@ -122,18 +128,28 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
         flags[key] = flag
 
     labels = sidecar["row_labels"]
+    identifiers = sidecar["row_ids"]
     return FeatureTable(
         values=values,
         coverage=coverage,
         meta=meta,
         flags=flags,
         row_labels=None if labels is None else tuple(str(label) for label in labels),
+        row_ids=(
+            None
+            if identifiers is None
+            else tuple(
+                (str(recording), int(epoch), str(event)) for recording, epoch, event in identifiers
+            )
+        ),
     )
 
 
 def _row_key(table: FeatureTable) -> tuple[str, list[int] | list[str]]:
     if table.row_labels is None:
-        return _EPOCH_KEY, list(range(table.n_rows))
+        if table.row_ids is None:
+            return _EPOCH_KEY, list(range(table.n_rows))
+        return _EPOCH_KEY, [epoch for _, epoch, _ in table.row_ids]
     return _GROUP_KEY, list(table.row_labels)
 
 
@@ -173,6 +189,7 @@ def _sidecar(
         "eegfeat_version": __version__,
         "rows": "epochs" if table.row_labels is None else "groups",
         "row_labels": None if table.row_labels is None else list(table.row_labels),
+        "row_ids": None if table.row_ids is None else list(table.row_ids),
         "row_columns": [key, *descriptor_columns],
         "coverage": coverage_name,
         "columns": [_meta_record(m) for m in table.meta],
@@ -200,32 +217,64 @@ def _meta_record(meta: FeatureMeta) -> dict[str, Any]:
         "space": meta.space,
         "space_kind": meta.space_kind,
         "window": meta.window,
+        "window_bounds": meta.window_bounds,
         "normalization": meta.normalization,
         "unit": meta.unit,
         "source": meta.source,
         "freq_resolution_hz": meta.freq_resolution_hz,
+        "phase_band": _band_record(meta.phase_band),
+        "amplitude_band": _band_record(meta.amplitude_band),
+        "nodes": meta.nodes,
+        "computation": meta.computation.record(),
+        "parameter_hash": meta.parameter_hash,
     }
 
 
 def _meta_from_record(record: Mapping[str, Any]) -> FeatureMeta:
     band = record["band"]
+    computation = record["computation"]
+    bounds = record["window_bounds"]
+    phase_band = record.get("phase_band")
+    amplitude_band = record.get("amplitude_band")
+    nodes = record.get("nodes")
     meta = FeatureMeta(
         measure=record["measure"],
         band=None if band is None else Band(band["name"], band["fmin"], band["fmax"]),
         space=record["space"],
         space_kind=record["space_kind"],
         window=record["window"],
+        window_bounds=None if bounds is None else (float(bounds[0]), float(bounds[1])),
         normalization=record["normalization"],
         unit=record["unit"],
         source=record["source"],
+        computation=ComputationSpec.create(
+            computation["method"], **dict(computation["parameters"])
+        ),
         freq_resolution_hz=record["freq_resolution_hz"],
+        phase_band=_band_from_record(phase_band),
+        amplitude_band=_band_from_record(amplitude_band),
+        nodes=None if nodes is None else (str(nodes[0]), str(nodes[1])),
     )
     if meta.name != record["name"]:
         raise ValueError(
             f"sidecar column {record['name']!r} does not match its own metadata, "
             f"which names it {meta.name!r}."
         )
+    if meta.parameter_hash != record["parameter_hash"]:
+        raise ValueError(f"sidecar column {record['name']!r} has an invalid parameter hash.")
     return meta
+
+
+def _band_record(band: Band | None) -> dict[str, Any] | None:
+    if band is None:
+        return None
+    return {"name": band.name, "fmin": band.fmin, "fmax": band.fmax}
+
+
+def _band_from_record(record: Mapping[str, Any] | None) -> Band | None:
+    if record is None:
+        return None
+    return Band(str(record["name"]), float(record["fmin"]), float(record["fmax"]))
 
 
 def _read_matrix(path: Path, names: list[str]) -> npt.NDArray[np.float64]:
@@ -246,3 +295,24 @@ def _write_text(text: str, path: Path) -> None:
     partial = path.with_name(path.name + ".partial")
     partial.write_text(text)
     os.replace(partial, path)
+
+
+def _publish_bundle(staged: tuple[Path, ...], final: tuple[Path, ...], backup: Path) -> None:
+    backup.mkdir()
+    saved: list[tuple[Path, Path]] = []
+    published: list[Path] = []
+    try:
+        for target in final:
+            if target.exists():
+                copy = backup / target.name
+                os.replace(target, copy)
+                saved.append((copy, target))
+        for source, target in zip(staged, final, strict=True):
+            os.replace(source, target)
+            published.append(target)
+    except Exception:
+        for path in published:
+            path.unlink(missing_ok=True)
+        for source, target in saved:
+            os.replace(source, target)
+        raise

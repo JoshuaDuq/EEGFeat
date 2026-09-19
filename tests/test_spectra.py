@@ -8,6 +8,7 @@ from eegfeat.spectra import (
     support_restricted_mask,
     trapezoid_weights,
 )
+from eegfeat.table import ComputationSpec
 
 
 def test_trapezoid_weights_sum_to_the_frequency_span() -> None:
@@ -56,7 +57,9 @@ def test_from_epochs_spectrum_gains_a_singleton_window_axis() -> None:
         np.random.RandomState(0).randn(5, 2, 400) * 1e-6, info, tmin=-1.0, verbose="ERROR"
     )
     spectrum = epochs.compute_psd("multitaper", fmin=2.0, fmax=40.0, verbose="ERROR")
-    spectra = Spectra.from_spectrum(spectrum)
+    spectra = Spectra.from_spectrum(
+        spectrum, recording="test", estimator_parameters={"bandwidth": None}
+    )
     assert spectra.data.ndim == 4
     assert spectra.data.shape[0] == 5
     assert spectra.data.shape[1] == 2
@@ -73,7 +76,7 @@ def test_from_continuous_spectrum_gains_epoch_and_window_axes() -> None:
     info = mne.create_info(["C3", "C4"], 200.0, "eeg")
     raw = mne.io.RawArray(np.random.RandomState(0).randn(2, 4000) * 1e-6, info, verbose="ERROR")
     spectrum = raw.compute_psd("welch", fmin=2.0, fmax=40.0, verbose="ERROR")
-    spectra = Spectra.from_spectrum(spectrum)
+    spectra = Spectra.from_spectrum(spectrum, recording="test", estimator_parameters={"n_fft": 400})
     assert spectra.data.shape[0] == 1
     assert spectra.data.shape[2] == 1
 
@@ -88,6 +91,10 @@ def test_non_finite_input_lowers_coverage_rather_than_raising() -> None:
         windows=(Window("all", -np.inf, np.inf),),
         coverage=np.isfinite(data).astype(float),
         source="test",
+        representation="psd",
+        support=np.ones(data.shape),
+        row_ids=(("test", 0, "event"), ("test", 1, "event")),
+        computation=ComputationSpec.create("test"),
     )
     assert spectra.coverage[0, 0, 0, 1] == 0.0
     assert spectra.coverage.sum() == 15.0
@@ -101,6 +108,10 @@ def test_shape_and_axis_mismatches_raise() -> None:
         windows=(Window("all", -np.inf, np.inf),),
         coverage=np.ones((2, 2, 1, 4)),
         source="test",
+        representation="psd",
+        support=np.ones((2, 2, 1, 4)),
+        row_ids=(("test", 0, "event"), ("test", 1, "event")),
+        computation=ComputationSpec.create("test"),
     )
     with pytest.raises(ValueError, match="ch_names"):
         Spectra(**{**good, "ch_names": ("C3",)})
@@ -110,6 +121,8 @@ def test_shape_and_axis_mismatches_raise() -> None:
         Spectra(**{**good, "freqs": np.array([4.0, 3.0, 2.0, 1.0])})
     with pytest.raises(ValueError, match="coverage"):
         Spectra(**{**good, "coverage": np.ones((2, 2, 1, 3))})
+    with pytest.raises(ValueError, match="support"):
+        Spectra(**{**good, "support": np.ones((2, 2, 1, 3))})
 
 
 def _toy_tfr(n_epochs: int = 4):
@@ -128,7 +141,7 @@ def _toy_tfr(n_epochs: int = 4):
 
 def test_from_tfr_produces_one_spectrum_per_window() -> None:
     windows = (Window("base", -2.0, -1.0), Window("stim", 0.0, 1.0))
-    spectra = Spectra.from_tfr(_toy_tfr(), windows)
+    spectra = Spectra.from_tfr(_toy_tfr(), windows, recording="test", n_cycles=3.0)
     assert spectra.data.shape == (4, 2, 2, 3)
     assert tuple(w.name for w in spectra.windows) == ("base", "stim")
     assert spectra.source == "morlet"
@@ -137,27 +150,30 @@ def test_from_tfr_produces_one_spectrum_per_window() -> None:
 def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
     tfr = _toy_tfr()
     window = Window("stim", 0.0, 1.0)
-    spectra = Spectra.from_tfr(tfr, (window,))
+    spectra = Spectra.from_tfr(tfr, (window,), recording="test", n_cycles=3.0)
     times = np.asarray(tfr.times)
-    mask = (times >= 0.0) & (times <= 1.0)
-    expected = np.asarray(tfr.get_data())[:, :, :, mask].mean(axis=3)
+    mask = support_restricted_mask(times, np.asarray(tfr.freqs), window, 3.0)
+    data = np.asarray(tfr.get_data())
+    expected = np.stack(
+        [data[:, :, index, row].mean(axis=2) for index, row in enumerate(mask)], axis=2
+    )
     np.testing.assert_allclose(spectra.data[:, :, 0, :], expected)
 
 
 def test_from_tfr_refuses_an_already_baselined_tfr() -> None:
     tfr = _toy_tfr().apply_baseline((-2.0, -1.0), mode="logratio", verbose="ERROR")
     with pytest.raises(ValueError, match="already baseline"):
-        Spectra.from_tfr(tfr, (Window("stim", 0.0, 1.0),))
+        Spectra.from_tfr(tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0)
 
 
 def test_from_tfr_rejects_a_window_outside_the_time_axis() -> None:
     with pytest.raises(ValueError, match="no samples"):
-        Spectra.from_tfr(_toy_tfr(), (Window("late", 30.0, 40.0),))
+        Spectra.from_tfr(_toy_tfr(), (Window("late", 30.0, 40.0),), recording="test", n_cycles=3.0)
 
 
 def test_from_tfr_requires_at_least_one_window() -> None:
     with pytest.raises(ValueError, match="at least one window"):
-        Spectra.from_tfr(_toy_tfr(), ())
+        Spectra.from_tfr(_toy_tfr(), (), recording="test", n_cycles=3.0)
 
 
 def test_from_tfr_rejects_complex_output() -> None:
@@ -175,18 +191,25 @@ def test_from_tfr_rejects_complex_output() -> None:
         },
     )()
     with pytest.raises(ValueError, match="complex"):
-        Spectra.from_tfr(complex_tfr, (Window("stim", 0.0, 1.0),))
+        Spectra.from_tfr(
+            complex_tfr,
+            (Window("stim", 0.0, 1.0),),
+            recording="test",
+            n_cycles=3.0,
+        )
 
 
 def test_support_restriction_narrows_low_frequencies_more_than_high_ones() -> None:
     times = np.linspace(-2.0, 2.0, 401)
     freqs = np.array([4.0, 40.0])
     mask = support_restricted_mask(times, freqs, Window("stim", 0.0, 1.0), n_cycles=6.0)
-    # half support: 6/(2*4) = 0.75 s at 4 Hz, 6/(2*40) = 0.075 s at 40 Hz
+    # MNE extends to five Gaussian standard deviations, where
+    # sigma_t = n_cycles / (2*pi*f).
     assert mask.shape == (2, 401)
     assert mask[0].sum() < mask[1].sum()
-    assert times[mask[1]].min() == pytest.approx(0.075, abs=0.01)
-    assert times[mask[1]].max() == pytest.approx(0.925, abs=0.01)
+    expected_half_support = 5.0 * 6.0 / (2.0 * np.pi * 40.0)
+    assert times[mask[1]].min() == pytest.approx(expected_half_support, abs=0.01)
+    assert times[mask[1]].max() == pytest.approx(1.0 - expected_half_support, abs=0.01)
 
 
 def test_a_frequency_whose_support_never_fits_drops_out_entirely() -> None:
@@ -199,10 +222,10 @@ def test_a_frequency_whose_support_never_fits_drops_out_entirely() -> None:
 
 
 def test_frequencies_drop_out_of_a_window_individually() -> None:
-    # freqs are 8/10/12 Hz and n_cycles is 3, so half-supports are
-    # 0.1875 / 0.150 / 0.125 s. A window of half-width 0.14 s holds only 12 Hz.
+    # MNE's five-sigma half supports are approximately 0.298 / 0.239 / 0.199 s.
+    # A window of half-width 0.22 s therefore holds only 12 Hz.
     tfr = _toy_tfr()
-    spectra = Spectra.from_tfr(tfr, (Window("narrow", 0.0, 0.28),), n_cycles=3.0)
+    spectra = Spectra.from_tfr(tfr, (Window("narrow", 0.0, 0.44),), recording="test", n_cycles=3.0)
     assert np.isnan(spectra.data[:, :, 0, 0]).all()
     assert np.isnan(spectra.data[:, :, 0, 1]).all()
     assert np.isfinite(spectra.data[:, :, 0, 2]).all()
@@ -215,10 +238,39 @@ def test_a_window_narrower_than_every_wavelet_raises() -> None:
     # That is a specification error, not a data condition: the message says so.
     tfr = _toy_tfr()
     with pytest.raises(ValueError, match="retains no coefficients"):
-        Spectra.from_tfr(tfr, (Window("tiny", 0.0, 0.1),), n_cycles=3.0)
+        Spectra.from_tfr(tfr, (Window("tiny", 0.0, 0.1),), recording="test", n_cycles=3.0)
 
 
-def test_without_n_cycles_no_restriction_is_applied() -> None:
+def test_from_tfr_requires_the_morlet_cycle_count() -> None:
+    with pytest.raises(TypeError, match="n_cycles"):
+        Spectra.from_tfr(_toy_tfr(), (Window("stim", 0.0, 1.0),), recording="test")
+
+
+def test_support_fraction_is_distinct_from_finite_coverage() -> None:
     tfr = _toy_tfr()
-    unrestricted = Spectra.from_tfr(tfr, (Window("tiny", 0.0, 0.1),))
-    assert np.isfinite(unrestricted.data).all()
+    spectra = Spectra.from_tfr(tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0)
+
+    assert (spectra.coverage == 1.0).all()
+    assert (spectra.support < 1.0).all()
+    assert (spectra.support > 0.0).all()
+
+
+def test_event_immediately_outside_window_cannot_affect_retained_coefficients() -> None:
+    mne = pytest.importorskip("mne")
+    sfreq = 200.0
+    info = mne.create_info(["C3"], sfreq, "eeg")
+    data = np.zeros((2, 1, 401))
+    times = -1.0 + np.arange(data.shape[-1]) / sfreq
+    data[1, 0, np.flatnonzero(times < 0.0)[-1]] = 1.0
+    epochs = mne.EpochsArray(data, info, tmin=-1.0, verbose="ERROR")
+    tfr = epochs.compute_tfr(
+        "morlet",
+        freqs=np.array([10.0]),
+        n_cycles=3.0,
+        return_itc=False,
+        verbose="ERROR",
+    )
+
+    spectra = Spectra.from_tfr(tfr, (Window("target", 0.0, 0.6),), recording="test", n_cycles=3.0)
+
+    np.testing.assert_allclose(spectra.data[1], spectra.data[0], atol=1e-14)

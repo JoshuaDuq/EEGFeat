@@ -48,7 +48,9 @@ Core Data Structures
 Spectral Features
 -----------------
 
-.. autofunction:: eegfeat.band_power
+.. autofunction:: eegfeat.integrated_band_power
+.. autofunction:: eegfeat.mean_psd
+.. autofunction:: eegfeat.mean_tfr_power
 
 .. autofunction:: eegfeat.band_ratio
 
@@ -121,6 +123,8 @@ Phase & Connectivity
 --------------------
 
 .. autofunction:: eegfeat.itpc
+
+.. autofunction:: eegfeat.ppc
 
 .. autofunction:: eegfeat.pac
 

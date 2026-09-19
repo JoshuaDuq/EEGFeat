@@ -40,6 +40,7 @@ def _signal(envelope: np.ndarray) -> BandSignal:
         ch_names=("C3",),
         band=BETA,
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(envelope.shape[0])),
     )
 
 
@@ -155,6 +156,7 @@ def test_count_is_monotonically_non_increasing_in_min_duration() -> None:
         ch_names=("C3", "Cz"),
         band=BETA,
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(envelope.shape[0])),
     )
 
     durations = [10.0, 50.0, 100.0, 200.0]
@@ -215,6 +217,7 @@ def test_percentile_threshold_is_computed_per_trial_without_cross_trial_leakage(
         ch_names=("C3",),
         band=BETA,
         sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(envelope.shape[0])),
     )
     table = burst_features(
         [sig],

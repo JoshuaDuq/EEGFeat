@@ -9,6 +9,8 @@ import numpy.typing as npt
 from scipy.signal import hilbert
 
 from eegfeat.bands import Band
+from eegfeat.identity import epoch_row_ids
+from eegfeat.table import ComputationSpec, RowId
 
 _FILTER_LENGTH_MULTIPLIER = 6.6
 _MIN_FILTER_LENGTH = 3
@@ -35,6 +37,12 @@ class TimeSeries(Protocol):
 
     @property
     def coverage(self) -> npt.NDArray[np.float64]: ...
+
+    @property
+    def row_ids(self) -> tuple[RowId, ...]: ...
+
+    @property
+    def computation(self) -> ComputationSpec: ...
 
     @property
     def amplitude(self) -> npt.NDArray[np.float64]:
@@ -76,9 +84,12 @@ class Signal:
     ch_names: tuple[str, ...]
     sfreq: float
     coverage: npt.NDArray[np.float64]
+    row_ids: tuple[RowId, ...]
+    computation: ComputationSpec
 
     def __post_init__(self) -> None:
         _validate_series(self.data, self.times, self.ch_names, self.coverage, self.sfreq, "data")
+        _validate_row_ids(self.row_ids, self.n_epochs)
 
     @property
     def amplitude(self) -> npt.NDArray[np.float64]:
@@ -101,27 +112,29 @@ class Signal:
         return int(self.data.shape[0])
 
     @classmethod
-    def from_epochs(cls, epochs: Any) -> Signal:
+    def from_epochs(cls, epochs: Any, *, recording: str) -> Signal:
         """Wrap an ``mne.Epochs`` without transforming it.
 
         Parameters
         ----------
         epochs : mne.Epochs
-            Epoched data. Every channel present is carried through, including
-            non-EEG channels and those marked bad; pass an already-picked object
-            if that matters.
+            Epoched data. Good EEG channels are selected; non-EEG channels and
+            channels listed in ``epochs.info['bads']`` are excluded.
 
         Returns
         -------
         Signal
         """
-        data = np.asarray(epochs.get_data(), dtype=float)
+        selected = epochs.copy().pick("eeg", exclude="bads")
+        data = np.asarray(selected.get_data(), dtype=float)
         return cls(
             data=data,
-            times=np.asarray(epochs.times, dtype=float),
-            ch_names=tuple(epochs.ch_names),
-            sfreq=float(epochs.info["sfreq"]),
+            times=np.asarray(selected.times, dtype=float),
+            ch_names=tuple(selected.ch_names),
+            sfreq=float(selected.info["sfreq"]),
             coverage=np.isfinite(data).astype(float),
+            row_ids=epoch_row_ids(selected, recording, data.shape[0]),
+            computation=ComputationSpec.create("mne.Epochs.get_data", picks="eeg", exclude="bads"),
         )
 
     @classmethod
@@ -132,7 +145,9 @@ class Signal:
         times: npt.NDArray[np.float64],
         ch_names: tuple[str, ...],
         sfreq: float,
+        row_ids: tuple[RowId, ...],
         coverage: npt.NDArray[np.float64] | None = None,
+        computation: ComputationSpec | None = None,
     ) -> Signal:
         """Build from arrays.
 
@@ -160,6 +175,10 @@ class Signal:
             ch_names=tuple(ch_names),
             sfreq=float(sfreq),
             coverage=np.isfinite(array).astype(float) if coverage is None else coverage,
+            row_ids=row_ids,
+            computation=(
+                ComputationSpec.create("provided-array") if computation is None else computation
+            ),
         )
 
 
@@ -188,6 +207,11 @@ def _validate_series(
         raise ValueError(f"coverage shape {coverage.shape} does not match {label} {values.shape}.")
     if not sfreq > 0.0:
         raise ValueError(f"sfreq must be positive, got {sfreq}.")
+
+
+def _validate_row_ids(row_ids: tuple[RowId, ...], n_epochs: int) -> None:
+    if len(row_ids) != n_epochs:
+        raise ValueError(f"row_ids has {len(row_ids)} entries but data has {n_epochs} epochs.")
 
 
 @dataclass(frozen=True, eq=False)
@@ -219,6 +243,8 @@ class BandSignal:
     band: Band
     sfreq: float
     coverage: npt.NDArray[np.float64]
+    row_ids: tuple[RowId, ...]
+    computation: ComputationSpec
 
     def __post_init__(self) -> None:
         if self.analytic.ndim != 3:
@@ -243,6 +269,7 @@ class BandSignal:
             )
         if not self.sfreq > 0.0:
             raise ValueError(f"sfreq must be positive, got {self.sfreq}.")
+        _validate_row_ids(self.row_ids, self.n_epochs)
 
     @property
     def envelope(self) -> npt.NDArray[np.float64]:
@@ -283,7 +310,9 @@ class BandSignal:
         ch_names: tuple[str, ...],
         band: Band,
         sfreq: float,
+        row_ids: tuple[RowId, ...],
         coverage: npt.NDArray[np.float64] | None = None,
+        computation: ComputationSpec | None = None,
     ) -> BandSignal:
         """Build from arrays the caller filtered themselves.
 
@@ -316,6 +345,12 @@ class BandSignal:
             band=band,
             sfreq=float(sfreq),
             coverage=coverage,
+            row_ids=row_ids,
+            computation=(
+                ComputationSpec.create("provided-analytic-array")
+                if computation is None
+                else computation
+            ),
         )
 
     @classmethod
@@ -324,6 +359,7 @@ class BandSignal:
         epochs: Any,
         band: Band,
         *,
+        recording: str,
         pad_sec: float = 0.5,
         pad_cycles: float = 3.0,
         n_jobs: int = 1,
@@ -350,14 +386,15 @@ class BandSignal:
         BandSignal
             With the padding removed, so ``times`` matches ``epochs.times``.
         """
-        sfreq = float(epochs.info["sfreq"])
+        selected = epochs.copy().pick("eeg", exclude="bads")
+        sfreq = float(selected.info["sfreq"])
         if band.fmax > sfreq / 2.0:
             raise ValueError(
                 f"band {band.name!r} reaches {band.fmax} Hz, above the Nyquist "
                 f"frequency {sfreq / 2.0} of this recording."
             )
 
-        data = np.asarray(epochs.get_data(), dtype=float)
+        data = np.asarray(selected.get_data(), dtype=float)
         n_epochs, n_channels, n_times = data.shape
         flat = data.reshape(-1, n_times)
 
@@ -380,8 +417,8 @@ class BandSignal:
         analytic = analytic.reshape(n_epochs, n_channels, n_times)
         return cls.from_arrays(
             analytic=analytic,
-            times=np.asarray(epochs.times, dtype=float),
-            ch_names=tuple(epochs.ch_names),
+            times=np.asarray(selected.times, dtype=float),
+            ch_names=tuple(selected.ch_names),
             band=band,
             sfreq=sfreq,
             # Coverage is taken from the analytic signal, not the input: a single
@@ -389,6 +426,17 @@ class BandSignal:
             # Hilbert transform and destroys the whole epoch, so input finiteness
             # would claim a channel is intact when every output sample is NaN.
             coverage=np.isfinite(analytic).astype(float),
+            row_ids=epoch_row_ids(selected, recording, n_epochs),
+            computation=ComputationSpec.create(
+                "mne.filter.filter_data+scipy.signal.hilbert",
+                band={"name": band.name, "fmin": band.fmin, "fmax": band.fmax},
+                pad_sec=pad_sec,
+                pad_cycles=pad_cycles,
+                filter_length=_filter_length(padded.shape[-1], sfreq, band.fmin),
+                n_jobs=n_jobs,
+                picks="eeg",
+                exclude="bads",
+            ),
         )
 
 
