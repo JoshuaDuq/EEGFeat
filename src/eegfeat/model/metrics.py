@@ -36,6 +36,10 @@ _DEFAULT_AGGREGATION_CONFIG = AggregationConfig()
 
 @dataclass(frozen=True)
 class ClassificationResult:
+    # When `groups` is given, every scalar below is the mean over subjects, giving each subject
+    # equal weight, while `confusion` stays pooled counts over all trials. The two therefore
+    # disagree by design: accuracy recomputed from `confusion` is the trial-pooled value, not
+    # `accuracy`. Report one or the other, not both as if they matched.
     y_true: npt.NDArray[np.intp]
     y_pred: npt.NDArray[np.intp]
     y_prob: npt.NDArray[np.float64] | None
@@ -206,12 +210,32 @@ def regression_metrics(
         groups_arr = np.asarray(groups)[finite]
         pred_df = pd.DataFrame({"subject_id": groups_arr, "y_true": yt_f, "y_pred": yp_f})
         subj_r = subject_level_r(pred_df, config=config)
+        # Two names for one number, kept because both are in use. subject_level_r is always the
+        # Fisher-z mean, under equal and trial-count weighting alike, so they cannot diverge.
+        # They are one result, not two: reporting both would double-count it.
         summary["subject_level_r"] = subj_r.r
         summary["avg_subject_r_fisher_z"] = subj_r.r
         for s, r in subj_r.per_subject:
             per_subject_list.append({"subject": s, "r": r})
 
     return summary, per_subject_list
+
+
+def _check_aligned(label: str, *arrays: npt.NDArray[np.generic]) -> None:
+    if any(a.ndim != 1 for a in arrays) or len({a.shape for a in arrays}) != 1:
+        raise ValueError(f"{label} metrics require aligned 1-D arrays.")
+
+
+def _check_labelled(label: str, **named: npt.NDArray[np.object_]) -> None:
+    # A trial with no subject or condition has no cell to be centred within, and inventing one
+    # would change the statistic. Refuse it rather than dropping it from the denominator.
+    for name, values in named.items():
+        missing = int(np.sum(pd.isna(values)))
+        if missing:
+            raise ValueError(
+                f"{label} metrics require a {name} label for every trial; "
+                f"{missing} of {len(values)} have none."
+            )
 
 
 def within_subject_centered_metrics(
@@ -224,15 +248,13 @@ def within_subject_centered_metrics(
     t = np.asarray(target, dtype=float)
     f = np.asarray(full_prediction, dtype=float)
     n = np.asarray(nuisance_prediction, dtype=float)
-    if not (grp.shape == t.shape == f.shape == n.shape):
-        raise ValueError("Within-subject prediction metrics require aligned 1D arrays.")
+    _check_aligned("Within-subject prediction", grp, t, f, n)
+    _check_labelled("Within-subject prediction", subject=grp)
 
     full_scores: list[float] = []
     nuis_scores: list[float] = []
 
     for subj in pd.unique(grp):
-        if pd.isna(subj):
-            continue
         mask = grp == subj
         t_sub = t[mask]
         f_sub = f[mask]
@@ -300,14 +322,14 @@ def within_condition_metrics(
     n = np.asarray(nuisance_prediction, dtype=float)
     cond = np.asarray(conditions)
 
-    if not (grp.shape == t.shape == f.shape == n.shape == cond.shape):
-        raise ValueError("Within-condition prediction metrics require aligned 1D arrays.")
+    _check_aligned("Within-condition prediction", grp, t, f, n, cond)
+    _check_labelled("Within-condition prediction", subject=grp, condition=cond)
 
     full_scores: list[float] = []
     nuis_scores: list[float] = []
     n_trials = 0
 
-    for subj in np.unique(grp):
+    for subj in pd.unique(grp):
         mask = grp == subj
         cells = _within_condition_cells(mask, cond)
         if not cells:

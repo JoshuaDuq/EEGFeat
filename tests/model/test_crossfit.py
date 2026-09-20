@@ -304,3 +304,26 @@ def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
             recorded_inner_fits_y1[train_idx],
             recorded_inner_fits_y2[train_idx],
         )
+
+
+def test_covariates_that_still_carry_rejected_epochs_are_refused() -> None:
+    # Covariates are indexed positionally, so a frame that kept the rejected epochs would
+    # residualize each trial against another trial's nuisance values without any error.
+    rng = np.random.default_rng(0)
+    groups = np.repeat([f"s{i}" for i in range(4)], 10).astype(object)
+    values = rng.normal(size=(40, 3))
+    target = rng.normal(size=40)
+
+    with pytest.raises(ValueError, match="covariates has 60 rows and X has 40"):
+        cross_fit_regression(
+            loso_folds(groups),
+            values,
+            target,
+            groups,
+            PIPE,
+            {},
+            inner=BY_SUBJECT,
+            seed=0,
+            covariates=rng.normal(size=(60, 1)),
+            residualize_on=["age"],
+        )

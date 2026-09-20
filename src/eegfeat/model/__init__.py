@@ -43,6 +43,7 @@ from eegfeat.model.estimators import (
 from eegfeat.model.execution import (
     inner_n_jobs,
     run_folds,
+    seeded,
     set_random_seeds,
     should_parallelize,
 )
@@ -188,6 +189,7 @@ __all__ = [
     "safe_pearsonr",
     "scoring_dict",
     "select",
+    "seeded",
     "set_random_seeds",
     "shap_importance",
     "shap_importance_over_folds",

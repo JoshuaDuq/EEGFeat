@@ -8,8 +8,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev,model]"
       - run: ruff check src tests
       - run: black --check src tests
       - run: mypy
       - run: pytest
+      # A green `pytest` above does not prove the modelling suite ran: tests/model is
+      # collect-ignored without scikit-learn, and the equivalence test skips without its
+      # fixture. Fail loudly on either, instead of reading a skip as a passing result.
+      - run: test -f tests/fixtures/model_reference.npz
+      - run: pytest tests/model tests/test_equivalence_model.py -ra

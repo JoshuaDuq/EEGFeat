@@ -41,12 +41,15 @@ def parse_run_label_to_int(value: object) -> int | None:
         return None
     if match := re.match(r"^run-(\d+)$", s):
         return int(match.group(1))
-    if match := re.search(r"(\d+)$", s):
-        return int(match.group(1))
+    # A plain number is read as a number before trailing digits are scanned for, so that the
+    # float 1.0 is run 1 and not run 0 from the digit after the decimal point.
     try:
         return int(float(s))
     except (ValueError, TypeError):
-        return None
+        pass
+    if match := re.search(r"(\d+)$", s):
+        return int(match.group(1))
+    return None
 
 
 def find_run_column(events: pd.DataFrame) -> pd.Series | None:
@@ -54,7 +57,12 @@ def find_run_column(events: pd.DataFrame) -> pd.Series | None:
         return None
     series = events["run"]
     numeric = pd.to_numeric(series, errors="coerce")
-    if np.any(np.isfinite(numeric.to_numpy(dtype=float))):
+    # Every value that is actually present has to coerce, not just one of them: a column of
+    # "run-1", "run-2", 3 would otherwise return the numeric view, in which the two labelled
+    # runs have silently become NaN. An already-missing entry is not a failure to coerce.
+    present = ~pd.isna(series).to_numpy()
+    coerced = np.isfinite(numeric.to_numpy(dtype=float))
+    if np.all(coerced[present]):
         return numeric
     parsed = pd.Series(
         [parse_run_label_to_int(v) for v in series],
@@ -164,9 +172,25 @@ def within_subject_folds(
             if not np.all(np.isfinite(num_blocks)):
                 parsed = [parse_run_label_to_int(b) for b in subject_blocks]
                 if all(p is not None for p in parsed):
-                    num_blocks = np.array([float(p) for p in parsed if p is not None], dtype=float)
+                    num_blocks = np.array(parsed, dtype=float)
 
-            unique_nums = sorted(np.unique(num_blocks[np.isfinite(num_blocks)]))
+            # Forward CV places runs in order, so a label with no order has no position in the
+            # sequence. It would otherwise fall out of both the train and the test mask below
+            # and vanish from every fold without a word.
+            if not np.all(np.isfinite(num_blocks)):
+                unorderable = sorted(
+                    {
+                        str(b)
+                        for b, ok in zip(subject_blocks, np.isfinite(num_blocks), strict=True)
+                        if not ok
+                    }
+                )
+                raise ValueError(
+                    f"Subject {subject}: forward CV orders runs, but {unorderable[:3]} carry no "
+                    "run number; rename them or pass ordered_runs=False."
+                )
+
+            unique_nums = sorted(np.unique(num_blocks))
             if len(unique_nums) < 3:
                 raise ValueError(
                     f"Subject {subject}: at least three ordered runs are required for "

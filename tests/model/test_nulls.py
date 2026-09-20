@@ -541,3 +541,62 @@ def test_a_run_scheme_refuses_trials_without_a_run_label(scheme: str) -> None:
             config=NullConfig(scheme=scheme, min_retained_trials=2),  # type: ignore[arg-type]
             rng=np.random.default_rng(0),
         )
+
+
+def test_run_wise_is_an_alias_for_within_subject_within_run() -> None:
+    # "run_wise" exists to match the upstream pipeline's name for this shuffle. It is the
+    # same operation, not a run-block exchange, and the two must not drift apart.
+    groups = np.repeat(["s1", "s2"], 6).astype(object)
+    runs = np.array(["A"] * 3 + ["B"] * 3 + ["A"] * 4 + ["B"] * 2, dtype=object)
+    y = np.arange(12, dtype=float)
+
+    for seed in range(5):
+        alias = permute(
+            y, groups, runs, config=NullConfig(scheme="run_wise"), rng=np.random.default_rng(seed)
+        )
+        canonical = permute(
+            y,
+            groups,
+            runs,
+            config=NullConfig(scheme="within_subject_within_run"),
+            rng=np.random.default_rng(seed),
+        )
+        np.testing.assert_array_equal(alias, canonical)
+
+
+def test_permute_refuses_a_trial_without_a_subject_label() -> None:
+    # An unlabelled trial belongs to no subject to be exchanged within, so it would keep its
+    # observed target in every draw, pulling the null toward the observed statistic.
+    y = np.arange(8, dtype=float)
+    groups = np.array(["s1"] * 4 + [None] * 4, dtype=object)
+
+    with pytest.raises(ValueError, match="subject labels"):
+        permute(y, groups, None, config=NullConfig(), rng=np.random.default_rng(0))
+
+
+def test_a_run_of_missing_trial_counts_is_not_a_valid_run() -> None:
+    # The count array is cast to int before the finiteness test, which made the test vacuous
+    # and reported a run of NaNs as usable.
+    from eegfeat.model.nulls import is_permutation_valid_run
+
+    assert not is_permutation_valid_run(np.array([np.nan] * 10))
+    assert is_permutation_valid_run(np.arange(10))
+
+
+def test_permute_refuses_a_subject_with_a_single_trial() -> None:
+    # A lone trial has nothing to be exchanged with, so it kept its observed target in every
+    # draw; skipping the subject also skipped the per-run size checks, letting a one-trial
+    # subject through where a seven-trial run is refused.
+    y = np.arange(9, dtype=float)
+    groups = np.array(["s1"] * 8 + ["s2"], dtype=object)
+    runs = np.array(["A"] * 8 + ["B"], dtype=object)
+
+    with pytest.raises(ValueError, match="single trial"):
+        permute(
+            y,
+            groups,
+            runs,
+            config=NullConfig(scheme="circular_shift_within_run", min_retained_trials=8),
+            rng=np.random.default_rng(0),
+            trial_indices=np.r_[np.arange(8), 0],
+        )

@@ -316,6 +316,21 @@ def _fit_fold(
     )
 
 
+def _validate_row_aligned(
+    n_rows: int,
+    y: npt.NDArray[np.float64] | npt.NDArray[np.intp],
+    covariates: npt.NDArray[np.float64] | None,
+) -> None:
+    # Every input indexed by fold row has to be as long as X. A covariates frame that still
+    # carries the rejected epochs is longer, and indexing it positionally then residualizes
+    # each trial against another trial's nuisance values without any error.
+    if len(y) != n_rows:
+        raise ValueError(f"y has {len(y)} rows and X has {n_rows}.")
+
+    if covariates is not None and len(covariates) != n_rows:
+        raise ValueError(f"covariates has {len(covariates)} rows and X has {n_rows}.")
+
+
 def _validate_outer_folds(
     folds: Sequence[Fold],
     n_rows: int,
@@ -398,9 +413,7 @@ def _cross_fit_engine(
     refit: str | bool | None = None,
 ) -> list[FoldPrediction] | list[FoldClassification]:
     _validate_outer_folds(folds, len(X), groups, runs)
-
-    if len(y) != len(X):
-        raise ValueError("y length does not match X.")
+    _validate_row_aligned(len(X), y, covariates)
 
     inner_groups_all = _validate_and_resolve_inner_groups(folds, inner, groups, runs)
 

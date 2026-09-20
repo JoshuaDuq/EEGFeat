@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import contextlib
+
 import numpy as np
 
 from eegfeat.model.execution import (
     inner_n_jobs,
     run_folds,
+    seeded,
     set_random_seeds,
     should_parallelize,
 )
@@ -50,3 +53,26 @@ def test_inner_n_jobs_drops_to_one_when_outer_is_parallel() -> None:
 def test_run_folds_sequential_when_outer_is_one() -> None:
     results = run_folds(FOLDS, lambda fold: {"index": fold.index}, outer_n_jobs=1)
     assert [r["index"] for r in results] == [0, 1, 2]
+
+
+def test_fitting_a_model_does_not_reset_the_callers_random_stream() -> None:
+    # set_random_seeds reseeds the global generators, which is what makes estimators that
+    # consult them reproducible. Left in place it also resets the caller's stream, so their
+    # next draw would depend on how many folds happened to run.
+    np.random.seed(12345)
+    expected = np.random.random()
+
+    np.random.seed(12345)
+    with seeded(42, 1):
+        np.random.random()
+    assert np.random.random() == expected
+
+
+def test_seeded_restores_the_stream_even_when_the_body_raises() -> None:
+    np.random.seed(12345)
+    expected = np.random.random()
+
+    np.random.seed(12345)
+    with contextlib.suppress(RuntimeError), seeded(42, 1):
+        raise RuntimeError("fit failed")
+    assert np.random.random() == expected

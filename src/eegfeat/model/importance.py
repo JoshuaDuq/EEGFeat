@@ -11,7 +11,13 @@ from sklearn.inspection import permutation_importance as sklearn_perm_importance
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model._deps import require_shap
-from eegfeat.model.crossfit import _fit_fold, _FittedFold, _validate_and_resolve_inner_groups
+from eegfeat.model.crossfit import (
+    _fit_fold,
+    _FittedFold,
+    _validate_and_resolve_inner_groups,
+    _validate_outer_folds,
+    _validate_row_aligned,
+)
 from eegfeat.model.execution import run_folds
 from eegfeat.model.splits import Fold, InnerSplit
 from eegfeat.model.transformers import transform_feature_names
@@ -53,6 +59,18 @@ def aggregate_by(
 
     if set(names) != set(metadata_by_name):
         raise ValueError("Importance and metadata must contain exactly the same feature names.")
+
+    # A feature no fold could score carries NaN, which would silently turn its whole
+    # category's total into NaN. Name the features instead of returning that.
+    unscored = [
+        name for name, value in zip(names, importance.values, strict=True) if np.isnan(value)
+    ]
+    if unscored:
+        msg = (
+            f"No fold scored {unscored[:3]}, so their importance is undefined and would make "
+            "the totals NaN; drop them or lower the harmonization threshold that removed them."
+        )
+        raise ValueError(msg)
 
     totals: dict[str, float] = {}
     for name, value in zip(names, importance.values, strict=True):
@@ -100,7 +118,7 @@ def shap_importance(
 
     X_arr = np.asarray(X, dtype=np.float64)
     steps = list(model.steps)
-    final_name, final_estimator = steps[-1]
+    _, final_estimator = steps[-1]
     X_trans = X_arr
     for _, step in steps[:-1]:
         if hasattr(step, "transform"):
@@ -182,7 +200,11 @@ def _fold_fitter(
     refit: str | bool | None,
 ) -> Callable[[Fold], _FittedFold]:
     # Importance fits each fold exactly as cross-fitting does, so it explains the model that
-    # was evaluated rather than one tuned or trained differently.
+    # was evaluated rather than one tuned or trained differently. That includes the fold
+    # checks: importance is an entry point of its own, and folds reaching it never passed
+    # through cross_fit_*.
+    _validate_outer_folds(folds, len(X), groups, runs)
+    _validate_row_aligned(len(X), y, covariates)
     inner_groups_all = _validate_and_resolve_inner_groups(folds, inner, groups, runs)
     task = "classification" if is_classifier(pipeline) else "regression"
 
@@ -233,7 +255,9 @@ def _combine_folds(
     min_complete_fraction: float,
     label: str,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    successful = [r for r in results if r is not None and np.any(np.isfinite(r))]
+    # run_folds propagates a failed fold, so a result here is always an array; a fold counts
+    # as unsuccessful only when no feature survived it.
+    successful = [r for r in results if np.any(np.isfinite(r))]
     rate = len(successful) / n_folds if n_folds else 0.0
     if rate < min_complete_fraction:
         msg = f"Insufficient successful folds for {label} ({len(successful)}/{n_folds})."

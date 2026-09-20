@@ -11,6 +11,7 @@ from eegfeat.model.splits import (
     inner_cv,
     inner_cv_splits,
     loso_folds,
+    parse_run_label_to_int,
     within_subject_folds,
 )
 
@@ -168,7 +169,7 @@ def test_create_within_subject_folds_supports_forward_ordering() -> None:
 def test_create_within_subject_folds_raises_when_ordered_runs_cannot_be_formed() -> None:
     groups = np.array(["sub-0001"] * 4, dtype=object)
     blocks = np.array(["run-a", "run-a", "run-b", "run-b"], dtype=object)
-    with pytest.raises(ValueError, match="at least three ordered runs"):
+    with pytest.raises(ValueError, match="carry no run number"):
         within_subject_folds(
             groups=groups,
             blocks=blocks,
@@ -177,6 +178,31 @@ def test_create_within_subject_folds_raises_when_ordered_runs_cannot_be_formed()
             seed=42,
             ordered_runs=True,
         )
+
+
+def test_forward_cv_needs_three_ordered_runs() -> None:
+    groups = np.array(["sub-0001"] * 4, dtype=object)
+    blocks = np.array([1, 1, 2, 2], dtype=object)
+    with pytest.raises(ValueError, match="at least three ordered runs"):
+        within_subject_folds(
+            groups=groups, blocks=blocks, inner_splits=2, seed=42, ordered_runs=True
+        )
+
+
+def test_forward_cv_refuses_a_run_it_cannot_place_in_order() -> None:
+    # An unorderable label fell out of both the train and the test mask, so its trials were
+    # silently absent from every fold while ordered_runs=False used all of them.
+    groups = np.array(["sub-0001"] * 8, dtype=object)
+    blocks = np.array(["1", "1", "2", "2", "3", "3", "rest", "rest"], dtype=object)
+
+    with pytest.raises(ValueError, match="carry no run number"):
+        within_subject_folds(
+            groups=groups, blocks=blocks, inner_splits=2, seed=0, ordered_runs=True
+        )
+
+    folds = within_subject_folds(groups, blocks, inner_splits=2, seed=0, ordered_runs=False)
+    used = {int(i) for fold in folds for i in [*fold.train.tolist(), *fold.test.tolist()]}
+    assert used == set(range(8))
 
 
 def test_within_subject_folds_accept_integer_subject_ids() -> None:
@@ -195,3 +221,29 @@ def test_find_run_column_parses_run_prefixed_labels() -> None:
     assert runs is not None
     vals = pd.to_numeric(runs, errors="coerce").to_numpy(dtype=float)
     np.testing.assert_allclose(vals, np.array([1.0, 1.0, 2.0, 2.0], dtype=float), atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("labels", "expected"),
+    [
+        # One subject writing run 3 as a bare integer used to blank every other label, because
+        # a single coercible value was enough to accept the all-NaN numeric view.
+        (["run-1", "run-2", 3, "run-4"], [1.0, 2.0, 3.0, 4.0]),
+        (["run-1", "run-2", "run-3"], [1.0, 2.0, 3.0]),
+        (["1", "2", "3"], [1.0, 2.0, 3.0]),
+        # A value that is already missing is not a failure to coerce, so the numeric view stands
+        # and the float 1.0 stays run 1 rather than becoming run 0 via its trailing digit.
+        ([1.0, 2.0, float("nan")], [1.0, 2.0, float("nan")]),
+    ],
+)
+def test_run_labels_survive_a_mix_of_numbers_and_strings(
+    labels: list[object], expected: list[float]
+) -> None:
+    resolved = find_run_column(pd.DataFrame({"run": labels}))
+    assert resolved is not None
+    np.testing.assert_array_equal(resolved.to_numpy(dtype=float), np.array(expected))
+
+
+def test_a_float_run_label_parses_as_its_value_not_its_last_digit() -> None:
+    assert parse_run_label_to_int(1.0) == 1
+    assert parse_run_label_to_int("sub-02_run-4") == 4

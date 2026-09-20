@@ -389,3 +389,53 @@ def test_permutation_importance_is_measured_with_the_selection_metric(multi_metr
         n_repeats=2,
     )
     np.testing.assert_array_equal(imp.values, np.zeros(2))
+
+
+@pytest.mark.parametrize(
+    "entry_point",
+    [
+        pytest.param("permutation", id="permutation"),
+        pytest.param("shap", id="shap"),
+    ],
+)
+def test_importance_over_folds_rejects_overlapping_custom_folds(entry_point: str) -> None:
+    # Importance explains the model cross-fitting evaluated, so it has to refuse the same
+    # leaky folds cross-fitting refuses; otherwise it reports on a model fitted on its test set.
+    bad = Fold(index=1, train=np.array([0, 1, 2, 3]), test=np.array([3, 4, 5]))
+    X = np.arange(12, dtype=np.float64).reshape(6, 2)
+    y = np.array([1.0, 1.2, 2.0, 2.1, 3.0, 3.2])
+    groups = np.array(["s1", "s1", "s2", "s2", "s3", "s3"], dtype=object)
+    pipe = Pipeline([("regressor", DummyRegressor())])
+    inner = InnerSplit(grouping="subject", n_splits=2)
+
+    with pytest.raises(ValueError, match="train/test overlap"):
+        if entry_point == "permutation":
+            permutation_importance_over_folds([bad], X, y, groups, pipe, {}, inner=inner)
+        else:
+            with _shap_stand_in():
+                shap_importance_over_folds([bad], X, y, groups, pipe, {}, ["f0", "f1"], inner=inner)
+
+
+def test_importance_over_folds_rejects_mismatched_y_length() -> None:
+    folds = [Fold(index=0, train=np.array([0, 1, 2, 3]), test=np.array([4, 5]))]
+    X = np.arange(12, dtype=np.float64).reshape(6, 2)
+    groups = np.array(["s1", "s1", "s2", "s2", "s3", "s3"], dtype=object)
+    pipe = Pipeline([("regressor", DummyRegressor())])
+    inner = InnerSplit(grouping="subject", n_splits=2)
+
+    with pytest.raises(ValueError, match="y has .* rows and X has"):
+        permutation_importance_over_folds(folds, X, np.ones(5), groups, pipe, {}, inner=inner)
+
+
+def test_aggregation_refuses_a_feature_no_fold_could_score(
+    alpha_beta_meta: tuple[FeatureMeta, FeatureMeta],
+) -> None:
+    # nanmean over folds leaves NaN when a feature was dropped everywhere, and summing that
+    # into a category would report the whole category as NaN.
+    importance = Importance(
+        feature_names=(alpha_beta_meta[0].name, alpha_beta_meta[1].name),
+        values=np.array([1.0, np.nan]),
+        per_fold=np.array([[1.0, np.nan]]),
+    )
+    with pytest.raises(ValueError, match="No fold scored"):
+        aggregate_by(importance, alpha_beta_meta, "band")

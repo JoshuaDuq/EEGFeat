@@ -105,3 +105,11 @@ def test_logistic_elasticnet_grid_includes_l1_ratio() -> None:
     grid = logistic_grid(penalty="elasticnet")
     assert "lr__l1_ratio" in grid
     assert set(grid.keys()) <= set(pipe.get_params())
+
+
+@pytest.mark.parametrize("penalty", ["typo", "L2", "ridge"])
+def test_logistic_pipeline_refuses_an_unknown_penalty(penalty: str) -> None:
+    # On scikit-learn >= 1.8 the penalty is translated rather than passed through, so an
+    # unrecognised value used to fall past every branch and fit a default L2 model in silence.
+    with pytest.raises(ValueError, match="penalty must be one of"):
+        logistic_pipeline(_CONFIG, seed=0, penalty=penalty)

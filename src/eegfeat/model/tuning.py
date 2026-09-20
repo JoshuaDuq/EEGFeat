@@ -11,7 +11,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model import _deps as _deps
-from eegfeat.model.execution import set_random_seeds
+from eegfeat.model.execution import seeded
 from eegfeat.model.splits import InnerSplit, inner_cv
 
 __all__ = [
@@ -80,36 +80,39 @@ def tune(
     scoring: object = None,
     refit: str | bool | None = None,
 ) -> TunedFit:
-    set_random_seeds(seed, fold)
+    if refit is False:
+        raise ValueError("refit=False cannot return a fitted outer-fold model.")
+
     groups_arr = np.asarray(inner_groups_train)
     n_unique = len(np.unique(groups_arr))
     if n_unique < 2:
         msg = f"Fold {fold}: inner CV requires at least 2 unique groups, got {n_unique}."
         raise ValueError(msg)
 
-    y_strat = np.asarray(y_train, dtype=np.intp) if split.stratified else None
-    inner_seed = seed + (fold - 1 if fold > 0 else 0)
-    cv = inner_cv(groups_arr, split, y_train=y_strat, random_state=inner_seed)
+    with seeded(seed, fold):
+        y_strat = np.asarray(y_train, dtype=np.intp) if split.stratified else None
+        inner_seed = seed + (fold - 1 if fold > 0 else 0)
+        cv = inner_cv(groups_arr, split, y_train=y_strat, random_state=inner_seed)
 
-    pipe_clone = cast(Pipeline, clone(pipeline))
-    _assign_random_state(pipe_clone, seed)
+        pipe_clone = cast(Pipeline, clone(pipeline))
+        _assign_random_state(pipe_clone, seed)
 
-    refit_param: str | bool = refit if refit is not None else True
-    gs = GridSearchCV(
-        estimator=pipe_clone,
-        param_grid=grid,
-        scoring=scoring,
-        cv=cv,
-        refit=refit_param,
-        error_score="raise",
-        n_jobs=n_jobs,
-    )
+        refit_param: str | bool = refit if refit is not None else True
+        gs = GridSearchCV(
+            estimator=pipe_clone,
+            param_grid=grid,
+            scoring=scoring,
+            cv=cv,
+            refit=refit_param,
+            error_score="raise",
+            n_jobs=n_jobs,
+        )
 
-    try:
-        gs.fit(X_train, y_train, groups=groups_arr)
-    except Exception as exc:
-        msg = f"Fold {fold}: inner CV failed: {exc}"
-        raise FoldFitError(msg) from exc
+        try:
+            gs.fit(X_train, y_train, groups=groups_arr)
+        except Exception as exc:
+            msg = f"Fold {fold}: inner CV failed: {exc}"
+            raise FoldFitError(msg) from exc
 
     _raise_for_nonfinite_grid_search_scores(gs, fold)
     return TunedFit(
@@ -126,12 +129,12 @@ def fit_untuned(
     seed: int,
     fold: int = 0,
 ) -> Pipeline:
-    set_random_seeds(seed, fold)
-    pipe_clone = cast(Pipeline, clone(pipeline))
-    _assign_random_state(pipe_clone, seed)
-    try:
-        pipe_clone.fit(X, y)
-    except Exception as exc:
-        msg = f"Fold {fold}: fit failed: {exc}"
-        raise FoldFitError(msg) from exc
+    with seeded(seed, fold):
+        pipe_clone = cast(Pipeline, clone(pipeline))
+        _assign_random_state(pipe_clone, seed)
+        try:
+            pipe_clone.fit(X, y)
+        except Exception as exc:
+            msg = f"Fold {fold}: fit failed: {exc}"
+            raise FoldFitError(msg) from exc
     return pipe_clone

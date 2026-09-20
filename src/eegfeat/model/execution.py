@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import random as pyrandom
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from typing import TypeVar
 
 import numpy as np
@@ -13,6 +14,7 @@ from eegfeat.model.splits import Fold
 __all__ = [
     "inner_n_jobs",
     "run_folds",
+    "seeded",
     "set_random_seeds",
     "should_parallelize",
 ]
@@ -24,6 +26,21 @@ def set_random_seeds(seed: int, fold: int) -> None:
     combined = seed + fold
     np.random.seed(combined)
     pyrandom.seed(combined)
+
+
+@contextmanager
+def seeded(seed: int, fold: int) -> Iterator[None]:
+    # Seeding the global generators is what makes an estimator that consults them reproducible,
+    # but leaving them seeded would reset the caller's own random stream as a side effect of
+    # fitting a model, so anything they drew afterwards would depend on how many folds ran.
+    np_state = np.random.get_state()
+    py_state = pyrandom.getstate()
+    try:
+        set_random_seeds(seed, fold)
+        yield
+    finally:
+        np.random.set_state(np_state)
+        pyrandom.setstate(py_state)
 
 
 def inner_n_jobs(outer_n_jobs: int, n_jobs: int) -> int:
@@ -44,7 +61,7 @@ def run_folds(
         warnings.filterwarnings(
             "ignore",
             category=UserWarning,
-            module=r"sklearn\.utils\.parallel",
+            module=r".*sklearn[/.]utils[/.]parallel",
         )
         if should_parallelize(outer_n_jobs, len(folds)):
             from joblib import Parallel, delayed

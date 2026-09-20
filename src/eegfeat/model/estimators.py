@@ -60,8 +60,17 @@ def _append_classification_resampler(
         raise ValueError(msg)
 
 
+_LR_PENALTIES = ("l1", "l2", "elasticnet", "none")
+
+
 def _get_lr_kwargs(penalty: str, l1_ratio: float | None = None) -> dict[str, Any]:
-    # Handles penalty argument deprecation in scikit-learn >= 1.8.0.
+    # Handles penalty argument deprecation in scikit-learn >= 1.8.0. On those versions the
+    # penalty is translated into l1_ratio/C rather than passed through, so an unrecognised
+    # value would silently fall past every branch and fit a default L2 model instead of the
+    # error older scikit-learn raised.
+    if penalty not in _LR_PENALTIES:
+        raise ValueError(f"penalty must be one of {_LR_PENALTIES}, got {penalty!r}.")
+
     kwargs: dict[str, Any] = {}
     if parse_version(sklearn.__version__) >= parse_version("1.8.0"):
         if penalty == "l2":

@@ -23,11 +23,11 @@ The [Sphinx documentation](https://joshuaduq.github.io/EEGFeatML/) is the canoni
 - **Baseline-calibrated thresholds**: Burst detection and ERDS baselines are calibrated on unperturbed reference windows to avoid stimulus-induced circularity.
 - **Strict row semantics**: Cross-trial measures (ITPC, wPLI, AEC) return one row per trial group with explicit labels, preventing single-trial pseudo-replication.
 - **Finite-data accounting**: Parallel coverage matrices report numerical finiteness, not artifact rejection. Morlet spectra separately expose the fraction of each requested window with complete wavelet support.
-- **Group-disjoint cross-validation**: Subjects and runs never appear in both training and evaluation splits; inner tuning refuses fewer than two training groups.
+- **Group-aware cross-validation**: Leave-one-subject-out evaluation separates subjects; within-subject evaluation separates runs within a subject, so that subject is present on both sides by construction. Inner tuning uses the corresponding grouping and refuses fewer than two training groups.
 - **Fold-local preprocessing**: Imputation, scaling, feature selection, group-intersection harmonization, and target residualization fit strictly on training folds to prevent target leakage.
 - **Subject-level primary metrics**: Continuous predictions are aggregated across subjects in Fisher $z$-space with equal weighting rather than pooled across trials.
 - **Unconditioned permutation nulls**: Multi-level label permutations (within-subject, run-wise, circular shift) include all sampled draws without selective filtering.
-- **Conformal prediction intervals**: Distribution-free prediction intervals calibrated at trial or subject levels (split, CV+, conformalized quantile).
+- **Conformal prediction intervals**: Distribution-free intervals (split, CV+, conformalized quantile). Passing `groups` makes the fitting and calibration splits group-disjoint, but calibration scores stay pooled across trials, so coverage for an unseen participant is not guaranteed.
 
 ---
 
@@ -330,14 +330,16 @@ p_signflip = efm.paired_signflip_p_value(subj_r, iterations=10_000, seed=42)
 ```
 
 `classification_metrics` reports accuracy, balanced accuracy, AUC, average precision, F1,
-precision, recall, specificity, and the confusion matrix. Pass `groups` for per-subject
-summaries where the metric is defined.
+precision, recall, specificity, and the confusion matrix. Passing `groups` switches every
+scalar to a mean over subjects with equal subject weight, and adds per-subject summaries where
+the metric is defined. The confusion matrix stays pooled over trials either way, so accuracy
+recomputed from it will not equal the reported `accuracy` — report one convention, not both.
 
 ### 4. Permutation Null Distributions
 
-Test exchangeability with within-subject, run-wise, within-subject-within-run, or
-circular-shift-within-run null schemes. Incomplete fits are reported in `NullResult` rather
-than silently changing the tested hypothesis:
+Test exchangeability with within-subject, run-wise (an alias for within-subject-within-run),
+or circular-shift-within-run null schemes. A permutation whose fit fails aborts the test with
+an error rather than being dropped, since discarding draws would change the null distribution:
 
 ```python
 # Pass design.runs instead of None for run-aware schemes.
@@ -360,7 +362,9 @@ print(f"Permutation p-value: {null.p_value:.4f}")
 ### 5. Conformal Prediction Intervals
 
 Construct split, CV+, or conformalized quantile (`quantile`) intervals. Supplying `groups`
-calibrates at the subject level; omitting it calibrates at the trial level:
+makes the proper-fitting and calibration splits group-disjoint. Calibration scores remain one
+per trial either way, so `calibration_unit` is always `"trial"` and the intervals are marginal
+over trials rather than over participants:
 
 ```python
 intervals = efm.prediction_intervals(

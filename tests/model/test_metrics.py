@@ -124,3 +124,42 @@ def test_labels_other_than_zero_and_one_are_refused(y_true: list[int], y_pred: l
     # assume 0/1 coding; event codes 1/2 would be scored against the wrong classes.
     with pytest.raises(ValueError, match="0/1"):
         classification_metrics(np.array(y_true), np.array(y_pred))
+
+
+def test_subject_averaged_scalars_and_pooled_confusion_differ_by_design() -> None:
+    # Six correct trials from one subject and two wrong from another: pooled accuracy is 6/8,
+    # subject-averaged is (1.0 + 0.0)/2. The confusion matrix reports the pooled counts.
+    y_true = np.array([0, 1, 0, 1, 0, 1, 0, 1])
+    y_pred = np.array([0, 1, 0, 1, 0, 1, 1, 0])
+    groups = np.array(["s1"] * 6 + ["s2"] * 2, dtype=object)
+
+    res = classification_metrics(y_true, y_pred, groups=groups)
+
+    assert res.accuracy == pytest.approx(0.5)
+    pooled = (res.confusion[0, 0] + res.confusion[1, 1]) / res.confusion.sum()
+    assert pooled == pytest.approx(0.75)
+
+
+@pytest.mark.parametrize("metric", ["within_subject", "within_condition"])
+def test_centred_metrics_refuse_a_trial_without_a_subject_label(metric: str) -> None:
+    # Dropping an unlabelled trial would quietly shrink the subject denominator, and the two
+    # functions used to disagree: one skipped such trials, the other raised a TypeError on sort.
+    t = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    f = t.copy()
+    n = np.zeros(6)
+    groups = np.array(["s1", "s1", "s1", "s1", np.nan, np.nan], dtype=object)
+    conditions = np.array(["a", "a", "b", "b", "a", "b"], dtype=object)
+
+    with pytest.raises(ValueError, match="subject label for every trial"):
+        if metric == "within_subject":
+            within_subject_centered_metrics(t, f, n, groups)
+        else:
+            within_condition_metrics(t, f, n, groups, conditions)
+
+
+def test_centred_metrics_refuse_two_dimensional_input() -> None:
+    values = np.arange(6.0).reshape(3, 2)
+    groups = np.array([["s1", "s1"], ["s1", "s1"], ["s2", "s2"]], dtype=object)
+
+    with pytest.raises(ValueError, match="aligned 1-D arrays"):
+        within_subject_centered_metrics(values, values, np.zeros((3, 2)), groups)

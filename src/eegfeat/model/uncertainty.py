@@ -281,6 +281,18 @@ def prediction_intervals(
         msg = "Training and test arrays must not be empty."
         raise ValueError(msg)
 
+    if len(y_tr) != len(X_tr):
+        raise ValueError(f"y_train has {len(y_tr)} rows and X_train has {len(X_tr)}.")
+
+    if groups is not None and len(groups) != len(X_tr):
+        raise ValueError(f"groups has {len(groups)} rows and X_train has {len(X_tr)}.")
+
+    if X_tr.ndim != 2 or X_te.ndim != 2:
+        raise ValueError("X_train and X_test must be 2-D.")
+
+    if X_te.shape[1] != X_tr.shape[1]:
+        raise ValueError(f"X_test has {X_te.shape[1]} columns and X_train has {X_tr.shape[1]}.")
+
     # Scores remain one per trial, even with group-disjoint splits.
     cal_unit: Literal["trial", "subject"] = "trial"
 

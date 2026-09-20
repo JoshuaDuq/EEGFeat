@@ -7,6 +7,7 @@ from typing import Literal
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+from scipy import stats
 
 from eegfeat.model.scoring import safe_pearsonr
 
@@ -240,7 +241,17 @@ def subject_level_r(
     z_vals = np.arctanh(clipped_r)
 
     if config.subject_weighting == "trial_count":
-        weights = np.maximum(n_vals - 3.0, 1.0)
+        # var(z) = 1/(n-3), so a 3-trial subject has infinite variance and no weight. Flooring
+        # it at 1.0 would give it the same weight as a 4-trial subject, fabricating precision
+        # the data does not have and making the fixed-effects interval far too narrow.
+        underpowered = int(np.sum(n_vals < 4))
+        if underpowered:
+            raise ValueError(
+                f"Trial-count weighting needs more than 3 trials per subject for the Fisher-z "
+                f"variance to be defined; {underpowered} of {len(n_vals)} subject(s) have 3 or "
+                "fewer. Use subject_weighting='equal' or drop those subjects."
+            )
+        weights = n_vals - 3.0
     else:
         weights = np.ones_like(z_vals, dtype=float)
 
@@ -250,6 +261,14 @@ def subject_level_r(
     agg_r = float(np.tanh(mean_z))
 
     ci_low, ci_high = np.nan, np.nan
+    # Falling through to the fixed-effects branch would hand back a different estimator than
+    # the one asked for, with nothing on the result to say so.
+    if config.ci_method == "bootstrap" and 1 < len(z_vals) < 3:
+        raise ValueError(
+            f"Bootstrap confidence intervals need at least 3 subjects, got {len(z_vals)}. "
+            "Use ci_method='fixed_effects'."
+        )
+
     if config.ci_method == "bootstrap" and len(z_vals) >= 3:
         rng = np.random.default_rng(config.seed)
         n_sub = len(z_vals)
@@ -266,11 +285,17 @@ def subject_level_r(
         ci_high = float(np.tanh(np.percentile(boot_means, 97.5)))
     elif len(z_vals) > 1:
         if config.subject_weighting == "trial_count":
+            # Known Fisher-z variance, so the normal quantile is the right multiplier.
             se = float(np.sqrt(1.0 / sum_weights))
+            multiplier = 1.96
         else:
+            # The between-subject SD is estimated from the subjects themselves, so the interval
+            # needs Student's t. At 5 subjects the normal quantile gives a nominal 95% interval
+            # that covers about 88%.
             se = float(np.std(z_vals, ddof=1) / np.sqrt(len(z_vals)))
+            multiplier = float(stats.t.ppf(0.975, len(z_vals) - 1))
         if np.isfinite(se) and se > 0:
-            delta = 1.96 * se
+            delta = multiplier * se
             ci_low = float(np.tanh(mean_z - delta))
             ci_high = float(np.tanh(mean_z + delta))
 
@@ -282,6 +307,28 @@ def subject_level_r(
     )
 
 
+def _weighted_mean(values: npt.NDArray[np.float64], weights: npt.NDArray[np.float64]) -> float:
+    return float(np.average(values, weights=weights / np.sum(weights)))
+
+
+def _weighted_bootstrap_ci(
+    values: npt.NDArray[np.float64],
+    weights: npt.NDArray[np.float64],
+    *,
+    iterations: int,
+    seed: int,
+) -> tuple[float, float]:
+    # Subjects are resampled, carrying their weights, so the interval reflects the same
+    # weighting as the point estimate.
+    rng = np.random.default_rng(seed)
+    n = len(values)
+    means = np.empty(iterations, dtype=float)
+    for i in range(iterations):
+        idx = rng.choice(n, size=n, replace=True)
+        means[i] = _weighted_mean(values[idx], weights[idx])
+    return float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))
+
+
 def subject_level_errors(
     predictions: pd.DataFrame,
     *,
@@ -289,6 +336,7 @@ def subject_level_errors(
 ) -> dict[str, float]:
     per_subject_mae: list[float] = []
     per_subject_rmse: list[float] = []
+    per_subject_n: list[int] = []
     invalid_subjects: list[str] = []
 
     for subj, df_sub in predictions.groupby("subject_id"):
@@ -302,6 +350,7 @@ def subject_level_errors(
         err = yp[finite] - yt[finite]
         per_subject_mae.append(float(np.mean(np.abs(err))))
         per_subject_rmse.append(float(np.sqrt(np.mean(err**2))))
+        per_subject_n.append(n_trials)
 
     if invalid_subjects:
         details = "; ".join(invalid_subjects)
@@ -319,18 +368,23 @@ def subject_level_errors(
 
     maes = np.array(per_subject_mae, dtype=float)
     rmses = np.array(per_subject_rmse, dtype=float)
-    mean_mae = float(np.mean(maes))
-    mean_rmse = float(np.mean(rmses))
+    # One config must not weight the correlation by trial count while leaving the errors
+    # equal-weighted; subject_level_r honours this field, so these have to as well.
+    counts = np.array(per_subject_n, dtype=float)
+    weights = counts if config.subject_weighting == "trial_count" else np.ones_like(counts)
+
+    mean_mae = _weighted_mean(maes, weights)
+    mean_rmse = _weighted_mean(rmses, weights)
 
     ci_low_mae, ci_high_mae = np.nan, np.nan
     ci_low_rmse, ci_high_rmse = np.nan, np.nan
 
     if config.ci_method == "bootstrap" and len(maes) >= 3:
-        ci_low_mae, ci_high_mae = bootstrap_mean_ci(
-            maes, iterations=config.bootstrap_iterations, seed=42
+        ci_low_mae, ci_high_mae = _weighted_bootstrap_ci(
+            maes, weights, iterations=config.bootstrap_iterations, seed=config.seed
         )
-        ci_low_rmse, ci_high_rmse = bootstrap_mean_ci(
-            rmses, iterations=config.bootstrap_iterations, seed=42
+        ci_low_rmse, ci_high_rmse = _weighted_bootstrap_ci(
+            rmses, weights, iterations=config.bootstrap_iterations, seed=config.seed
         )
 
     return {

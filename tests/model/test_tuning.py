@@ -169,3 +169,19 @@ class _Diverges(DummyRegressor):
 def test_an_untuned_fit_that_raises_is_reported_as_a_fit_failure() -> None:
     with pytest.raises(FoldFitError, match="solver diverged"):
         fit_untuned(Pipeline([("regressor", _Diverges())]), X8, Y8, seed=0, fold=3)
+
+
+def test_tune_refuses_refit_false() -> None:
+    # tune() returns a fitted estimator, which GridSearchCV never builds under refit=False.
+    with pytest.raises(ValueError, match="refit=False"):
+        tune(
+            PIPE,
+            GRID,
+            X8,
+            Y8,
+            TWO_SUBJECTS,
+            split=BY_SUBJECT,
+            seed=0,
+            fold=1,
+            refit=False,
+        )

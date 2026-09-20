@@ -164,7 +164,9 @@ to the design groups. :func:`eegfeat.model.regression_metrics` returns overall P
 ``R²``, explained variance, and subject-level correlation summaries. The default subject-level
 correlation averages Fisher ``z`` values with equal subject weighting. Use
 :func:`eegfeat.model.classification_metrics` for accuracy, balanced accuracy, AUC, average
-precision, F1, precision, recall, specificity, and the confusion matrix.
+precision, F1, precision, recall, specificity, and the confusion matrix. Passing ``groups``
+makes every scalar a mean over subjects with equal subject weight; the confusion matrix stays
+pooled over trials, so accuracy recomputed from it will not match the reported ``accuracy``.
 
 .. code-block:: python
 
@@ -190,9 +192,12 @@ Permutation nulls
 -----------------
 
 :func:`eegfeat.model.permutation_test` refits the complete cross-fitting procedure for each
-draw. ``NullConfig.scheme`` supports ``"within_subject"``, ``"run_wise"``,
-``"within_subject_within_run"``, and ``"circular_shift_within_run"``. Run-aware schemes
-require ``runs``; circular shifts additionally require finite within-run trial indices.
+draw. ``NullConfig.scheme`` supports ``"within_subject"``, ``"within_subject_within_run"``,
+and ``"circular_shift_within_run"``; ``"run_wise"`` is an accepted alias for
+``"within_subject_within_run"``, named after the upstream pipeline's ``runwise``. Both shuffle
+labels within each run of each subject — no scheme exchanges whole runs, because run structure
+is paradigm-specific. Run-aware schemes require ``runs``; circular shifts additionally require
+finite within-run trial indices.
 Incomplete fits abort the procedure with an error instead of dropping failed draws,
 preventing distortion of the null distribution.
 

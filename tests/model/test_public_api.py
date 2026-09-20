@@ -76,6 +76,7 @@ EXPECTED = {
     "safe_pearsonr",
     "scoring_dict",
     "select",
+    "seeded",
     "set_random_seeds",
     "shap_importance",
     "shap_importance_over_folds",

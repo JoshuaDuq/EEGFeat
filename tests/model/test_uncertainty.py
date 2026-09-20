@@ -150,3 +150,25 @@ def test_order_stat_quantile_formulas() -> None:
     assert np.isfinite(upper)
     assert np.isfinite(lower)
     assert lower <= upper
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"y_train": np.ones(9)}, "y_train has 9 rows"),
+        ({"groups": np.array(["s1"] * 9, dtype=object)}, "groups has 9 rows"),
+        ({"X_test": np.ones((3, 2))}, "X_test has 2 columns"),
+    ],
+)
+def test_prediction_intervals_refuse_misaligned_inputs(
+    kwargs: dict[str, np.ndarray], message: str
+) -> None:
+    rng = np.random.default_rng(0)
+    base = {
+        "model": PIPE,
+        "X_train": rng.normal(size=(10, 3)),
+        "y_train": rng.normal(size=10),
+        "X_test": rng.normal(size=(3, 3)),
+    }
+    with pytest.raises(ValueError, match=message):
+        prediction_intervals(**{**base, **kwargs})

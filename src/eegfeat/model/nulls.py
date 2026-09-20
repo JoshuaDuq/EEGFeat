@@ -25,6 +25,10 @@ __all__ = [
     "permute",
 ]
 
+# "run_wise" is an alias for "within_subject_within_run", kept because the upstream pipeline
+# calls this shuffle "runwise". Both shuffle labels within each run of each subject; neither
+# exchanges whole runs. Run structure is paradigm-specific, so a run-block exchange is not
+# offered rather than guessed at. The alias is pinned by a test.
 Scheme = Literal[
     "within_subject",
     "run_wise",
@@ -70,7 +74,9 @@ _DEFAULT_AGGREGATION = AggregationConfig()
 
 
 def is_permutation_valid_run(retained: npt.NDArray[np.intp], min_retained: int = 8) -> bool:
-    arr = np.asarray(retained, dtype=np.intp)
+    # Cast to float, not int: an int cast turns NaN into a large negative integer, which then
+    # passes any finiteness test and reports a run of missing counts as usable.
+    arr = np.asarray(retained, dtype=np.float64)
     return bool(arr.size >= min_retained and np.all(np.isfinite(arr)))
 
 
@@ -154,12 +160,28 @@ def permute(
     else:
         trial_indices_arr = None
 
-    unique_subs = [s for s in pd.unique(groups_arr) if not pd.isna(s)]
+    # A trial with no subject belongs to no exchangeable block, so it would keep its observed
+    # target in every draw and pull the null toward the observed statistic. Refuse it, exactly
+    # as a missing run label is refused above.
+    n_unlabelled = int(np.sum(pd.isna(groups_arr)))
+    if n_unlabelled:
+        msg = (
+            f"Permutation requires subject labels for every trial; "
+            f"{n_unlabelled} of {len(groups_arr)} have none."
+        )
+        raise ValueError(msg)
 
-    for subj in unique_subs:
+    for subj in pd.unique(groups_arr):
         subj_mask = groups_arr == subj
         if np.sum(subj_mask) < 2:
-            continue
+            # Nothing to exchange this trial with, so it would carry its observed target into
+            # every draw. Skipping the subject also skipped the per-run size checks below, so a
+            # one-trial subject slipped past min_retained_trials that a seven-trial run fails.
+            msg = (
+                f"Subject {subj!r} has a single trial, which cannot be permuted and would keep "
+                "its observed target in every draw; drop the subject before testing."
+            )
+            raise ValueError(msg)
 
         if config.scheme == "within_subject":
             subj_idx = np.where(subj_mask)[0]
@@ -179,9 +201,8 @@ def permute(
             and runs_arr is not None
             and trial_indices_arr is not None
         ):
-            subj_runs = runs_arr[subj_mask]
-            unique_runs = [r for r in pd.unique(subj_runs) if not pd.isna(r)]
-            for r in unique_runs:
+            # Missing run labels were refused above, so every run here is a real one.
+            for r in pd.unique(runs_arr[subj_mask]):
                 run_idx = np.where(subj_mask & (runs_arr == r))[0]
                 order = np.argsort(trial_indices_arr[run_idx], kind="stable")
                 ordered_run_idx = run_idx[order]

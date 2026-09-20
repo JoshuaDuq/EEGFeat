@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats
 
 from eegfeat.model.aggregate import (
     AggregationConfig,
@@ -243,3 +244,97 @@ def test_fold_results_refuses_to_mix_labelled_and_unlabelled_records() -> None:
     ]
     with pytest.raises(ValueError, match="subject labels"):
         fold_results(predictions)
+
+
+def _noise_frame(n_subjects: int, n_trials: int, seed: int) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    return pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "subject_id": f"s{s}",
+                    "y_true": rng.normal(size=n_trials),
+                    "y_pred": rng.normal(size=n_trials),
+                }
+            )
+            for s in range(n_subjects)
+        ]
+    )
+
+
+def test_trial_count_weighting_refuses_subjects_with_an_undefined_fisher_z_variance() -> None:
+    # var(z) = 1/(n-3) is infinite at n=3. Flooring that weight at 1.0 gave such subjects the
+    # same weight as a 4-trial subject and pushed the false positive rate from 5% to 17%.
+    with pytest.raises(ValueError, match="3 or fewer"):
+        subject_level_r(
+            _noise_frame(20, 3, seed=0),
+            config=AggregationConfig(subject_weighting="trial_count"),
+        )
+
+
+def test_equal_weighting_uses_student_t_for_the_estimated_between_subject_error() -> None:
+    # The between-subject SD is estimated from the subjects, so a normal quantile makes the
+    # interval too narrow: at 5 subjects a nominal 95% interval covered about 88%.
+    frame = _noise_frame(5, 20, seed=1)
+    result = subject_level_r(frame)
+
+    z_vals = np.arctanh(np.clip([r for _, r in result.per_subject], -0.999999, 0.999999))
+    se = float(np.std(z_vals, ddof=1) / np.sqrt(len(z_vals)))
+    expected_half_width = float(stats.t.ppf(0.975, len(z_vals) - 1)) * se
+
+    observed_half_width = (np.arctanh(result.ci_high) - np.arctanh(result.ci_low)) / 2
+    assert observed_half_width == pytest.approx(expected_half_width, rel=1e-6)
+    assert float(stats.t.ppf(0.975, len(z_vals) - 1)) > 1.96
+
+
+def _uneven_frame() -> pd.DataFrame:
+    rows = []
+    for s, n in enumerate([5, 50, 5, 50, 5]):
+        rng = np.random.default_rng(s)
+        rows.append(
+            pd.DataFrame(
+                {"subject_id": f"s{s}", "y_true": rng.normal(size=n), "y_pred": rng.normal(size=n)}
+            )
+        )
+    return pd.concat(rows)
+
+
+def test_subject_level_errors_honour_the_configured_weighting() -> None:
+    # One config must not produce a trial-weighted correlation and an equal-weighted error.
+    frame = _uneven_frame()
+    equal = subject_level_errors(frame, config=AggregationConfig(subject_weighting="equal"))
+    weighted = subject_level_errors(
+        frame, config=AggregationConfig(subject_weighting="trial_count")
+    )
+    assert equal["mean_mae"] != weighted["mean_mae"]
+
+
+def test_subject_level_errors_honour_the_configured_seed() -> None:
+    # A hardcoded seed made the bootstrap look perfectly stable across seeds.
+    frame = _uneven_frame()
+    first = subject_level_errors(
+        frame, config=AggregationConfig(ci_method="bootstrap", bootstrap_iterations=200, seed=1)
+    )
+    second = subject_level_errors(
+        frame, config=AggregationConfig(ci_method="bootstrap", bootstrap_iterations=200, seed=999)
+    )
+    assert first["ci_low_mae"] != second["ci_low_mae"]
+
+
+def test_bootstrap_intervals_are_not_silently_replaced_by_fixed_effects() -> None:
+    # With two subjects the bootstrap branch was skipped and the fixed-effects interval was
+    # returned instead, byte-identical and with nothing on the result to say which ran.
+    frame = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "subject_id": f"s{s}",
+                    "y_true": np.random.default_rng(s).normal(size=20),
+                    "y_pred": np.random.default_rng(s + 9).normal(size=20),
+                }
+            )
+            for s in range(2)
+        ]
+    )
+    with pytest.raises(ValueError, match="at least 3 subjects"):
+        subject_level_r(frame, config=AggregationConfig(ci_method="bootstrap"))
