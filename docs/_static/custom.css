@@ -27,6 +27,39 @@
   --radius-sm: 3px;
   --radius-md: 4px;
 
+  /* Type scale — one ladder, 16px root. Every size in this sheet comes
+     from here; nothing picks its own value. The steps are wide enough
+     apart that a heading is legible as a heading from across the page. */
+  --fs-display:  2.5rem;    /* 40px — landing hero only            */
+  --fs-h1:       2rem;      /* 32px                                */
+  --fs-h2:       1.5rem;    /* 24px                                */
+  --fs-h3:       1.1875rem; /* 19px                                */
+  --fs-h4:       1.0625rem; /* 17px                                */
+  --fs-lede:     1.1875rem; /* 19px — standfirst paragraph         */
+  --fs-body:     1.0625rem; /* 17px — running prose                */
+  --fs-ui:       0.9375rem; /* 15px — cards, tables, admonitions   */
+  --fs-ui-sm:    0.875rem;  /* 14px — sidebar, captions, summaries */
+  --fs-ui-xs:    0.8125rem; /* 13px — right TOC, footer, buttons   */
+  --fs-label:    0.75rem;   /* 12px — uppercase eyebrows           */
+  --fs-code:     0.875rem;  /* 14px — code blocks                  */
+
+  /* Reading measure: ~76 characters at --fs-body. Prose is capped here,
+     while code, tables and card grids keep the full content width — the
+     text column stays readable without starving the data. */
+  --measure: 39rem;
+
+  /* Inter needs tightening as it grows and loosening at caption sizes. */
+  --track-display: -0.022em;
+  --track-heading: -0.014em;
+  --track-body:    -0.006em;
+  --track-label:    0.11em;
+}
+
+/* The hairlines are composed from the palette, so they have to be declared
+   on the element that carries the palette. Declared on :root — where the
+   colour tokens do not exist — `var()` substitution fails and the whole
+   border declaration falls back to `none`. */
+body {
   --hairline: 1px solid var(--color-foreground-border);
   --hairline-quiet: 1px solid var(--color-background-border);
 }
@@ -110,10 +143,17 @@ html {
 
 body {
   font-family: var(--font-stack);
-  font-feature-settings: "cv11", "ss01", "ss03", "tnum";
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.005em;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: var(--track-body);
   line-height: 1.65;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Tabular figures line up columns but leave gaps around 1 and punctuation
+   in a sentence, so they are scoped to data rather than applied globally. */
+table.docutils,
+.sig {
+  font-variant-numeric: tabular-nums;
 }
 
 ::selection {
@@ -134,13 +174,24 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-stack);
   font-feature-settings: "cv11", "ss01", "ss03";
   color: var(--color-foreground-primary);
+  padding-left: 0;
+  padding-right: 0;
+  scroll-margin-top: var(--space-5);
+}
+
+/* Prose is set one step above the UI chrome so the thing you actually
+   read is the largest text on the page. */
+article {
+  font-size: var(--fs-body);
+  line-height: 1.7;
 }
 
 h1 {
-  font-size: 1.75rem;
+  font-size: var(--fs-h1);
   font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: var(--track-display);
+  line-height: 1.15;
+  text-wrap: balance;
   border-bottom: var(--hairline);
   padding-bottom: var(--space-3);
   margin: 0 0 var(--space-6);
@@ -149,17 +200,18 @@ h1 {
 /* Landing page — drop the H1 border so the title flows into the
    lede paragraph as a single visual block. */
 h1:has(+ .hero-lede) {
-  font-size: 2rem;
+  font-size: var(--fs-display);
   border-bottom: none;
   padding-bottom: 0;
   margin-bottom: var(--space-4);
 }
 
 h2 {
-  font-size: 1.15rem;
+  font-size: var(--fs-h2);
   font-weight: 600;
-  letter-spacing: -0.005em;
-  line-height: 1.3;
+  letter-spacing: var(--track-heading);
+  line-height: 1.25;
+  text-wrap: balance;
   color: var(--color-foreground-primary);
   border-bottom: var(--hairline-quiet);
   padding-bottom: var(--space-2);
@@ -167,45 +219,80 @@ h2 {
 }
 
 h3 {
-  font-size: 0.95rem;
+  font-size: var(--fs-h3);
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: -0.008em;
+  line-height: 1.35;
+  text-wrap: balance;
   color: var(--color-foreground-primary);
-  margin: var(--space-5) 0 var(--space-3);
+  margin: var(--space-6) 0 var(--space-3);
 }
 
 h4 {
-  font-size: 0.78rem;
+  font-size: var(--fs-h4);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: var(--color-foreground-primary);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+/* Below h4 the ladder runs out of size, so the last two levels switch
+   to small caps and carry their rank by tracking instead. */
+h5, h6 {
+  font-size: var(--fs-label);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.085em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-secondary);
   margin: var(--space-4) 0 var(--space-2);
 }
 
-h5, h6 {
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-foreground-muted);
-  margin: var(--space-3) 0 var(--space-2);
-}
-
 p {
-  line-height: 1.68;
+  line-height: 1.7;
   color: var(--color-foreground-primary);
-  margin: 0 0 var(--space-4);
+  margin: 0 0 1.35em;
+  text-wrap: pretty;
 }
 
 ul, ol {
-  margin: 0 0 var(--space-4);
-  padding-left: 1.4rem;
+  margin: 0 0 1.35em;
+  padding-left: 1.35rem;
 }
 
 li {
-  line-height: 1.65;
-  margin-bottom: 0.2rem;
+  line-height: 1.7;
+  margin-bottom: 0.3rem;
+}
+
+/* Reading measure. A 46em content column is right for code and tables but
+   runs prose out to ~96 characters, so the text column is capped and the
+   wide blocks keep the rest. */
+article p,
+article ul,
+article ol,
+article blockquote {
+  max-width: var(--measure);
+}
+
+article h1,
+article h2,
+article h3,
+article h4 {
+  max-width: var(--measure);
+}
+
+/* Anything that already sets its own box fills it — a capped paragraph
+   inside a card or a table cell would just look like a mistake. */
+.admonition :is(p, ul, ol),
+.sd-card :is(p, ul, ol),
+.sd-tab-content :is(p, ul, ol),
+details.sd-dropdown :is(p, ul, ol),
+table.docutils :is(p, ul, ol),
+dl.field-list :is(p, ul, ol),
+.module-ref p,
+.search-results :is(p, ul) {
+  max-width: none;
 }
 
 li::marker {
@@ -250,13 +337,13 @@ em, i {
 
 .sidebar-brand-text {
   font-weight: 600;
-  font-size: 0.875rem;
-  letter-spacing: 0.005em;
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0;
   color: var(--color-foreground-primary);
 }
 
 .sidebar-tree .reference {
-  font-size: 0.825rem;
+  font-size: var(--fs-ui-sm);
   color: var(--color-foreground-secondary);
   letter-spacing: 0.005em;
   padding: 0.2rem 0.5rem;
@@ -288,10 +375,10 @@ em, i {
 }
 
 .sidebar-tree .caption-text {
-  font-size: 0.68rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-muted);
   margin-top: 1.25rem;
   padding-bottom: 0.3rem;
@@ -301,7 +388,7 @@ em, i {
    Right-side TOC — tighter, quieter
    --------------------------------------------------------- */
 .toc-tree .reference {
-  font-size: 0.78rem;
+  font-size: var(--fs-ui-xs);
   color: var(--color-foreground-secondary);
   padding: 0.15rem 0;
   letter-spacing: 0.005em;
@@ -313,10 +400,10 @@ em, i {
 }
 
 .toc-title {
-  font-size: 0.68rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-muted);
 }
 
@@ -341,14 +428,14 @@ em, i {
   border-bottom: var(--hairline) !important;
   padding: 0.55rem 0.9rem !important;
   font-weight: 600 !important;
-  font-size: 0.85rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-primary) !important;
   letter-spacing: -0.005em;
 }
 
 .sd-card-body {
-  padding: 0.7rem 0.9rem !important;
-  font-size: 0.82rem !important;
+  padding: 0.75rem 0.95rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-secondary) !important;
   line-height: 1.6;
 }
@@ -374,7 +461,7 @@ em, i {
 }
 
 .sd-tab-set > input ~ label {
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   font-weight: 500;
   letter-spacing: 0.01em;
   padding: 0.4rem 0.85rem;
@@ -412,15 +499,15 @@ em, i {
   background: var(--color-admonition-background) !important;
   padding: 0.6rem 0.95rem !important;
   margin: var(--space-4) 0 !important;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: var(--fs-ui);
+  line-height: 1.65;
 }
 
 .admonition-title {
-  font-size: 0.7rem !important;
+  font-size: var(--fs-label) !important;
   font-weight: 700 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.12em !important;
+  letter-spacing: var(--track-label) !important;
   margin: 0 0 0.3rem !important;
   color: var(--color-foreground-primary) !important;
   background: transparent !important;
@@ -481,6 +568,7 @@ em, i {
    Code blocks — monochrome syntax tokens, weight-based emphasis
    --------------------------------------------------------- */
 div.highlight {
+  box-sizing: border-box;
   border-radius: var(--radius-md) !important;
   border: var(--hairline-quiet) !important;
   position: relative;
@@ -490,81 +578,138 @@ div.highlight {
 
 div.highlight pre {
   font-family: var(--font-stack--monospace);
-  font-size: 0.8rem;
+  font-size: var(--fs-code);
   font-feature-settings: "calt", "ss03";
-  line-height: 1.62;
-  padding: 0.85rem 1rem !important;
+  line-height: 1.6;
+  padding: 0.9rem 1.1rem !important;
   background: transparent !important;
   color: var(--color-foreground-primary);
   overflow-x: auto;
 }
 
-/* Pygments token overrides — neutralize all theme colors to grayscale.
-   Selectors cover every common token class so the look is identical
-   regardless of which pygments_style is configured. */
-.highlight .hll { background-color: var(--color-background-hover); }
-.highlight .c, .highlight .ch, .highlight .cm, .highlight .c1,
-.highlight .cs, .highlight .cp, .highlight .cpf {
+/* Pygments token overrides — neutralise every syntax colour to grayscale so
+   code carries emphasis by weight and value, like the rest of the page.
+
+   Sphinx emits the dark Pygments theme behind `body[data-theme="dark"]` and
+   `body:not([data-theme="light"])`, both of which outrank a bare
+   `.highlight .c1`. Each group therefore ships a second, guarded selector at
+   matching specificity; custom.css loads after pygments.css, so source order
+   decides it. Without that guard the light theme is grayscale and the dark
+   theme falls back to Monokai. */
+
+/* Highlighted line */
+.highlight :is(.hll),
+body:not([data-theme="light"]) .highlight :is(.hll) {
+  background-color: var(--color-background-hover);
+}
+
+/* Comments */
+.highlight :is(.c, .ch, .cm, .c1, .cs, .cp, .cpf),
+body:not([data-theme="light"]) .highlight :is(.c, .ch, .cm, .c1, .cs, .cp, .cpf) {
   color: var(--color-foreground-muted);
   font-style: italic;
 }
-.highlight .k, .highlight .kc, .highlight .kd, .highlight .kn,
-.highlight .kp, .highlight .kr, .highlight .kt {
+
+/* Keywords */
+.highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kt),
+body:not([data-theme="light"]) .highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kt) {
   color: var(--color-brand-primary);
   font-weight: 600;
 }
-.highlight .o, .highlight .ow {
+
+/* Operators */
+.highlight :is(.o, .ow),
+body:not([data-theme="light"]) .highlight :is(.o, .ow) {
   color: var(--color-foreground-primary);
 }
-.highlight .p {
+
+/* Punctuation */
+.highlight :is(.p),
+body:not([data-theme="light"]) .highlight :is(.p) {
   color: var(--color-foreground-secondary);
 }
-.highlight .n, .highlight .nx, .highlight .nv, .highlight .vc,
-.highlight .vg, .highlight .vi {
+
+/* Names and variables */
+.highlight :is(.n, .nx, .nv, .vc, .vg, .vi),
+body:not([data-theme="light"]) .highlight :is(.n, .nx, .nv, .vc, .vg, .vi) {
   color: var(--color-foreground-primary);
 }
-.highlight .nb, .highlight .bp {
+
+/* Builtins */
+.highlight :is(.nb, .bp),
+body:not([data-theme="light"]) .highlight :is(.nb, .bp) {
   color: var(--color-foreground-primary);
   font-weight: 500;
 }
-.highlight .nf, .highlight .nc, .highlight .nn {
+
+/* Definitions — functions, classes, modules */
+.highlight :is(.nf, .nc, .nn),
+body:not([data-theme="light"]) .highlight :is(.nf, .nc, .nn) {
   color: var(--color-brand-content);
   font-weight: 600;
 }
-.highlight .nd, .highlight .ni, .highlight .ne, .highlight .nl,
-.highlight .no, .highlight .py {
+
+/* Decorators, exceptions, constants */
+.highlight :is(.nd, .ni, .ne, .nl, .no, .py),
+body:not([data-theme="light"]) .highlight :is(.nd, .ni, .ne, .nl, .no, .py) {
   color: var(--color-brand-content);
 }
-.highlight .s, .highlight .s1, .highlight .s2, .highlight .sb,
-.highlight .sc, .highlight .sd, .highlight .se, .highlight .sh,
-.highlight .si, .highlight .sx, .highlight .sr, .highlight .ss,
-.highlight .sa, .highlight .dl {
+
+/* Strings */
+.highlight :is(.s, .s1, .s2, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss, .sa, .dl),
+body:not([data-theme="light"]) .highlight :is(.s, .s1, .s2, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss, .sa, .dl) {
   color: var(--color-foreground-secondary);
 }
-.highlight .m, .highlight .mf, .highlight .mh, .highlight .mi,
-.highlight .mo, .highlight .il, .highlight .mb {
+
+/* Numbers */
+.highlight :is(.m, .mf, .mh, .mi, .mo, .il, .mb),
+body:not([data-theme="light"]) .highlight :is(.m, .mf, .mh, .mi, .mo, .il, .mb) {
   color: var(--color-brand-content);
 }
-.highlight .gh, .highlight .gu {
+
+/* Diff and generic headings */
+.highlight :is(.gh, .gu),
+body:not([data-theme="light"]) .highlight :is(.gh, .gu) {
   color: var(--color-brand-primary);
   font-weight: 700;
 }
-.highlight .gd { color: var(--color-semantic-error); }
-.highlight .gi { color: var(--color-foreground-primary); font-weight: 600; }
-.highlight .ge { font-style: italic; }
-.highlight .gs { font-weight: 700; }
-.highlight .gr, .highlight .gt {
+
+/* Deletions */
+.highlight :is(.gd),
+body:not([data-theme="light"]) .highlight :is(.gd) {
   color: var(--color-semantic-error);
 }
-.highlight .err {
+
+/* Insertions */
+.highlight :is(.gi),
+body:not([data-theme="light"]) .highlight :is(.gi) {
+  color: var(--color-foreground-primary);
+  font-weight: 600;
+}
+
+/* Generic emphasis */
+.highlight :is(.ge),
+body:not([data-theme="light"]) .highlight :is(.ge) {
+  font-style: italic;
+}
+
+/* Generic strong */
+.highlight :is(.gs),
+body:not([data-theme="light"]) .highlight :is(.gs) {
+  font-weight: 700;
+}
+
+/* Tracebacks and errors */
+.highlight :is(.gr, .gt, .err),
+body:not([data-theme="light"]) .highlight :is(.gr, .gt, .err) {
   color: var(--color-semantic-error);
   border: none;
   background: transparent;
 }
 
-/* Shell/REPL prompts (>>>, $) — recede so the typed command stands out */
-.highlight .gp,
-.highlight .go {
+/* Shell and REPL prompts — recede so the typed command stands out */
+.highlight :is(.gp, .go),
+body:not([data-theme="light"]) .highlight :is(.gp, .go) {
   color: var(--color-foreground-muted);
   user-select: none;
 }
@@ -578,7 +723,7 @@ button.copybtn {
   border-radius: var(--radius-sm) !important;
   color: var(--color-foreground-secondary) !important;
   padding: 2px 6px !important;
-  font-size: 0.72rem !important;
+  font-size: var(--fs-ui-xs) !important;
   top: 0.4rem !important;
   right: 0.4rem !important;
 }
@@ -606,8 +751,8 @@ dd code {
   background: var(--color-background-hover) !important;
   border: var(--hairline-quiet) !important;
   border-radius: var(--radius-sm) !important;
-  padding: 0.05em 0.35em !important;
-  font-size: 0.83em !important;
+  padding: 0.08em 0.36em !important;
+  font-size: 0.875em !important;
   color: var(--color-foreground-primary) !important;
   font-family: var(--font-stack--monospace);
   font-feature-settings: "calt", "ss03";
@@ -615,7 +760,7 @@ dd code {
 
 /* Code inside headings should stay quiet */
 h1 code, h2 code, h3 code, h4 code {
-  font-size: 0.92em !important;
+  font-size: 0.9em !important;
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
@@ -642,10 +787,15 @@ a:hover {
 /* ---------------------------------------------------------
    Tables — hairline rows, dense header
    --------------------------------------------------------- */
+.table-wrapper {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 table.docutils {
   border-collapse: collapse;
   width: 100%;
-  font-size: 0.84rem;
+  font-size: var(--fs-ui);
   margin: var(--space-4) 0;
   border-top: var(--hairline);
   border-bottom: var(--hairline);
@@ -655,9 +805,9 @@ table.docutils th {
   background: transparent !important;
   color: var(--color-foreground-secondary) !important;
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: var(--fs-label);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--track-label);
   border-bottom: var(--hairline) !important;
   border-top: none !important;
   padding: 0.5rem 0.8rem !important;
@@ -666,10 +816,10 @@ table.docutils th {
 
 table.docutils td {
   border-bottom: var(--hairline-quiet) !important;
-  padding: 0.45rem 0.8rem !important;
+  padding: 0.5rem 0.8rem !important;
   vertical-align: top;
   color: var(--color-foreground-primary);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 table.docutils tr:last-child td {
@@ -699,13 +849,14 @@ hr.docutils {
    header styling targets .sd-card-title, not .sd-card-header.
    --------------------------------------------------------- */
 .hero-lede {
-  font-size: 1.05rem;
+  font-size: var(--fs-lede);
   font-weight: 400;
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--color-foreground-secondary);
-  max-width: 68ch;
+  max-width: var(--measure);
   margin: 0 0 var(--space-6);
-  letter-spacing: -0.005em;
+  letter-spacing: var(--track-heading);
+  text-wrap: pretty;
 }
 
 .hero-lede strong {
@@ -754,7 +905,7 @@ hr.docutils {
 }
 
 .nav-cards .sd-card-title {
-  font-size: 0.98rem !important;
+  font-size: var(--fs-h4) !important;
   font-weight: 600 !important;
   letter-spacing: -0.005em;
   color: var(--color-foreground-primary) !important;
@@ -767,7 +918,7 @@ hr.docutils {
   position: absolute;
   top: 1rem;
   right: 1.1rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--color-foreground-muted);
   transition: transform 0.15s ease, color 0.15s ease;
 }
@@ -778,7 +929,7 @@ hr.docutils {
 }
 
 .nav-cards .sd-card-text {
-  font-size: 0.83rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-secondary) !important;
   line-height: 1.6;
   margin: 0 0 0.35rem !important;
@@ -831,10 +982,10 @@ img.hero-screenshot {
 }
 
 .stage-grid .sd-card-title {
-  font-size: 0.7rem !important;
+  font-size: var(--fs-label) !important;
   font-weight: 700 !important;
   text-transform: uppercase;
-  letter-spacing: 0.11em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-secondary) !important;
   margin: 0 !important;
   padding-bottom: 0.45rem;
@@ -842,7 +993,7 @@ img.hero-screenshot {
 }
 
 .stage-grid .sd-card-text {
-  font-size: 0.83rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-primary) !important;
   line-height: 1.6;
   margin: 0 !important;
@@ -850,7 +1001,7 @@ img.hero-screenshot {
 
 .stage-grid .sd-card-text:not(:first-child):last-child {
   font-family: var(--font-stack--monospace);
-  font-size: 0.74rem !important;
+  font-size: var(--fs-ui-xs) !important;
   color: var(--color-foreground-muted) !important;
   margin-top: auto !important;
   letter-spacing: 0.005em;
@@ -886,14 +1037,14 @@ img.hero-screenshot {
 }
 
 .docs-nav .sd-card-title {
-  font-size: 0.88rem !important;
+  font-size: var(--fs-ui) !important;
   font-weight: 600 !important;
   color: var(--color-foreground-primary) !important;
   margin: 0 0 0.25rem !important;
 }
 
 .docs-nav .sd-card-text {
-  font-size: 0.78rem !important;
+  font-size: var(--fs-ui-sm) !important;
   color: var(--color-foreground-muted) !important;
   line-height: 1.55;
   margin: 0 !important;
@@ -901,7 +1052,7 @@ img.hero-screenshot {
 
 /* Quiet status aside — replaces a heavy admonition on the landing page */
 .dev-status {
-  font-size: 0.82rem;
+  font-size: var(--fs-ui-sm);
   color: var(--color-foreground-muted);
   border-left: 1px solid var(--color-foreground-border);
   padding: 0.1rem 0.85rem;
@@ -919,10 +1070,10 @@ img.hero-screenshot {
    tutorial page (e.g. Quick Start). Renders as a single horizontal
    strip of small uppercase tokens separated by hairline arrows. */
 .step-progress {
-  font-size: 0.7rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.11em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-muted);
   margin: 0 0 var(--space-6);
   padding: 0.55rem 0;
@@ -976,7 +1127,7 @@ img.hero-screenshot {
 }
 
 .related-pages a {
-  font-size: 0.82rem;
+  font-size: var(--fs-ui-sm);
   color: var(--color-foreground-secondary);
   text-decoration: none;
 }
@@ -989,7 +1140,7 @@ img.hero-screenshot {
    Footer
    --------------------------------------------------------- */
 footer {
-  font-size: 0.75rem;
+  font-size: var(--fs-ui-xs);
   color: var(--color-foreground-muted);
   border-top: var(--hairline-quiet);
   padding-top: var(--space-4);
@@ -1009,9 +1160,9 @@ input[type="search"] {
   border-radius: var(--radius-sm) !important;
   border: var(--hairline-quiet) !important;
   background: var(--color-background-hover) !important;
-  font-size: 0.83rem !important;
+  font-size: var(--fs-ui-sm) !important;
   color: var(--color-foreground-primary) !important;
-  padding: 0.4rem 0.6rem !important;
+  padding: 0.45rem 0.6rem !important;
   font-family: var(--font-stack);
 }
 
@@ -1030,8 +1181,8 @@ details.sd-dropdown {
 }
 
 details.sd-dropdown summary {
-  padding: 0.55rem 0.95rem !important;
-  font-size: 0.86rem !important;
+  padding: 0.6rem 0.95rem !important;
+  font-size: var(--fs-ui) !important;
   font-weight: 500 !important;
   color: var(--color-foreground-primary) !important;
   cursor: pointer;
@@ -1052,10 +1203,10 @@ details.sd-dropdown[open] summary {
 }
 
 details.sd-dropdown .sd-summary-content {
-  padding: 0.75rem 0.95rem !important;
-  font-size: 0.85rem !important;
+  padding: 0.8rem 0.95rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-secondary) !important;
-  line-height: 1.62;
+  line-height: 1.65;
 }
 
 details.sd-dropdown .sd-summary-content p:last-child {
@@ -1066,7 +1217,7 @@ details.sd-dropdown .sd-summary-content p:last-child {
    Search results
    --------------------------------------------------------- */
 .search-results .context {
-  font-size: 0.83rem;
+  font-size: var(--fs-ui-sm);
   color: var(--color-foreground-secondary);
   line-height: 1.6;
   border-left: 2px solid var(--color-foreground-border);
@@ -1085,7 +1236,7 @@ details.sd-dropdown .sd-summary-content p:last-child {
 }
 
 .search-results a {
-  font-size: 0.9rem;
+  font-size: var(--fs-h4);
   font-weight: 600;
   color: var(--color-foreground-primary);
   text-decoration: none;
@@ -1104,9 +1255,9 @@ details.sd-dropdown .sd-summary-content p:last-child {
 }
 
 #search-results h2 {
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-muted);
   border-bottom: none;
   margin: var(--space-4) 0 var(--space-2);
@@ -1144,7 +1295,7 @@ div.math {
   overflow-y: hidden;
   color: var(--color-foreground-primary);
   position: relative;
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 
@@ -1161,7 +1312,7 @@ div.math mjx-container[display="true"] {
 div.math span.eqno,
 .math .eqno {
   color: var(--color-foreground-muted) !important;
-  font-size: 0.78rem !important;
+  font-size: var(--fs-ui-xs) !important;
   font-family: var(--font-stack--monospace);
   letter-spacing: 0.01em;
   float: right;
@@ -1228,10 +1379,10 @@ table.docutils mjx-container[display="true"] {
 }
 
 .meta-cards .sd-card-title {
-  font-size: 0.66rem !important;
+  font-size: var(--fs-label) !important;
   font-weight: 700 !important;
   text-transform: uppercase;
-  letter-spacing: 0.13em;
+  letter-spacing: var(--track-label);
   color: var(--color-foreground-muted) !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -1239,7 +1390,7 @@ table.docutils mjx-container[display="true"] {
 }
 
 .meta-cards .sd-card-text {
-  font-size: 0.82rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-primary) !important;
   line-height: 1.55;
   margin: 0 !important;
@@ -1268,7 +1419,7 @@ section[id^="step-"] > h3 {
 .module-ref {
   margin: -0.4rem 0 var(--space-4);
   padding: 0;
-  font-size: 0.78rem;
+  font-size: var(--fs-ui-sm);
   color: var(--color-foreground-muted);
   border-left: 2px solid var(--color-foreground-border);
   padding-left: 0.7rem;
@@ -1281,7 +1432,7 @@ section[id^="step-"] > h3 {
 
 .module-ref code,
 .module-ref .docutils.literal {
-  font-size: 0.78rem !important;
+  font-size: var(--fs-ui-sm) !important;
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
@@ -1306,7 +1457,7 @@ details.sd-dropdown[open] summary svg.octicon {
    --------------------------------------------------------- */
 dl.glossary dt {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-h4);
   color: var(--color-foreground-primary);
   margin-top: 1.1rem;
   padding-bottom: 0.2rem;
@@ -1315,7 +1466,7 @@ dl.glossary dt {
 
 dl.glossary dd {
   margin-left: 1rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui);
   color: var(--color-foreground-secondary);
   line-height: 1.65;
   margin-bottom: 0.2rem;
@@ -1333,15 +1484,31 @@ dl.glossary dd {
 
 .sd-col-12 > .sd-card .sd-card-body,
 .sd-col-xs-12 > .sd-card .sd-card-body {
-  padding: 0.55rem 0.95rem !important;
-  font-size: 0.85rem !important;
+  padding: 0.6rem 0.95rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-secondary) !important;
 }
 
 /* ---------------------------------------------------------
    Mobile / narrow viewport
    --------------------------------------------------------- */
+/* Narrow viewports step the whole ladder down at once rather than patching
+   rule by rule, so the proportions that hold on a desktop still hold here. */
 @media (max-width: 700px) {
+  :root {
+    --fs-display: 1.875rem;
+    --fs-h1:      1.625rem;
+    --fs-h2:      1.3125rem;
+    --fs-h3:      1.0625rem;
+    --fs-h4:      1rem;
+    --fs-lede:    1.0625rem;
+    --fs-body:    1rem;
+    --fs-ui:      0.875rem;
+    --fs-ui-sm:   0.8125rem;
+    --fs-code:    0.8125rem;
+    --measure:    100%;
+  }
+
   .sd-row.sd-row-cols-3 > .sd-col,
   .sd-row.sd-row-cols-xs-3 > .sd-col,
   .sd-row.sd-row-cols-2 > .sd-col,
@@ -1351,27 +1518,16 @@ dl.glossary dd {
     max-width: 100% !important;
   }
 
-  h1 { font-size: 1.45rem; }
-  h2 { font-size: 1.05rem; }
-  .hero-lede { font-size: 0.95rem; }
-
-  table.docutils {
-    font-size: 0.78rem;
-  }
-
   table.docutils th,
   table.docutils td {
-    padding: 0.35rem 0.55rem !important;
+    padding: 0.4rem 0.55rem !important;
   }
 }
 
 @media (max-width: 480px) {
-  div.highlight pre {
-    font-size: 0.74rem;
-  }
-
-  .sd-card-body {
-    font-size: 0.8rem !important;
+  :root {
+    --fs-code: 0.75rem;
+    --fs-ui:   0.8125rem;
   }
 }
 
@@ -1405,6 +1561,13 @@ dl.glossary dd {
    Print / PDF — clean grayscale scholarly output
    --------------------------------------------------------- */
 @media print {
+  :root {
+    --measure: 100%;
+    --fs-body: 10.5pt;
+    --fs-code: 8.5pt;
+    --fs-ui:   9.5pt;
+  }
+
   body,
   .page,
   .content,
@@ -1442,7 +1605,7 @@ dl.glossary dd {
     background: #f5f5f5 !important;
     border: 1px solid #cccccc !important;
     color: #1a1a1a !important;
-    font-size: 0.78rem !important;
+    font-size: var(--fs-code) !important;
     white-space: pre-wrap !important;
     word-break: break-word !important;
     page-break-inside: avoid;
@@ -1535,6 +1698,10 @@ dl.glossary dd {
   border-radius: var(--radius-md) !important;
   padding: 0.5rem 0.85rem 0.5rem 3em !important;
   text-indent: -2.25em !important;
+  /* Furo bleeds signatures 0.25rem past the column; once they carry a
+     border that reads as a misalignment against the h1 rule. */
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   background: var(--color-api-background) !important;
   color: var(--color-api-overall) !important;
   margin-top: var(--space-5) !important;
@@ -1586,10 +1753,10 @@ dl.field-list {
 }
 
 dl.field-list > dt {
-  font-size: 0.7rem !important;
+  font-size: var(--fs-label) !important;
   font-weight: 700 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.12em !important;
+  letter-spacing: var(--track-label) !important;
   color: var(--color-foreground-secondary) !important;
   margin-top: var(--space-3) !important;
   padding-bottom: 0.2rem;
@@ -1599,7 +1766,7 @@ dl.field-list > dt {
 dl.field-list > dd {
   margin-left: 0.75rem !important;
   padding-left: 0.5rem !important;
-  font-size: 0.85rem !important;
+  font-size: var(--fs-ui) !important;
   color: var(--color-foreground-primary) !important;
   line-height: 1.6;
 }
