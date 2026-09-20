@@ -6,60 +6,47 @@
 [![Typing: Strict](https://img.shields.io/badge/typing-mypy%20strict-blue.svg)](https://mypy.readthedocs.io/)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](https://joshuaduq.github.io/EEGFeatML/)
 
-**Turn preprocessed EEG into a labelled feature table, then take that table through machine
-learning without leaking the answer.**
+**Labelled feature extraction and leak-free machine learning for preprocessed EEG.**
 
-Every number EEGFeat produces knows what it is: which measure, which frequency band, which
-channel or region, which time window, which normalization, its unit, and the exact parameters
-behind it. That description travels with the value — into the files you write, back out when you
-read them, and on into the design matrix you model. A column is never just `feature_0347`.
+EEGFeat operates downstream of preprocessing, accepting epoched MNE objects (`Epochs`, `Spectrum`, `EpochsSpectrum`, `EpochsTFR`). It extracts fully auditable, metadata-tracked features and provides a rigorous cross-validation modeling pipeline designed to prevent data leakage.
 
-EEGFeat starts where preprocessing ends. You bring epochs you already trust; it does not filter,
-re-reference, or reject anything on your behalf.
+### Core Features
 
-### See the output before you install anything
-
-Real files from the real pipeline, small enough to open and read, in [`examples/`](examples/):
-
-- [`sub-01_task-pain_run-01_features.tsv`](examples/sub-01_task-pain_run-01_features.tsv) — one
-  row per epoch: your trial metadata first, then every feature, each named for what it measures.
-  Its [coverage file](examples/sub-01_task-pain_run-01_features_coverage.tsv) and
-  [JSON sidecar](examples/sub-01_task-pain_run-01_features.json) sit beside it, and the
-  [cross-trial table](examples/sub-01_task-pain_run-01_crosstrial.tsv) holds the measures that are
-  defined over a group of trials rather than within one.
-- [`example_model_scores.tsv`](examples/example_model_scores.tsv) — what the modelling gives back:
-  a leave-one-subject-out correlation with its confidence interval and permutation *p*, plus each
-  subject's own score. Every held-out prediction is in
-  [`example_model_predictions.tsv`](examples/example_model_predictions.tsv).
-
-The recordings behind them are simulated, so nothing here is participant data, and
-`python examples/make_examples.py` reproduces the lot from
-[`examples/recipe.toml`](examples/recipe.toml).
+- **Self-Describing Features**: Every column preserves its measure type, frequency band, ROI/channel, time window, normalization method, physical units, and estimator parameters.
+- **Strict Separation**: Epoch-level and cross-trial measures (e.g., ITPC, wPLI) are maintained in separate tables to prevent pseudo-replication.
+- **Leak-Free Modeling**: Imputation, scaling, selection, tuning, and harmonization are fitted strictly inside training folds.
+- **Subject-Aware Metrics**: Primary evaluation metrics weight subjects equally, avoiding trial-count dominance.
+- **Example Pipeline**: Inspect sample outputs generated from synthetic data in [`examples/`](examples/).
 
 ---
 
-## Install
+## Installation
 
 ```bash
 pip install eegfeat
 ```
 
-The core install computes every spectral, temporal, burst, and ERDS measure. A few measures and
-the modeling subpackage need extras:
+### Optional Extras
 
-- `pip install "eegfeat[model]"` — scikit-learn, for everything in the machine learning section.
-- `pip install "eegfeat[connectivity]"` — mne-connectivity, for weighted phase lag index.
-- `pip install "eegfeat[microstates]"` — scikit-learn, for microstate clustering.
-- `pip install "eegfeat[importance]"` — adds SHAP. Permutation importance already comes
-  with `[model]`.
-- `pip install "eegfeat[dev]"` — pytest, ruff, black, mypy.
+| Extra | Description | Dependencies |
+| :--- | :--- | :--- |
+| `[model]` | Cross-validated modeling pipelines and evaluation | `scikit-learn>=1.3` |
+| `[connectivity]` | Weighted Phase Lag Index (wPLI) | `mne-connectivity>=0.7` |
+| `[microstates]` | Microstate segmentation and dynamics | `scikit-learn>=1.3` |
+| `[importance]` | SHAP importance over cross-validation folds | `shap>=0.44`, `scikit-learn>=1.3` |
+| `[dev]` | Testing, typing, and linting tools | `pytest`, `mypy`, `ruff`, `black` |
+
+```bash
+pip install "eegfeat[model,connectivity,microstates,importance]"
+```
 
 ---
 
-## Extract features from one recording
+## Quickstart: Feature Extraction
 
-Three steps: describe the bands and windows you care about, wrap your MNE objects in EEGFeat
-containers, then call measures on them.
+### 1. Define Measurement Containers
+
+Define frequency bands, time windows, and regions of interest (ROIs):
 
 ```python
 import mne
@@ -67,7 +54,7 @@ import eegfeat as ef
 
 epochs = mne.read_epochs("sub-01_task-pain_epo.fif", preload=True)
 
-# What you want measured, and where.
+# Define bands, windows, and ROIs
 alpha = ef.Band("alpha", 8.0, 13.0)
 beta = ef.Band("beta", 13.0, 30.0)
 baseline = ef.Window("baseline", -5.0, -1.0)
@@ -75,9 +62,9 @@ stimulus = ef.Window("stimulus", 0.0, 8.0)
 rois = {"central": ["C3", "Cz", "C4"], "parietal": ["P3", "Pz", "P4"]}
 ```
 
-**Spectral measures read a spectrum you computed yourself.** EEGFeat never guesses how your
-spectrum should be estimated — you pass it a finished MNE `Spectrum`, `EpochsSpectrum`, or
-`EpochsTFR` and say what produced it.
+### 2. Extract Spectral and Time-Domain Measures
+
+- **Spectral measures** take an explicit MNE `Spectrum` or `EpochsSpectrum`:
 
 ```python
 spectrum = epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0, tmin=0.0, tmax=8.0)
@@ -91,100 +78,75 @@ power = ef.integrated_band_power(spectra, bands=[alpha, beta], groups=rois, norm
 peak = ef.peak_frequency(spectra, band=alpha, groups=rois)
 ```
 
-**Time-domain, burst, and ERDS measures read the epochs and cut the windows themselves.** Pass
-them a `Signal` (broadband) or a `BandSignal` (one band's analytic signal), and they slice each
-window out for you.
+- **Time-domain, burst, and ERDS measures** cut designated windows directly from analytic or broadband signals:
 
 ```python
 alpha_signal = ef.BandSignal.from_epochs(epochs, band=alpha, recording="sub-01")
 
-# Percent change from the baseline window, calibrated on the baseline itself.
+# ERDS and burst rates calibrated against the baseline window
 erds = ef.erds_mean([alpha_signal], windows=[stimulus], baseline=baseline, groups=rois)
 bursts = ef.burst_rate([alpha_signal], windows=[stimulus], baseline=baseline, groups=rois)
 ```
 
-Join everything into one table and look at it:
+### 3. Combine and Export Feature Tables
 
 ```python
 table = ef.concat([power, peak, erds, bursts])
 
-table.n_rows          # one row per epoch
-table.names           # 'eeg_band-power_alpha_central_all_log10_p83d9…', …
-table.meta[0].unit    # 'log10(V^2)'
-table.meta[0].window  # 'all'
+# Introspect table metadata
+table.n_rows          # One row per epoch
+table.names           # Column names containing full parameter hashes
+table.meta[0].unit    # Physical unit (e.g. 'log10(V^2)')
+table.meta[0].window  # Time window label (e.g. 'all' or 'stimulus')
 
-# Pull columns back out by what they mean, not by string matching.
-table.select(band=alpha, space="central")
-table.to_dataframe()
+# Query columns semantically
+subset = table.select(band=alpha, space="central")
+df = table.to_dataframe()
 ```
 
-The spectral columns say `window='all'` because the spectrum you handed over covers one segment;
-EEGFeat labels what it was given rather than inventing a window. To get several named windows in
-one spectral table, compute one spectrum per window — or let the runner below do it for you.
-
-Write it, and it comes back whole — values, per-cell coverage, flags, and all the metadata:
+Export tables to disk with complete provenance:
 
 ```python
 from eegfeat.io import read_table, write_table
 
+# Write features alongside trial metadata
 write_table(table, "sub-01_features.tsv", rows=epochs.metadata)
 restored = read_table("sub-01_features.tsv")
 ```
 
-`write_table` produces three files: the values as TSV, a matching `_coverage.tsv` saying which
-cells were finite, and a `.json` sidecar holding every column's description. Passing
-`rows=epochs.metadata` copies your per-trial variables — condition, stimulus intensity, response,
-subject — alongside the features. **Put your prediction target and your subject label in there**,
-because that is where the modeling stage will look for them.
+`write_table` generates three complementary files:
+1. `*_features.tsv`: Numerical values with trial metadata.
+2. `*_features_coverage.tsv`: Fractional coverage indicating finite, unmasked data per cell.
+3. `*_features.json`: Sidecar storing metadata, physical units, parameter hashes, and provenance for every column.
 
 ---
 
-## What you can measure
+## Available Measures
 
-Every measure takes bands, windows, and an optional region mapping, and returns a table you can
-`concat` with any other. Cross-trial measures return one row per trial group instead of one row
-per epoch, and say so.
-
-- **Spectral power** — `integrated_band_power` and `mean_psd` for a PSD, `mean_tfr_power` for a
-  time-frequency decomposition. Normalize as raw, `log10`, dB, percent, or a log ratio against a
-  baseline window. `band_ratio` and `asymmetry` derive theta/beta style ratios and left/right
-  contrasts from a power table you already have.
-- **Spectral shape** — `peak_frequency` finds the dominant oscillation after dividing out the
-  1/f background, refines it between bins, and flags the cases where the maximum sat on a band
-  edge or fell back to a centre of gravity. `spectral_centroid`, `spectral_bandwidth`,
-  `spectral_edge`, and `spectral_entropy` describe the band's shape. `aperiodic` returns the 1/f
-  slope and offset themselves.
-- **Time domain** — `variance`, `mean_amplitude`, `peak_to_peak`, `area_under_curve`,
-  `peak_amplitude`, and `peak_latency`, on the broadband signal or on any band's envelope.
-- **Oscillatory bursts** — `burst_rate`, `burst_count`, `burst_duration`, `burst_amplitude`, and
-  `fraction_above_threshold`. The threshold is calibrated on a baseline window you nominate, so
-  the stimulus cannot set its own detection bar.
-- **Event-related dynamics** — `erds_mean` and `erds_slope` for the average change and its trend;
-  `erd_magnitude`, `erd_duration`, `ers_magnitude`, `ers_duration` for the two directions
-  separately; `erds_onset_latency`, `erds_peak_latency`, `erds_rebound_latency` for the timing.
-- **Phase and connectivity** — `itpc` and `ppc` for phase consistency across trials, `pac` for
-  phase-amplitude coupling, `envelope_correlation` and `wpli` for pairwise coupling, and
-  `global_efficiency` and `clustering_coefficient` to summarize a connectivity table as a network.
-- **Complexity** — `sample_entropy` and `multiscale_entropy`.
-- **Microstates** — `segment` clusters the topographies at global field power peaks into states,
-  then `microstate_coverage`, `microstate_duration`, `microstate_occurrence`, and
-  `microstate_transitions` describe each window's sequence.
+| Category | Functions | Description |
+| :--- | :--- | :--- |
+| **Spectral Power** | `integrated_band_power`, `mean_psd`, `mean_tfr_power`, `band_ratio`, `asymmetry` | PSD/TFR band power with normalization (`raw`, `log10`, `dB`, `percent`, `log_ratio`), frequency ratios, and hemispheric asymmetry. |
+| **Spectral Shape** | `peak_frequency`, `spectral_centroid`, `spectral_bandwidth`, `spectral_edge`, `spectral_entropy`, `aperiodic` | 1/f-corrected peak frequency with sub-bin refinement, spectral distribution moments, edge frequencies, entropy, and aperiodic slope/offset. |
+| **Time Domain** | `variance`, `mean_amplitude`, `peak_to_peak`, `area_under_curve`, `peak_amplitude`, `peak_latency` | Statistical and waveform morphology metrics on broadband or filtered analytic envelope signals. |
+| **Oscillatory Bursts** | `burst_rate`, `burst_count`, `burst_duration`, `burst_amplitude`, `fraction_above_threshold` | Dual-threshold burst detection calibrated against pre-stimulus baseline periods. |
+| **Event-Related Dynamics** | `erds_mean`, `erds_slope`, `erd_magnitude`, `erd_duration`, `ers_magnitude`, `ers_duration`, `erds_onset_latency`, `erds_peak_latency`, `erds_rebound_latency` | Temporal ERD/ERS dynamics, peak/onset/rebound latencies, and regression slopes relative to baseline. |
+| **Phase & Connectivity** | `itpc`, `ppc`, `pac`, `envelope_correlation`, `wpli`, `global_efficiency`, `clustering_coefficient` | Cross-trial phase consistency, phase-amplitude coupling, pairwise connectivity, and graph theoretical network metrics. *(Written to cross-trial tables)* |
+| **Complexity** | `sample_entropy`, `multiscale_entropy` | Signal regularity across multiple temporal scales. |
+| **Microstates** | `segment`, `microstate_coverage`, `microstate_duration`, `microstate_occurrence`, `microstate_transitions` | Topographic clustering at GFP peaks and subsequent temporal dynamics analysis. |
 
 ---
 
-## Extract features for a whole dataset
+## Batch Processing: `eegfeat` CLI
 
-Writing the loop yourself gets tedious across dozens of recordings. `eegfeat run` takes one
-recipe file and applies it to every epochs file it finds.
+The CLI automates uniform feature extraction across full BIDS or derivative datasets using a single TOML recipe.
 
 ```bash
-eegfeat init recipe.toml     # a commented recipe to start from
-eegfeat check recipe.toml    # validate it, try it on the first recording, write nothing
-eegfeat run recipe.toml      # compute features for every recording
+eegfeat init recipe.toml     # Generate a commented recipe template
+eegfeat check recipe.toml    # Validate syntax and test extraction on the first recording
+eegfeat run recipe.toml      # Process all recordings across the dataset
 ```
 
-A recipe says once what you would otherwise repeat: where the epochs are, which bands and windows
-and regions you mean, how spectra are estimated, and one entry per measure.
+### Recipe Structure (`recipe.toml`)
 
 ```toml
 [inputs]
@@ -195,7 +157,7 @@ exclude_bads = true
 
 [output]
 root = "derivatives/eegfeat"
-epoch_metadata = true          # copy each epoch's metadata into its row
+epoch_metadata = true          # Include epoch metadata columns in outputs
 
 [bands]
 theta = [4.0, 8.0]
@@ -227,51 +189,33 @@ measure = "itpc"
 bands = ["theta"]
 ```
 
-Run `check` before `run`. It reads the recipe, reports every problem at once rather than the first
-one, and then computes the first recording to catch what a recipe alone cannot know — a region
-naming a channel your data lacks, a window outside your epochs, a wavelet longer than an epoch.
+### Generated Files
 
-The output tree mirrors the input tree. For `sub-01/eeg/sub-01_task-pain_epo.fif` you get
-`sub-01_task-pain_features.tsv` with one row per epoch, its coverage file and JSON sidecar,
-`sub-01_task-pain_crosstrial.tsv` for the measures that are defined across trials rather than
-within one, and an `eegfeat_run.json` recording what happened to every recording.
-
-Per-epoch and cross-trial results are kept in separate files on purpose. ITPC, wPLI, and envelope
-correlation estimate one value from a group of trials; copying that value onto each of its trials
-would invent independent observations that do not exist.
+For each recording (e.g., `sub-01_task-pain_epo.fif`), `eegfeat run` writes:
+- `*_features.tsv`: Per-epoch feature table.
+- `*_features_coverage.tsv`: Per-epoch finite data coverage table.
+- `*_features.json`: Column metadata sidecar.
+- `*_crosstrial.tsv`: Cross-trial measures (e.g., ITPC, wPLI) kept strictly separate from per-epoch rows.
+- `eegfeat_run.json`: Execution log and reproducibility record for the batch.
 
 ---
 
-## Machine learning
+## Machine Learning (`eegfeat.model`)
 
-`eegfeat.model` (install with `pip install "eegfeat[model]"`) takes per-epoch feature tables into
-cross-validated prediction. The hard part of modeling EEG is not fitting — it is not fooling
-yourself, so most of what this subpackage does is refuse shortcuts that inflate scores.
+The `eegfeat.model` subpackage provides leak-free predictive modeling and validation tools.
 
-### Load the cohort and build a design
+### 1. Build the Design Matrix
+
+Load multi-subject feature tables into unified matrices matched by metadata identifiers (`recording`, `epoch`, `event`):
 
 ```python
 from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
 import eegfeat.model as efm
 from eegfeat.io import read_dataset
 
 dataset = read_dataset(sorted(Path("derivatives/eegfeat").rglob("*_features.tsv")))
-```
 
-`dataset.table` is every recording stacked into one matrix; `dataset.targets` holds the epoch
-metadata the runner copied in. Recordings that excluded different bad channels have different
-columns, so the default stacks them onto the union and marks a column a recording never measured
-as missing, with zero coverage, rather than quietly aligning by position.
-
-Now choose which features to model and which column is the answer:
-
-```python
-# Filter by meaning. These are the labels on the columns, not the function names:
-# read them with sorted({m.measure for m in dataset.table.meta}).
+# Filter features semantically by measure and band
 selection = efm.Selection(measure=("band_power", "erds_mean"), band=("alpha", "beta"))
 
 design = efm.build_design(
@@ -283,26 +227,19 @@ design = efm.build_design(
     selection=selection,
 )
 
-design.X.shape        # epochs by features
-design.y              # the target, one value per epoch
-design.groups         # the subject each epoch belongs to
-design.runs           # the run each epoch belongs to
+# design.X: Feature matrix (epochs x features)
+# design.y: Continuous or categorical target vector
+# design.groups: Subject identifiers for grouped splitting
+# design.runs: Run/session identifiers
 ```
 
-Features and targets are matched by recording, epoch, and event — never by row order — and a
-mismatch is an error rather than a silent misalignment.
+### 2. Define Split Strategy and Cross-Fit
 
-### Decide what "generalize" means, then cross-fit
+Choose an evaluation scheme matching your generalization target:
+- `efm.loso_folds(design.groups)`: Leave-one-subject-out CV (between-subject generalization).
+- `efm.within_subject_folds(design.groups, design.runs, inner_splits=3, seed=42)`: Within-subject CV across runs.
 
-This is the choice that determines what your score means.
-
-- `efm.loso_folds(design.groups)` holds out **one subject at a time**. It answers: would this model
-  work on someone it has never seen?
-- `efm.within_subject_folds(design.groups, design.runs, inner_splits=3, seed=42)` holds out **runs
-  within each subject**, so every subject appears on both sides. It answers: can we track this
-  measure within a person across sessions?
-
-The two usually give very different numbers. Report the one that matches your claim.
+Preprocessing (imputation, scaling, selection) and hyperparameter tuning execute strictly within each training fold:
 
 ```python
 config = efm.PreprocessingConfig(
@@ -327,43 +264,33 @@ predictions = efm.cross_fit_regression(
 )
 ```
 
-Imputation, scaling, feature selection, column harmonization, and any target residualization are
-fitted **inside each training fold** and applied to the held-out fold. Hyperparameters are tuned in
-an inner loop that never crosses the same grouping boundary as the outer one. Nothing about the
-held-out subject reaches the model that predicts them.
+*(Pipelines are also provided for `elasticnet_pipeline` and `random_forest_pipeline` with matching `*_grid()` definitions.)*
 
-Ridge is one option; `elasticnet_pipeline` and `random_forest_pipeline` work the same way, each
-with a matching `*_grid()`.
+### 3. Evaluate Performance
 
-### Score it at the subject level
-
-Pooling every trial from every subject into one correlation lets a few talkative subjects speak for
-the group. The primary metric averages each subject's correlation in Fisher *z* space instead, with
-every subject weighted equally.
+Compute subject-weighted metrics (averaging within-subject Fisher $z$-transformed correlations) to prevent trial imbalance bias:
 
 ```python
+import numpy as np
+import pandas as pd
+
 y_true, y_pred, eval_groups, _, _ = efm.fold_results(predictions, groups=design.groups)
 eval_groups = np.asarray(eval_groups, dtype=object)
 
 metrics, per_subject = efm.regression_metrics(y_true, y_pred, eval_groups)
-print(f"subject-level r {metrics['subject_level_r']:+.3f}")
-print(f"pooled r        {metrics['pearson_r']:+.3f}")
+print(f"Subject-level r: {metrics['subject_level_r']:+.3f}")
+print(f"Pooled r:        {metrics['pearson_r']:+.3f}")
 
-# regression_metrics reports the point estimate; the aggregation behind it also has the interval.
+# Calculate 95% confidence interval
 summary = efm.subject_level_r(
     pd.DataFrame({"subject_id": eval_groups, "y_true": y_true, "y_pred": y_pred})
 )
-print(f"95% CI [{summary.ci_low:+.3f}, {summary.ci_high:+.3f}]")
+print(f"95% CI: [{summary.ci_low:+.3f}, {summary.ci_high:+.3f}]")
 ```
 
-This is what lands in [`examples/example_model_scores.tsv`](examples/example_model_scores.tsv):
-`r = 0.41`, `95% CI [0.34, 0.48]`, and each subject's own correlation beside it.
+### 4. Permutation Null Testing
 
-### Ask whether it beats chance
-
-A permutation test refits the whole cross-validated procedure on shuffled labels. Shuffling happens
-within each subject (or within each run), so it destroys the brain-behaviour link without also
-destroying the between-subject structure the model was never using anyway.
+Test significance by refitting the cross-validation loop on within-subject or within-run shuffled labels:
 
 ```python
 null = efm.permutation_test(
@@ -374,23 +301,18 @@ null = efm.permutation_test(
     design.runs,
     pipeline,
     efm.ridge_grid(),
-    metrics["subject_level_r"],          # the observed statistic
+    metrics["subject_level_r"],  # Observed statistic
     config=efm.NullConfig(scheme="within_subject", n_permutations=1000),
     inner=inner,
     seed=42,
     harmonization="intersection",
 )
-print(f"p = {null.p_value:.3f}")
+print(f"Permutation p-value: {null.p_value:.3f}")
 ```
 
-The observed statistic has to come from the *same* configuration — same folds, pipeline, grid,
-seed, harmonization, and residualization. Pass a number computed some other way and the test says
-so instead of quietly comparing incomparable things. Permutations that fail to fit abort the test
-rather than being dropped, because dropping draws would reshape the null.
+### 5. Uncertainty and Feature Importance
 
-### Say how uncertain each prediction is
-
-Conformal intervals give a range per prediction with a distribution-free coverage guarantee.
+- **Conformal Prediction Intervals**: Generate finite-sample, distribution-free prediction bounds:
 
 ```python
 intervals = efm.prediction_intervals(
@@ -399,18 +321,14 @@ intervals = efm.prediction_intervals(
     design.y,
     design.X[:5],
     alpha=0.10,
-    method="cv_plus",        # or "split", or "quantile"
+    method="cv_plus",  # "cv_plus", "split", or "quantile"
     groups=design.groups,
     seed=42,
 )
-print(intervals.lower, intervals.upper, intervals.calibration_unit)   # … 'trial'
+print(f"Intervals: [{intervals.lower}, {intervals.upper}]")
 ```
 
-Passing `groups` keeps the fitting and calibration splits subject-disjoint. Calibration scores stay
-one per trial either way, which is why `calibration_unit` is always `"trial"`: the guarantee is
-marginal over trials, not over participants.
-
-### Find out what drove it
+- **Out-of-Fold Feature Importance**: Assess feature attribution on validation folds and aggregate by metadata:
 
 ```python
 importance = efm.permutation_importance_over_folds(
@@ -427,30 +345,22 @@ importance = efm.permutation_importance_over_folds(
     harmonization="intersection",
 )
 
-for index in np.argsort(importance.values)[::-1][:5]:
-    print(importance.feature_names[index], importance.values[index])
-
-# Because the columns are labelled, importance can be read at the level you think in.
+# Aggregate importance scores across semantic tags
 selected = efm.select(dataset.table, selection)
-efm.aggregate_by(importance, selected.meta, "band")      # {'alpha': 0.022, 'beta': 0.056}
-efm.aggregate_by(importance, selected.meta, "measure")   # {'band_power': 0.078, …}
+band_imp = efm.aggregate_by(importance, selected.meta, "band")
+measure_imp = efm.aggregate_by(importance, selected.meta, "measure")
 ```
 
-Importance is measured on held-out folds, not on the data the model was fitted to. SHAP is
-available as `shap_importance_over_folds` with the `importance` extra.
+### 6. Classification
 
-### Classification
-
-Binary targets follow the same path with classification pipelines. Labels must be coded 0 and 1 —
-a third value, such as a `-1` for a missing response, is refused up front rather than fitted as a
-silent third class.
+Binary classification models (`logistic_pipeline`, `svm_pipeline`, `random_forest_classifier_pipeline`, `ensemble_pipeline`) require labels coded as 0 and 1:
 
 ```python
 labels = efm.build_design(
     dataset.table, dataset.targets, target="painful", groups="subject", runs="run",
     selection=selection,
 )
-answered = np.isin(labels.y, (0.0, 1.0))      # drop trials with no response
+answered = np.isin(labels.y, (0.0, 1.0))
 
 classifications = efm.cross_fit_classification(
     efm.loso_folds(labels.groups[answered]),
@@ -468,72 +378,55 @@ classifications = efm.cross_fit_classification(
 truth, predicted, class_groups, _, _ = efm.fold_results(
     classifications, groups=labels.groups[answered]
 )
-# fold_results carries labels only, so AUC needs the positive-class probability rebuilt
-# from the fold records, in the same fold order it sorts by.
 in_fold_order = sorted(classifications, key=lambda fold: fold.fold)
 positive = np.concatenate([f.y_prob[:, f.classes.index(1)] for f in in_fold_order])
+
 result = efm.classification_metrics(
-    truth.astype(np.intp), predicted.astype(np.intp),
-    y_prob=positive, groups=np.asarray(class_groups, dtype=object),
+    truth.astype(np.intp),
+    predicted.astype(np.intp),
+    y_prob=positive,
+    groups=np.asarray(class_groups, dtype=object),
 )
-print(result.balanced_accuracy, result.auc)
+print(f"Balanced Accuracy: {result.balanced_accuracy:.3f}, AUC: {result.auc:.3f}")
 ```
 
-`svm_pipeline`, `random_forest_classifier_pipeline`, and `ensemble_pipeline` are drop-in
-alternatives. Passing `groups` makes every reported scalar a mean over subjects with equal weight;
-the confusion matrix stays pooled over trials, so accuracy recomputed from it will not match the
-reported accuracy. Report one convention, not both.
+---
+
+## Scientific Guardrails
+
+EEGFeat enforces strict computational and statistical constraints by default:
+
+1. **Boundary Isolation**: Morlet wavelets are strictly masked to frequencies whose temporal support fits entirely within the requested window to eliminate edge contamination.
+2. **1/f Background Decoupling**: Peak frequency fitting subtracts the fitted aperiodic component across a broad band rather than searching local raw PSD maxima.
+3. **Pre-Stimulus Threshold Calibration**: Burst detection thresholds and ERD/ERS baselines must be defined on dedicated reference windows; they cannot self-calibrate on test periods.
+4. **Pseudo-Replication Prevention**: Multi-trial metrics (ITPC, wPLI, envelope correlation) are strictly separated into cross-trial tables and rejected by per-epoch modeling routines.
+5. **Coverage Tracking**: Per-cell numeric finiteness and valid wavelet support fractions are recorded independently of data values.
+6. **Leak-Free Cross-Fitting**: All preprocessing, imputation, scaling, feature selection, and tuning operations are computed exclusively within training folds.
+7. **Balanced Subject Weighting**: Cohort metrics weight each subject equally to prevent subjects with higher trial counts from dominating effect sizes.
+8. **Preserved Null Distributions**: Permutation tests fail fast if any fold fit fails, preventing biased null shapes from dropped iterations.
 
 ---
 
-## What it refuses to do
+## Documentation and Development
 
-These are the defaults, and most of them are the reason a number here may be lower than the same
-number computed elsewhere.
+Full API references, mathematical derivations, and tutorials are available in the [Documentation](https://joshuaduq.github.io/EEGFeatML/):
 
-- **It will not let a window borrow data from outside itself.** Morlet coefficients are masked to
-  the frequencies whose wavelets actually fit inside the requested window.
-- **It will not report a peak that is only the 1/f slope.** Peak frequency is measured after
-  dividing out a fitted aperiodic background, and the fit deliberately spans more than the band,
-  because a 1/f slope estimated from five hertz is not a 1/f slope.
-- **It will not calibrate a threshold on the data it is testing.** Burst detection and ERDS take
-  their reference from a baseline window you nominate.
-- **It will not turn a group estimate into per-trial rows.** ITPC, wPLI, and envelope correlation
-  stay in their own table, and the modeling layer rejects them outright.
-- **It will not confuse "missing" with "rejected".** Coverage reports numerical finiteness, and
-  Morlet spectra separately report how much of a window had complete wavelet support.
-- **It will not fit preprocessing on data it is about to predict.** Every fold-local step is fitted
-  on training rows only, and inner tuning refuses fewer than two training groups.
-- **It will not let loud subjects outvote quiet ones.** Subject-level aggregation weights each
-  subject equally.
-- **It will not filter its own null.** Permutation draws are all kept; a failed fit is an error.
-- **It will not overstate conformal coverage.** Intervals are marginal over trials, and the result
-  says so.
+- [Quick Start](docs/quickstart.rst)
+- [Methods & Mathematical Formulations](docs/methods.rst)
+- [Modeling & Validation](docs/modeling.rst)
+- [Runner & Recipe Specification](docs/runner.rst)
+- [API Reference](docs/api.rst)
 
----
-
-## Documentation and development
-
-The [Sphinx documentation](https://joshuaduq.github.io/EEGFeatML/) is the canonical reference:
-
-- [Quick Start](docs/quickstart.rst) — end-to-end walkthroughs.
-- [Methods](docs/methods.rst) — the mathematics behind each measure.
-- [Modeling](docs/modeling.rst) — designs, cross-fitting, metrics, nulls, uncertainty, importance.
-- [Command Line Runner](docs/runner.rst) — recipe syntax and output formats.
-- [API Reference](docs/api.rst) — every signature.
+Run the test and verification suite:
 
 ```bash
-pytest          # unit and regression tests
-mypy src        # strict type checking
-ruff check src tests
+pytest                  # Unit and regression tests
+mypy src                # Strict static type checking
+ruff check src tests    # Linting and style conformance
 ```
-
-Continuous values in the test suite are checked against analytic derivations and, where one
-exists, an independently executed reference implementation. Those fixtures are regression
-evidence; they are not by themselves evidence of scientific validity.
 
 ---
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE) for details.
