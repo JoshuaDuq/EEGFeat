@@ -52,6 +52,8 @@ The core sample-entropy computation is:
    templates = templates[np.isfinite(templates).all(axis=1)]
    finite_signal = signal[np.isfinite(signal)]
    tolerance = r * np.std(finite_signal)
+   if not np.isfinite(tolerance) or tolerance <= 0.0:
+       tolerance = max(np.finfo(float).eps, r * np.nanstd(finite_signal))
    short_matches = 0
    long_matches = 0
    for i, j in unordered_pairs(templates):

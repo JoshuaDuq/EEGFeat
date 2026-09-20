@@ -86,7 +86,10 @@ In implementation terms, the detector is:
 
 .. code-block:: python
 
+   # Scalar threshold: q is calibrated on the baseline, or on analysis windows
+   # when no baseline is supplied. An ndarray threshold is used directly.
    threshold = np.nanquantile(envelope[..., calibration_mask], q, axis=-1)
+   # threshold = provided_threshold  # broadcast to (n_epochs, n_channels)
    above = envelope > threshold[..., None]
    min_samples = max(1, round(min_duration_ms * sfreq / 1000.0))
    runs = contiguous_true_runs(above)
@@ -173,12 +176,17 @@ The exact line-length reduction is:
 
 .. code-block:: python
 
-   finite_differences = np.abs(np.diff(signal))
+   clean = np.where(np.isfinite(signal), signal, np.nan)
+   finite_differences = np.abs(np.diff(clean))
+   finite_differences = np.where(np.isfinite(finite_differences),
+                                 finite_differences, np.nan)
    line_length = np.nanmean(finite_differences, axis=-1) * sfreq
 
 The distributional defaults are SciPy's biased Fisher--Pearson skewness and
 Fisher excess kurtosis with NaNs omitted: ``scipy.stats.skew(...,
 nan_policy="omit")`` and ``scipy.stats.kurtosis(..., nan_policy="omit")``.
+The implementation withholds skewness with fewer than three finite samples and
+kurtosis with fewer than four.
 See the authoritative SciPy definitions for `skew
 <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.skew.html>`__
 and `kurtosis

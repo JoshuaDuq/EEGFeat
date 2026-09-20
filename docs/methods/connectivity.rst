@@ -155,6 +155,17 @@ estimators and their exact parameter names are delegated to the official
 `MNE-Connectivity spectral-connectivity documentation
 <https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html>`__.
 
+The phase-locking value was introduced by `Jean-Philippe Lachaux, Eugenio
+Rodriguez, Jacques Martinerie, and Francisco J. Varela (1999)
+<https://doi.org/10.1002/(SICI)1097-0193(1999)8:4%3C194::AID-HBM4%3E3.0.CO;2-C>`__.
+The imaginary-coherency estimator follows `Guido Nolte, Ou Bai, Lewis Wheaton,
+Zoltan Mari, Sherry Vorbach, and Mark Hallett (2004)
+<https://doi.org/10.1016/j.clinph.2004.04.029>`__. The corrected imaginary
+phase-locking estimator is documented by `Ernesto Pereda, Ricardo Bruña, and
+Fernando Maestú (2018) <https://doi.org/10.1088/1741-2552/aacfe4>`__. These
+citations identify the scientific estimators; the exact implementation and
+parameter behavior remain those of MNE-Connectivity.
+
 For analytic node signals :math:`z_i(t)`, the raw branch is the Pearson
 correlation of :math:`|z_i(t)|` and :math:`|z_j(t)|`. The pairwise
 orthogonalized branch follows the asymmetric construction of `Joerg F. Hipp,
@@ -186,18 +197,19 @@ Spectral estimator formulas
 The delegated estimator is defined from epoch-specific cross-spectral and
 power quantities :math:`S_{xy}^{(e)}`, :math:`S_{xx}^{(e)}`, and
 :math:`S_{yy}^{(e)}`. Writing :math:`\langle\cdot\rangle_e` for the mean over
-valid epochs, the scalar estimators exposed by this package are:
+valid epochs, the delegated scalar estimators before this package's
+unordered-pair post-processing are:
 
 .. math::
 
    \begin{aligned}
    \mathrm{coh} &= \frac{|\langle S_{xy}\rangle_e|}
       {\sqrt{\langle S_{xx}\rangle_e\langle S_{yy}\rangle_e}} \\
-   \mathrm{imcoh} &= \frac{|\operatorname{Im}(\langle S_{xy}\rangle_e)|}
+   \mathrm{imcoh} &= \frac{\operatorname{Im}(\langle S_{xy}\rangle_e)}
       {\sqrt{\langle S_{xx}\rangle_e\langle S_{yy}\rangle_e}} \\
    \mathrm{PLV} &= \left|\left\langle S_{xy}/|S_{xy}|\right\rangle_e\right| \\
    \mathrm{ciPLV} &= \frac{|\langle\operatorname{Im}(S_{xy}/|S_{xy}|)\rangle_e|}
-      {\sqrt{1-\langle\operatorname{Re}(S_{xy}/|S_{xy}|)\rangle_e^2}} \\
+      {\sqrt{1-|\langle\operatorname{Re}(S_{xy}/|S_{xy}|)\rangle_e|^2}} \\
    \mathrm{PLI} &= |\langle\operatorname{sign}(\operatorname{Im}S_{xy})\rangle_e| \\
    \mathrm{WPLI} &= \frac{|\langle\operatorname{Im}S_{xy}\rangle_e|}
       {\langle|\operatorname{Im}S_{xy}|\rangle_e}.
@@ -207,7 +219,10 @@ PPC is the unbiased estimator of squared PLV given above. ``wpli2_debiased``
 is MNE-Connectivity's debiased estimator of squared WPLI. These definitions
 follow the official `MNE-Connectivity spectral-connectivity documentation
 <https://mne.tools/mne-connectivity/dev/generated/mne_connectivity.spectral_connectivity_epochs.html>`__;
-the project does not reimplement their cross-spectral accumulation.
+the project does not reimplement their cross-spectral accumulation. MNE returns
+signed imaginary coherency, but this package takes its absolute value before
+the frequency reduction because the public table contains unordered node pairs:
+the sign would reverse when the pair order is swapped.
 
 After estimation, the package performs its own half-open band reduction:
 
@@ -319,6 +334,8 @@ The reductions are implemented directly as:
 
 .. code-block:: python
 
+   if not np.isfinite(matrix).all():
+       return np.nan
    length = np.where(np.abs(matrix) > 0.0, 1.0 / np.abs(matrix), np.inf)
    np.fill_diagonal(length, 0.0)
    distance = floyd_warshall(length)
@@ -350,6 +367,19 @@ References
   analysis*. Journal of Neuroscience Methods, 134(1), 9--21.
   `doi:10.1016/j.jneumeth.2003.10.009
   <https://doi.org/10.1016/j.jneumeth.2003.10.009>`__.
+* Lachaux, J.-P., Rodriguez, E., Martinerie, J., & Varela, F. J. (1999). *Measuring
+  phase synchrony in brain signals*. Human Brain Mapping, 8(4), 194--208.
+  `doi:10.1002/(SICI)1097-0193(1999)8:4%3C194::AID-HBM4%3E3.0.CO;2-C
+  <https://doi.org/10.1002/(SICI)1097-0193(1999)8:4%3C194::AID-HBM4%3E3.0.CO;2-C>`__.
+* Nolte, G., Bai, O., Wheaton, L., Mari, Z., Vorbach, S., & Hallett, M. (2004).
+  *Identifying true brain interaction from EEG data using the imaginary part of
+  coherency*. Clinical Neurophysiology, 115(10), 2292--2307.
+  `doi:10.1016/j.clinph.2004.04.029
+  <https://doi.org/10.1016/j.clinph.2004.04.029>`__.
+* Pereda, E., Bruña, R., & Maestú, F. (2018). *Phase locking value revisited:
+  Teaching new tricks to an old dog*. Journal of Neural Engineering, 15(5),
+  056011. `doi:10.1088/1741-2552/aacfe4
+  <https://doi.org/10.1088/1741-2552/aacfe4>`__.
 * Vinck, M., van Wingerden, M., Womelsdorf, T., Fries, P., & Pennartz, C. M.
   A. (2010). *The pairwise phase consistency: A bias-free measure of rhythmic
   neuronal synchronization*. NeuroImage, 51(1), 112--122.
