@@ -345,3 +345,25 @@ def test_morlet_log_spacing_reaches_the_top_band_edge(tmp_path) -> None:
     )
 
     assert result.epochs is not None and result.epochs.n_rows == 12
+
+
+@pytest.mark.parametrize("measure", ["variance", "erds_mean"])
+@pytest.mark.parametrize("channel_kind", ["bad_eeg", "eog"])
+def test_time_domain_features_preserve_runner_channel_selection(tmp_path, measure, channel_kind):
+    epochs = make_epochs()
+    if channel_kind == "bad_eeg":
+        epochs.info["bads"] = ["Fz"]
+    else:
+        epochs.set_channel_types({"Fz": "eog"})
+    body = f'[[features]]\nmeasure = "{measure}"\nspatial = ["channels"]\n'
+    if measure == "erds_mean":
+        body = (
+            "[windows]\nbase = [-0.5, 0.0]\nstim = [0.25, 1.25]\n"
+            + body
+            + 'bands = ["alpha"]\nbaseline = "base"\n'
+        )
+
+    result = features(tmp_path, body, epochs)
+
+    assert {meta.space for meta in result.epochs.meta} == set(epochs.ch_names)
+    assert epochs.info["bads"] == (["Fz"] if channel_kind == "bad_eeg" else [])

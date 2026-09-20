@@ -144,7 +144,9 @@ class RecordingInputs:
     def signal(self) -> Signal:
         """The broadband epochs."""
         if self._signal is None:
-            self._signal = Signal.from_epochs(self.epochs, recording=self.recording)
+            self._signal = Signal.from_epochs(
+                self.epochs, recording=self.recording, picks="all", exclude=()
+            )
         return self._signal
 
     def band_signal(self, band: Band) -> BandSignal:
@@ -155,6 +157,8 @@ class RecordingInputs:
                 self.epochs,
                 band,
                 recording=self.recording,
+                picks="all",
+                exclude=(),
                 pad_sec=settings.pad_sec,
                 pad_cycles=settings.pad_cycles,
                 n_jobs=self.n_jobs,

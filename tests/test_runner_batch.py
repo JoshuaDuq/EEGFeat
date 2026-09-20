@@ -21,6 +21,27 @@ ITPC = (
 )
 
 
+@pytest.mark.parametrize("exclude_bads", [True, False])
+def test_explicit_channel_names_respect_recipe_bad_channel_exclusion(tmp_path, exclude_bads):
+    from eegfeat.runner.batch import load_epochs
+    from synthetic import make_epochs
+
+    epochs = make_epochs()
+    epochs.info["bads"] = ["Fz"]
+    source = tmp_path / "test_epo.fif"
+    epochs.save(source, overwrite=True, verbose=False)
+    path = tmp_path / "recipe.toml"
+    path.write_text(
+        '[inputs]\nroot = "."\npicks = ["Fz", "Cz"]\n'
+        f"exclude_bads = {str(exclude_bads).lower()}\n"
+        '[output]\nroot = "out"\n' + POWER
+    )
+
+    selected = load_epochs(source, load_recipe(path).inputs)
+
+    assert selected.ch_names == (["Cz"] if exclude_bads else ["Fz", "Cz"])
+
+
 def _recipe(tmp_path: Path, body: str, output: str = "out"):
     path = tmp_path / "recipe.toml"
     path.write_text(f'[inputs]\nroot = "data"\n\n[output]\nroot = "{output}"\n\n{body}')

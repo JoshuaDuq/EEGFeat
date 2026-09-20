@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -128,20 +129,31 @@ class Signal:
         return int(self.data.shape[0])
 
     @classmethod
-    def from_epochs(cls, epochs: Any, *, recording: str) -> Signal:
+    def from_epochs(
+        cls,
+        epochs: Any,
+        *,
+        recording: str,
+        picks: str | Sequence[str] = "eeg",
+        exclude: str | Sequence[str] = "bads",
+    ) -> Signal:
         """Wrap an ``mne.Epochs`` without transforming it.
 
         Parameters
         ----------
         epochs : mne.Epochs
-            Epoched data. Good EEG channels are selected; non-EEG channels and
-            channels listed in ``epochs.info['bads']`` are excluded.
+            Epoched data.
+        picks : str or sequence of str, default "eeg"
+            MNE channel selection. By default, select good EEG channels.
+            Explicit channel names retain every named channel, including bads.
+        exclude : str or sequence of str, default "bads"
+            Channels excluded from a channel-type selection; use () to retain all.
 
         Returns
         -------
         Signal
         """
-        selected = epochs.copy().pick("eeg", exclude="bads")
+        selected = epochs.copy().pick(picks, exclude=exclude)
         data = np.asarray(selected.get_data(), dtype=float)
         return cls(
             data=data,
@@ -150,7 +162,7 @@ class Signal:
             sfreq=float(selected.info["sfreq"]),
             coverage=np.isfinite(data).astype(float),
             row_ids=epoch_row_ids(selected, recording, data.shape[0]),
-            computation=ComputationSpec.create("mne.Epochs.get_data", picks="eeg", exclude="bads"),
+            computation=ComputationSpec.create("mne.Epochs.get_data", picks=picks, exclude=exclude),
             passband=_passband(selected),
         )
 
@@ -382,6 +394,8 @@ class BandSignal:
         band: Band,
         *,
         recording: str,
+        picks: str | Sequence[str] = "eeg",
+        exclude: str | Sequence[str] = "bads",
         pad_sec: float = 0.5,
         pad_cycles: float = 3.0,
         n_jobs: int = 1,
@@ -394,6 +408,11 @@ class BandSignal:
             Epoched data.
         band : Band
             Band to filter to. ``band.fmax`` must be below Nyquist.
+        picks : str or sequence of str, default "eeg"
+            MNE channel selection. By default, select good EEG channels.
+            Explicit channel names retain every named channel, including bads.
+        exclude : str or sequence of str, default "bads"
+            Channels excluded from a channel-type selection; use () to retain all.
         pad_sec : float, default 0.5
             Minimum reflect padding in seconds.
         pad_cycles : float, default 3.0
@@ -408,7 +427,7 @@ class BandSignal:
         BandSignal
             With the padding removed, so ``times`` matches ``epochs.times``.
         """
-        selected = epochs.copy().pick("eeg", exclude="bads")
+        selected = epochs.copy().pick(picks, exclude=exclude)
         sfreq = float(selected.info["sfreq"])
         # Nyquist itself is excluded, not just frequencies above it: MNE needs a
         # non-zero upper transition band below sfreq/2 to design the filter at all.
@@ -475,8 +494,8 @@ class BandSignal:
                 pad_cycles=pad_cycles,
                 filter_length=required,
                 n_jobs=n_jobs,
-                picks="eeg",
-                exclude="bads",
+                picks=picks,
+                exclude=exclude,
             ),
         )
 

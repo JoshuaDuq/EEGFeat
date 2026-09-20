@@ -5,11 +5,11 @@ it on a whole dataset and then cross-validating the classifier reports an
 accuracy the method did not earn. The leak is invisible in the numbers and
 survives every downstream precaution.
 
-:func:`csp_features` therefore takes the folds up front and builds one table in
-which **every row was transformed by filters fitted without it**, and records
-those folds in each column's computation so a table built under one split cannot
-be quietly reused under another. :class:`CommonSpatialPattern` is the estimator
-underneath, for callers driving their own loop.
+:func:`csp_features` produces descriptive held-out features, not a fixed design
+for classifier cross-validation: one fold's training features can depend on its
+test labels through the other CSP fits. For prediction, fit
+:class:`CommonSpatialPattern` inside every training fold and use that same fit
+to transform both its training and test rows, including during inner tuning.
 """
 
 from __future__ import annotations
@@ -43,9 +43,24 @@ class _Fold(Protocol):
 
 def _fold_indices(fold: Any) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     if hasattr(fold, "train") and hasattr(fold, "test"):
-        return np.asarray(fold.train, dtype=np.intp), np.asarray(fold.test, dtype=np.intp)
+        return np.asarray(fold.train), np.asarray(fold.test)
     train, test = fold
-    return np.asarray(train, dtype=np.intp), np.asarray(test, dtype=np.intp)
+    return np.asarray(train), np.asarray(test)
+
+
+def _row_indices(rows: npt.NDArray[np.intp] | None, n_epochs: int) -> npt.NDArray[np.intp]:
+    if rows is None:
+        return np.arange(n_epochs, dtype=np.intp)
+    indices = np.asarray(rows)
+    if indices.ndim != 1 or indices.size == 0:
+        raise ValueError("CSP row indices must be a nonempty 1-D array.")
+    if not np.issubdtype(indices.dtype, np.integer):
+        raise ValueError("CSP row indices must be integers.")
+    if np.any(indices < 0) or np.any(indices >= n_epochs):
+        raise ValueError("CSP row indices are out of range.")
+    if np.unique(indices).size != indices.size:
+        raise ValueError("CSP row indices must not contain duplicates.")
+    return indices.astype(np.intp)
 
 
 def _covariance(epochs: npt.NDArray[np.float64], regularization: float) -> npt.NDArray[np.float64]:
@@ -160,7 +175,7 @@ class CommonSpatialPattern:
         if not 0.0 <= regularization < 1.0:
             raise ValueError(f"regularization must be in [0, 1), got {regularization}.")
 
-        selected = np.arange(y.size, dtype=np.intp) if rows is None else np.asarray(rows, np.intp)
+        selected = _row_indices(rows, y.size)
         present = np.unique(y[selected])
         if present.size != 2:
             raise ValueError(
@@ -227,11 +242,7 @@ class CommonSpatialPattern:
                 "this CSP was fitted on different channels, in a different order; "
                 f"fitted on {self.ch_names} and asked to transform {tuple(signal.ch_names)}."
             )
-        selected = (
-            np.arange(signal.data.shape[0], dtype=np.intp)
-            if rows is None
-            else np.asarray(rows, np.intp)
-        )
+        selected = _row_indices(rows, signal.data.shape[0])
         projected = np.einsum("ij,njt->nit", self.filters, signal.data[selected])
         with np.errstate(invalid="ignore", divide="ignore"):
             # Every filter mixes every channel, so one bad sample is bad in all
@@ -264,15 +275,15 @@ def csp_features(
     """Cross-fitted CSP features: every row transformed by filters that never saw it.
 
     For each fold the filters are fitted on its training rows and applied to its
-    test rows, so no row's features depend on its own label. **Use the same folds
-    downstream.** Fitting a classifier under a different split would place a row
-    in a training set whose features already encode the test labels, which is the
-    leak this function exists to prevent; the split's digest is recorded in every
-    column's computation so the two can be checked against each other.
+    test rows, so no row's features depend on its own label. This table is for
+    description, not downstream classifier cross-validation, even with the same
+    folds: training rows can encode test labels through other folds' CSP fits.
+    ``build_design`` rejects these columns. For prediction, fit CSP on each
+    training fold and transform both train and test rows with that same fit.
+    Repeat that procedure inside inner cross-validation when tuning.
 
-    Every row must be tested exactly once, which is what
-    :func:`~eegfeat.model.loso_folds` and
-    :func:`~eegfeat.model.within_subject_folds` produce.
+    Every row must be tested exactly once. Forward-only splits that leave the
+    earliest runs untested cannot produce this descriptive table.
 
     Parameters
     ----------
@@ -312,6 +323,8 @@ def csp_features(
     tested = np.zeros(n_epochs, dtype=bool)
     for index, fold in enumerate(folds, start=1):
         train, test = _fold_indices(fold)
+        train = _row_indices(train, n_epochs)
+        test = _row_indices(test, n_epochs)
         if np.intersect1d(train, test).size:
             raise ValueError(f"fold {index}: train and test rows overlap.")
         if tested[test].any():

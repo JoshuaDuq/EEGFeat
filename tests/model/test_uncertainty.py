@@ -3,9 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from sklearn.dummy import DummyRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
+from sklearn.random_projection import GaussianRandomProjection
 
 from eegfeat.model.uncertainty import (
     _compute_conformal_quantile,
@@ -14,6 +16,26 @@ from eegfeat.model.uncertainty import (
 )
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
+
+
+@pytest.mark.parametrize("method", ["split", "cv_plus", "quantile"])
+def test_interval_seed_controls_stochastic_model_fits(method):
+    rng = np.random.default_rng(12)
+    X = rng.normal(size=(80, 3))
+    y = X[:, 0] + rng.normal(size=80)
+    model = Pipeline(
+        [
+            ("projection", GaussianRandomProjection(n_components=2)),
+            ("regressor", RandomForestRegressor(n_estimators=5)),
+        ]
+    )
+
+    first = prediction_intervals(model, X, y, X[:4], method=method, seed=7)
+    second = prediction_intervals(model, X, y, X[:4], method=method, seed=7)
+
+    np.testing.assert_array_equal(first.lower, second.lower)
+    np.testing.assert_array_equal(first.upper, second.upper)
+    assert model.named_steps["regressor"].random_state is None
 
 
 def test_intervals_bracket_their_point_prediction() -> None:

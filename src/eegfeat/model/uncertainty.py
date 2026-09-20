@@ -11,6 +11,8 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit, KFold, LeaveOneGroupOut
 from sklearn.pipeline import Pipeline
 
+from eegfeat.model.tuning import fit_untuned
+
 __all__ = [
     "Method",
     "PredictionIntervals",
@@ -103,8 +105,7 @@ def _split_conformal(
         msg = "Split conformal could not form valid train/calibration splits."
         raise ValueError(msg)
 
-    model_proper = cast(Pipeline, clone(model))
-    model_proper.fit(X_train[train_idx], y_train[train_idx])
+    model_proper = fit_untuned(model, X_train[train_idx], y_train[train_idx], seed=seed)
 
     residuals = np.abs(y_train[cal_idx] - model_proper.predict(X_train[cal_idx]))
     q_hat = _compute_conformal_quantile(residuals, alpha)
@@ -158,9 +159,10 @@ def _conformal_cv_plus(
     lower_chunks: list[npt.NDArray[np.float64]] = []
     upper_chunks: list[npt.NDArray[np.float64]] = []
 
-    for train_idx, val_idx in splits:
-        model_fold = cast(Pipeline, clone(model))
-        model_fold.fit(X_train[train_idx], y_train[train_idx])
+    for fold, (train_idx, val_idx) in enumerate(splits, start=1):
+        model_fold = fit_untuned(
+            model, X_train[train_idx], y_train[train_idx], seed=seed, fold=fold
+        )
 
         val_preds = np.asarray(model_fold.predict(X_train[val_idx]), dtype=np.float64)
         residuals = np.abs(y_train[val_idx] - val_preds)
@@ -221,10 +223,20 @@ def _conformal_quantile(
     lower_chunks: list[npt.NDArray[np.float64]] = []
     upper_chunks: list[npt.NDArray[np.float64]] = []
 
-    for train_idx, val_idx in splits:
-        low = _quantile_model(model, alpha / 2.0, seed).fit(X_train[train_idx], y_train[train_idx])
-        high = _quantile_model(model, 1.0 - alpha / 2.0, seed).fit(
-            X_train[train_idx], y_train[train_idx]
+    for fold, (train_idx, val_idx) in enumerate(splits, start=1):
+        low = fit_untuned(
+            _quantile_model(model, alpha / 2.0, seed),
+            X_train[train_idx],
+            y_train[train_idx],
+            seed=seed,
+            fold=fold,
+        )
+        high = fit_untuned(
+            _quantile_model(model, 1.0 - alpha / 2.0, seed),
+            X_train[train_idx],
+            y_train[train_idx],
+            seed=seed,
+            fold=fold,
         )
 
         y_val = y_train[val_idx]
@@ -260,6 +272,8 @@ def prediction_intervals(
     CV+ methods use alpha in each tail, not a universal 1 - alpha guarantee.
     Group-disjoint fitting alone does not establish coverage for dependent
     trials or new subjects; calibration scores are still pooled over trials.
+    ``seed`` controls both splits and stochastic pipeline fitting, without
+    mutating the supplied model or the caller's global random state.
     """
     if not (0.0 < alpha < 1.0):
         msg = f"alpha must be between 0.0 and 1.0, got {alpha}."

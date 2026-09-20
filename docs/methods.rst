@@ -35,6 +35,10 @@ where :math:`B` is the baseline power in a designated reference window, and :mat
 
 Applying normalization per channel before spatial aggregation ensures that region-of-interest (ROI) values reflect the mean of log-ratios rather than the log-ratio of channel means.
 
+For baseline-normalized spectral power, coverage is the minimum of the analysis
+and baseline coverage per channel, and flags from either window propagate to the
+result. The baseline name and time bounds are included in the computation metadata.
+
 Wavelet Support Restriction
 ---------------------------
 
@@ -414,8 +418,13 @@ Common Spatial Patterns
 :class:`~eegfeat.CommonSpatialPattern` finds spatial filters that maximize the
 variance ratio between two classes. Because the labels determine the filters,
 :func:`~eegfeat.csp_features` fits them on each training fold and transforms only
-the corresponding held-out rows. Reuse the same folds for the downstream model;
-the split signature is recorded in the feature computation metadata. CSP expects
+the corresponding held-out rows. This assembled table is descriptive: even reusing
+the same folds for a classifier leaks test labels through other folds' CSP fits
+into the classifier's training features. ``build_design`` rejects these columns.
+For prediction, fit CSP inside each training fold and use that same fit to
+transform both training and test rows. Repeat this within inner tuning; for a
+scikit-learn workflow, place ``mne.decoding.CSP`` inside the classifier pipeline.
+The split signature is recorded in the feature computation metadata. CSP expects
 band-restricted input, an even number of components, and exactly two classes.
 
 Graph Measures

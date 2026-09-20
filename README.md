@@ -229,8 +229,11 @@ The public functions are exported from `eegfeat` and documented in the [API refe
 | Microstates | `segment`, `microstate_coverage`, `microstate_duration`, `microstate_occurrence`, `microstate_transitions` | Per epoch |
 | Supervised spatial filters | `CommonSpatialPattern`, `csp_features` | Cross-fitted per epoch |
 
-`csp_features` must receive caller-defined folds and fits each spatial filter on training rows
-only. `spectral_connectivity` and `wpli` require the `connectivity` extra; microstate measures
+`csp_features` produces descriptive held-out features and cannot be used as a fixed
+classifier design, even with the same folds. For prediction, fit `CommonSpatialPattern`
+inside each training fold and transform both train and test data with that same fit;
+repeat this inside inner tuning. `build_design` rejects assembled CSP columns.
+`spectral_connectivity` and `wpli` require the `connectivity` extra; microstate measures
 require `microstates`.
 
 ## Modeling

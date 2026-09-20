@@ -212,6 +212,9 @@ def load_epochs(path: Path, inputs: Inputs) -> Any:
 def _pick(epochs: Any, inputs: Inputs) -> Any:
     picks = list(inputs.picks) if isinstance(inputs.picks, tuple) else inputs.picks
     epochs.pick(picks, exclude="bads" if inputs.exclude_bads else ())
+    # MNE retains explicitly named bad channels regardless of pick's exclude argument.
+    if inputs.exclude_bads and epochs.info["bads"]:
+        epochs.drop_channels(epochs.info["bads"])
     return epochs
 
 

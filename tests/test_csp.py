@@ -3,6 +3,7 @@
 import importlib.util
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import eegfeat as ef
@@ -177,7 +178,7 @@ def test_cross_fitting_still_separates_a_real_difference() -> None:
 
 
 @pytest.mark.skipif(not _HAS_SKLEARN, reason="needs scikit-learn")
-def test_cross_fitting_removes_the_accuracy_a_whole_dataset_fit_invents() -> None:
+def test_fold_local_csp_removes_the_accuracy_a_whole_dataset_fit_invents() -> None:
     # Pure noise and random labels: the honest accuracy is chance. A CSP fitted on
     # every row puts the labels into the features, and the classifier then reads
     # part of its own answer key back out.
@@ -202,9 +203,16 @@ def test_cross_fitting_removes_the_accuracy_a_whole_dataset_fit_invents() -> Non
             ]
             return float(np.mean(np.concatenate(hits)))
 
+        hits = []
+        for train, test in folds:
+            fitted = ef.CommonSpatialPattern.fit(signal, y, rows=train, n_components=6)
+            model = LogisticRegression(max_iter=2000).fit(
+                fitted.transform(signal, rows=train), y[train]
+            )
+            hits.append(model.predict(fitted.transform(signal, rows=test)) == y[test])
         return (
             accuracy(ef.CommonSpatialPattern.fit(signal, y, n_components=6).transform(signal)),
-            accuracy(ef.csp_features(signal, y, folds=folds, n_components=6).values),
+            float(np.mean(np.concatenate(hits))),
         )
 
     draws = np.array([one_draw(seed) for seed in range(5)])
@@ -250,6 +258,54 @@ def test_no_folds_at_all_is_refused() -> None:
     signal, y = _lateralised(n_per_class=6)
     with pytest.raises(ValueError, match="at least one fold"):
         ef.csp_features(signal, y, folds=[])
+
+
+@pytest.mark.parametrize("invalid", ["negative", "fractional", "duplicate", "boolean"])
+def test_invalid_csp_fold_indices_are_refused(invalid) -> None:
+    signal, y = _lateralised(n_per_class=10)
+    folds = _folds(len(y))
+    train, test = folds[0]
+    if invalid == "negative":
+        train = train.copy()
+        train[0] = -len(y)  # Aliases test row zero despite disjoint integer sets.
+    elif invalid == "fractional":
+        train = train.astype(float) + 0.25
+    elif invalid == "duplicate":
+        test = np.r_[test, test[0]]
+    else:
+        train = np.ones(len(y), dtype=bool)
+    with pytest.raises(ValueError, match="indices"):
+        ef.csp_features(signal, y, folds=[(train, test), *folds[1:]])
+
+
+@pytest.mark.skipif(not _HAS_SKLEARN, reason="needs scikit-learn")
+def test_oof_csp_table_is_refused_as_a_classifier_design() -> None:
+    from eegfeat.model import Selection, build_design
+
+    signal, y = _lateralised(n_per_class=10)
+    folds = _folds(len(y))
+    train, test = folds[0]
+    original = ef.csp_features(signal, y, folds=folds)
+    changed_labels = y.copy()
+    changed_labels[test[:2]] = 1 - changed_labels[test[:2]]
+    changed = ef.csp_features(signal, changed_labels, folds=folds)
+    np.testing.assert_array_equal(original.values[test], changed.values[test])
+    assert not np.allclose(original.values[train], changed.values[train])
+
+    targets = pd.DataFrame(signal.row_ids, columns=["recording", "epoch", "event"])
+    targets["target"] = y
+    targets["subject_id"] = np.repeat(np.arange(4), 5)
+    with pytest.raises(ValueError, match="CSP.*inside.*fold"):
+        build_design(original, targets, target="target")
+
+    variance = ef.variance([signal], windows=[Window("all", 0.0, 1.9)], include_global=False)
+    design = build_design(
+        ef.concat([original, variance]),
+        targets,
+        target="target",
+        selection=Selection(measure=("variance",)),
+    )
+    np.testing.assert_array_equal(design.X, variance.values)
 
 
 def test_it_accepts_the_model_layer_own_fold_objects() -> None:

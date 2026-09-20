@@ -96,6 +96,16 @@ def expand(
     weighting: Literal["trapezoid", "gradient", "band_integral", "uniform"] = "trapezoid",
 ) -> FeatureTable:
     baseline_index = _baseline_index(spectra, baseline)
+    baseline_parameters = (
+        {
+            "baseline_bounds": (
+                spectra.windows[baseline_index].tmin,
+                spectra.windows[baseline_index].tmax,
+            )
+        }
+        if baseline_index is not None
+        else {}
+    )
     columns: list[_Column] = []
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
@@ -128,6 +138,13 @@ def expand(
 
         base = values[:, :, baseline_index] if baseline_index is not None else None
         values = normalize(values, baseline=base, mode=mode)
+        all_flags = {**spectra.flags, **flags}
+        if baseline_index is not None:
+            coverage = np.minimum(coverage, coverage[:, :, baseline_index, np.newaxis])
+            all_flags = {
+                key: array | array[:, :, baseline_index, np.newaxis]
+                for key, array in all_flags.items()
+            }
 
         units = aggregate(values, coverage, spectra.ch_names, groups, include_global)
         resolution = float(np.median(np.diff(sub_freqs))) if sub_freqs.size > 1 else None
@@ -158,11 +175,11 @@ def expand(
                     weighting=weighting,
                     spatial_aggregation="arithmetic_mean_of_channel_features",
                     parameters=parameters,
+                    **baseline_parameters,
                 ),
                 freq_resolution_hz=_r,
             )
 
-        all_flags = {**spectra.flags, **flags}
         band_columns, band_flags = _collect(
             units, spectra.windows, all_flags, make_meta, skip_window=baseline_index
         )

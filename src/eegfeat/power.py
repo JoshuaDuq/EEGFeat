@@ -63,7 +63,8 @@ def mean_psd(
         Also emit the mean across all channels.
     baseline : str, optional
         Name of the window to normalize against. That window is consumed and
-        does not appear in the output.
+        does not appear in the output. Normalized coverage is the minimum of
+        analysis and baseline coverage; baseline flags propagate to the output.
     normalize : {"raw", "log10", "log_ratio", "db", "percent"}, default "raw"
         Normalization. ``"log_ratio"``, ``"db"`` and ``"percent"`` require ``baseline``.
 

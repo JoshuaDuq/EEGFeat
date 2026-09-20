@@ -142,3 +142,45 @@ def test_percent_is_change_from_the_baseline_window(
     np.testing.assert_allclose(stimulus.values, 50.0)
     assert stimulus.meta[0].normalization == "percent"
     assert stimulus.meta[0].unit == "%"
+
+
+@pytest.mark.parametrize("normalize", ["log_ratio", "db", "percent"])
+def test_baseline_quality_is_carried_into_normalized_power(normalize):
+    freqs = np.arange(8.0, 14.0)
+    data = np.ones((1, 1, 2, freqs.size))
+    coverage = np.ones_like(data)
+    coverage[:, :, 0] = 0.25
+    spectra = replace(
+        _spectra(np.ones(freqs.size), freqs),
+        data=data,
+        windows=(Window("base", -1.0, 0.0), Window("stim", 0.0, 1.0)),
+        coverage=coverage,
+        support=np.ones_like(data),
+        flags={"insufficient_support": np.array([[[True, False]]])},
+    )
+    table = integrated_band_power(
+        spectra, bands=(ALPHA,), baseline="base", normalize=normalize, include_global=False
+    )
+    assert table.coverage.item() == pytest.approx(0.25)
+    assert table.flags["insufficient_support"].item()
+    np.testing.assert_array_equal(spectra.flags["insufficient_support"], [[[True, False]]])
+
+
+def test_normalized_feature_identity_includes_baseline_bounds():
+    freqs = np.arange(8.0, 14.0)
+    data = np.ones((1, 1, 2, freqs.size))
+    spectra = replace(
+        _spectra(np.ones(freqs.size), freqs),
+        data=data,
+        windows=(Window("base", -1.0, 0.0), Window("stim", 0.0, 1.0)),
+        coverage=np.ones_like(data),
+        support=np.ones_like(data),
+    )
+    longer_baseline = replace(spectra, windows=(Window("base", -2.0, 0.0), spectra.windows[1]))
+    tables = [
+        integrated_band_power(
+            source, bands=(ALPHA,), baseline="base", normalize="db", include_global=False
+        )
+        for source in (spectra, longer_baseline)
+    ]
+    assert tables[0].names != tables[1].names

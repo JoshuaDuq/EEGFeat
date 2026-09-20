@@ -107,6 +107,16 @@ def build_design(
     if selection != _DEFAULT_SELECTION:
         table = select(table, selection)
 
+    if any(
+        meta.measure == "csp_log_power" or meta.computation.method == "csp_features"
+        for meta in table.meta
+    ):
+        raise ValueError(
+            "CSP must be fitted inside each training fold, including inner tuning; "
+            "an assembled cross-fitted CSP table can leak test labels into training "
+            "features even when the same folds are reused."
+        )
+
     key_columns = ["recording", "epoch", "event"]
     for col in key_columns:
         if col not in targets.columns:
