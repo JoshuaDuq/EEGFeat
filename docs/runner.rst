@@ -185,9 +185,9 @@ Load a table back with its metadata:
    alpha = table.select(band=ef.Band("alpha", 8.0, 13.0), space="global")
 
 For predictive modeling across recordings, pass several per-epoch ``*_features.tsv`` paths
-to :func:`eegfeat.io.read_dataset`. The loader stacks compatible tables and restores the
-descriptor columns written by the runner alongside canonical ``recording``, ``epoch``, and
-``event`` keys. Include target and grouping variables in the epoch metadata if they are needed
+to :func:`eegfeat.io.read_dataset`. The loader stacks the tables onto the union of their
+feature columns and restores the descriptor columns written by the runner alongside canonical
+``recording``, ``epoch``, and ``event`` keys. Include target and grouping variables in the epoch metadata if they are needed
 by :func:`eegfeat.model.build_design`; descriptor columns are not feature columns.
 
 .. code-block:: python

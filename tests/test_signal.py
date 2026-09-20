@@ -230,3 +230,54 @@ def test_signal_shape_mismatches_raise() -> None:
         Signal.from_arrays(**{**good, "data": np.ones((2, 4))})
     with pytest.raises(ValueError, match="sfreq"):
         Signal.from_arrays(**{**good, "sfreq": 0.0})
+
+
+@pytest.mark.parametrize("container", [Signal, BandSignal])
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -0.1, 1.1])
+def test_time_series_coverage_must_be_a_finite_fraction(
+    container: type[Signal] | type[BandSignal], invalid: float
+) -> None:
+    values = np.ones((1, 2, 4), dtype=complex if container is BandSignal else float)
+    arguments = {
+        "analytic" if container is BandSignal else "data": values,
+        "times": np.arange(4) / 100.0,
+        "ch_names": ("C3", "C4"),
+        "sfreq": 100.0,
+        "coverage": np.array([[[invalid, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]]),
+        "row_ids": (("test", 0, "event"),),
+    }
+    if container is BandSignal:
+        arguments["band"] = BETA
+
+    with pytest.raises(ValueError, match=r"finite values in \[0, 1\]"):
+        container.from_arrays(**arguments)
+
+
+@pytest.mark.parametrize("container", [Signal, BandSignal])
+def test_time_series_require_nonempty_axes_and_unique_channels(
+    container: type[Signal] | type[BandSignal],
+) -> None:
+    values = np.ones((1, 2, 0), dtype=complex if container is BandSignal else float)
+    arguments = {
+        "analytic" if container is BandSignal else "data": values,
+        "times": np.empty(0),
+        "ch_names": ("C3", "C3"),
+        "sfreq": 100.0,
+        "row_ids": (("test", 0, "event"),),
+    }
+    if container is BandSignal:
+        arguments["band"] = BETA
+
+    with pytest.raises(ValueError, match="non-empty"):
+        container.from_arrays(**arguments)
+
+
+def test_channel_names_must_be_nonempty_strings() -> None:
+    with pytest.raises(ValueError, match="non-empty strings"):
+        Signal.from_arrays(
+            data=np.ones((1, 2, 4)),
+            times=np.arange(4) / 100.0,
+            ch_names=("C3", 7),
+            sfreq=100.0,
+            row_ids=(("test", 0, "event"),),
+        )

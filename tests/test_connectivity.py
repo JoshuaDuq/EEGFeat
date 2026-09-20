@@ -348,6 +348,58 @@ def test_one_edge_measured_twice_within_a_group_raises() -> None:
         global_efficiency(ef.concat([table, mirrored]))
 
 
+def test_permuting_declared_nodes_does_not_create_a_second_estimator() -> None:
+    first = _pair_table("aec", 0.8, nodes=("C3", "C4", "P3"))
+    permuted = _pair_table("aec", 0.8, nodes=("P3", "C4", "C3"))
+
+    with pytest.raises(ValueError, match="measured twice"):
+        global_efficiency(ef.concat([first, permuted]))
+
+
+def test_graph_measures_reject_an_incomplete_edge_set() -> None:
+    complete = _pair_table("aec", 0.8)
+    incomplete = ef.FeatureTable(
+        values=complete.values[:, :-1],
+        coverage=complete.coverage[:, :-1],
+        meta=complete.meta[:-1],
+        row_labels=complete.row_labels,
+    )
+
+    with pytest.raises(ValueError, match=r"missing.*C4-P3"):
+        global_efficiency(incomplete)
+
+
+def test_graph_measures_reject_self_edges() -> None:
+    complete = _pair_table("aec", 0.8)
+    malformed = ef.FeatureTable(
+        values=complete.values,
+        coverage=complete.coverage,
+        meta=(replace(complete.meta[0], nodes=("C3", "C3")), *complete.meta[1:]),
+        row_labels=complete.row_labels,
+    )
+
+    with pytest.raises(ValueError, match="self-edge"):
+        global_efficiency(malformed)
+
+
 def test_the_clustering_threshold_is_recorded_as_a_number() -> None:
     out = clustering_coefficient(_pair_table("aec", 0.8), threshold=0.5)
     assert out.meta[0].computation.parameters["threshold"] == 0.5
+
+
+def test_a_single_node_set_has_no_pairs_to_report() -> None:
+    # One ROI yields zero node pairs; without this the empty column list reaches numpy.
+    with pytest.raises(ValueError, match="needs at least two nodes"):
+        envelope_correlation(
+            [_shared_driver(5.0)], windows=[WINDOW], groups={"central": ["C3", "C4"]}
+        )
+
+
+def test_two_node_sets_give_the_one_pair_between_them() -> None:
+    table = envelope_correlation(
+        [_shared_driver(5.0)],
+        windows=[WINDOW],
+        groups={"central": ["C3", "C4"], "parietal": ["P3", "P4"]},
+    )
+
+    assert [m.nodes for m in table.meta] == [("central", "parietal")]

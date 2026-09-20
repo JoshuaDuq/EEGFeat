@@ -1,0 +1,3516 @@
+{
+  "eegfeat_version": "0.1.0.dev0",
+  "n_rows": 16,
+  "rows": "epochs",
+  "row_labels": null,
+  "row_ids": [
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      0,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      1,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      2,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      3,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      4,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      5,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      6,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      7,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      8,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      9,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      10,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      11,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      12,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      13,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      14,
+      "stim"
+    ],
+    [
+      "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+      15,
+      "stim"
+    ]
+  ],
+  "row_columns": [
+    "epoch",
+    "selection",
+    "event",
+    "subject",
+    "run",
+    "trial",
+    "intensity",
+    "rating",
+    "painful"
+  ],
+  "coverage": "sub-01_task-pain_run-01_features_coverage.tsv",
+  "columns": [
+    {
+      "name": "eeg_band-power_theta_f3_baseline_log10_pb791fc0befe4",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "F3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "b791fc0befe40c1ab7601be5f54790c76fc97b5dc6bd0bd470407500ead3a92c"
+    },
+    {
+      "name": "eeg_band-power_theta_f3_stimulus_log10_p96302e408f15",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "F3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "96302e408f15b359735e1511de7d31bbea4c91177c77a139c883cdca9fc43128"
+    },
+    {
+      "name": "eeg_band-power_theta_fz_baseline_log10_pbe689f0eb6df",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "Fz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "be689f0eb6dfb32e62d118ecf3ed6421c5dc45ac45232c5c1db4fc8e2baa2f0d"
+    },
+    {
+      "name": "eeg_band-power_theta_fz_stimulus_log10_pf1c639070b53",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "Fz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "f1c639070b5359c35b197e68ce557c49f17f1a4c882ca4b870fd6b48a2e953c5"
+    },
+    {
+      "name": "eeg_band-power_theta_f4_baseline_log10_p711518a56bc5",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "F4",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "711518a56bc5260d9448fc442c3bdee8608bf036ffc9a5ccbf49c1d8282e1d71"
+    },
+    {
+      "name": "eeg_band-power_theta_f4_stimulus_log10_pd85c67917194",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "F4",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "d85c679171942197c27d55f0a0c66d93d7f212d880231a81d9b2713337644339"
+    },
+    {
+      "name": "eeg_band-power_theta_c3_baseline_log10_p93a8f6014622",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "C3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "93a8f601462223528c2715ce6fe45db280cc99693add4dfb15d9bb5f42f36346"
+    },
+    {
+      "name": "eeg_band-power_theta_c3_stimulus_log10_pb4a02dcc2ad9",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "C3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "b4a02dcc2ad9733060d74a37d237880748c6ad660240cf47369089ccce441268"
+    },
+    {
+      "name": "eeg_band-power_theta_cz_baseline_log10_pa6eb7ef5f3e5",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "Cz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "a6eb7ef5f3e51c02094532e8d635f23a58ca95e9f06214f771ff70280397e047"
+    },
+    {
+      "name": "eeg_band-power_theta_cz_stimulus_log10_p3b8ee577502a",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "Cz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "3b8ee577502a94ce28963e992c60a51bbcc7c7d5bebbbb4cd0b71e940c480615"
+    },
+    {
+      "name": "eeg_band-power_theta_c4_baseline_log10_p7e2869725334",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "C4",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "7e28697253341978cf32d77cd66ca66911e847a9c21a3ffc9ec9fa4bcf24b10d"
+    },
+    {
+      "name": "eeg_band-power_theta_c4_stimulus_log10_pc6cb3d2214a8",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "C4",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "c6cb3d2214a8d8e9e7ef63ba9a8d3e1906aa6c0d7f82e4a12b1e8a2a487456a1"
+    },
+    {
+      "name": "eeg_band-power_theta_p3_baseline_log10_p2a8f49dd801a",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "P3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "2a8f49dd801a4935e6853de9173353c6f025051de91e63d552daf7e4a147304d"
+    },
+    {
+      "name": "eeg_band-power_theta_p3_stimulus_log10_p14d529822538",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "P3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "14d5298225385f0ecf00b0859a92825ac3def769c7353f29cedf2621c8099b63"
+    },
+    {
+      "name": "eeg_band-power_theta_pz_baseline_log10_pce439492c4db",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "Pz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "ce439492c4dbabe2ac11eead0bcba4b9055ae81f00c10e7fc9e229ac5391413a"
+    },
+    {
+      "name": "eeg_band-power_theta_pz_stimulus_log10_p91f411c6b333",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "Pz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "91f411c6b333824f89284daf8114686963828942cb8a0e28ff0b6e32cc157574"
+    },
+    {
+      "name": "eeg_band-power_theta_global_baseline_log10_pb16b726e3e93",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "b16b726e3e939e1eb945ee1c9efd4f9f1b02eddbb31b2f86d4a8edd2680500fc"
+    },
+    {
+      "name": "eeg_band-power_theta_global_stimulus_log10_p39f175e271f7",
+      "measure": "band_power",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "39f175e271f7576af5d7d5d092467e0a4a365a52845405a57700f1c91d520630"
+    },
+    {
+      "name": "eeg_band-power_alpha_f3_baseline_log10_p6895e87136f3",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "F3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "6895e87136f3d181f486d4979a41cb2b0d50fa320ebe1cd1b5ce83e3d3d76604"
+    },
+    {
+      "name": "eeg_band-power_alpha_f3_stimulus_log10_p7a88fdadb94f",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "F3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "7a88fdadb94f25d60e3fbcadf67e72d5e698541b6f9c6a523a42c543e9540363"
+    },
+    {
+      "name": "eeg_band-power_alpha_fz_baseline_log10_pf38bdcf7c412",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "Fz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "f38bdcf7c41204f120c37f3425af8b04104608672c6b0b5f63e54e11b2e43688"
+    },
+    {
+      "name": "eeg_band-power_alpha_fz_stimulus_log10_pe31313e17cf0",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "Fz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "e31313e17cf00cc6d3af8fc589d390a287b28c7ed7afd9f9fe8cc7ab54f6c246"
+    },
+    {
+      "name": "eeg_band-power_alpha_f4_baseline_log10_p8f7b0a867eb5",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "F4",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "8f7b0a867eb56e9dd0104d8f6814401cbb0a07c0c92cc75a940adfa4835db968"
+    },
+    {
+      "name": "eeg_band-power_alpha_f4_stimulus_log10_p39d0a44fe3c9",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "F4",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "39d0a44fe3c9bf97562c7e162270641ecb9dc9802755bceff64734d48c86692f"
+    },
+    {
+      "name": "eeg_band-power_alpha_c3_baseline_log10_p958d7f9672e8",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "C3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "958d7f9672e8edc0567bfd4c95e85a556f70a707777e049a31c96cb125b596d0"
+    },
+    {
+      "name": "eeg_band-power_alpha_c3_stimulus_log10_p672e1cbf0bf5",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "C3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "672e1cbf0bf5d7ac6d52da2413e2b168909466c4be3ef1ecf9385e6007fa3907"
+    },
+    {
+      "name": "eeg_band-power_alpha_cz_baseline_log10_pe4842619593b",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "Cz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "e4842619593bd7f18095639aa895a365de18b6e21733506e035194d559c6c0ae"
+    },
+    {
+      "name": "eeg_band-power_alpha_cz_stimulus_log10_p8a2f92f26bcf",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "Cz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "8a2f92f26bcf23dff95df001836c258ac6f88022902b6b9b783c955ddab78781"
+    },
+    {
+      "name": "eeg_band-power_alpha_c4_baseline_log10_ped2f6013975e",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "C4",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "ed2f6013975ebe47422233c81ee17684057cde3f3be846153e074565bd91c60e"
+    },
+    {
+      "name": "eeg_band-power_alpha_c4_stimulus_log10_p566139af327e",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "C4",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "566139af327e70fc8fccecffdf9f20297a1a20b52c996c8e5f4b65d30fce0319"
+    },
+    {
+      "name": "eeg_band-power_alpha_p3_baseline_log10_pea90a698e440",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "P3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "ea90a698e4405e77669967892de69a33684de0d87c2b8a3764eb4d7287c680b5"
+    },
+    {
+      "name": "eeg_band-power_alpha_p3_stimulus_log10_p5d217b27c82e",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "P3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "5d217b27c82e9cb35b5e74fc2d119d63d491787f4784d92193be9996a7a0e3fc"
+    },
+    {
+      "name": "eeg_band-power_alpha_pz_baseline_log10_p6ed59cf30ab3",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "Pz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "6ed59cf30ab3302cb2eaca633b4f6da0447756bedaf98bd6809a46a41e0b47de"
+    },
+    {
+      "name": "eeg_band-power_alpha_pz_stimulus_log10_p59acdfec85b4",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "Pz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "59acdfec85b4dbd44d08868e53c958b0eaf675858c2b504d52b76e3586b8c68b"
+    },
+    {
+      "name": "eeg_band-power_alpha_global_baseline_log10_p55bf1535a019",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "55bf1535a019469587822204d323432d98d6082f1958dacd118e98c62671756e"
+    },
+    {
+      "name": "eeg_band-power_alpha_global_stimulus_log10_p6e5f04cf309e",
+      "measure": "band_power",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "6e5f04cf309e4b8eadb0c886fb25e53ffd1676a42062713aea631575e1af064e"
+    },
+    {
+      "name": "eeg_band-power_beta_f3_baseline_log10_pe7a0be2ce9c4",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "F3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "e7a0be2ce9c421c86636cf3181965543998b4f2642d474843554288fde493e45"
+    },
+    {
+      "name": "eeg_band-power_beta_f3_stimulus_log10_p8529adac6cb6",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "F3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "8529adac6cb6b209ee09577149cbc336639ebf761a6927edc3038ab98e8c5826"
+    },
+    {
+      "name": "eeg_band-power_beta_fz_baseline_log10_p20b84f2d2c54",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "Fz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "20b84f2d2c5486529c2f78989aad14bd9f9b12e35a02cc0e76ee0b6439bb7fe2"
+    },
+    {
+      "name": "eeg_band-power_beta_fz_stimulus_log10_p56570b157747",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "Fz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "56570b1577477b1520403b35a2065869e424f6ab2fed00d5bb46db949dbcb6df"
+    },
+    {
+      "name": "eeg_band-power_beta_f4_baseline_log10_pc8f53cc79d9f",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "F4",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "c8f53cc79d9f4a88806b404bec3dfcd823ec4524ca23221bb82fba094abd707e"
+    },
+    {
+      "name": "eeg_band-power_beta_f4_stimulus_log10_pf8460629bdf9",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "F4",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "f8460629bdf924a03501f1cddf7f23effd9cff3b9b3c6121d3798c5780207723"
+    },
+    {
+      "name": "eeg_band-power_beta_c3_baseline_log10_pb46b0bf97a80",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "C3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "b46b0bf97a80ab904367fae48ff54875fc57dbb894108922bee5d4069069eb97"
+    },
+    {
+      "name": "eeg_band-power_beta_c3_stimulus_log10_pe4204b847c76",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "C3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "e4204b847c769d026a8ff7292428334591ec9abc3cd6df8dd9110197b438e12e"
+    },
+    {
+      "name": "eeg_band-power_beta_cz_baseline_log10_pa3b66a5f0c3b",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "Cz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "a3b66a5f0c3bca13305fafc32f0f856aae1b2b418c8dfaeae9e06c6f52cde11f"
+    },
+    {
+      "name": "eeg_band-power_beta_cz_stimulus_log10_pde5a63059321",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "Cz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "de5a630593211ca7d1674e75cc27468c31134694bd0eb332d0998d9a13647c4c"
+    },
+    {
+      "name": "eeg_band-power_beta_c4_baseline_log10_p47168b3debc8",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "C4",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "47168b3debc8a9660d6f67f844da57fd5a19e48569991bb7ecc5fa4a1e8428df"
+    },
+    {
+      "name": "eeg_band-power_beta_c4_stimulus_log10_p39fe24f793e9",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "C4",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "39fe24f793e983bc5731ed84e750235d8df6bc52c56a578d9a22bf1619e6401d"
+    },
+    {
+      "name": "eeg_band-power_beta_p3_baseline_log10_p4f45ab8d9eb3",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "P3",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "4f45ab8d9eb354858fe6052e494858f17b48ed419d918935a6ed387a835c8be2"
+    },
+    {
+      "name": "eeg_band-power_beta_p3_stimulus_log10_p490cb12b4598",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "P3",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "490cb12b4598223c03412b0361404f6c73d97012b43ad51886b75f1d301ded49"
+    },
+    {
+      "name": "eeg_band-power_beta_pz_baseline_log10_pc1a1aed6bc07",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "Pz",
+      "space_kind": "channel",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "c1a1aed6bc07af48557f7c1f641e35b2a5eca47b54786e3b1b6ea27fbfe66a55"
+    },
+    {
+      "name": "eeg_band-power_beta_pz_stimulus_log10_p830e515ce730",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "Pz",
+      "space_kind": "channel",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "830e515ce730b2a69f9e5d7bebce759ca8c07f2a8946444fdd00d58a9c6228e4"
+    },
+    {
+      "name": "eeg_band-power_beta_global_baseline_log10_pcb9f80279444",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "cb9f80279444de69e568d176a1dd19c6a1191d14982b07ea479761a7613f709c"
+    },
+    {
+      "name": "eeg_band-power_beta_global_stimulus_log10_p04176825ef4c",
+      "measure": "band_power",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "log10",
+      "unit": "log10(V^2)",
+      "source": "welch",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "band_power",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "welch",
+            "parameters": {
+              "settings": {
+                "decim": 4,
+                "fmax": 30.0,
+                "fmin": 4.0,
+                "max_cycles": 15.0,
+                "method": "welch",
+                "min_cycles": 3.0,
+                "n_cycles_factor": 2.0,
+                "n_freqs": 40,
+                "spacing": "log"
+              }
+            }
+          },
+          "input_source": "welch",
+          "minimum_bins": 2,
+          "normalization": "log10",
+          "parameters": {
+            "quantity": "integrated_power_spectral_density"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "band_integral"
+        }
+      },
+      "parameter_hash": "04176825ef4cb1ac47ad335f084b91e83203fc1206a44fc342945c4708511f8b"
+    },
+    {
+      "name": "eeg_erds-mean_alpha_central_stimulus_percent_p35d4b57940ac",
+      "measure": "erds_mean",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "central",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "percent",
+      "unit": "%",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "erds_mean",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": "auto",
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "percent",
+          "parameters": {
+            "baseline": {
+              "name": "baseline",
+              "tmax": -0.5,
+              "tmin": -1.5
+            },
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "35d4b57940ac106e6966cbf0f8f064097ebdb8473f41ff365778fe7b4c0794df"
+    },
+    {
+      "name": "eeg_erds-mean_alpha_parietal_stimulus_percent_p86ce38c9f766",
+      "measure": "erds_mean",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "parietal",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "percent",
+      "unit": "%",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "erds_mean",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": "auto",
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "percent",
+          "parameters": {
+            "baseline": {
+              "name": "baseline",
+              "tmax": -0.5,
+              "tmin": -1.5
+            },
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "86ce38c9f76626dead69be837c83a05139d0d30b2bd038ef9b86e4a7d26862fe"
+    },
+    {
+      "name": "eeg_erds-mean_alpha_global_stimulus_percent_p44af102dba1a",
+      "measure": "erds_mean",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "percent",
+      "unit": "%",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "erds_mean",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": "auto",
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "percent",
+          "parameters": {
+            "baseline": {
+              "name": "baseline",
+              "tmax": -0.5,
+              "tmin": -1.5
+            },
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "44af102dba1acca718dbf6589a72f8ead48ca3b218705e3020837a38dd752096"
+    },
+    {
+      "name": "eeg_erds-mean_beta_central_stimulus_percent_p4371e25cbac3",
+      "measure": "erds_mean",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "central",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "percent",
+      "unit": "%",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "erds_mean",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 30.0,
+                "fmin": 13.0,
+                "name": "beta"
+              },
+              "exclude": "bads",
+              "filter_length": "auto",
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "percent",
+          "parameters": {
+            "baseline": {
+              "name": "baseline",
+              "tmax": -0.5,
+              "tmin": -1.5
+            },
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "4371e25cbac3935f4a2c02114338d6a4d3bd44dc0776972b807ca36a75e9e3cf"
+    },
+    {
+      "name": "eeg_erds-mean_beta_parietal_stimulus_percent_p112e4c670f52",
+      "measure": "erds_mean",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "parietal",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "percent",
+      "unit": "%",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "erds_mean",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 30.0,
+                "fmin": 13.0,
+                "name": "beta"
+              },
+              "exclude": "bads",
+              "filter_length": "auto",
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "percent",
+          "parameters": {
+            "baseline": {
+              "name": "baseline",
+              "tmax": -0.5,
+              "tmin": -1.5
+            },
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "112e4c670f52c27af2bca36d69aae87e257efe203c553012203f3198732f7739"
+    },
+    {
+      "name": "eeg_erds-mean_beta_global_stimulus_percent_p8945f577a9e7",
+      "measure": "erds_mean",
+      "band": {
+        "name": "beta",
+        "fmin": 13.0,
+        "fmax": 30.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "percent",
+      "unit": "%",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "erds_mean",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 30.0,
+                "fmin": 13.0,
+                "name": "beta"
+              },
+              "exclude": "bads",
+              "filter_length": "auto",
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "percent",
+          "parameters": {
+            "baseline": {
+              "name": "baseline",
+              "tmax": -0.5,
+              "tmin": -1.5
+            },
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd"
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "8945f577a9e708716a59afd1932f493f814a851647f4a6a15a3875de39fc32b8"
+    },
+    {
+      "name": "eeg_peak-freq-adjusted_alpha_global_baseline_raw_p2e7ef19989fb",
+      "measure": "peak_freq_adjusted",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "raw",
+      "unit": "Hz",
+      "source": "welch+aperiodic_ratio",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "peak_freq_adjusted",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "aperiodic_ratio",
+            "parameters": {
+              "fit_range": [
+                2.0,
+                40.0
+              ],
+              "input_computation": {
+                "method": "welch",
+                "parameters": {
+                  "settings": {
+                    "decim": 4,
+                    "fmax": 30.0,
+                    "fmin": 4.0,
+                    "max_cycles": 15.0,
+                    "method": "welch",
+                    "min_cycles": 3.0,
+                    "n_cycles_factor": 2.0,
+                    "n_freqs": 40,
+                    "spacing": "log"
+                  }
+                }
+              },
+              "max_iterations": 3,
+              "peak_rejection_z": 2.5
+            }
+          },
+          "input_source": "welch+aperiodic_ratio",
+          "minimum_bins": 3,
+          "normalization": "raw",
+          "parameters": {
+            "aperiodic_adjusted": true,
+            "fit_range": null,
+            "interpolate": true,
+            "min_prominence": 0.1,
+            "smoothing_hz": 1.0
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "trapezoid"
+        }
+      },
+      "parameter_hash": "2e7ef19989fb6820cc012fc0c4061cbb221ff0385c2fcac14d5d74e5bd9a3723"
+    },
+    {
+      "name": "eeg_peak-freq-adjusted_alpha_global_stimulus_raw_p2738c7963f33",
+      "measure": "peak_freq_adjusted",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "global",
+      "space_kind": "global",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "raw",
+      "unit": "Hz",
+      "source": "welch+aperiodic_ratio",
+      "freq_resolution_hz": 0.9950248756218905,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "peak_freq_adjusted",
+        "parameters": {
+          "baseline": null,
+          "input_computation": {
+            "method": "aperiodic_ratio",
+            "parameters": {
+              "fit_range": [
+                2.0,
+                40.0
+              ],
+              "input_computation": {
+                "method": "welch",
+                "parameters": {
+                  "settings": {
+                    "decim": 4,
+                    "fmax": 30.0,
+                    "fmin": 4.0,
+                    "max_cycles": 15.0,
+                    "method": "welch",
+                    "min_cycles": 3.0,
+                    "n_cycles_factor": 2.0,
+                    "n_freqs": 40,
+                    "spacing": "log"
+                  }
+                }
+              },
+              "max_iterations": 3,
+              "peak_rejection_z": 2.5
+            }
+          },
+          "input_source": "welch+aperiodic_ratio",
+          "minimum_bins": 3,
+          "normalization": "raw",
+          "parameters": {
+            "aperiodic_adjusted": true,
+            "fit_range": null,
+            "interpolate": true,
+            "min_prominence": 0.1,
+            "smoothing_hz": 1.0
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "weighting": "trapezoid"
+        }
+      },
+      "parameter_hash": "2738c7963f33549c3c2c85b6f75d3cdc0993b90b6b36f13165a5b53bf8f1762e"
+    }
+  ],
+  "flags": {
+    "aperiodic_fit_failed": {},
+    "cog_fallback": {},
+    "edge_hit": {}
+  },
+  "provenance": {
+    "input": "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+    "recipe": "recipe.toml",
+    "recipe_sha256": "1570489eff36d0a8f613c2ca09a408506ba913daa317b5f713eec07246b0d232",
+    "channels": [
+      "F3",
+      "Fz",
+      "F4",
+      "C3",
+      "Cz",
+      "C4",
+      "P3",
+      "Pz"
+    ],
+    "n_epochs": 16,
+    "sfreq": 200.0,
+    "mne_version": "1.13.2",
+    "created": "2026-09-20T02:36:16+00:00"
+  }
+}

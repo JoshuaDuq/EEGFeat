@@ -331,9 +331,11 @@ def test_check_trials_the_first_recording_without_writing(tmp_path) -> None:
     report = check(_recipe(tmp_path, POWER + "\n" + ITPC))
 
     assert [r.label for r in report.recordings] == ["sub-01_task-rest", "sub-02_task-rest"]
-    assert report.trial.label == "sub-01_task-rest"
-    assert report.features.epochs is not None and report.features.epochs.n_rows == 12
-    assert report.features.crosstrial is not None
+    assert report.trial is not None
+    assert report.trial.recording.label == "sub-01_task-rest"
+    assert report.trial.features.epochs is not None
+    assert report.trial.features.epochs.n_rows == 12
+    assert report.trial.features.crosstrial is not None
     assert not (tmp_path / "out").exists()
 
 

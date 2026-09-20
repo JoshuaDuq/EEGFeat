@@ -292,8 +292,10 @@ class RecordingInputs:
     def _morlet(self) -> tuple[Any, npt.NDArray[np.float64]]:
         if self._tfr is None:
             settings = self.recipe.spectra
+            # geomspace rather than logspace of the log bounds: only geomspace returns
+            # fmax itself, and fmax is usually a band edge that then has to be integrated.
             freqs = (
-                np.logspace(np.log10(settings.fmin), np.log10(settings.fmax), settings.n_freqs)
+                np.geomspace(settings.fmin, settings.fmax, settings.n_freqs)
                 if settings.spacing == "log"
                 else np.linspace(settings.fmin, settings.fmax, settings.n_freqs)
             )

@@ -28,11 +28,15 @@ those values into an epoch-level design would create pseudo-replication.
 Building a cohort
 -----------------
 
-For in-memory data, compute the same feature schema for each recording and stack the resulting
+For in-memory data, compute the same measures for each recording and stack the resulting
 per-epoch tables. :func:`eegfeat.stack_rows` preserves input order, values, coverage, flags,
-and metadata while rejecting duplicate row identities and schema mismatches. The target frame
-must be assembled in the same canonical-key space; it is aligned by ``build_design`` rather
-than by row position.
+and metadata while rejecting duplicate row identities. Recordings of a cohort exclude different
+bad channels, so their schemas differ; ``columns="union"`` keeps every column any recording
+measured and marks a column a recording did not measure as NaN with zero coverage. That is the
+cohort matrix fold-local harmonization is defined over: ``harmonization="intersection"`` then
+drops, within each fold, the columns some training subject lacks. The target frame must be
+assembled in the same canonical-key space; it is aligned by ``build_design`` rather than by row
+position.
 
 .. code-block:: python
 
@@ -45,7 +49,7 @@ than by row position.
        space_kind=("channel",),
    )
    selected_tables = [efm.select(table, selection) for table in tables_by_recording]
-   cohort_table = ef.stack_rows(selected_tables)
+   cohort_table = ef.stack_rows(selected_tables, columns="union")
 
    # Each frame must contain recording, epoch, event, reaction_time, and subject_id.
    targets = pd.concat(target_frames, ignore_index=True)
@@ -76,7 +80,9 @@ resulting ``*_features.tsv`` paths to :func:`eegfeat.io.read_dataset`:
        groups="subject_id",
    )
 
-``read_dataset`` reads the descriptor columns named by each JSON sidecar. It constructs the
+``read_dataset`` stacks onto the union of the feature columns; pass ``columns="identical"`` to
+require one schema across the cohort instead. It reads the descriptor columns named by each
+JSON sidecar. It constructs the
 canonical key columns from the table's stored ``row_ids`` and refuses descriptors that disagree
 with those identities. It does not infer targets or grouping variables from filenames; include
 them in the descriptor rows when writing the tables.
@@ -89,10 +95,17 @@ fragments. Its fields are ``measure``, ``band``, ``space_kind``, ``window``, ``n
 and ``space``. Optional numeric covariates are appended to ``X`` after the feature columns and
 are tracked by ``Design.covariate_columns``.
 
+``measure`` matches ``FeatureMeta.measure``, the label on the column, which is not always the
+name of the function or recipe entry that produced it: :func:`eegfeat.integrated_band_power`
+labels its columns ``"band_power"``, :func:`eegfeat.peak_frequency` labels them
+``"peak_freq_adjusted"``, and :func:`eegfeat.aperiodic` emits both ``"slope"`` and
+``"offset"``. Read the labels a cohort actually carries with
+``sorted({m.measure for m in cohort_table.meta})``.
+
 .. code-block:: python
 
    selection = efm.Selection(
-       measure=("power",),
+       measure=("band_power",),
        band=("alpha", "beta"),
        space_kind=("channel",),
        normalization=("log10",),

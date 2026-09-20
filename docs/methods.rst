@@ -135,11 +135,11 @@ Spectral entropy measures the uniformity of the spectral distribution within a b
 .. math::
 
    \begin{aligned}
-   p_i &= \frac{P(f_i) \Delta f_i}{\sum_j P(f_j) \Delta f_j} \\[6pt]
+   p_i &= \frac{P(f_i)}{\sum_j P(f_j)} \\[6pt]
    H &= -\frac{\sum_i p_i \ln(p_i)}{\ln(N)}
    \end{aligned}
 
-where :math:`N` is the number of frequency bins in the band. A value of 1 indicates uniform power across the band, while 0 indicates concentration in a single bin. Because the normalization depends on :math:`\ln(N)`, entropy values across bands with different bin counts are not directly comparable.
+where :math:`N` is the number of frequency bins in the band. A value of 1 indicates uniform power across the band, while 0 indicates concentration in a single bin. This discrete definition requires an approximately uniform frequency grid; non-uniform grids are rejected because bin probabilities and density-weighted spectral mass are different quantities. Recompute or interpolate a non-uniform PSD onto a uniform-Hz grid before calculating entropy. Because the normalization depends on :math:`\ln(N)`, entropy values across bands with different bin counts are not directly comparable.
 
 Aperiodic Fit
 -------------

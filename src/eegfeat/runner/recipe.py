@@ -23,6 +23,7 @@ from eegfeat.runner.measures import (
     MEASURES,
     REQUIRES,
     SEGMENTATION,
+    SPECTRAL_INPUT,
     Measure,
     Mismatch,
     convert,
@@ -205,7 +206,7 @@ class _Parser:
         band_signal = self.band_signal(self.table(data, "band_signal"))
         trials = self.trials(self.table(data, "trials"))
         microstates = self.microstates(self.table(data, "microstates"))
-        features = self.features(data.get("features"), bands, windows, rois)
+        features = self.features(data.get("features"), bands, windows, rois, spectra.method)
 
         if self.problems:
             raise RecipeError(self.path, self.problems)
@@ -367,6 +368,7 @@ class _Parser:
         bands: tuple[Band, ...],
         windows: tuple[Window, ...],
         rois: Mapping[str, tuple[str, ...]],
+        method: SpectralMethod,
     ) -> tuple[FeatureSpec, ...]:
         if not isinstance(entries, list) or not entries:
             self.problem("the recipe needs at least one [[features]] entry")
@@ -375,6 +377,7 @@ class _Parser:
             bands={b.name: b for b in bands},
             windows={w.name: w for w in windows},
             rois=rois,
+            method=method,
         )
         specs = []
         for index, entry in enumerate(entries):
@@ -401,6 +404,12 @@ class _Parser:
             self.problem(
                 f"{where}: {name} needs {module}, which is not installed; "
                 f"install it with: pip install 'eegfeat[{extra}]'"
+            )
+        if name in SPECTRAL_INPUT and context.method not in SPECTRAL_INPUT[name][1]:
+            quantity, methods = SPECTRAL_INPUT[name]
+            self.problem(
+                f"{where}: {name} reads {quantity}, which [spectra] method = "
+                f"{context.method!r} does not give; use {' or '.join(map(repr, methods))}"
             )
 
         settable = measure.settable
@@ -728,6 +737,7 @@ class _EntryContext:
     bands: Mapping[str, Band]
     windows: Mapping[str, Window]
     rois: Mapping[str, tuple[str, ...]]
+    method: SpectralMethod
 
 
 def _entry_keys(measure: Measure) -> set[str]:

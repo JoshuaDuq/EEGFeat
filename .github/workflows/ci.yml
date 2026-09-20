@@ -1,7 +1,12 @@
 name: ci
+
 on: [push, pull_request]
+
+env:
+  MNE_DONTWRITE_HOME: "true"
+
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,9 +17,45 @@ jobs:
       - run: ruff check src tests
       - run: black --check src tests
       - run: mypy
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev,model]"
       - run: pytest
-      # A green `pytest` above does not prove the modelling suite ran: tests/model is
-      # collect-ignored without scikit-learn, and the equivalence test skips without its
-      # fixture. Fail loudly on either, instead of reading a skip as a passing result.
+      # A green general run does not prove that the reference fixture was present
+      # or that the complete modeling suite remained collectable.
       - run: test -f tests/fixtures/model_reference.npz
       - run: pytest tests/model tests/test_equivalence_model.py -ra
+
+  optional-integrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev,model,connectivity,microstates]"
+      - run: pytest tests/test_connectivity.py tests/test_microstates.py tests/test_runner_compute.py -ra
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install build
+      - run: python -m build
+      - run: python -m venv /tmp/eegfeat-wheel
+      - run: /tmp/eegfeat-wheel/bin/pip install dist/*.whl
+      - run: /tmp/eegfeat-wheel/bin/python -c "import eegfeat"
+      - run: /tmp/eegfeat-wheel/bin/eegfeat --version

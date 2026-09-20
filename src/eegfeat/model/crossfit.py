@@ -316,6 +316,17 @@ def _fit_fold(
     )
 
 
+def _validate_binary_labels(y: npt.NDArray[np.intp]) -> None:
+    # Everything downstream, from the positive-class probability to the confusion matrix,
+    # reads 0 and 1. A third label is a silent multiclass fit that only the metrics catch,
+    # by which point every fold has been tuned.
+    labels = np.unique(np.ravel(y))
+    if not set(labels.tolist()) <= {0, 1}:
+        raise ValueError(
+            f"cross_fit_classification expects labels coded 0/1, got {labels.tolist()}."
+        )
+
+
 def _validate_row_aligned(
     n_rows: int,
     y: npt.NDArray[np.float64] | npt.NDArray[np.intp],
@@ -531,6 +542,7 @@ def cross_fit_classification(
     scoring: object = None,
     refit: str | bool | None = None,
 ) -> tuple[FoldClassification, ...]:
+    _validate_binary_labels(y)
     results = _cross_fit_engine(
         "classification",
         folds,

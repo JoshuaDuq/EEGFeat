@@ -26,26 +26,26 @@ ErdsScale = Literal["percent", "db"]
 
 _UNITS: dict[str, dict[str, str]] = {
     "percent": {
-        "mean": "%",
-        "slope": "%/s",
+        "erds_mean": "%",
+        "erds_slope": "%/s",
         "erd_magnitude": "%",
         "erd_duration": "s",
         "ers_magnitude": "%",
         "ers_duration": "s",
-        "peak_latency": "s",
-        "onset_latency": "s",
-        "rebound_latency": "s",
+        "erds_peak_latency": "s",
+        "erds_onset_latency": "s",
+        "erds_rebound_latency": "s",
     },
     "db": {
-        "mean": "dB",
-        "slope": "dB/s",
+        "erds_mean": "dB",
+        "erds_slope": "dB/s",
         "erd_magnitude": "dB",
         "erd_duration": "s",
         "ers_magnitude": "dB",
         "ers_duration": "s",
-        "peak_latency": "s",
-        "onset_latency": "s",
-        "rebound_latency": "s",
+        "erds_peak_latency": "s",
+        "erds_onset_latency": "s",
+        "erds_rebound_latency": "s",
     },
 }
 
@@ -90,7 +90,7 @@ def erds_mean(
     """
     return _erds_measure(
         signals,
-        "mean",
+        "erds_mean",
         baseline=baseline,
         windows=windows,
         groups=groups,
@@ -140,7 +140,7 @@ def erds_slope(
     """
     return _erds_measure(
         signals,
-        "slope",
+        "erds_slope",
         baseline=baseline,
         windows=windows,
         groups=groups,
@@ -387,7 +387,7 @@ def erds_peak_latency(
     """
     return _erds_measure(
         signals,
-        "peak_latency",
+        "erds_peak_latency",
         baseline=baseline,
         windows=windows,
         groups=groups,
@@ -439,7 +439,7 @@ def erds_onset_latency(
     """
     return _erds_measure(
         signals,
-        "onset_latency",
+        "erds_onset_latency",
         baseline=baseline,
         windows=windows,
         groups=groups,
@@ -488,7 +488,7 @@ def erds_rebound_latency(
     """
     return _erds_measure(
         signals,
-        "rebound_latency",
+        "erds_rebound_latency",
         baseline=baseline,
         windows=windows,
         groups=groups,
@@ -579,15 +579,15 @@ def _measures(
         mean = np.where(usable, np.nanmean(trace, axis=2), np.nan)
     peak_index = _argmax_masked(np.abs(trace), finite)
     return {
-        "mean": mean,
-        "slope": _slope(trace, times, finite),
+        "erds_mean": mean,
+        "erds_slope": _slope(trace, times, finite),
         "erd_magnitude": _signed_magnitude(trace, finite, usable, negative=True),
         "erd_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=True),
         "ers_magnitude": _signed_magnitude(trace, finite, usable, negative=False),
         "ers_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=False),
-        "peak_latency": np.where(usable, times[peak_index], np.nan),
-        "onset_latency": _onset(times, usable, onset_crossing),
-        "rebound_latency": _rebound(trace, times, finite, usable, peak_index),
+        "erds_peak_latency": np.where(usable, times[peak_index], np.nan),
+        "erds_onset_latency": _onset(times, usable, onset_crossing),
+        "erds_rebound_latency": _rebound(trace, times, finite, usable, peak_index),
     }
 
 

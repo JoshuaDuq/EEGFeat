@@ -143,18 +143,23 @@ def _check_lines(
         row("Recipe", f"valid · {n_entries} feature entries"),
         row("Inputs", f"{n} recording{'s' if n != 1 else ''}"),
         row("Output", f"{output_root} · {existing}"),
-        row(
-            "Trial",
-            f"{report.trial.label} · {report.n_epochs} epochs · {len(report.channels)} channels",
-        ),
     ]
-    if report.features.epochs is not None:
-        table = report.features.epochs
-        lines.append(row("Per epoch", f"{len(table.meta)} features × {table.n_rows} epochs"))
-    if report.features.crosstrial is not None:
-        table = report.features.crosstrial
-        groups = ", ".join(table.row_labels or ())
-        lines.append(row("Across trials", f"{len(table.meta)} features × groups {groups}"))
+    if report.trial is not None:
+        trial = report.trial
+        lines.append(
+            row(
+                "Trial",
+                f"{trial.recording.label} · {trial.n_epochs} epochs · "
+                f"{len(trial.channels)} channels",
+            )
+        )
+        if trial.features.epochs is not None:
+            table = trial.features.epochs
+            lines.append(row("Per epoch", f"{len(table.meta)} features × {table.n_rows} epochs"))
+        if trial.features.crosstrial is not None:
+            table = trial.features.crosstrial
+            groups = ", ".join(table.row_labels or ())
+            lines.append(row("Across trials", f"{len(table.meta)} features × groups {groups}"))
     if report.missing_channels:
         n_failing = len(report.missing_channels)
         counted = "1 recording lacks" if n_failing == 1 else f"{n_failing} recordings lack"

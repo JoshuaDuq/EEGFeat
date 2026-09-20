@@ -1,0 +1,51 @@
+# The recipe behind the example outputs in this folder.
+#
+#   eegfeat check recipe.toml
+#   eegfeat run recipe.toml
+
+[inputs]
+root = "epochs"
+pattern = "**/*_epo.fif"
+picks = "eeg"
+exclude_bads = true
+
+[output]
+root = "features"
+epoch_metadata = true
+
+[bands]
+theta = [4.0, 8.0]
+alpha = [8.0, 13.0]
+beta = [13.0, 30.0]
+
+[windows]
+baseline = [-1.5, -0.5]
+stimulus = [0.5, 3.5]
+
+[rois]
+central = ["C3", "Cz", "C4"]
+parietal = ["P3", "Pz"]
+
+[trials]
+by = "event"
+
+[[features]]
+measure = "integrated_band_power"
+normalize = "log10"
+spatial = ["channels", "global"]
+
+[[features]]
+measure = "erds_mean"
+bands = ["alpha", "beta"]
+baseline = "baseline"
+spatial = ["rois", "global"]
+
+[[features]]
+measure = "peak_frequency"
+bands = ["alpha"]
+spatial = ["global"]
+
+[[features]]
+measure = "itpc"
+bands = ["theta", "alpha"]
+spatial = ["rois"]

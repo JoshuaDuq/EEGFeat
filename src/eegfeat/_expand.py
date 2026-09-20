@@ -92,7 +92,7 @@ def expand(
     mode: Normalization,
     min_bins: int,
     parameters: Mapping[str, object],
-    weighting: Literal["trapezoid", "gradient", "band_integral"] = "trapezoid",
+    weighting: Literal["trapezoid", "gradient", "band_integral", "uniform"] = "trapezoid",
 ) -> FeatureTable:
     baseline_index = _baseline_index(spectra, baseline)
     columns: list[_Column] = []
@@ -116,8 +116,10 @@ def expand(
             weights = integration_weights[mask]
         elif weighting == "trapezoid":
             weights = trapezoid_weights(sub_freqs)
-        else:
+        elif weighting == "gradient":
             weights = gradient_weights(sub_freqs)
+        else:
+            weights = np.ones(sub_freqs.size)
         values, flags = kernel(spectra.data[:, :, :, mask], sub_freqs, weights)
         coverage = band_coverage(spectra.coverage[:, :, :, mask], weights)
 

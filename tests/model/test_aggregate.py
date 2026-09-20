@@ -338,3 +338,12 @@ def test_bootstrap_intervals_are_not_silently_replaced_by_fixed_effects() -> Non
     )
     with pytest.raises(ValueError, match="at least 3 subjects"):
         subject_level_r(frame, config=AggregationConfig(ci_method="bootstrap"))
+
+
+@pytest.mark.parametrize("missing", ["subject_id", "y_true", "y_pred"])
+@pytest.mark.parametrize("function", [subject_level_r, subject_level_errors])
+def test_subject_level_aggregates_name_the_columns_they_need(function, missing: str) -> None:
+    frame = _predictions({"s1": ([1.0, 2.0, 3.0], [1.0, 2.5, 2.8])}).drop(columns=[missing])
+
+    with pytest.raises(ValueError, match=f"missing.*{missing}"):
+        function(frame)

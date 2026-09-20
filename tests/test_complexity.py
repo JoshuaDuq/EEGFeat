@@ -163,9 +163,22 @@ def test_invalid_parameters_raise(order: int, r: float) -> None:
         sample_entropy([_signal(np.zeros(50))], windows=[WINDOW], order=order, r=r)
 
 
-def test_invalid_scales_raise() -> None:
+@pytest.mark.parametrize("order", [True, 1.5])
+def test_order_must_be_an_integer(order: object) -> None:
+    with pytest.raises(ValueError, match="order"):
+        sample_entropy([_signal(np.zeros(50))], windows=[WINDOW], order=order)
+
+
+@pytest.mark.parametrize("r", [np.nan, np.inf])
+def test_tolerance_fraction_must_be_finite(r: float) -> None:
+    with pytest.raises(ValueError, match="r"):
+        sample_entropy([_signal(np.zeros(50))], windows=[WINDOW], r=r)
+
+
+@pytest.mark.parametrize("scales", [(), (0,), (1, 1), (True,), (1.5,)])
+def test_invalid_scales_raise(scales: tuple[object, ...]) -> None:
     with pytest.raises(ValueError, match="scales"):
-        multiscale_entropy([_signal(np.zeros(50))], windows=[WINDOW], scales=(0,))
+        multiscale_entropy([_signal(np.zeros(50))], windows=[WINDOW], scales=scales)
 
 
 @pytest.mark.skipif(
@@ -180,3 +193,25 @@ def test_matches_antropy_where_it_is_available() -> None:
         tolerance = 0.2 * float(np.std(values))
         expected = antropy_sampen(values, order=2, tolerance=tolerance, metric="chebyshev")
         assert _sample_entropy(values, 2, 0.2) == pytest.approx(expected, rel=1e-12, abs=1e-12)
+
+
+def _brute_force_sample_entropy(x: np.ndarray, order: int, r: float) -> float:
+    """The textbook definition, pair by pair, as an independent oracle."""
+    threshold = r * float(np.std(x))
+    templates = [x[i : i + order + 1] for i in range(x.size - order)]
+    short = long = 0
+    for i, first in enumerate(templates):
+        for second in templates[i + 1 :]:
+            if max(abs(first[:order] - second[:order])) < threshold:
+                short += 1
+                if abs(first[order] - second[order]) < threshold:
+                    long += 1
+    return float(-np.log(long / short))
+
+
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_the_chunked_kernel_agrees_with_the_definition(order: int) -> None:
+    rng = np.random.RandomState(11)
+    values = rng.randn(250)
+    expected = _brute_force_sample_entropy(values, order, 0.2)
+    assert _sample_entropy(values, order, 0.2) == pytest.approx(expected, rel=1e-12)

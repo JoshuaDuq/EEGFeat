@@ -189,12 +189,40 @@ def fold_results(
     )
 
 
+_PREDICTION_COLUMNS = ("subject_id", "y_true", "y_pred")
+
+
+def _check_prediction_columns(predictions: pd.DataFrame, function: str) -> None:
+    missing = [column for column in _PREDICTION_COLUMNS if column not in predictions.columns]
+    if missing:
+        msg = (
+            f"{function} needs one row per trial with columns "
+            f"{list(_PREDICTION_COLUMNS)}; missing {missing}."
+        )
+        raise ValueError(msg)
+
+
 def subject_level_r(
     predictions: pd.DataFrame,
     *,
     config: AggregationConfig = _DEFAULT_CONFIG,
     undefined: Literal["raise", "zero"] = "raise",
 ) -> SubjectLevelR:
+    """Correlate predictions with targets within each subject, then average.
+
+    Parameters
+    ----------
+    predictions : DataFrame
+        One row per trial, with a ``subject_id`` label and the ``y_true`` and
+        ``y_pred`` values of that trial.
+    config : AggregationConfig
+        Subject weighting, confidence-interval method and bootstrap settings.
+    undefined : {"raise", "zero"}
+        What to do with a subject whose correlation is undefined because nothing
+        varies. ``"raise"``, the default, refuses; ``"zero"`` scores it as no
+        linear association.
+    """
+    _check_prediction_columns(predictions, "subject_level_r")
     if undefined not in ("raise", "zero"):
         raise ValueError(f"undefined must be 'raise' or 'zero', got {undefined!r}")
     per_subject: list[tuple[str, float]] = []
@@ -334,6 +362,17 @@ def subject_level_errors(
     *,
     config: AggregationConfig = _DEFAULT_CONFIG,
 ) -> dict[str, float]:
+    """Mean absolute and root-mean-square error per subject, then averaged.
+
+    Parameters
+    ----------
+    predictions : DataFrame
+        One row per trial, with a ``subject_id`` label and the ``y_true`` and
+        ``y_pred`` values of that trial.
+    config : AggregationConfig
+        Subject weighting, confidence-interval method and bootstrap settings.
+    """
+    _check_prediction_columns(predictions, "subject_level_errors")
     per_subject_mae: list[float] = []
     per_subject_rmse: list[float] = []
     per_subject_n: list[int] = []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping, Sequence
+from numbers import Integral, Real
 from typing import Literal
 
 import numpy as np
@@ -14,7 +15,7 @@ from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
 
 _PAIR_BUDGET = 2_000_000
-"""Template pairs held in memory at once.
+"""Template pairs compared at once.
 
 Sample entropy is inherently O(n^2) in the window length. Comparing every pair at
 once would need gigabytes on a multi-second window, so the comparison is chunked;
@@ -135,9 +136,17 @@ def multiscale_entropy(
         raise ValueError(
             "tolerance_mode must be 'original_sd' or 'scale_sd', got " f"{tolerance_mode!r}."
         )
-    ordered = [int(s) for s in scales]
-    if not ordered or any(s < 1 for s in ordered):
+    raw_scales = list(scales)
+    if (
+        not raw_scales
+        or any(
+            isinstance(scale, bool) or not isinstance(scale, Integral) or scale < 1
+            for scale in raw_scales
+        )
+        or len(set(raw_scales)) != len(raw_scales)
+    ):
         raise ValueError(f"scales must be positive integers, got {list(scales)!r}.")
+    ordered = [int(scale) for scale in raw_scales]
 
     def kernel(
         s: TimeSeries,
@@ -180,10 +189,10 @@ def _scale_name(scale: int) -> str:
 
 
 def _validate(order: int, r: float) -> None:
-    if order < 1:
-        raise ValueError(f"order must be >= 1, got {order}.")
-    if not r > 0.0:
-        raise ValueError(f"r must be positive, got {r}.")
+    if isinstance(order, bool) or not isinstance(order, Integral) or order < 1:
+        raise ValueError(f"order must be a positive integer, got {order!r}.")
+    if isinstance(r, bool) or not isinstance(r, Real) or not np.isfinite(r) or r <= 0.0:
+        raise ValueError(f"r must be finite and positive, got {r!r}.")
 
 
 def _per_channel(
@@ -244,14 +253,25 @@ def _sample_entropy(
 
     matched_short = 0
     matched_long = 0
-    chunk = max(1, _PAIR_BUDGET // max(n_templates * (order + 1), 1))
+    chunk = max(1, _PAIR_BUDGET // n_templates)
     for start in range(0, n_templates, chunk):
         stop = min(start + chunk, n_templates)
-        distance = np.abs(templates[start:stop, np.newaxis, :] - templates[np.newaxis, :, :])
+        block = templates[start:stop]
+        # A Chebyshev match is a conjunction over the embedding dimensions, so the
+        # pair mask is narrowed one dimension at a time. Reducing a stacked
+        # (pairs x dimensions) distance array instead would hold order + 1 floats
+        # per pair where this holds one byte.
+        close = np.abs(block[:, 0, np.newaxis] - templates[np.newaxis, :, 0]) < threshold
         # Each unordered pair once, matching antropy's positive-offset iteration.
-        upper = np.arange(n_templates)[np.newaxis, :] > np.arange(start, stop)[:, np.newaxis]
-        matched_short += int(((distance[..., :order].max(axis=2) < threshold) & upper).sum())
-        matched_long += int(((distance.max(axis=2) < threshold) & upper).sum())
+        close &= np.arange(n_templates)[np.newaxis, :] > np.arange(start, stop)[:, np.newaxis]
+        for dimension in range(1, order):
+            close &= (
+                np.abs(block[:, dimension, np.newaxis] - templates[np.newaxis, :, dimension])
+                < threshold
+            )
+        matched_short += int(close.sum())
+        close &= np.abs(block[:, order, np.newaxis] - templates[np.newaxis, :, order]) < threshold
+        matched_long += int(close.sum())
 
     if matched_short == 0:
         return float("nan")

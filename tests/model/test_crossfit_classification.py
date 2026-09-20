@@ -112,3 +112,14 @@ def test_within_subject_classification_raises_when_training_fold_has_one_class()
             seed=0,
             runs=runs,
         )
+
+
+def test_labels_outside_zero_and_one_are_refused_before_any_fold_is_fitted() -> None:
+    # A missing-response code such as -1 is a third class: sklearn would fit it happily
+    # and only the metrics would notice, after every fold had been tuned.
+    y_coded = Y.copy()
+    y_coded[:2] = -1
+    with pytest.raises(ValueError, match=r"labels coded 0/1, got \[-1, 0, 1\]"):
+        cross_fit_classification(
+            loso_folds(GROUPS), X, y_coded, GROUPS, PIPE, GRID, inner=STRATIFIED, seed=0
+        )

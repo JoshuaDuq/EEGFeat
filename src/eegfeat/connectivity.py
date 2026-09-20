@@ -217,7 +217,7 @@ def _nodes(
     ch_names: tuple[str, ...], groups: Mapping[str, Sequence[str]] | None
 ) -> tuple[tuple[str, ...], list[list[int]]]:
     if groups is None:
-        return ch_names, [[i] for i in range(len(ch_names))]
+        return _checked(ch_names, [[i] for i in range(len(ch_names))])
     lookup = {name: i for i, name in enumerate(ch_names)}
     picks = []
     for roi, members in groups.items():
@@ -227,7 +227,19 @@ def _nodes(
         if not members:
             raise ValueError(f"group {roi!r} has no channels.")
         picks.append([lookup[m] for m in members])
-    return tuple(groups), picks
+    return _checked(tuple(groups), picks)
+
+
+def _checked(
+    node_names: tuple[str, ...], picks: list[list[int]]
+) -> tuple[tuple[str, ...], list[list[int]]]:
+    # One node is zero pairs, and a table of no columns says nothing about why.
+    if len(node_names) < 2:
+        raise ValueError(
+            f"a pairwise measure needs at least two nodes, got {list(node_names)}; "
+            "name more channels or more ROIs."
+        )
+    return node_names, picks
 
 
 def _correlation_matrix(
@@ -370,7 +382,7 @@ def _graph_measure(
         )
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
     for indices in _by_estimator(pairs).values():
-        nodes = _node_order(pairs, indices)
+        nodes = _validate_graph_edges(pairs, indices)
         values = np.empty(pairs.n_rows)
         for row in range(pairs.n_rows):
             values[row] = reduce(_square(pairs, indices, nodes, row))
@@ -407,21 +419,62 @@ def _by_estimator(pairs: FeatureTable) -> dict[str, list[int]]:
     """
     out: dict[str, list[int]] = {}
     for index, meta in enumerate(pairs.meta):
-        key = replace(meta, space="", nodes=None).parameter_hash
+        parameters = dict(meta.computation.parameters)
+        declared_nodes = parameters.get("nodes")
+        if isinstance(declared_nodes, list) and all(
+            isinstance(node, str) for node in declared_nodes
+        ):
+            parameters["nodes"] = sorted(declared_nodes)
+        canonical_computation = ComputationSpec.create(meta.computation.method, **parameters)
+        key = replace(
+            meta,
+            space="",
+            nodes=None,
+            computation=canonical_computation,
+        ).parameter_hash
         out.setdefault(key, []).append(index)
     return out
 
 
-def _node_order(pairs: FeatureTable, indices: list[int]) -> list[str]:
-    seen: list[str] = []
+def _validate_graph_edges(pairs: FeatureTable, indices: list[int]) -> list[str]:
+    template = pairs.meta[indices[0]]
+    declared_nodes = template.computation.parameters.get("nodes")
+    if not isinstance(declared_nodes, list) or not declared_nodes:
+        raise ValueError("pair computation metadata must declare its node set.")
+    if any(not isinstance(node, str) or not node for node in declared_nodes):
+        raise ValueError("pair computation nodes must be non-empty strings.")
+    nodes = list(declared_nodes)
+    if len(set(nodes)) != len(nodes):
+        raise ValueError("pair computation nodes must be unique.")
+
+    expected = {
+        frozenset((nodes[left], nodes[right]))
+        for left in range(len(nodes))
+        for right in range(left + 1, len(nodes))
+    }
+    observed: set[frozenset[str]] = set()
     for index in indices:
-        nodes = pairs.meta[index].nodes
-        if nodes is None:
+        edge_nodes = pairs.meta[index].nodes
+        if edge_nodes is None or len(edge_nodes) != 2:
             raise ValueError("pair metadata must carry its two node identities.")
-        for name in nodes:
-            if name not in seen:
-                seen.append(name)
-    return seen
+        left, right = edge_nodes
+        if left == right:
+            raise ValueError(f"self-edge {left}-{right} is not valid graph input.")
+        if left not in nodes or right not in nodes:
+            raise ValueError(f"edge {left}-{right} contains a node outside the declared node set.")
+        edge = frozenset(edge_nodes)
+        if edge in observed:
+            raise ValueError(
+                f"edge {left}-{right} is measured twice within one estimator; a graph "
+                "cannot take two values for the same pair."
+            )
+        observed.add(edge)
+
+    missing = expected - observed
+    if missing:
+        labels = ["-".join(node for node in nodes if node in edge) for edge in missing]
+        raise ValueError(f"graph edge set is incomplete; missing: {', '.join(sorted(labels))}.")
+    return nodes
 
 
 def _square(
@@ -429,19 +482,10 @@ def _square(
 ) -> npt.NDArray[np.float64]:
     position = {name: i for i, name in enumerate(nodes)}
     matrix = np.zeros((len(nodes), len(nodes)))
-    filled: set[frozenset[str]] = set()
     for index in indices:
         nodes_pair = pairs.meta[index].nodes
-        if nodes_pair is None:
-            raise ValueError("pair metadata must carry its two node identities.")
+        assert nodes_pair is not None
         left, right = nodes_pair
-        edge = frozenset(nodes_pair)
-        if edge in filled:
-            raise ValueError(
-                f"edge {left}-{right} is measured twice within one estimator; a graph "
-                "cannot take two values for the same pair."
-            )
-        filled.add(edge)
         value = pairs.values[row, index]
         matrix[position[left], position[right]] = value
         matrix[position[right], position[left]] = value

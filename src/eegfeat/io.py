@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -202,8 +202,22 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
     )
 
 
-def read_dataset(paths: Sequence[str | os.PathLike[str]]) -> FeatureDataset:
-    """Load and vertically combine runner-generated per-epoch feature bundles."""
+def read_dataset(
+    paths: Sequence[str | os.PathLike[str]],
+    *,
+    columns: Literal["identical", "union"] = "union",
+) -> FeatureDataset:
+    """Load and vertically combine runner-generated per-epoch feature bundles.
+
+    Parameters
+    ----------
+    paths : sequence of path-like
+        The ``*_features.tsv`` files to combine.
+    columns : {"union", "identical"}
+        How :func:`eegfeat.stack_rows` reconciles the feature columns. The
+        default keeps every column any recording measured; pass ``"identical"``
+        to require one schema across the cohort.
+    """
     if not paths:
         raise ValueError("read_dataset requires at least one feature table path.")
 
@@ -217,8 +231,10 @@ def read_dataset(paths: Sequence[str | os.PathLike[str]]) -> FeatureDataset:
         tables.append(table)
         target_frames.append(_read_targets(source, table, _read_sidecar(source)))
 
+    # Recordings differ in their bad channels, so their feature schemas differ; the
+    # cohort is the union, with NaN where a recording did not measure a column.
     return FeatureDataset(
-        table=stack_rows(tables),
+        table=stack_rows(tables, columns=columns),
         targets=pd.concat(target_frames, ignore_index=True),
     )
 

@@ -154,6 +154,17 @@ GRAPH: dict[str, Callable[..., FeatureTable]] = {
 }
 """Network summaries a connectivity entry can add."""
 
+SPECTRAL_INPUT: dict[str, tuple[str, tuple[str, ...]]] = {
+    "mean_psd": ("a power spectral density", ("welch", "multitaper")),
+    "integrated_band_power": ("a power spectral density", ("welch", "multitaper")),
+    "mean_tfr_power": ("time-frequency power", ("morlet",)),
+}
+"""Measures that read only one kind of spectrum: what they read, and the methods giving it.
+
+A spectral measure not named here reads either kind. The two are dimensionally
+different quantities, so no recipe can feed a measure the wrong one.
+"""
+
 REQUIRES: dict[str, tuple[str, str]] = {
     "wpli": ("mne_connectivity", "connectivity"),
     "microstate_coverage": ("sklearn", "microstates"),

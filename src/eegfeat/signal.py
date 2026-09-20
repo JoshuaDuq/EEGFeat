@@ -8,6 +8,11 @@ import numpy as np
 import numpy.typing as npt
 from scipy.signal import hilbert
 
+from eegfeat._validation import (
+    validate_fraction_array,
+    validate_names,
+    validate_nonempty_shape,
+)
 from eegfeat.bands import Band
 from eegfeat.identity import epoch_row_ids
 from eegfeat.table import ComputationSpec, RowId
@@ -194,19 +199,24 @@ def _validate_series(
         raise ValueError(
             f"{label} must be 3-D (n_epochs, n_channels, n_times), got {values.shape}."
         )
+    validate_nonempty_shape(values.shape, label)
     n_channels, n_times = values.shape[1:]
     if len(ch_names) != n_channels:
         raise ValueError(
             f"ch_names has {len(ch_names)} entries but {label} has {n_channels} channels."
         )
+    validate_names(ch_names, "ch_names")
     if times.ndim != 1 or times.size != n_times:
         raise ValueError(f"times must be 1-D of length {n_times}, got {times.shape}.")
+    if not np.isfinite(times).all():
+        raise ValueError("times must contain only finite values.")
     if n_times > 1 and not np.all(np.diff(times) > 0):
         raise ValueError("times must be strictly ascending.")
     if coverage.shape != values.shape:
         raise ValueError(f"coverage shape {coverage.shape} does not match {label} {values.shape}.")
-    if not sfreq > 0.0:
-        raise ValueError(f"sfreq must be positive, got {sfreq}.")
+    validate_fraction_array(coverage, "coverage")
+    if not np.isfinite(sfreq) or sfreq <= 0.0:
+        raise ValueError(f"sfreq must be finite and positive, got {sfreq}.")
 
 
 def _validate_row_ids(row_ids: tuple[RowId, ...], n_epochs: int) -> None:
@@ -247,28 +257,16 @@ class BandSignal:
     computation: ComputationSpec
 
     def __post_init__(self) -> None:
-        if self.analytic.ndim != 3:
-            raise ValueError(
-                f"analytic must be 3-D (n_epochs, n_channels, n_times), got {self.analytic.shape}."
-            )
+        _validate_series(
+            self.analytic,
+            self.times,
+            self.ch_names,
+            self.coverage,
+            self.sfreq,
+            "analytic",
+        )
         if not np.iscomplexobj(self.analytic):
             raise TypeError("analytic must be complex; a real array has already lost its phase.")
-        n_channels, n_times = self.analytic.shape[1:]
-        if len(self.ch_names) != n_channels:
-            raise ValueError(
-                f"ch_names has {len(self.ch_names)} entries but analytic has {n_channels} channels."
-            )
-        if self.times.ndim != 1 or self.times.size != n_times:
-            raise ValueError(f"times must be 1-D of length {n_times}, got {self.times.shape}.")
-        if n_times > 1 and not np.all(np.diff(self.times) > 0):
-            raise ValueError("times must be strictly ascending.")
-        if self.coverage.shape != self.analytic.shape:
-            raise ValueError(
-                f"coverage shape {self.coverage.shape} does not match analytic "
-                f"{self.analytic.shape}."
-            )
-        if not self.sfreq > 0.0:
-            raise ValueError(f"sfreq must be positive, got {self.sfreq}.")
         _validate_row_ids(self.row_ids, self.n_epochs)
 
     @property

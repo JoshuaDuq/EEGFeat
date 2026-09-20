@@ -1,11 +1,8 @@
-"""Labelled spectral feature extraction for MNE objects.
+"""Labelled EEG feature extraction and modeling for MNE objects.
 
-`eegfeat` turns a computed ``Spectrum`` or ``EpochsTFR`` into a
-:class:`~eegfeat.table.FeatureTable`: values plus one metadata record per
-column, so band, channel, window and normalization are structured fields rather
-than fragments of a column name.
-
-It computes no time-frequency transform of its own.
+`eegfeat` turns MNE objects and NumPy arrays into labelled feature tables.
+Feature metadata keeps channels, bands, windows, and normalizations as
+structured fields rather than fragments of column names.
 """
 
 from __future__ import annotations

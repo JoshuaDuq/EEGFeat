@@ -69,6 +69,22 @@ def test_fit_range_outside_the_axis_raises() -> None:
         aperiodic(_spectra(10.0 * FREQS**-1.7), fit_range=(100.0, 200.0), include_global=False)
 
 
+@pytest.mark.parametrize("peak_rejection_z", [0.0, -1.0, np.nan, np.inf, True])
+@pytest.mark.parametrize("measure", [aperiodic, aperiodic_ratio])
+def test_peak_rejection_threshold_must_be_finite_and_positive(
+    peak_rejection_z: float, measure: object
+) -> None:
+    with pytest.raises(ValueError, match="peak_rejection_z"):
+        measure(_spectra(10.0 * FREQS**-1.7), peak_rejection_z=peak_rejection_z)
+
+
+@pytest.mark.parametrize("max_iterations", [0, -1, 1.5, True])
+@pytest.mark.parametrize("measure", [aperiodic, aperiodic_ratio])
+def test_max_iterations_must_be_a_positive_integer(max_iterations: object, measure: object) -> None:
+    with pytest.raises(ValueError, match="max_iterations"):
+        measure(_spectra(10.0 * FREQS**-1.7), max_iterations=max_iterations)
+
+
 # --- aperiodic_ratio -----------------------------------------------------------------
 
 

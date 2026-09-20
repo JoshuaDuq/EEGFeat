@@ -1,0 +1,7 @@
+scope	n_epochs	r	ci_low	ci_high	permutation_p
+cohort	160	0.4106	0.3402	0.4765	0.005
+sub-01	32	0.3319	n/a	n/a	n/a
+sub-02	32	0.4608	n/a	n/a	n/a
+sub-03	32	0.4652	n/a	n/a	n/a
+sub-04	32	0.3939	n/a	n/a	n/a
+sub-05	32	0.3955	n/a	n/a	n/a

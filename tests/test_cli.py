@@ -102,12 +102,12 @@ def test_check_exits_zero_and_writes_nothing(tmp_path, capsys) -> None:
 
 
 def test_check_exits_one_when_the_trial_recording_fails(tmp_path, capsys) -> None:
-    _recording(tmp_path, "sub-01", channels=["Fz", "Cz"])
+    _recording(tmp_path, "sub-01")
 
-    code = main(["check", str(_recipe(tmp_path, FRONTAL_ROI))])
+    code = main(["check", str(_recipe(tmp_path, POWER + DB_WITHOUT_BASELINE))])
 
     assert code == 1
-    assert "F3" in capsys.readouterr().err
+    assert "baseline" in capsys.readouterr().err
 
 
 def test_check_finds_a_named_channel_that_a_later_recording_marks_bad(tmp_path, capsys) -> None:
@@ -204,3 +204,19 @@ def test_the_package_runs_as_a_module() -> None:
 
     assert completed.returncode == 0
     assert completed.stdout.startswith("eegfeat ")
+
+
+def test_check_reports_a_channel_the_first_recording_lacks_instead_of_computing_it(
+    tmp_path, capsys
+) -> None:
+    # Surveying the cohort's channels is cheap and says why; computing a recording that
+    # already fails the survey can only raise from inside a measure.
+    _recording(tmp_path, "sub-01", bads=["F3"])
+    _recording(tmp_path, "sub-02")
+
+    code = main(["check", str(_recipe(tmp_path, FRONTAL_ROI))])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "sub-01_task-rest" in out and "F3" in out and "marked bad" in out
+    assert "sub-02_task-rest" not in out

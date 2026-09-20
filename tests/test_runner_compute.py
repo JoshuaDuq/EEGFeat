@@ -315,3 +315,17 @@ def test_wpli_is_estimated_per_trial_group(tmp_path) -> None:
     assert result.crosstrial is not None
     assert result.crosstrial.row_labels == ("left", "right")
     assert {m.space_kind for m in result.crosstrial.meta} == {"pair"}
+
+
+def test_morlet_log_spacing_reaches_the_top_band_edge(tmp_path) -> None:
+    # fmax defaults to the top band's upper edge, so the grid has to reach it exactly:
+    # a last frequency an ULP short leaves that band unintegrable.
+    result = features(
+        tmp_path,
+        "[bands]\ntheta = [4.0, 8.0]\nalpha = [8.0, 13.0]\nbeta = [13.0, 30.0]\n\n"
+        '[spectra]\nmethod = "morlet"\nn_freqs = 20\n\n'
+        "[windows]\nstim = [0.0, 1.0]\n\n"
+        '[[features]]\nmeasure = "mean_tfr_power"\nbands = ["beta"]\nspatial = ["global"]\n',
+    )
+
+    assert result.epochs is not None and result.epochs.n_rows == 12

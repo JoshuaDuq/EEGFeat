@@ -349,3 +349,23 @@ def test_measure_whose_optional_dependency_is_missing_is_rejected(tmp_path) -> N
     problems = _problems(tmp_path, '[[features]]\nmeasure = "wpli"\n')
 
     assert "eegfeat[connectivity]" in problems
+
+
+def test_a_measure_that_cannot_read_the_chosen_spectrum_is_refused(tmp_path) -> None:
+    problems = _problems(
+        tmp_path,
+        '\n[spectra]\nmethod = "morlet"\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n\n'
+        '[[features]]\nmeasure = "mean_tfr_power"\n',
+    )
+
+    assert "integrated_band_power reads a power spectral density" in problems
+    assert "morlet" in problems
+    assert "mean_tfr_power" not in problems
+
+
+def test_a_time_frequency_measure_needs_morlet(tmp_path) -> None:
+    problems = _problems(tmp_path, '\n[[features]]\nmeasure = "mean_tfr_power"\n')
+
+    assert "mean_tfr_power reads time-frequency power" in problems
+    assert "welch" in problems

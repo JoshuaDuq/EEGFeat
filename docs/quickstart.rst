@@ -14,9 +14,10 @@ Quick Start
 The Mental Model
 ----------------
 
-``eegfeat`` computes no time-frequency transforms or filters of its own. You bring standard
-MNE objects (``Spectrum``, ``EpochsTFR``, or ``Epochs``), wrap them into strongly validated
-containers, and pass them to pure feature extractor functions:
+``eegfeat`` accepts standard MNE objects (``Spectrum``, ``EpochsTFR``, or ``Epochs``), wraps
+them into strongly validated containers, and passes those containers to feature extractor
+functions. Spectra and time-frequency representations are precomputed with MNE;
+:class:`~eegfeat.BandSignal` can apply its documented band-pass and Hilbert transform:
 
 .. grid:: 3
    :gutter: 3
@@ -224,13 +225,16 @@ them as features:
        ["sub-01_features.tsv", "sub-02_features.tsv", "sub-03_features.tsv"]
    )
 
-For in-memory cohort construction, use :func:`eegfeat.stack_rows` on compatible per-epoch
-tables. It preserves input order and rejects duplicate row identities, schema mismatches, and
-cross-trial group tables:
+For in-memory cohort construction, use :func:`eegfeat.stack_rows` on per-epoch tables. It
+preserves input order and rejects duplicate row identities and cross-trial group tables.
+``columns="union"`` keeps every column any recording measured, which is what a cohort whose
+recordings differ in their bad channels needs; the default requires one schema:
 
 .. code-block:: python
 
-   cohort_features = ef.stack_rows([sub_01_features, sub_02_features, sub_03_features])
+   cohort_features = ef.stack_rows(
+       [sub_01_features, sub_02_features, sub_03_features], columns="union"
+   )
 
 The target frame used by :func:`eegfeat.model.build_design` must carry matching
 ``recording``, ``epoch``, and ``event`` keys plus the target and grouping columns. See

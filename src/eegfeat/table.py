@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from eegfeat._validation import validate_fraction_array
 from eegfeat.bands import Band
 from eegfeat.naming import feature_name
 
@@ -92,7 +93,9 @@ class FeatureMeta:
     Parameters
     ----------
     measure : str
-        Measure label, e.g. ``"power"``, ``"peak_freq"``, ``"slope"``.
+        Measure label, e.g. ``"band_power"``, ``"peak_freq"``, ``"slope"``. It names
+        the quantity, not the function that produced it, and is what
+        :meth:`FeatureTable.select` and ``eegfeat.model.Selection`` match on.
     band : Band or None
         The band this column was computed over, or None for measures spanning
         a fitted range rather than a band.
@@ -218,6 +221,7 @@ class FeatureTable:
             raise ValueError(
                 f"coverage shape {self.coverage.shape} does not match values {self.values.shape}."
             )
+        validate_fraction_array(self.coverage, "coverage")
         if len(self.meta) != self.values.shape[1]:
             raise ValueError(
                 f"meta has {len(self.meta)} records but values has {self.values.shape[1]} columns."
@@ -371,13 +375,38 @@ def concat(tables: Sequence[FeatureTable]) -> FeatureTable:
     )
 
 
-def stack_rows(tables: Sequence[FeatureTable]) -> FeatureTable:
-    """Stack compatible per-epoch feature tables in input order.
+def stack_rows(
+    tables: Sequence[FeatureTable],
+    *,
+    columns: Literal["identical", "union"] = "identical",
+) -> FeatureTable:
+    """Stack per-epoch feature tables in input order.
 
     This is the cohort-building counterpart to :func:`concat`, which joins
     feature columns for the same epochs. Cross-trial tables are deliberately
     excluded because their group rows are not independent epochs.
+
+    Parameters
+    ----------
+    tables : sequence of FeatureTable
+        Per-epoch tables to stack, in order.
+    columns : {"identical", "union"}
+        How to reconcile feature columns. ``"identical"``, the default, requires
+        every table to carry the same ordered metadata. ``"union"`` keeps every
+        column any table measured, in first-seen order, and marks a column a
+        recording did not measure as NaN with zero coverage. Recordings in a
+        cohort differ in their bad channels, so their schemas differ; the union
+        is the cohort matrix the fold-local harmonization in
+        :mod:`eegfeat.model` is defined over.
+
+    Returns
+    -------
+    FeatureTable
+        One table holding every row. A flag present in some inputs and absent in
+        others is False where it was absent.
     """
+    if columns not in ("identical", "union"):
+        raise ValueError(f'columns must be "identical" or "union"; got {columns!r}.')
     if not tables:
         raise ValueError("stack_rows requires at least one table.")
 
@@ -386,13 +415,16 @@ def stack_rows(tables: Sequence[FeatureTable]) -> FeatureTable:
     for table in tables:
         if table.row_labels is not None or table.row_ids is None:
             raise ValueError("stack_rows accepts per-epoch tables with row_ids only.")
-        if table.meta != meta:
+        if columns == "identical" and table.meta != meta:
             raise ValueError("stack_rows requires the same ordered feature metadata.")
         identity_groups.append(table.row_ids)
 
     row_ids = tuple(row_id for identities in identity_groups for row_id in identities)
     if len(set(row_ids)) != len(row_ids):
         raise ValueError("stack_rows found duplicate row_ids across input tables.")
+
+    if columns == "union":
+        return _stack_rows_union(tables, row_ids)
 
     flag_names = sorted({name for table in tables for name in table.flags})
     flags = {
@@ -406,6 +438,44 @@ def stack_rows(tables: Sequence[FeatureTable]) -> FeatureTable:
         values=np.concatenate([table.values for table in tables], axis=0),
         coverage=np.concatenate([table.coverage for table in tables], axis=0),
         meta=meta,
+        flags=flags,
+        row_ids=row_ids,
+    )
+
+
+def _stack_rows_union(tables: Sequence[FeatureTable], row_ids: tuple[RowId, ...]) -> FeatureTable:
+    """Stack tables onto the union of their columns, NaN where a table lacks one."""
+    # A column's identity is its whole FeatureMeta, which FeatureTable already
+    # requires to be unique within a table, so first-seen order places each one.
+    positions: dict[FeatureMeta, int] = {}
+    placements = [
+        np.array(
+            [positions.setdefault(record, len(positions)) for record in table.meta],
+            dtype=np.intp,
+        )
+        for table in tables
+    ]
+
+    n_rows, n_columns = len(row_ids), len(positions)
+    values = np.full((n_rows, n_columns), np.nan)
+    # A column a recording never measured had no finite input, so its coverage is 0.
+    coverage = np.zeros((n_rows, n_columns))
+    flag_names = sorted({name for table in tables for name in table.flags})
+    flags = {name: np.zeros((n_rows, n_columns), dtype=bool) for name in flag_names}
+
+    start = 0
+    for table, placement in zip(tables, placements, strict=True):
+        rows = slice(start, start + table.n_rows)
+        values[rows, placement] = table.values
+        coverage[rows, placement] = table.coverage
+        for name, array in table.flags.items():
+            flags[name][rows, placement] = array
+        start += table.n_rows
+
+    return FeatureTable(
+        values=values,
+        coverage=coverage,
+        meta=tuple(positions),
         flags=flags,
         row_ids=row_ids,
     )

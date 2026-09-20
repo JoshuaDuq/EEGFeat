@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from numbers import Integral, Real
 
 import numpy as np
 import numpy.typing as npt
@@ -55,6 +56,7 @@ def aperiodic(
     FeatureTable
         Columns for ``slope`` (negative for a typical spectrum) and ``offset``.
     """
+    _validate_fit_settings(peak_rejection_z, max_iterations)
     band = Band("fit", *fit_range)
     tables: list[FeatureTable] = []
     for which in ("slope", "offset"):
@@ -141,6 +143,7 @@ def aperiodic_ratio(
         Power divided by the fitted aperiodic component. Frequencies at or below
         zero carry no 1/f value and pass through unchanged.
     """
+    _validate_fit_settings(peak_rejection_z, max_iterations)
     mask = Band("fit", *fit_range).mask(spectra.freqs)
     n_bins = int(mask.sum())
     if n_bins < _MIN_FIT_POINTS:
@@ -179,6 +182,22 @@ def aperiodic_ratio(
         ),
         flags={**spectra.flags, "aperiodic_fit_failed": failed},
     )
+
+
+def _validate_fit_settings(peak_rejection_z: float, max_iterations: int) -> None:
+    if (
+        isinstance(peak_rejection_z, bool)
+        or not isinstance(peak_rejection_z, Real)
+        or not np.isfinite(peak_rejection_z)
+        or peak_rejection_z <= 0.0
+    ):
+        raise ValueError(f"peak_rejection_z must be finite and positive, got {peak_rejection_z}.")
+    if (
+        isinstance(max_iterations, bool)
+        or not isinstance(max_iterations, Integral)
+        or max_iterations < 1
+    ):
+        raise ValueError(f"max_iterations must be a positive integer, got {max_iterations!r}.")
 
 
 def _fit_kernel(

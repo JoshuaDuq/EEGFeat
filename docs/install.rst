@@ -81,9 +81,6 @@ Install optional components as needed depending on your analysis scope:
      - ``scikit-learn>=1.3``, ``shap>=0.44``
      - Held-out permutation importance and SHAP explanations
        (:mod:`eegfeat.model.importance`).
-   * - ``[knee]``
-     - ``specparam>=2.0.0rc7,<3``
-     - Spectral knee parameterization.
    * - ``[dev]``
      - ``pytest``, ``ruff``, ``black``, ``mypy``, type stubs
      - Test suite execution, type checking, and linting.
@@ -95,7 +92,7 @@ To install with all extras:
 
 .. code-block:: bash
 
-   pip install -e ".[connectivity,microstates,model,importance,knee,dev,docs]"
+   pip install -e ".[connectivity,microstates,model,importance,dev,docs]"
 
 For predictive modeling specifically, install ``.[model]``. Add ``.[importance]`` when SHAP explanations
 are needed; permutation importance itself is available with the model extra.

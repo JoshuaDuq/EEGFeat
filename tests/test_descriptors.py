@@ -143,6 +143,13 @@ def test_entropy_of_a_single_occupied_bin_is_zero() -> None:
     assert table.values.item() == pytest.approx(0.0, abs=1e-12)
 
 
+def test_entropy_rejects_a_nonuniform_frequency_grid() -> None:
+    freqs = np.array([8.0, 8.5, 9.25, 10.5, 12.0])
+
+    with pytest.raises(ValueError, match="interpolate.*uniform-Hz grid"):
+        spectral_entropy(_spectra(np.ones(freqs.size), freqs), band=ALPHA)
+
+
 def test_edge_at_half_of_a_flat_band_is_near_its_midpoint() -> None:
     table = spectral_edge(
         _spectra(np.ones(UNIFORM.size), UNIFORM),

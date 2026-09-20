@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping, Sequence
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -309,7 +310,8 @@ def spectral_entropy(
 
     One means power is spread evenly across the band; zero means it is
     concentrated in a single bin. Normalized by ``log(n_bins)``, so values from
-    bands holding different numbers of bins are not directly comparable.
+    bands holding different numbers of bins are not directly comparable. The
+    discrete definition requires an approximately uniform frequency grid.
 
     Parameters
     ----------
@@ -335,6 +337,7 @@ def spectral_entropy(
         band,
         groups,
         include_global,
+        weighting="uniform",
     )
 
 
@@ -409,6 +412,7 @@ def _descriptor(
     groups: Mapping[str, Sequence[str]] | None,
     include_global: bool,
     parameters: Mapping[str, object] | None = None,
+    weighting: Literal["trapezoid", "gradient", "band_integral", "uniform"] = "gradient",
 ) -> FeatureTable:
     return expand(
         spectra,
@@ -422,7 +426,7 @@ def _descriptor(
         mode="raw",
         min_bins=3,
         parameters={} if parameters is None else parameters,
-        weighting="gradient",
+        weighting=weighting,
     )
 
 
@@ -464,7 +468,13 @@ def _entropy_kernel(
     freqs: npt.NDArray[np.float64],
     weights: npt.NDArray[np.float64],
 ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
-    del freqs
+    spacing = np.diff(freqs)
+    tolerance = np.finfo(float).eps * max(1.0, abs(float(spacing[0]))) * 8.0
+    if not np.allclose(spacing, spacing[0], rtol=1e-6, atol=tolerance):
+        raise ValueError(
+            "spectral_entropy requires an approximately uniform frequency grid; "
+            "recompute or interpolate the PSD onto a uniform-Hz grid."
+        )
     mass, total = _mass(data, weights)
     with np.errstate(invalid="ignore", divide="ignore"):
         probabilities = np.where(total[..., np.newaxis] > 0.0, mass / total[..., np.newaxis], 0.0)

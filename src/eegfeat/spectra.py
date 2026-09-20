@@ -8,6 +8,11 @@ from typing import Any, Literal
 import numpy as np
 import numpy.typing as npt
 
+from eegfeat._validation import (
+    validate_fraction_array,
+    validate_names,
+    validate_nonempty_shape,
+)
 from eegfeat.identity import epoch_row_ids
 from eegfeat.table import ComputationSpec, RowId
 
@@ -163,6 +168,9 @@ class Spectra:
                 "data must be 4-D (n_epochs, n_channels, n_windows, n_freqs), "
                 f"got {self.data.shape}."
             )
+        validate_nonempty_shape(self.data.shape, "spectral data")
+        if np.any(np.isfinite(self.data) & (self.data < 0.0)):
+            raise ValueError("spectral data must not contain negative power.")
         if self.representation not in ("psd", "time_frequency_power"):
             raise ValueError(f"unknown spectral representation {self.representation!r}.")
         n_channels, n_windows, n_freqs = self.data.shape[1:]
@@ -170,6 +178,7 @@ class Spectra:
             raise ValueError(
                 f"ch_names has {len(self.ch_names)} entries but data has {n_channels} channels."
             )
+        validate_names(self.ch_names, "ch_names")
         if len(self.windows) != n_windows:
             raise ValueError(
                 f"windows has {len(self.windows)} entries but data has {n_windows} windows."
@@ -178,16 +187,22 @@ class Spectra:
             raise ValueError(
                 f"freqs must be 1-D of length {n_freqs}, got shape {self.freqs.shape}."
             )
+        if not np.isfinite(self.freqs).all():
+            raise ValueError("freqs must contain only finite values.")
+        if np.any(self.freqs < 0.0):
+            raise ValueError("freqs must be non-negative.")
         if n_freqs > 1 and not np.all(np.diff(self.freqs) > 0):
             raise ValueError("freqs must be strictly ascending.")
         if self.coverage.shape != self.data.shape:
             raise ValueError(
                 f"coverage shape {self.coverage.shape} does not match data {self.data.shape}."
             )
+        validate_fraction_array(self.coverage, "coverage")
         if self.support.shape != self.data.shape:
             raise ValueError(
                 f"support shape {self.support.shape} does not match data {self.data.shape}."
             )
+        validate_fraction_array(self.support, "support")
         if len(self.row_ids) != self.n_epochs:
             raise ValueError(
                 f"row_ids has {len(self.row_ids)} entries but data has {self.n_epochs} epochs."

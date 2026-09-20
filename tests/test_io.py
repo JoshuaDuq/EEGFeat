@@ -307,3 +307,29 @@ def test_infinite_window_bounds_round_trip(tmp_path) -> None:
     restored = read_table(path)
     _assert_same_table(restored, table)
     assert restored.meta[0].window_bounds == (-np.inf, np.inf)
+
+
+def test_read_dataset_unions_columns_across_recordings_that_measured_different_channels(
+    tmp_path,
+) -> None:
+    first = _epoch_table()
+    second = FeatureTable(
+        values=first.values + 10.0,
+        coverage=first.coverage,
+        meta=(first.meta[0], _meta(space="Pz")),
+        row_ids=tuple(("sub-02_task-test", epoch, event) for _, epoch, event in first.row_ids),
+    )
+    paths = [tmp_path / "sub-01_features.tsv", tmp_path / "sub-02_features.tsv"]
+    for path, table in zip(paths, (first, second), strict=True):
+        rows = pd.DataFrame({"event": [event for _, _, event in table.row_ids]})
+        write_table(table, path, rows=rows)
+
+    dataset = io_module.read_dataset(paths)
+
+    spaces = tuple(m.space for m in dataset.table.meta)
+    assert spaces == (first.meta[0].space, first.meta[1].space, "Pz")
+    values = dataset.table.values
+    assert np.all(np.isnan(values[3:, 1]))
+    assert np.all(np.isnan(values[:3, 2]))
+    np.testing.assert_array_equal(values[3:, 2], second.values[:, 1])
+    assert len(dataset.targets) == 6

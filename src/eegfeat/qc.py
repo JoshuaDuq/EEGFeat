@@ -31,4 +31,5 @@ def band_coverage(
     total = float(np.sum(weights))
     if total <= 0.0:
         return np.zeros(coverage.shape[:3], dtype=float)
-    return np.tensordot(coverage, np.asarray(weights, dtype=float), axes=([3], [0])) / total
+    reduced = np.tensordot(coverage, np.asarray(weights, dtype=float), axes=([3], [0])) / total
+    return np.clip(reduced, 0.0, 1.0)

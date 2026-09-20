@@ -15,7 +15,7 @@ import platform
 import time
 import traceback
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -131,19 +131,28 @@ class RunResult:
 
 
 @dataclass(frozen=True, eq=False)
+class Trial:
+    """What computing the first recording produced."""
+
+    recording: Recording
+    n_epochs: int
+    channels: tuple[str, ...]
+    features: RecordingFeatures
+
+
+@dataclass(frozen=True, eq=False)
 class CheckReport:
     """A recipe tried on its first recording, without writing anything.
 
     ``missing_channels`` maps the label of each recording a run would fail to the
-    channels the recipe names that it will not have once picked.
+    channels the recipe names that it will not have once picked. ``trial`` is None
+    when the first recording is one of them: it would fail for a reason already
+    reported, from inside whichever measure named the channel first.
     """
 
     recordings: tuple[Recording, ...]
     existing: tuple[Path, ...]
-    trial: Recording
-    n_epochs: int
-    channels: tuple[str, ...]
-    features: RecordingFeatures
+    trial: Trial | None
     missing_channels: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
@@ -279,24 +288,33 @@ def check(recipe: Recipe, *, n_jobs: int = 1) -> CheckReport:
         When computing the first recording fails.
     """
     recordings = discover(recipe)
-    trial = recordings[0]
+    missing = _missing_channels(recipe, recordings)
+    report = CheckReport(
+        recordings=recordings,
+        existing=_existing(recordings),
+        trial=None,
+        missing_channels=missing,
+    )
+    first = recordings[0]
+    if first.label in missing:
+        return report
     try:
-        epochs = load_epochs(trial.source, recipe.inputs)
+        epochs = load_epochs(first.source, recipe.inputs)
         features = compute_features(
-            epochs, recipe, recording=trial.source.as_posix(), n_jobs=n_jobs
+            epochs, recipe, recording=first.source.as_posix(), n_jobs=n_jobs
         )
         if features.epochs is not None:
             epoch_rows(epochs, recipe.output.epoch_metadata)
     except Exception as exc:  # noqa: BLE001 - reported with the recording it came from
-        raise TrialError(trial, exc) from exc
-    return CheckReport(
-        recordings=recordings,
-        existing=_existing(recordings),
-        trial=trial,
-        n_epochs=len(epochs),
-        channels=tuple(epochs.ch_names),
-        features=features,
-        missing_channels=_missing_channels(recipe, recordings),
+        raise TrialError(first, exc) from exc
+    return replace(
+        report,
+        trial=Trial(
+            recording=first,
+            n_epochs=len(epochs),
+            channels=tuple(epochs.ch_names),
+            features=features,
+        ),
     )
 
 

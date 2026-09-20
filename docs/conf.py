@@ -53,7 +53,7 @@ napoleon_preprocess_types = True
 # ---------------------------------------------------------------------------
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
-autodoc_mock_imports = ["mne_connectivity", "specparam", "shap"]
+autodoc_mock_imports = ["mne_connectivity", "shap"]
 
 # ---------------------------------------------------------------------------
 # MyST (Markdown support)

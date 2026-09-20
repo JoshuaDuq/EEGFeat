@@ -98,6 +98,15 @@ def test_mismatched_meta_length_raises() -> None:
         FeatureTable(values=np.zeros((3, 2)), coverage=np.ones((3, 2)), meta=(_meta("C3"),))
 
 
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -0.1, 1.1])
+def test_coverage_must_be_a_finite_fraction(invalid: float) -> None:
+    coverage = np.ones((3, 2))
+    coverage[0, 0] = invalid
+
+    with pytest.raises(ValueError, match=r"finite values in \[0, 1\]"):
+        FeatureTable(values=np.zeros((3, 2)), coverage=coverage, meta=(_meta("C3"), _meta("C4")))
+
+
 def test_flags_must_match_the_value_shape() -> None:
     with pytest.raises(ValueError, match="flag"):
         FeatureTable(
@@ -273,3 +282,48 @@ def test_select_preserves_row_labels() -> None:
         row_labels=("rest", "task"),
     )
     assert table.select(space="C4").row_labels == ("rest", "task")
+
+
+def test_stack_rows_unions_columns_when_recordings_differ_in_channels() -> None:
+    # Bad channels differ per recording, so each one measures its own channel set.
+    first = FeatureTable(
+        values=np.array([[1.0, 2.0]]),
+        coverage=np.array([[1.0, 0.5]]),
+        meta=(_meta("C3"), _meta("C4")),
+        flags={"edge_hit": np.array([[True, False]])},
+        row_ids=(("recording-01", 0, "stim"),),
+    )
+    second = FeatureTable(
+        values=np.array([[3.0, 4.0]]),
+        coverage=np.array([[0.25, 1.0]]),
+        meta=(_meta("C3"), _meta("Pz")),
+        row_ids=(("recording-02", 0, "stim"),),
+    )
+
+    stacked = table_module.stack_rows([first, second], columns="union")
+
+    assert tuple(m.space for m in stacked.meta) == ("C3", "C4", "Pz")
+    np.testing.assert_array_equal(
+        stacked.values, np.array([[1.0, 2.0, np.nan], [3.0, np.nan, 4.0]])
+    )
+    np.testing.assert_array_equal(stacked.coverage, np.array([[1.0, 0.5, 0.0], [0.25, 0.0, 1.0]]))
+    np.testing.assert_array_equal(
+        stacked.flags["edge_hit"], np.array([[True, False, False], [False, False, False]])
+    )
+    assert stacked.row_ids == first.row_ids + second.row_ids
+
+
+def test_stack_rows_union_of_identical_schemas_matches_the_strict_stack() -> None:
+    tables = [_identified_table("recording-01"), _identified_table("recording-02", start=6.0)]
+
+    union = table_module.stack_rows(tables, columns="union")
+    strict = table_module.stack_rows(tables)
+
+    assert union.meta == strict.meta
+    np.testing.assert_array_equal(union.values, strict.values)
+    np.testing.assert_array_equal(union.coverage, strict.coverage)
+
+
+def test_stack_rows_refuses_an_unknown_columns_mode() -> None:
+    with pytest.raises(ValueError, match="columns must be"):
+        table_module.stack_rows([_identified_table("recording-01")], columns="outer")

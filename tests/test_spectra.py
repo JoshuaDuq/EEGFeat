@@ -125,6 +125,71 @@ def test_shape_and_axis_mismatches_raise() -> None:
         Spectra(**{**good, "support": np.ones((2, 2, 1, 3))})
 
 
+@pytest.mark.parametrize("field", ["coverage", "support"])
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -0.1, 1.1])
+def test_spectral_fractions_must_be_finite_and_bounded(field: str, invalid: float) -> None:
+    good = dict(
+        data=np.ones((1, 1, 1, 2)),
+        freqs=np.array([1.0, 2.0]),
+        ch_names=("C3",),
+        windows=(Window("all", -np.inf, np.inf),),
+        coverage=np.ones((1, 1, 1, 2)),
+        source="test",
+        representation="psd",
+        support=np.ones((1, 1, 1, 2)),
+        row_ids=(("test", 0, "event"),),
+        computation=ComputationSpec.create("test"),
+    )
+    values = good[field].copy()
+    values[0, 0, 0, 0] = invalid
+
+    with pytest.raises(ValueError, match=rf"{field} must contain finite values in \[0, 1\]"):
+        Spectra(**{**good, field: values})
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("freqs", np.array([1.0, np.nan]), "finite"),
+        ("freqs", np.array([-1.0, 2.0]), "non-negative"),
+        ("data", np.array([[[[-1.0, 1.0]], [[1.0, 1.0]]]]), "negative power"),
+        ("ch_names", ("C3", "C3"), "unique"),
+    ],
+)
+def test_spectral_domain_invariants_raise(field: str, value: object, message: str) -> None:
+    good = dict(
+        data=np.ones((1, 2, 1, 2)),
+        freqs=np.array([1.0, 2.0]),
+        ch_names=("C3", "C4"),
+        windows=(Window("all", -np.inf, np.inf),),
+        coverage=np.ones((1, 2, 1, 2)),
+        source="test",
+        representation="psd",
+        support=np.ones((1, 2, 1, 2)),
+        row_ids=(("test", 0, "event"),),
+        computation=ComputationSpec.create("test"),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        Spectra(**{**good, field: value})
+
+
+def test_spectra_require_nonempty_axes() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        Spectra(
+            data=np.empty((1, 1, 1, 0)),
+            freqs=np.empty(0),
+            ch_names=("C3",),
+            windows=(Window("all", -np.inf, np.inf),),
+            coverage=np.empty((1, 1, 1, 0)),
+            source="test",
+            representation="psd",
+            support=np.empty((1, 1, 1, 0)),
+            row_ids=(("test", 0, "event"),),
+            computation=ComputationSpec.create("test"),
+        )
+
+
 def _toy_tfr(n_epochs: int = 4):
     mne = pytest.importorskip("mne")
     info = mne.create_info(["C3", "C4"], 200.0, "eeg")
