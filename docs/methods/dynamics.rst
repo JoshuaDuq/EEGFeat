@@ -43,6 +43,15 @@ Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}
   percent or decibel reporting, so normalization choice cannot move the onset.
 - **rebound_latency**: Latency of the maximal excursion occurring strictly after the peak latency: :math:`\arg\max_{t_k > t^*} \text{ERDS}(t_k)`.
 
+The ERD/ERS terminology and baseline-referenced power interpretation follow
+the synthesis by `Gert Pfurtscheller and F. H. Lopes da Silva (1999)
+<https://doi.org/10.1016/S1388-2457(99)00141-8>`__, which distinguishes
+frequency-specific changes in ongoing activity from phase-locked ERPs. The
+``erds_*`` functions then apply explicit window summaries to that trace; the
+relative baseline-degeneracy guard and onset/rebound definitions are
+implementation-specific additions and should be reported with the feature
+values.
+
 Oscillatory Bursts
 ------------------
 
@@ -59,6 +68,16 @@ From the surviving burst intervals, five measures are extracted per window:
 - **duration_mean**: Mean duration of surviving bursts in seconds.
 - **amp_mean**: Mean peak envelope amplitude across surviving bursts.
 - **fraction_above**: Overall fraction of samples above threshold prior to duration filtering.
+
+Thresholding an analytic amplitude and requiring a minimum duration are the
+core ideas of the BOSC family of oscillation detectors. The relevant sources
+are `Tara A. Whitten, Adam M. Hughes, Clayton T. Dickson, and Jeremy B. Caplan
+(2011) <https://doi.org/10.1016/j.neuroimage.2010.08.064>`__ and `Adam M.
+Hughes, Tara A. Whitten, Jeremy B. Caplan, and Clayton T. Dickson (2012)
+<https://doi.org/10.1002/hipo.20979>`__. This package intentionally implements a
+transparent envelope-quantile or user-threshold detector, not BOSC: it does not
+fit a background 1/f spectrum, use a chi-square power threshold, or impose a
+cycle-count criterion. Those differences are part of the estimator definition.
 
 
 
@@ -83,6 +102,25 @@ silent zero-filling or whole-window invalidation.
 finite samples and sums them. A gap is skipped rather than interpolated across,
 so missing data contributes nothing instead of contributing a straight line.
 
+These waveform summaries are conventional descriptive statistics rather than
+single named EEG algorithms. Their use as EEG feature families is reviewed by
+`D. Puthankattil Subha, Paul K. Joseph, Rajendra Acharya U., and Choo Min Lim
+(2010) <https://doi.org/10.1007/s10916-008-9231-z>`__. The distributional
+estimators for skewness and kurtosis follow the sample-statistic conventions
+compared by `D. N. Joanes and C. A. Gill (1998)
+<https://doi.org/10.1111/1467-9884.00122>`__. ``line_length`` is the cumulative
+absolute first difference used in EEG detection by `R. Esteller, J. Echauz,
+T. Tcheng, B. Litt, and B. Pless (2001)
+<https://doi.org/10.1109/IEMBS.2001.1020545>`__, and ``zero_crossing_rate`` is
+the discrete crossing-rate analogue of the level-crossing analysis of `S. O.
+Rice (1944) <https://doi.org/10.1002/j.1538-7305.1944.tb00874.x>`__.
+
+``hjorth_mobility`` and ``hjorth_complexity`` are the named exception: they are
+the time-domain parameters introduced by `Bo Hjorth (1970)
+<https://doi.org/10.1016/0013-4694(70)90143-4>`__. The implementation's
+sample-difference form makes mobility dependent on the sampling frequency and
+therefore reports it in hertz.
+
 Peak Amplitude and Latency
 --------------------------
 
@@ -102,3 +140,56 @@ window sits at its edge on a monotonic trend, which is not a peak at all. It doe
 not reject narrow spikes: an isolated tall sample is highly prominent by
 definition.
 
+Peak amplitude and peak latency are standard windowed ERP scores, not labels for
+any particular component. The measurement convention and its limitations are
+summarized by `Connie C. Duncan, Robert J. Barry, John F. Connolly, Catherine
+Fischer, Patricia T. Michie, Risto Näätänen, John Polich, Ivar Reinvang, and
+Cyma Van Petten (2009) <https://doi.org/10.1016/j.clinph.2009.07.045>`__. In
+particular, the window, polarity, and prominence criterion must be reported;
+the function does not infer a paradigm-specific N2, P300, or other component.
+
+References
+----------
+
+* Pfurtscheller, G., & Lopes da Silva, F. H. (1999). *Event-related EEG/MEG
+  synchronization and desynchronization: Basic principles*. Clinical
+  Neurophysiology, 110(11), 1842--1857.
+  `doi:10.1016/S1388-2457(99)00141-8
+  <https://doi.org/10.1016/S1388-2457(99)00141-8>`__.
+* Whitten, T. A., Hughes, A. M., Dickson, C. T., & Caplan, J. B. (2011). *A
+  better oscillation detection method robustly extracts EEG rhythms across
+  brain state changes: The human alpha rhythm as a test case*. NeuroImage, 54,
+  860--874. `doi:10.1016/j.neuroimage.2010.08.064
+  <https://doi.org/10.1016/j.neuroimage.2010.08.064>`__.
+* Hughes, A. M., Whitten, T. A., Caplan, J. B., & Dickson, C. T. (2012). *BOSC:
+  A better oscillation detection method, extracts both sustained and transient
+  rhythms from rat hippocampal recordings*. Hippocampus, 22, 1417--1428.
+  `doi:10.1002/hipo.20979 <https://doi.org/10.1002/hipo.20979>`__.
+* Subha, D. P., Joseph, P. K., Acharya, U. R., & Lim, C. M. (2010). *EEG signal
+  analysis: A survey*. Journal of Medical Systems, 34, 195--212.
+  `doi:10.1007/s10916-008-9231-z
+  <https://doi.org/10.1007/s10916-008-9231-z>`__.
+* Joanes, D. N., & Gill, C. A. (1998). *Comparing measures of sample skewness
+  and kurtosis*. The Statistician, 47, 183--189.
+  `doi:10.1111/1467-9884.00122 <https://doi.org/10.1111/1467-9884.00122>`__.
+* Esteller, R., Echauz, J., Tcheng, T., Litt, B., & Pless, B. (2001). *Line
+  length: An efficient feature for seizure onset detection*. Proceedings of
+  the 23rd Annual International Conference of the IEEE Engineering in Medicine
+  and Biology Society, 1707--1710.
+  `doi:10.1109/IEMBS.2001.1020545
+  <https://doi.org/10.1109/IEMBS.2001.1020545>`__.
+* Rice, S. O. (1944). *Mathematical analysis of random noise*. Bell System
+  Technical Journal, 23(3), 282--332.
+  `doi:10.1002/j.1538-7305.1944.tb00874.x
+  <https://doi.org/10.1002/j.1538-7305.1944.tb00874.x>`__.
+* Hjorth, B. (1970). *EEG analysis based on time domain properties*.
+  Electroencephalography and Clinical Neurophysiology, 29(3), 306--310.
+  `doi:10.1016/0013-4694(70)90143-4
+  <https://doi.org/10.1016/0013-4694(70)90143-4>`__.
+* Duncan, C. C., Barry, R. J., Connolly, J. F., Fischer, C., Michie, P. T.,
+  Näätänen, R., Polich, J., Reinvang, I., & Van Petten, C. (2009).
+  *Event-related potentials in clinical research: Guidelines for eliciting,
+  recording, and quantifying mismatch negativity, P300, and N400*. Clinical
+  Neurophysiology, 120(11), 1883--1908.
+  `doi:10.1016/j.clinph.2009.07.045
+  <https://doi.org/10.1016/j.clinph.2009.07.045>`__.

@@ -41,7 +41,8 @@ and the parameters.
       :link: complexity
       :link-type: doc
 
-      Sample entropy, multiscale entropy, and GFP-peak microstate segmentation.
+      Higuchi fractal dimension, sample and multiscale entropy, and GFP-peak
+      microstate segmentation.
 
 The statistical methods behind predictive modeling — group-disjoint
 cross-fitting, permutation nulls, conformal calibration — are documented inline

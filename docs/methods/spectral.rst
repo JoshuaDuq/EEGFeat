@@ -26,6 +26,18 @@ represented interval. For EEG PSD in V²/Hz the result is V².
 time-frequency power. :class:`~eegfeat.Spectra` records which representation it
 contains, and these operations reject the wrong one instead of conflating units.
 
+The three functions are summaries of an already estimated spectral
+representation; they do not introduce a new PSD estimator. When the input was
+produced by Welch averaging, its statistical provenance is the short-segment
+modified-periodogram estimator of `Peter D. Welch (1967)
+<https://doi.org/10.1109/TAU.1967.1161901>`__. When it was produced by
+multitaper estimation, the relevant method is `David J. Thomson (1982)
+<https://doi.org/10.1109/PROC.1982.12433>`__. For ``mean_tfr_power``, the
+underlying Morlet construction follows `Jean Morlet, G. Arens, E. Fourgeau,
+and D. Giard (1982) <https://doi.org/10.1190/1.1441328>`__. The integration
+and averaging performed here are deterministic numerical summaries of those
+estimates.
+
 Normalization
 -------------
 
@@ -39,6 +51,13 @@ Power normalization is applied per channel before spatial aggregation:
 where :math:`B` is the baseline power in a designated reference window, and :math:`\epsilon = 10^{-20}` is a symmetric floor applied equally to the numerator and denominator to prevent infinite ratios while avoiding numerator bias (in percent normalization, the numerator is unfloored so that a true zero power remains an exact :math:`-100\%` decrease).
 
 Applying normalization per channel before spatial aggregation ensures that region-of-interest (ROI) values reflect the mean of log-ratios rather than the log-ratio of channel means.
+
+The baseline-referenced percentage and logarithmic forms are relative-power
+estimators rather than a separate spectral decomposition. Their interpretation
+as event-related synchronization or desynchronization follows the baseline
+logic formalized by `Gert Pfurtscheller and F. H. Lopes da Silva (1999)
+<https://doi.org/10.1016/S1388-2457(99)00141-8>`__; the sign convention and
+units remain the explicit choices of this package.
 
 For baseline-normalized spectral power, coverage is the minimum of the analysis
 and baseline coverage per channel, and flags from either window propagate to the
@@ -75,6 +94,14 @@ simply the leftmost one. The fit spans ``fit_range``, defaulting to
 :math:`(\min(2, f_{\min}), \max(40, f_{\max}))`, which deliberately reaches
 outside the band: a 1/f slope estimated from a five-hertz window is not a 1/f
 slope. This sets the measure name to ``peak_freq_adjusted``.
+
+The separation of aperiodic background and oscillatory peaks is grounded in the
+spectral parameterization of `Thomas Donoghue, Matar Haller, Erik J. Peterson,
+Paroma Varma, Priyadarshini Sebastian, Richard Gao, Torben Noto, Antonio H.
+Lara, Joni D. Wallis, Robert T. Knight, Avgusta Shestyuk, and Bradley Voytek
+(2020) <https://doi.org/10.1038/s41593-020-00744-x>`__. This implementation
+uses that scientific distinction but deliberately exposes a compact robust
+aperiodic fit rather than claiming to reproduce the complete FOOOF model.
 
 **Smoothing.** The spectrum is averaged over frequencies within the requested
 ``smoothing_hz`` interval around each output frequency. Distances are measured in
@@ -125,6 +152,13 @@ Spectral bandwidth is the mass-weighted standard deviation around the centroid:
 
 Both measures utilize central-difference frequency weights :math:`\Delta f_i` (:func:`numpy.gradient`), consistent with standard spectral descriptor conventions.
 
+The centroid and bandwidth definitions are the first two spectral moments
+described by `Geoffroy Peeters (2004)
+<https://recherche.ircam.fr/anasyn/peeters/ARTICLES/Peeters_2003_cuidadoaudiofeatures.pdf>`__.
+The frequency weighting used here is adapted to a PSD density, so the
+calculation integrates spectral mass rather than treating unequal frequency
+bins as equally probable observations.
+
 Spectral Edge Frequency
 -----------------------
 
@@ -135,6 +169,13 @@ Spectral edge frequency (SEF) is the frequency below which a specified fraction 
    \frac{\sum_{i=0}^{k} P(f_i) \Delta f_i}{\sum_{i} P(f_i) \Delta f_i} \ge \alpha
 
 The value is computed directly via search without interpolation, returning the frequency grid coordinate that first meets or exceeds the cumulative threshold.
+
+SEF is a cumulative-power quantile, not a peak-frequency estimator. Its use as
+an EEG summary is exemplified by `Hazel H. Szeto (1990)
+<https://doi.org/10.1203/00006450-199003000-00018>`__, who defined the spectral
+edge as the frequency below which a specified percentage of electrocortical
+power resides. The package keeps the quantile configurable rather than
+assuming the 90-percent convention used in that study.
 
 Spectral Entropy
 ----------------
@@ -150,6 +191,13 @@ Spectral entropy measures the uniformity of the spectral distribution within a b
 
 where :math:`N` is the number of frequency bins in the band. A value of 1 indicates uniform power across the band, while 0 indicates concentration in a single bin. This discrete definition requires an approximately uniform frequency grid; non-uniform grids are rejected because bin probabilities and density-weighted spectral mass are different quantities. Recompute or interpolate a non-uniform PSD onto a uniform-Hz grid before calculating entropy. Because the normalization depends on :math:`\ln(N)`, entropy values across bands with different bin counts are not directly comparable.
 
+This is the normalized entropy of the power-spectrum proportions introduced for
+EEG irregularity by `T. Inouye, K. Shinosaki, H. Sakamoto, S. Toi, S. Ukai,
+A. Iyama, Y. Katsuda, and M. Hirano (1991)
+<https://doi.org/10.1016/0013-4694(91)90138-T>`__. The implementation retains
+their information-theoretic interpretation while making the frequency-grid
+assumption explicit.
+
 Aperiodic Fit
 -------------
 
@@ -164,6 +212,11 @@ Fitting uses iterative peak rejection: an initial least-squares line is fit over
 If the fit cannot be estimated, ``aperiodic_ratio`` returns NaNs for that cell
 and marks ``aperiodic_fit_failed``. It never labels an unchanged raw spectrum as
 aperiodic-adjusted.
+
+The fitted line is therefore a named scientific model, while the positive-
+residual rejection rule and its stopping criteria are implementation choices.
+They should not be cited as an exact reimplementation of any software package
+unless those settings are reproduced independently.
 
 Band Ratio and Asymmetry
 ------------------------
@@ -212,4 +265,56 @@ For logarithmic input, the difference of logs corresponds directly to the logari
      - ``dB``
      - ``dB``
 
+The band-ratio operation is a deterministic arithmetic transform of two
+already-computed band-power columns; no unique historical estimator is claimed
+for it. The left-right asymmetry convention is the power-asymmetry framework
+used by `Richard J. Davidson, John P. Chapman, Linda J. Chapman, and John B.
+Henriques (1990) <https://doi.org/10.1111/j.1469-8986.1990.tb01970.x>`__.
+Because log-ratio asymmetry is a different scale, it is reported as such rather
+than being silently called the same raw-power index.
 
+References
+----------
+
+* Welch, P. D. (1967). *The use of fast Fourier transform for the estimation of
+  power spectra: A method based on time averaging over short, modified
+  periodograms*. IEEE Transactions on Audio and Electroacoustics, 15(2),
+  70--73. `doi:10.1109/TAU.1967.1161901
+  <https://doi.org/10.1109/TAU.1967.1161901>`__.
+* Thomson, D. J. (1982). *Spectrum estimation and harmonic analysis*.
+  Proceedings of the IEEE, 70(9), 1055--1096.
+  `doi:10.1109/PROC.1982.12433 <https://doi.org/10.1109/PROC.1982.12433>`__.
+* Morlet, J., Arens, G., Fourgeau, E., & Giard, D. (1982). *Wave propagation
+  and sampling theory; Part I, Complex signal and scattering in multilayered
+  media*. Geophysics, 47(2). `doi:10.1190/1.1441328
+  <https://doi.org/10.1190/1.1441328>`__.
+* Donoghue, T., Haller, M., Peterson, E. J., Varma, P., Sebastian, P., Gao, R.,
+  Noto, T., Lara, A. H., Wallis, J. D., Knight, R. T., Shestyuk, A., & Voytek,
+  B. (2020). *Parameterizing neural power spectra into periodic and aperiodic
+  components*. Nature Neuroscience, 23, 1655--1665.
+  `doi:10.1038/s41593-020-00744-x
+  <https://doi.org/10.1038/s41593-020-00744-x>`__.
+* Peeters, G. (2004). *A large set of audio features for sound description
+  (similarity and classification) in the CUIDADO project*. IRCAM technical
+  report. `Report PDF
+  <https://recherche.ircam.fr/anasyn/peeters/ARTICLES/Peeters_2003_cuidadoaudiofeatures.pdf>`__.
+* Szeto, H. H. (1990). *Spectral edge frequency as a simple quantitative
+  measure of the maturation of electrocortical activity*. Pediatric Research,
+  27, 289--292. `doi:10.1203/00006450-199003000-00018
+  <https://doi.org/10.1203/00006450-199003000-00018>`__.
+* Inouye, T., Shinosaki, K., Sakamoto, H., Toi, S., Ukai, S., Iyama, A.,
+  Katsuda, Y., & Hirano, M. (1991). *Quantification of EEG irregularity by use
+  of the entropy of the power spectrum*. Electroencephalography and Clinical
+  Neurophysiology, 79(3), 204--210.
+  `doi:10.1016/0013-4694(91)90138-T
+  <https://doi.org/10.1016/0013-4694(91)90138-T>`__.
+* Pfurtscheller, G., & Lopes da Silva, F. H. (1999). *Event-related EEG/MEG
+  synchronization and desynchronization: Basic principles*. Clinical
+  Neurophysiology, 110(11), 1842--1857.
+  `doi:10.1016/S1388-2457(99)00141-8
+  <https://doi.org/10.1016/S1388-2457(99)00141-8>`__.
+* Davidson, R. J., Chapman, J. P., Chapman, L. J., & Henriques, J. B. (1990).
+  *Asymmetrical brain electrical activity discriminates between
+  psychometrically-matched verbal and spatial cognitive tasks*. Psychophysiology,
+  27, 528--543. `doi:10.1111/j.1469-8986.1990.tb01970.x
+  <https://doi.org/10.1111/j.1469-8986.1990.tb01970.x>`__.

@@ -33,6 +33,36 @@ missing samples are never removed in a way that creates new temporal neighbours.
 Cost grows with the square of the window length, so entropy on long windows is
 markedly slower than the spectral measures.
 
+The sample-entropy estimator is the self-match-excluding statistic introduced
+by `Joshua S. Richman and J. Randall Moorman (2000)
+<https://doi.org/10.1152/ajpheart.2000.278.6.H2039>`__. The package retains the
+strict Chebyshev matching rule and makes undefined pair counts visible as NaN
+or infinity instead of replacing them with an arbitrary finite value.
+``multiscale_entropy`` follows the coarse-graining construction of `Madalena
+Costa, Ary L. Goldberger, and C.-K. Peng (2002)
+<https://doi.org/10.1103/PhysRevLett.89.068102>`__. Recomputing the tolerance
+from each coarse-grained standard deviation is exposed as a different estimator
+because it is not the classical fixed-tolerance MSE definition.
+
+Higuchi Fractal Dimension
+-------------------------
+
+``higuchi_fractal_dimension`` retraces the signal at integer strides
+:math:`k`, estimates the mean curve length :math:`L(k)` for each stride, and
+fits the scaling relation :math:`L(k) \propto k^{-D}`. The reported dimension
+:math:`D` is therefore the slope of :math:`\log L(k)` against
+:math:`-\log k`: values near one are characteristic of smooth curves, whereas
+larger values indicate structure that persists across finer scales. The
+estimator is linear in the number of samples for a fixed ``k_max`` and is not a
+substitute for sample entropy: it measures geometric scale dependence rather
+than template-match predictability.
+
+This is the estimator introduced by `T. Higuchi (1988)
+<https://doi.org/10.1016/0167-2789(88)90081-4>`__. The package reports NaN
+when a window contains non-finite samples or fewer samples than the largest
+requested stride, so an unsuccessful estimate remains distinguishable from a
+valid low-dimensional signal.
+
 Microstates
 -----------
 
@@ -77,5 +107,53 @@ four temporal statistics are derived:
    T_{i \to j} = \frac{N_{i \to j}}{\sum_{m \ne i} N_{i \to m}} \quad (i \ne j)
 
 Self-transitions (:math:`i = j`) are omitted from segment-based transition matrices.
+
+The microstate model descends from the quasi-stable scalp-map analysis of
+`Dietrich Lehmann, H. Ozaki, and I. Pal (1987)
+<https://doi.org/10.1016/0013-4694(87)90025-3>`__ and the GFP-peak clustering
+and back-fitting formulation of `Roberto D. Pascual-Marqui, Christoph M. Michel,
+and Dietrich Lehmann (1995) <https://doi.org/10.1109/10.391164>`__. The review
+by `Christoph M. Michel and Thomas Koenig (2018)
+<https://doi.org/10.1016/j.neuroimage.2017.11.062>`__ explains why GFP peaks,
+topographic correlation, polarity handling, and temporal descriptors are
+separate methodological choices.
+
+This package intentionally differs from the classical polarity-invariant
+modified k-means objective: it sign-normalizes the selected maps and then uses
+ordinary k-means. Consequently, ``state1``--``stateK`` are estimator-local
+cluster labels, not automatically the canonical A--D maps, and the temporal
+features should not be compared across independently fitted segmentations
+without a topographic matching step.
+
+References
+----------
+
+* Higuchi, T. (1988). *Approach to an irregular time series on the basis of
+  the fractal theory*. Physica D: Nonlinear Phenomena, 31(2), 277--283.
+  `doi:10.1016/0167-2789(88)90081-4
+  <https://doi.org/10.1016/0167-2789(88)90081-4>`__.
+* Richman, J. S., & Moorman, J. R. (2000). *Physiological time-series analysis
+  using approximate entropy and sample entropy*. American Journal of
+  Physiology--Heart and Circulatory Physiology, 278(6), H2039--H2049.
+  `doi:10.1152/ajpheart.2000.278.6.H2039
+  <https://doi.org/10.1152/ajpheart.2000.278.6.H2039>`__.
+* Costa, M., Goldberger, A. L., & Peng, C.-K. (2002). *Multiscale entropy
+  analysis of complex physiologic time series*. Physical Review Letters, 89(6),
+  068102. `doi:10.1103/PhysRevLett.89.068102
+  <https://doi.org/10.1103/PhysRevLett.89.068102>`__.
+* Lehmann, D., Ozaki, H., & Pal, I. (1987). *EEG alpha map series: Brain
+  micro-states by space-oriented adaptive segmentation*. Electroencephalography
+  and Clinical Neurophysiology, 67(3), 271--288.
+  `doi:10.1016/0013-4694(87)90025-3
+  <https://doi.org/10.1016/0013-4694(87)90025-3>`__.
+* Pascual-Marqui, R. D., Michel, C. M., & Lehmann, D. (1995). *Segmentation of
+  brain electrical activity into microstates: Model estimation and
+  validation*. IEEE Transactions on Biomedical Engineering, 42(7), 658--665.
+  `doi:10.1109/10.391164 <https://doi.org/10.1109/10.391164>`__.
+* Michel, C. M., & Koenig, T. (2018). *EEG microstates as a tool for studying
+  the temporal dynamics of whole-brain neuronal networks: A review*.
+  NeuroImage, 180(B), 577--593.
+  `doi:10.1016/j.neuroimage.2017.11.062
+  <https://doi.org/10.1016/j.neuroimage.2017.11.062>`__.
 
 Segmentation requires scikit-learn: ``pip install eegfeat[microstates]``.

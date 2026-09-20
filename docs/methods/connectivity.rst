@@ -48,6 +48,16 @@ downstream statistical or predictive models. Feature tables returned by
 explicit broadcasting strategy. Pass ``trials`` to estimate coherence within distinct groups
 (for example, per experimental condition).
 
+The ITPC expression is the length of the across-trial mean unit-phase vector,
+the phase-locking quantity used by `Catherine Tallon-Baudry, Olivier Bertrand,
+Claude Delpuech, and Jacques Pernier (1996)
+<https://doi.org/10.1523/JNEUROSCI.16-13-04240.1996>`__ and documented in the
+single-trial EEG framework of `Arnaud Delorme and Scott Makeig (2004)
+<https://doi.org/10.1016/j.jneumeth.2003.10.009>`__. PPC is not a second name
+for ITPC: it is the bias-free pairwise estimator introduced by `Martin Vinck,
+Marijn van Wingerden, Thilo Womelsdorf, Pascal Fries, and Cyriel M. A.
+Pennartz (2010) <https://doi.org/10.1016/j.neuroimage.2010.01.073>`__.
+
 Phase-Amplitude Coupling
 ------------------------
 
@@ -66,6 +76,14 @@ per epoch. **No surrogate correction is applied.** A raw coupling value is biase
 upward by amplitude and phase autocorrelation and should be evaluated against an
 empirical null distribution (preferring within-trial circular time shifts over
 trial-shuffling to preserve single-trial spectral structure).
+
+The mean-vector-length construction follows `Ryan T. Canolty, E. Edwards, Sarang
+S. Dalal, Maryam Soltani, S. S. Nagarajan, H. E. Kirsch, Mitchel S. Berger,
+N. M. Barbaro, and Robert T. Knight (2006)
+<https://doi.org/10.1126/science.1128115>`__. The methodological comparison by
+`N. Tort, R. Komorowski, H. Eichenbaum, and N. Kopell (2010)
+<https://doi.org/10.1152/jn.00106.2010>`__ motivates treating this raw MVL as
+an effect-size estimator rather than as a significance test.
 
 
 Connectivity
@@ -92,6 +110,26 @@ channel-level matrix is averaged within each ROI block and a node's own block
 excludes the diagonal. These connectivity measures are estimated across trials,
 so results have one row per trial group; see :func:`~eegfeat.itpc`.
 
+Envelope correlation is the amplitude-correlation approach used in MEG
+functional-connectivity work by `Matthew J. Brookes, Joanne R. Hale, Johanna M.
+Zumer, Claire M. Stevenson, Susan T. Francis, Gareth R. Barnes, Julia P. Owen,
+Peter G. Morris, and Srikantan S. Nagarajan (2011)
+<https://doi.org/10.1016/j.neuroimage.2011.02.054>`__. When orthogonalization is
+requested, its leakage-correction provenance is `G. L. Colclough, M. J.
+Brookes, S. M. Smith, and M. W. Woolrich (2015)
+<https://doi.org/10.1016/j.neuroimage.2015.03.071>`__. The remaining spectral
+estimators and their exact parameter names are delegated to the official
+`MNE-Connectivity spectral-connectivity documentation
+<https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html>`__.
+
+The phase-lag interpretation of PLI follows `C. J. Stam, G. Nolte, and A.
+Daffertshofer (2007) <https://doi.org/10.1002/hbm.20346>`__. The weighted phase
+lag index and its sample-size correction follow `Martin Vinck, Robert Oostenveld,
+Marijn van Wingerden, Franscesco Battaglia, and Cyriel M. A. Pennartz (2011)
+<https://doi.org/10.1016/j.neuroimage.2011.01.055>`__. ``wpli`` is therefore a
+specific estimator, whereas ``spectral_connectivity`` is the package's common
+interface to several estimators.
+
 Common Spatial Patterns
 -----------------------
 
@@ -106,6 +144,13 @@ transform both training and test rows. Repeat this within inner tuning; for a
 scikit-learn workflow, place ``mne.decoding.CSP`` inside the classifier pipeline.
 The split signature is recorded in the feature computation metadata. CSP expects
 band-restricted input, an even number of components, and exactly two classes.
+
+CSP is the supervised spatial-filtering method introduced to single-trial EEG
+classification by `Herbert Ramoser, J. Müller-Gerking, and Gert Pfurtscheller
+(2000) <https://doi.org/10.1109/86.895946>`__. The cross-fitting requirement in
+this package is a statistical safeguard around that method: because the filters
+are estimated from labels, no held-out epoch may influence the filters used to
+transform it.
 
 Graph Measures
 --------------
@@ -140,4 +185,69 @@ The clustering coefficient **binarizes** the connectivity matrix at user-specifi
 
 where :math:`(A^3)_{ii}` is the diagonal entry of the cubed adjacency matrix (representing twice the number of triangles :math:`T_i` containing node :math:`i`), and :math:`k_i = \sum_j A_{ij}` is the node degree. Nodes with :math:`k_i < 2` are excluded from the average. The result is NaN only when no node has at least two neighbors; eligible nodes with no triangles contribute zero.
 
+The global-efficiency definition is the weighted-network measure introduced by
+`Vito Latora and Massimo Marchiori (2001)
+<https://doi.org/10.1103/PhysRevLett.87.198701>`__. The local clustering
+coefficient is the triangle-density convention of `Duncan J. Watts and Steven
+H. Strogatz (1998) <https://doi.org/10.1038/30918>`__. This implementation
+adds an explicit thresholding rule for weighted connectivity and treats missing
+edges as undefined rather than as zero-weight disconnections.
 
+References
+----------
+
+* Tallon-Baudry, C., Bertrand, O., Delpuech, C., & Pernier, J. (1996).
+  *Stimulus specificity of phase-locked and non-phase-locked 40 Hz visual
+  responses in human*. The Journal of Neuroscience, 16(13), 4240--4249.
+  `doi:10.1523/JNEUROSCI.16-13-04240.1996
+  <https://doi.org/10.1523/JNEUROSCI.16-13-04240.1996>`__.
+* Delorme, A., & Makeig, S. (2004). *EEGLAB: An open source toolbox for
+  analysis of single-trial EEG dynamics including independent component
+  analysis*. Journal of Neuroscience Methods, 134(1), 9--21.
+  `doi:10.1016/j.jneumeth.2003.10.009
+  <https://doi.org/10.1016/j.jneumeth.2003.10.009>`__.
+* Vinck, M., van Wingerden, M., Womelsdorf, T., Fries, P., & Pennartz, C. M.
+  A. (2010). *The pairwise phase consistency: A bias-free measure of rhythmic
+  neuronal synchronization*. NeuroImage, 51(1), 112--122.
+  `doi:10.1016/j.neuroimage.2010.01.073
+  <https://doi.org/10.1016/j.neuroimage.2010.01.073>`__.
+* Canolty, R. T., Edwards, E., Dalal, S. S., Soltani, M., Nagarajan, S. S.,
+  Kirsch, H. E., Berger, M. S., Barbaro, N. M., & Knight, R. T. (2006). *High
+  gamma power is phase-locked to theta oscillations in human neocortex*.
+  Science, 313(5793), 1626--1628.
+  `doi:10.1126/science.1128115 <https://doi.org/10.1126/science.1128115>`__.
+* Tort, N., Komorowski, R., Eichenbaum, H., & Kopell, N. (2010). *Measuring
+  phase-amplitude coupling between neuronal oscillations of different
+  frequencies*. Journal of Neurophysiology, 104(2), 1195--1210.
+  `doi:10.1152/jn.00106.2010 <https://doi.org/10.1152/jn.00106.2010>`__.
+* Brookes, M. J., Hale, J. R., Zumer, J. M., Stevenson, C. M., Francis, S. T.,
+  Barnes, G. R., Owen, J. P., Morris, P. G., & Nagarajan, S. S. (2011).
+  *Measuring functional connectivity using MEG: Methodology and comparison
+  with fcMRI*. NeuroImage, 56(3), 1082--1104.
+  `doi:10.1016/j.neuroimage.2011.02.054
+  <https://doi.org/10.1016/j.neuroimage.2011.02.054>`__.
+* Colclough, G. L., Brookes, M. J., Smith, S. M., & Woolrich, M. W. (2015). *A
+  symmetric multivariate leakage correction for MEG connectomes*. NeuroImage,
+  117, 439--448. `doi:10.1016/j.neuroimage.2015.03.071
+  <https://doi.org/10.1016/j.neuroimage.2015.03.071>`__.
+* Stam, C. J., Nolte, G., & Daffertshofer, A. (2007). *Phase lag index:
+  Assessment of functional connectivity from multi channel EEG and MEG with
+  diminished bias from common sources*. Human Brain Mapping, 28, 1178--1193.
+  `doi:10.1002/hbm.20346 <https://doi.org/10.1002/hbm.20346>`__.
+* Vinck, M., Oostenveld, R., van Wingerden, M., Battaglia, F., & Pennartz, C.
+  M. A. (2011). *An improved index of phase-synchronization for
+  electrophysiological data in the presence of volume-conduction, noise and
+  sample-size bias*. NeuroImage, 55(4), 1548--1565.
+  `doi:10.1016/j.neuroimage.2011.01.055
+  <https://doi.org/10.1016/j.neuroimage.2011.01.055>`__.
+* Ramoser, H., Müller-Gerking, J., & Pfurtscheller, G. (2000). *Optimal spatial
+  filtering of single trial EEG during imagined hand movement*. IEEE
+  Transactions on Rehabilitation Engineering, 8(4), 441--446.
+  `doi:10.1109/86.895946 <https://doi.org/10.1109/86.895946>`__.
+* Latora, V., & Marchiori, M. (2001). *Efficient behavior of small-world
+  networks*. Physical Review Letters, 87(19), 198701.
+  `doi:10.1103/PhysRevLett.87.198701
+  <https://doi.org/10.1103/PhysRevLett.87.198701>`__.
+* Watts, D. J., & Strogatz, S. H. (1998). *Collective dynamics of small-world
+  networks*. Nature, 393, 440--442. `doi:10.1038/30918
+  <https://doi.org/10.1038/30918>`__.
