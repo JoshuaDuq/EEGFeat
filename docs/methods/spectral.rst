@@ -38,6 +38,26 @@ and D. Giard (1982) <https://doi.org/10.1190/1.1441328>`__. The integration
 and averaging performed here are deterministic numerical summaries of those
 estimates.
 
+The implementation first constructs exact piecewise-linear integration weights
+on the requested band and then reduces finite bins with those weights. In
+pseudocode, the core reductions are:
+
+.. code-block:: python
+
+   weights = band_integration_weights(freqs, fmin, fmax)
+   selected = weights > 0.0
+   finite = np.isfinite(power[..., selected])
+   selected_power = power[..., selected]
+   selected_weights = weights[selected]
+   weighted_sum = np.sum(np.where(finite, selected_power * selected_weights, 0.0), axis=-1)
+   weight_sum = np.sum(np.where(finite, selected_weights, 0.0), axis=-1)
+   mean = np.where(weight_sum > 0, weighted_sum / weight_sum, np.nan)
+   integral = np.where(finite.all(axis=-1), weighted_sum, np.nan)
+
+Thus ``mean_psd`` and ``mean_tfr_power`` return a weighted mean, whereas
+``integrated_band_power`` returns the weighted integral and invalidates a cell
+if any bin required by the integration is non-finite.
+
 Normalization
 -------------
 
@@ -51,6 +71,20 @@ Power normalization is applied per channel before spatial aggregation:
 where :math:`B` is the baseline power in a designated reference window, and :math:`\epsilon = 10^{-20}` is a symmetric floor applied equally to the numerator and denominator to prevent infinite ratios while avoiding numerator bias (in percent normalization, the numerator is unfloored so that a true zero power remains an exact :math:`-100\%` decrease).
 
 Applying normalization per channel before spatial aggregation ensures that region-of-interest (ROI) values reflect the mean of log-ratios rather than the log-ratio of channel means.
+
+The corresponding implementation is:
+
+.. code-block:: python
+
+   epsilon = 1e-20
+   floored_power = np.maximum(power, epsilon)
+   floored_baseline = np.maximum(baseline, epsilon)
+   log_ratio = np.log10(floored_power / floored_baseline)
+   normalized_db = 10.0 * log_ratio
+   normalized_percent = (power - floored_baseline) / floored_baseline * 100.0
+
+The percent branch intentionally retains the unfloored numerator, so zero
+power is reported as an exact :math:`-100\%` change.
 
 The baseline-referenced percentage and logarithmic forms are relative-power
 estimators rather than a separate spectral decomposition. Their interpretation
@@ -135,6 +169,18 @@ evaluated band. Every column additionally reports ``freq_resolution_hz``, the
 median in-band bin spacing, so the precision the grid could support is visible
 alongside the estimate.
 
+At the implementation level, the final interpolation is equivalent to:
+
+.. code-block:: python
+
+   denominator = left - 2.0 * centre + right
+   delta = 0.5 * (left - right) / denominator
+   delta = np.clip(np.nan_to_num(delta, nan=0.0), -0.5, 0.5)
+   peak_frequency = frequency[index] + delta * neighbour_spacing
+
+The code uses ``delta = 0`` at a zero denominator and for edge maxima; a
+prominence failure instead returns the power-weighted centre of gravity.
+
 Spectral Centroid and Bandwidth
 -------------------------------
 
@@ -159,6 +205,17 @@ The frequency weighting used here is adapted to a PSD density, so the
 calculation integrates spectral mass rather than treating unequal frequency
 bins as equally probable observations.
 
+The calculation is implemented as:
+
+.. code-block:: python
+
+   weights = np.gradient(freqs)
+   mass = power * weights
+   total = np.sum(mass, axis=-1)
+   centroid = np.sum(mass * freqs, axis=-1) / total
+   bandwidth = np.sqrt(np.sum(mass * (freqs - centroid[..., None]) ** 2,
+                              axis=-1) / total)
+
 Spectral Edge Frequency
 -----------------------
 
@@ -176,6 +233,18 @@ an EEG summary is exemplified by `Hazel H. Szeto (1990)
 edge as the frequency below which a specified percentage of electrocortical
 power resides. The package keeps the quantile configurable rather than
 assuming the 90-percent convention used in that study.
+
+The exact reduction is:
+
+.. code-block:: python
+
+   mass = power * weights
+   cumulative = np.cumsum(mass, axis=-1) / np.sum(mass, axis=-1, keepdims=True)
+   index = np.argmax(cumulative >= percentile, axis=-1)
+   edge_frequency = freqs[index]
+
+If no bin reaches the requested fraction because of floating-point rounding,
+the implementation returns the final frequency bin.
 
 Spectral Entropy
 ----------------
@@ -198,6 +267,18 @@ A. Iyama, Y. Katsuda, and M. Hirano (1991)
 their information-theoretic interpretation while making the frequency-grid
 assumption explicit.
 
+The implementation uses uniform-bin mass and omits the undefined ``0 log 0``
+term:
+
+.. code-block:: python
+
+   mass = np.where(np.isfinite(power), power, 0.0)
+   n_bins = mass.shape[-1]
+   probability = mass / np.sum(mass, axis=-1, keepdims=True)
+   entropy_terms = np.where(probability > 0.0,
+                            probability * np.log(probability), 0.0)
+   entropy = -np.sum(entropy_terms, axis=-1) / np.log(n_bins)
+
 Aperiodic Fit
 -------------
 
@@ -212,6 +293,37 @@ Fitting uses iterative peak rejection: an initial least-squares line is fit over
 If the fit cannot be estimated, ``aperiodic_ratio`` returns NaNs for that cell
 and marks ``aperiodic_fit_failed``. It never labels an unchanged raw spectrum as
 aperiodic-adjusted.
+
+For each cell, the fitted curve and adjustment are evaluated as:
+
+.. code-block:: python
+
+   log_frequency = np.log10(freqs)
+   fitted_log_power = offset + slope * log_frequency
+   aperiodic_power = 10.0 ** fitted_log_power
+   adjusted_power = power / aperiodic_power
+
+Only positive finite power values enter the fit; non-positive frequencies are
+not transformed, and failed fits return NaN with ``aperiodic_fit_failed``.
+
+The robust rejection loop is equivalent to:
+
+.. code-block:: python
+
+   keep = np.isfinite(power) & (power > 0.0)
+   for _ in range(max_iterations):
+       slope, offset = np.polyfit(log_frequency[keep],
+                                  np.log10(power[keep]), 1)
+       residual = np.log10(power) - (offset + slope * log_frequency)
+       mad = median_abs_deviation(residual[keep], scale="normal")
+       tightened = keep & (residual <= peak_rejection_z * mad)
+       if (not np.isfinite(mad) or mad <= np.finfo(float).eps
+               or tightened.sum() < 5 or np.array_equal(tightened, keep)):
+           break
+       keep = tightened
+
+This is intentionally a compact project-specific robust fit, not a claim of
+bit-for-bit equivalence to FOOOF or another spectral-parameterization package.
 
 The fitted line is therefore a named scientific model, while the positive-
 residual rejection rule and its stopping criteria are implementation choices.
@@ -229,11 +341,15 @@ Band power ratios and hemispheric asymmetry indices operate on computed band pow
 
    R_{A/B} = \frac{P_A}{P_B}
 
-When the input is logarithmic (``"log10"``, ``"log_ratio"``, or ``"db"``), division is replaced by subtraction:
+When the input is logarithmic (``"log10"``, ``"log_ratio"``, or ``"db"``), division is replaced by subtraction of the already-normalized values:
 
 .. math::
 
-   R_{A/B} = \log_{10} P_A - \log_{10} P_B = \log_{10}\left(\frac{P_A}{P_B}\right)
+   R_{A/B} = P_A^{(\mathrm{log})} - P_B^{(\mathrm{log})}
+
+For ``"log10"`` and ``"log_ratio"`` this equals
+:math:`\log_{10}(P_A/P_B)`; for ``"db"`` it equals
+:math:`10\log_{10}(P_A/P_B)` in decibels.
 
 **Hemispheric Asymmetry:** For a left-right homologous channel pair :math:`(L, R)`, raw power asymmetry is defined as the normalized difference:
 
@@ -241,11 +357,15 @@ When the input is logarithmic (``"log10"``, ``"log_ratio"``, or ``"db"``), divis
 
    A_{L, R} = \frac{P_R - P_L}{P_R + P_L}
 
-For logarithmic input, the difference of logs corresponds directly to the logarithm of the power ratio:
+For logarithmic input, the same normalized difference is used:
 
 .. math::
 
-   A_{L, R} = \log_{10} P_R - \log_{10} P_L = \log_{10}\left(\frac{P_R}{P_L}\right)
+   A_{L, R} = P_R^{(\mathrm{log})} - P_L^{(\mathrm{log})}
+
+Thus ``"log10"`` and ``"log_ratio"`` produce
+:math:`\log_{10}(P_R/P_L)`, whereas ``"db"`` produces the corresponding
+dB difference.
 
 **Units:** the output unit names the scale the result is on, because the same subtraction means different things on different scales. A ``"db"`` input carries the factor of ten through the subtraction, so the result is a difference in dB rather than a bare log ratio:
 
@@ -272,6 +392,20 @@ used by `Richard J. Davidson, John P. Chapman, Linda J. Chapman, and John B.
 Henriques (1990) <https://doi.org/10.1111/j.1469-8986.1990.tb01970.x>`__.
 Because log-ratio asymmetry is a different scale, it is reported as such rather
 than being silently called the same raw-power index.
+
+The corresponding elementwise operations are:
+
+.. code-block:: python
+
+   if normalization in {"log10", "log_ratio", "db"}:
+       band_ratio = numerator - denominator
+       asymmetry = right - left
+   else:
+       band_ratio = np.where(denominator != 0.0,
+                             numerator / denominator, np.nan)
+       total = right + left
+       asymmetry = np.where(total != 0.0,
+                            (right - left) / total, np.nan)
 
 References
 ----------

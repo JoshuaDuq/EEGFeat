@@ -44,6 +44,43 @@ Costa, Ary L. Goldberger, and C.-K. Peng (2002)
 from each coarse-grained standard deviation is exposed as a different estimator
 because it is not the classical fixed-tolerance MSE definition.
 
+The core sample-entropy computation is:
+
+.. code-block:: python
+
+   templates = sliding_window_view(signal, order + 1)
+   templates = templates[np.isfinite(templates).all(axis=1)]
+   finite_signal = signal[np.isfinite(signal)]
+   tolerance = r * np.std(finite_signal)
+   short_matches = 0
+   long_matches = 0
+   for i, j in unordered_pairs(templates):
+       short = np.max(np.abs(templates[i, :order] - templates[j, :order])) < tolerance
+       if short:
+           short_matches += 1
+           long_matches += (
+               np.max(np.abs(templates[i] - templates[j])) < tolerance
+           )
+   sampen = -np.log(long_matches / short_matches)
+
+The implementation counts each unordered pair once, discards incomplete
+templates, and returns NaN or infinity before the final line when the respective
+denominator or numerator is zero. For multiscale entropy, the coarse series is
+formed by averaging complete non-overlapping blocks and any trailing incomplete
+block is discarded:
+
+.. code-block:: python
+
+   n_blocks = signal.size // scale
+   blocks = signal[:n_blocks * scale].reshape(n_blocks, scale)
+   coarse = np.where(np.isfinite(blocks).all(axis=1), blocks.mean(axis=1), np.nan)
+   source = signal if tolerance_mode == "original_sd" else coarse
+   tolerance = r * np.std(source[np.isfinite(source)])
+
+If the finite standard deviation is non-finite or zero, the implementation uses
+the smallest positive floating-point tolerance rather than manufacturing a
+finite entropy from exact self-matches.
+
 Higuchi Fractal Dimension
 -------------------------
 
@@ -63,6 +100,25 @@ when a window contains non-finite samples or fewer samples than the largest
 requested stride, so an unsuccessful estimate remains distinguishable from a
 valid low-dimensional signal.
 
+For :math:`N` samples and stride :math:`k`, the exact length normalization is:
+
+.. math::
+
+   L_m(k) = \frac{\sum_q |x_{m+(q+1)k} - x_{m+qk}|}{q_{\max} k^2}(N-1),
+   \qquad L(k) = \frac{1}{k}\sum_{m=0}^{k-1} L_m(k),
+
+where :math:`q_{\max}=\lfloor(N-m-1)/k\rfloor`. The reported dimension is the
+slope of ``log(L(k))`` against ``-log(k)``. In code-like form:
+
+.. code-block:: python
+
+   for k in range(1, k_max + 1):
+       lengths = [np.abs(np.diff(signal[m::k])).sum()
+                  * (n_samples - 1) / (steps(m, k) * k * k)
+                  for m in range(k)]
+       L[k - 1] = np.nanmean(lengths)
+   dimension = np.polyfit(-np.log(k_values), np.log(L), 1)[0]
+
 Microstates
 -----------
 
@@ -81,6 +137,23 @@ Continuous EEG samples are subsequently assigned to the prototype template exhib
    s(t) = \arg\max_k \frac{|V(t)^T \mu_k|}{\|V(t)\| \|\mu_k\|}
 
 Segments shorter than ``min_duration_ms`` are absorbed into neighbouring states: the longer one, or split between them on a tie.
+
+The corresponding implementation is:
+
+.. code-block:: python
+
+   demeaned = epoch - np.mean(epoch, axis=0, keepdims=True)
+   gfp = np.std(demeaned, axis=0)
+   maps = normalize_rows(demeaned.T)
+   model = KMeans(n_clusters=K, n_init=20, random_state=random_state)
+   model.fit(maps[gfp_peaks])
+   templates = normalize_rows(model.cluster_centers_)
+   states = np.argmax(np.abs(templates @ maps.T), axis=0)
+
+The row normalization subtracts the channel mean, divides by the Euclidean
+norm, and flips the sign so the largest-magnitude channel is positive. The
+fitted templates therefore use ordinary k-means on sign-normalized maps; they
+are not the polarity-invariant modified k-means objective used by Pycrostates.
 
 **Template fitting pools across trials; the measures do not.** ``fit_on`` names which trials may contribute topographies, as a cross-validation fold requires. The default uses every trial, which is right for description and leaks for prediction. Assignment and every measure derived from it are per epoch, so the returned feature tables have one row per epoch.
 
@@ -107,6 +180,21 @@ four temporal statistics are derived:
    T_{i \to j} = \frac{N_{i \to j}}{\sum_{m \ne i} N_{i \to m}} \quad (i \ne j)
 
 Self-transitions (:math:`i = j`) are omitted from segment-based transition matrices.
+
+The global explained variance exposed by the segmentation is the GFP-weighted
+fit of the assigned template:
+
+.. code-block:: python
+
+   gfp = np.nanstd(epoch - np.nanmean(epoch, axis=0, keepdims=True), axis=0)
+   correlations = np.abs(normalized_maps @ templates.T)
+   assigned = correlations[np.arange(n_times), states]
+   gev = np.sum(gfp ** 2 * assigned ** 2) / np.sum(gfp ** 2)
+
+Coverage, duration, occurrence, and transitions are then computed from the
+smoothed state sequence using ``mean(state == k)``, mean run length divided by
+sampling frequency, run count divided by window seconds, and row-normalized
+successive-run counts, respectively.
 
 The microstate model descends from the quasi-stable scalp-map analysis of
 `Dietrich Lehmann, H. Ozaki, and I. Pal (1987)

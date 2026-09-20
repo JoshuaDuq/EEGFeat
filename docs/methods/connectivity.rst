@@ -58,6 +58,23 @@ for ITPC: it is the bias-free pairwise estimator introduced by `Martin Vinck,
 Marijn van Wingerden, Thilo Womelsdorf, Pascal Fries, and Cyriel M. A.
 Pennartz (2010) <https://doi.org/10.1016/j.neuroimage.2010.01.073>`__.
 
+The implementation uses unit complex phase vectors and performs the reductions
+in this order:
+
+.. code-block:: python
+
+   unit_phase = np.where(np.isfinite(phase), np.exp(1j * phase), np.nan)
+   count = np.sum(np.isfinite(unit_phase), axis=0)
+   itpc_per_time = np.abs(np.nansum(unit_phase, axis=0) / count)
+   itpc = np.nanmean(itpc_per_time, axis=-1)
+   resultant_squared = np.abs(np.nansum(unit_phase, axis=0)) ** 2
+   ppc_per_time = (resultant_squared - count) / (count * (count - 1))
+   ppc = np.nanmean(ppc_per_time, axis=-1)
+
+The package withholds time points with fewer than ``min_valid_trials`` finite
+phases. The PPC expression above is algebraically identical to the pairwise
+cosine form, but makes the finite-sample correction explicit.
+
 Phase-Amplitude Coupling
 ------------------------
 
@@ -69,7 +86,9 @@ Mean vector length, the amplitude-weighted resultant of the slow band's phase:
 
 Normalizing by the summed amplitude makes the value independent of overall power
 and so comparable across channels and trials; without it the result scales with
-amplitude.
+amplitude. In this package, ``normalize=False`` returns the amplitude-weighted
+resultant divided by the number of valid samples, not the unscaled complex
+resultant.
 
 Computed within each trial, so it carries no cross-trial leakage and has one row
 per epoch. **No surrogate correction is applied.** A raw coupling value is biased
@@ -84,6 +103,20 @@ N. M. Barbaro, and Robert T. Knight (2006)
 `N. Tort, R. Komorowski, H. Eichenbaum, and N. Kopell (2010)
 <https://doi.org/10.1152/jn.00106.2010>`__ motivates treating this raw MVL as
 an effect-size estimator rather than as a significance test.
+
+The exact implementation is:
+
+.. code-block:: python
+
+   unit_phase = np.exp(1j * phase)
+   valid = np.isfinite(amplitude) & np.isfinite(unit_phase)
+   resultant = np.abs(np.sum(np.where(valid, amplitude * unit_phase, 0.0), axis=-1))
+   if normalize:
+       denominator = np.sum(np.where(valid, amplitude, 0.0), axis=-1)
+       mvl = np.where(denominator > 1e-20, resultant / denominator, np.nan)
+   else:
+       count = np.sum(valid, axis=-1)
+       mvl = np.where(count > 0, resultant / count, np.nan)
 
 
 Connectivity
@@ -122,6 +155,70 @@ estimators and their exact parameter names are delegated to the official
 `MNE-Connectivity spectral-connectivity documentation
 <https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html>`__.
 
+For analytic node signals :math:`z_i(t)`, the raw branch is the Pearson
+correlation of :math:`|z_i(t)|` and :math:`|z_j(t)|`. The pairwise
+orthogonalized branch follows the asymmetric construction of `Joerg F. Hipp,
+David J. Hawellek, Maurizio Corbetta, Markus Siegel, and Andreas K. Engel
+(2012) <https://doi.org/10.1038/nn.3101>`__:
+
+.. math::
+
+   a_{i\perp j}(t) = \left|\operatorname{Im}\left(z_i(t)
+   \frac{\overline{z_j(t)}}{|z_j(t)|}\right)\right|,
+   \qquad r_{i\perp j} = \operatorname{corr}(a_{i\perp j}, |z_j|)
+
+The implementation averages :math:`r_{i\perp j}` with its transpose, optionally
+takes the absolute value before that average, and combines trials by Fisher's
+transform:
+
+.. code-block:: python
+
+   trial_r = np.corrcoef(np.abs(analytic_trial))
+   bounded = np.clip(trial_r, -0.999999, 0.999999)
+   envelope_correlation = np.tanh(np.nanmean(np.arctanh(bounded), axis=0))
+
+The orthogonalized branch substitutes the projected envelope in the first line
+and symmetrizes the resulting asymmetric matrix.
+
+Spectral estimator formulas
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The delegated estimator is defined from epoch-specific cross-spectral and
+power quantities :math:`S_{xy}^{(e)}`, :math:`S_{xx}^{(e)}`, and
+:math:`S_{yy}^{(e)}`. Writing :math:`\langle\cdot\rangle_e` for the mean over
+valid epochs, the scalar estimators exposed by this package are:
+
+.. math::
+
+   \begin{aligned}
+   \mathrm{coh} &= \frac{|\langle S_{xy}\rangle_e|}
+      {\sqrt{\langle S_{xx}\rangle_e\langle S_{yy}\rangle_e}} \\
+   \mathrm{imcoh} &= \frac{|\operatorname{Im}(\langle S_{xy}\rangle_e)|}
+      {\sqrt{\langle S_{xx}\rangle_e\langle S_{yy}\rangle_e}} \\
+   \mathrm{PLV} &= \left|\left\langle S_{xy}/|S_{xy}|\right\rangle_e\right| \\
+   \mathrm{ciPLV} &= \frac{|\langle\operatorname{Im}(S_{xy}/|S_{xy}|)\rangle_e|}
+      {\sqrt{1-\langle\operatorname{Re}(S_{xy}/|S_{xy}|)\rangle_e^2}} \\
+   \mathrm{PLI} &= |\langle\operatorname{sign}(\operatorname{Im}S_{xy})\rangle_e| \\
+   \mathrm{WPLI} &= \frac{|\langle\operatorname{Im}S_{xy}\rangle_e|}
+      {\langle|\operatorname{Im}S_{xy}|\rangle_e}.
+   \end{aligned}
+
+PPC is the unbiased estimator of squared PLV given above. ``wpli2_debiased``
+is MNE-Connectivity's debiased estimator of squared WPLI. These definitions
+follow the official `MNE-Connectivity spectral-connectivity documentation
+<https://mne.tools/mne-connectivity/dev/generated/mne_connectivity.spectral_connectivity_epochs.html>`__;
+the project does not reimplement their cross-spectral accumulation.
+
+After estimation, the package performs its own half-open band reduction:
+
+.. code-block:: python
+
+   keep = band.mask(result.freqs)  # fmin <= f < fmax
+   dense = result.get_data(output="dense")
+   selected = np.abs(dense[..., keep]) if method == "imcoh" else dense[..., keep]
+   band_matrix = selected.mean(axis=-1)
+   band_matrix = band_matrix + band_matrix.T
+
 The phase-lag interpretation of PLI follows `C. J. Stam, G. Nolte, and A.
 Daffertshofer (2007) <https://doi.org/10.1002/hbm.20346>`__. The weighted phase
 lag index and its sample-size correction follow `Martin Vinck, Robert Oostenveld,
@@ -151,6 +248,31 @@ classification by `Herbert Ramoser, J. Müller-Gerking, and Gert Pfurtscheller
 this package is a statistical safeguard around that method: because the filters
 are estimated from labels, no held-out epoch may influence the filters used to
 transform it.
+
+For class :math:`c`, the package first centers each finite epoch over time and
+forms a trace-normalized covariance:
+
+.. math::
+
+   C_c = \frac{1}{|E_c|} \sum_{e \in E_c}
+   \frac{(X_e-\bar X_e)(X_e-\bar X_e)^\mathsf{T}}
+   {\operatorname{tr}\left((X_e-\bar X_e)(X_e-\bar X_e)^\mathsf{T}\right)}.
+
+The generalized eigenvectors solve :math:`C_0 w = \lambda(C_0+C_1)w`.
+Components are selected alternately from the largest and smallest eigenvalues.
+For an epoch, the reported feature is the log relative projected variance:
+
+.. code-block:: python
+
+   projected = filters @ epoch
+   variance = np.nanvar(projected, axis=-1)
+   csp_log_power = np.log(variance / np.sum(variance))
+
+This is the standard CSP log-variance feature convention; see the official
+`MNE-CSP documentation
+<https://mne.tools/stable/generated/mne.decoding.CSP.html>`__ for a compatible
+reference implementation. The package additionally records its trace
+normalization, component ordering, and cross-fitting split.
 
 Graph Measures
 --------------
@@ -193,6 +315,28 @@ H. Strogatz (1998) <https://doi.org/10.1038/30918>`__. This implementation
 adds an explicit thresholding rule for weighted connectivity and treats missing
 edges as undefined rather than as zero-weight disconnections.
 
+The reductions are implemented directly as:
+
+.. code-block:: python
+
+   length = np.where(np.abs(matrix) > 0.0, 1.0 / np.abs(matrix), np.inf)
+   np.fill_diagonal(length, 0.0)
+   distance = floyd_warshall(length)
+   upper = np.triu_indices_from(distance, k=1)
+   pair_distance = distance[upper]
+   global_efficiency = np.mean(np.where(np.isfinite(pair_distance),
+                                        1.0 / pair_distance, 0.0))
+   adjacency = (np.abs(matrix) > threshold).astype(float)
+   np.fill_diagonal(adjacency, 0.0)
+   degree = adjacency.sum(axis=1)
+   triangles = np.diag(adjacency @ adjacency @ adjacency)
+   eligible = degree >= 2
+   clustering = np.mean(triangles[eligible]
+                        / (degree[eligible] * (degree[eligible] - 1.0)))
+
+The actual implementation averages only upper-triangular node pairs for global
+efficiency and returns NaN when no node is eligible for clustering.
+
 References
 ----------
 
@@ -230,6 +374,10 @@ References
   symmetric multivariate leakage correction for MEG connectomes*. NeuroImage,
   117, 439--448. `doi:10.1016/j.neuroimage.2015.03.071
   <https://doi.org/10.1016/j.neuroimage.2015.03.071>`__.
+* Hipp, J. F., Hawellek, D. J., Corbetta, M., Siegel, M., & Engel, A. K. (2012).
+  *Large-scale cortical correlation structure of spontaneous oscillatory
+  activity*. Nature Neuroscience, 15(6), 884--890.
+  `doi:10.1038/nn.3101 <https://doi.org/10.1038/nn.3101>`__.
 * Stam, C. J., Nolte, G., & Daffertshofer, A. (2007). *Phase lag index:
   Assessment of functional connectivity from multi channel EEG and MEG with
   diminished bias from common sources*. Human Brain Mapping, 28, 1178--1193.
