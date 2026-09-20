@@ -4,38 +4,14 @@ Quick Start
 .. raw:: html
 
    <p class="hero-lede">
-     Operational walkthrough mapping MNE data structures to structured <code>FeatureTable</code>
-     outputs. Covers spectral integration, support-restricted time-frequency windowing,
-     baseline-referenced burst detection, and metadata queries.
+     Three worked workflows, from MNE objects to a <code>FeatureTable</code>: spectral
+     integration from a PSD, support-restricted time-frequency windowing, and
+     baseline-referenced burst and ERDS dynamics.
    </p>
 
-.. _qs-mental-model:
-
-The Mental Model
-----------------
-
-``eegfeat`` accepts standard MNE objects (``Spectrum``, ``EpochsTFR``, or ``Epochs``), wraps
-them into strongly validated containers, and passes those containers to feature extractor
-functions. Spectra and time-frequency representations are precomputed with MNE;
-:class:`~eegfeat.BandSignal` can apply its documented band-pass and Hilbert transform:
-
-.. grid:: 3
-   :gutter: 3
-   :class-container: nav-cards
-
-   .. grid-item-card:: 1. Wrap MNE Objects
-
-      Convert MNE outputs into :class:`~eegfeat.Spectra`, :class:`~eegfeat.Signal`,
-      or :class:`~eegfeat.BandSignal`.
-
-   .. grid-item-card:: 2. Extract Features
-
-      Call pure extractor functions with explicit parameterization, windows, and ROIs.
-
-   .. grid-item-card:: 3. Query & Export
-
-      Filter columns via :meth:`~eegfeat.FeatureTable.select`, check :attr:`~eegfeat.FeatureTable.coverage`,
-      or export via :meth:`~eegfeat.FeatureTable.to_dataframe`.
+These assume the vocabulary in :doc:`concepts` — containers, bands and windows,
+and what a feature table holds. Skim that page first if any of the calls below
+look like they are doing something implicit.
 
 ----
 
@@ -180,67 +156,30 @@ To extract instantaneous amplitude dynamics, oscillatory bursts, and ERDS:
 
 ----
 
-Working with FeatureTables
---------------------------
+Where to go next
+----------------
 
-Unlike raw arrays, a :class:`~eegfeat.FeatureTable` is self-describing, quality-aware,
-and safe against accidental mislabeling:
+.. grid:: 3
+   :gutter: 3
+   :class-container: nav-cards
 
-.. code-block:: python
+   .. grid-item-card:: Feature Tables and Files
+      :link: guides/tables
+      :link-type: doc
 
-   # Query columns using structured metadata
-   alpha_rois = spectral_features.select(band=ef.Band("alpha", 8.0, 13.0), space_kind="roi")
+      Query the tables you just built, write them to TSV with their sidecars, and
+      stack several recordings into a cohort.
 
-   # Inspect finite-data coverage (not an artifact-rejection metric)
-   valid_fractions = spectral_features.coverage
+   .. grid-item-card:: Command Line Runner
+      :link: guides/runner
+      :link-type: doc
 
-   # Inspect boolean quality flags (e.g. where peak prominence fell back to CoG)
-   if "cog_fallback" in spectral_features.flags:
-       fell_back = spectral_features.flags["cog_fallback"]
+      Do all of the above for a whole folder from one TOML recipe, without
+      writing Python.
 
-   # Convert to pandas DataFrame with canonical column names
-   df = spectral_features.to_dataframe()
-   print(df.head())
-   # Output column names are structured slugs with unique parameter hashes:
-   # eeg_band-power_alpha_cz_all_raw_p<hash>
-   # eeg_peak-freq-adjusted_alpha_cz_all_raw_p<hash>
+   .. grid-item-card:: Predictive Modeling
+      :link: guides/modeling
+      :link-type: doc
 
-----
-
-Exporting & BIDS-style Table I/O
---------------------------------
-
-Tables serialize to BIDS-style TSV files with accompanying JSON sidecars and
-finite-data coverage matrices. This is not a validated BIDS derivative structure.
-``read_dataset`` restores descriptive row columns for modeling without treating
-them as features:
-
-.. code-block:: python
-
-   from eegfeat.io import read_dataset, read_table, write_table
-
-   # Write values, coverage matrix, and JSON sidecar
-   paths = write_table(spectral_features, "sub-01_features.tsv", rows=epochs.metadata)
-
-   # Restore exactly with full metadata, flags, and row labels
-   restored = read_table("sub-01_features.tsv")
-
-   # Load several per-epoch tables and their descriptors as one modeling dataset
-   dataset = read_dataset(
-       ["sub-01_features.tsv", "sub-02_features.tsv", "sub-03_features.tsv"]
-   )
-
-For in-memory cohort construction, use :func:`eegfeat.stack_rows` on per-epoch tables. It
-preserves input order and rejects duplicate row identities and cross-trial group tables.
-``columns="union"`` keeps every column any recording measured, which is what a cohort whose
-recordings differ in their bad channels needs; the default requires one schema:
-
-.. code-block:: python
-
-   cohort_features = ef.stack_rows(
-       [sub_01_features, sub_02_features, sub_03_features], columns="union"
-   )
-
-The target frame used by :func:`eegfeat.model.build_design` must carry matching
-``recording``, ``epoch``, and ``event`` keys plus the target and grouping columns. See
-:doc:`modeling` for the complete cross-fitting workflow.
+      Carry per-epoch tables into group-disjoint cross-fitting, nulls, and
+      conformal intervals.

@@ -21,7 +21,8 @@ Modeling is defined for one row per epoch. The input :class:`~eegfeat.FeatureTab
 :func:`eegfeat.model.build_design` must contain matching ``recording``, ``epoch``, and ``event``
 columns, the target column, and a grouping column such as ``subject_id``.
 
-Tables from cross-trial measures are intentionally not accepted. ITPC, envelope correlation,
+Tables from cross-trial measures are intentionally not accepted
+(:ref:`concepts-row-kinds`). ITPC, envelope correlation,
 wPLI, and graph summaries have group rows rather than independent epoch rows; broadcasting
 those values into an epoch-level design would create pseudo-replication.
 

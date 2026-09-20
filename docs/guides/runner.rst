@@ -174,7 +174,7 @@ Measures estimated within an epoch go to ``_features``. Its rows start with ``ep
 ``selection`` and ``event``, then the epoch metadata, then the features. Measures
 estimated across trials (``itpc``, ``ppc``, ``envelope_correlation``, ``wpli`` and their graph
 summaries) go to ``_crosstrial``, keyed by ``group``. The two are never merged; see
-:func:`eegfeat.itpc` for why. Missing values are ``n/a``.
+:ref:`concepts-row-kinds` for why. Missing values are ``n/a``.
 
 Load a table back with its metadata:
 

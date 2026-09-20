@@ -11,7 +11,7 @@ eegfeat
      outputs, then carries per-epoch tables into grouped model evaluation.
    </p>
 
-.. grid:: 3
+.. grid:: 4
    :gutter: 3
    :class-container: nav-cards
 
@@ -25,130 +25,91 @@ eegfeat
       :link: quickstart
       :link-type: doc
 
-      From MNE objects to feature tables in a few lines.
+      Three worked workflows, MNE objects to feature tables.
 
-   .. grid-item-card:: Methods
-      :link: methods
+   .. grid-item-card:: Concepts
+      :link: concepts
       :link-type: doc
 
-      Mathematical formulations, algorithms, and rationale.
+      Containers, table anatomy, column names, and what missing means.
 
-   .. grid-item-card:: Modeling
-      :link: modeling
+   .. grid-item-card:: Example Output
+      :link: examples
       :link-type: doc
 
-      Design matrices, group-disjoint cross-fitting, uncertainty, and importance.
+      Real files from a simulated five-subject cohort.
 
 ----
 
-Core Capabilities
------------------
+What It Computes
+----------------
 
 .. grid:: 3
    :gutter: 3
    :class-container: stage-grid
 
-   .. grid-item-card:: 01 — Spectral Power & Descriptors
-      :link: methods
+   .. grid-item-card:: Spectral
+      :link: methods/spectral
       :link-type: doc
 
-      Trapezoidal frequency-weighted band power, spectral centroid,
-      bandwidth, Shannon entropy, and spectral edge frequency (SEF95).
+      Trapezoidal frequency-weighted band power, centroid, bandwidth, Shannon
+      entropy and SEF95, iterative Huber/MAD 1/f fitting with prominence-gated
+      peak detection, and exact per-frequency Morlet support masking.
 
-      ``eegfeat.integrated_band_power`` · ``eegfeat.mean_psd`` · ``eegfeat.spectral_centroid``
+      ``integrated_band_power`` · ``peak_frequency`` · ``aperiodic_ratio``
 
-   .. grid-item-card:: 02 — Wavelet Support Restriction
-      :link: methods
+   .. grid-item-card:: Dynamics
+      :link: methods/dynamics
       :link-type: doc
 
-      Exact per-frequency temporal support masking for Morlet wavelets,
-      preventing edge contamination and pre-stimulus leakage into task windows.
+      Baseline-calibrated envelope burst rate and duration, signed ERD/ERS
+      magnitudes, onset, peak and rebound latencies, and time-domain descriptors
+      of the waveform itself.
 
-      ``Spectra.from_tfr(..., n_cycles)``
+      ``burst_rate`` · ``erds_mean`` · ``hjorth_complexity``
 
-   .. grid-item-card:: 03 — Aperiodic Whitening
-      :link: methods
+   .. grid-item-card:: Phase & Connectivity
+      :link: methods/connectivity
       :link-type: doc
 
-      Iterative Huber/MAD 1/f background fitting, spectral flattening,
-      prominence-gated peak detection, and parabolic frequency refinement.
+      Inter-trial phase coherence, pairwise phase consistency,
+      phase-amplitude coupling, envelope correlation, wPLI via MNE-Connectivity,
+      common spatial patterns, and graph summaries.
 
-      ``eegfeat.peak_frequency`` · ``aperiodic_ratio``
+      ``itpc`` · ``pac`` · ``wpli``
 
-   .. grid-item-card:: 04 — Bursts & ERDS Dynamics
-      :link: methods
+   .. grid-item-card:: Complexity & Microstates
+      :link: methods/complexity
       :link-type: doc
 
-      Baseline-calibrated envelope burst rate/duration, signed ERD/ERS
-      magnitudes, onset latency, peak latency, and rebound latency.
+      Native Sample Entropy and Multiscale Entropy, Higuchi fractal dimension,
+      and GFP-peak clustered microstate segmentation with duration, occurrence
+      and transition metrics.
 
-      ``eegfeat.burst_rate`` · ``eegfeat.erds_mean``
+      ``sample_entropy`` · ``microstates.segment``
 
-   .. grid-item-card:: 05 — Phase & Connectivity
-      :link: methods
+   .. grid-item-card:: Predictive Modeling
+      :link: guides/modeling
       :link-type: doc
 
-      Inter-trial phase coherence (ITPC), phase-amplitude coupling (PAC),
-      envelope correlation (AEC), and wPLI via MNE-Connectivity.
+      Per-epoch design matrices, group-disjoint nested validation, fold-local
+      preprocessing, permutation nulls, conformal intervals, and metadata-aware
+      importance.
 
-      ``eegfeat.itpc`` · ``eegfeat.wpli``
+      ``build_design`` · ``cross_fit_regression`` · ``permutation_test``
 
-   .. grid-item-card:: 06 — Complexity & Microstates
-      :link: methods
+   .. grid-item-card:: Batch Runner
+      :link: guides/runner
       :link-type: doc
 
-      Native Sample Entropy, Multiscale Entropy, and GFP-peak
-      clustered microstate segmentation with duration and transition metrics.
+      One declarative TOML recipe applied to a folder of preprocessed epochs
+      files, writing metadata-carrying tables that load straight back as
+      ``FeatureTable`` objects.
 
-      ``eegfeat.sample_entropy`` · ``microstates.segment``
+      ``eegfeat run`` · ``eegfeat check``
 
-   .. grid-item-card:: 07 — Predictive Modeling
-      :link: modeling
-      :link-type: doc
-
-      Per-epoch design matrices, group-disjoint nested validation, fold-local preprocessing,
-      permutation nulls, conformal intervals, and metadata-aware importance.
-
-      ``eegfeat.model.build_design`` · ``eegfeat.model.cross_fit_regression``
-
-----
-
-Explore the Documentation
--------------------------
-
-.. grid:: 5
-   :gutter: 2
-   :class-container: docs-nav
-
-   .. grid-item-card:: Install
-      :link: install
-      :link-type: doc
-
-      Environment, dependencies, and extras.
-
-   .. grid-item-card:: Quick Start
-      :link: quickstart
-      :link-type: doc
-
-      End-to-end operational workflows.
-
-   .. grid-item-card:: Methods
-      :link: methods
-      :link-type: doc
-
-      Mathematical formulations and rationale.
-
-   .. grid-item-card:: Modeling
-      :link: modeling
-      :link-type: doc
-
-      Leakage-safe predictive workflows and model diagnostics.
-
-   .. grid-item-card:: API Reference
-      :link: api
-      :link-type: doc
-
-      Public classes, methods, and functions.
+Every measure above is defined, with its assumptions and failure modes, in
+:doc:`methods/index`. Signatures and parameters are in :doc:`api/index`.
 
 .. raw:: html
 
@@ -159,30 +120,31 @@ Explore the Documentation
 
 .. toctree::
    :hidden:
-   :maxdepth: 1
    :caption: Getting Started
 
    install
    quickstart
-   runner
+   concepts
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
-   :caption: Scientific Methods
+   :caption: Guides
 
-   methods
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: Predictive Modeling
-
-   modeling
+   guides/tables
+   guides/runner
+   guides/modeling
+   examples
 
 .. toctree::
    :hidden:
+   :caption: Methods
    :maxdepth: 2
+
+   methods/index
+
+.. toctree::
+   :hidden:
    :caption: Reference
+   :maxdepth: 2
 
-   api
+   api/index
