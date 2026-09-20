@@ -5,6 +5,10 @@ import eegfeat
 EXPECTED = {
     "BANDS_STANDARD",
     "Band",
+    "CommonSpatialPattern",
+    "csp_features",
+    "check_passband",
+    "passband_fraction",
     "BandSignal",
     "FeatureMeta",
     "FeatureTable",
@@ -60,7 +64,17 @@ EXPECTED = {
     "spectral_edge",
     "spectral_entropy",
     "stack_rows",
+    "hjorth_complexity",
+    "hjorth_mobility",
+    "amplitude_quantile",
+    "kurtosis",
+    "line_length",
+    "root_mean_square",
+    "skewness",
+    "zero_crossing_rate",
+    "higuchi_fractal_dimension",
     "variance",
+    "spectral_connectivity",
     "wpli",
 }
 

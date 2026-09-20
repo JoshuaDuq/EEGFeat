@@ -73,8 +73,9 @@ def itpc(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        del signal, times
+        del signal, times, mask
         return {"itpc": _itpc(trace, row_groups, len(labels), min_valid_trials)}
 
     table = expand_signal(
@@ -123,8 +124,9 @@ def ppc(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        del signal, times
+        del signal, times, mask
         return {"ppc": _ppc(trace, row_groups, len(labels), min_valid_trials)}
 
     table = expand_signal(
@@ -232,10 +234,11 @@ def pac(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        del signal
-        window = np.isin(amplitude_signal.times, times)
-        return {"pac": _mean_vector_length(unit_phase[:, :, window], trace, normalize)}
+        del signal, times
+        # The expander's own selector, not one recovered from the time values.
+        return {"pac": _mean_vector_length(unit_phase[:, :, mask], trace, normalize)}
 
     table = expand_signal(
         [amplitude_signal],

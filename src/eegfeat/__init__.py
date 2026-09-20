@@ -8,7 +8,7 @@ structured fields rather than fragments of column names.
 from __future__ import annotations
 
 from eegfeat.aperiodic import aperiodic, aperiodic_ratio
-from eegfeat.bands import BANDS_STANDARD, Band
+from eegfeat.bands import BANDS_STANDARD, Band, check_passband, passband_fraction
 from eegfeat.bursts import (
     burst_amplitude,
     burst_count,
@@ -16,13 +16,15 @@ from eegfeat.bursts import (
     burst_rate,
     fraction_above_threshold,
 )
-from eegfeat.complexity import multiscale_entropy, sample_entropy
+from eegfeat.complexity import higuchi_fractal_dimension, multiscale_entropy, sample_entropy
 from eegfeat.connectivity import (
     clustering_coefficient,
     envelope_correlation,
     global_efficiency,
+    spectral_connectivity,
     wpli,
 )
+from eegfeat.csp import CommonSpatialPattern, csp_features
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.descriptors import (
     peak_frequency,
@@ -56,12 +58,20 @@ from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat, stack_rows
 from eegfeat.temporal import (
+    amplitude_quantile,
     area_under_curve,
+    hjorth_complexity,
+    hjorth_mobility,
+    kurtosis,
+    line_length,
     mean_amplitude,
     peak_amplitude,
     peak_latency,
     peak_to_peak,
+    root_mean_square,
+    skewness,
     variance,
+    zero_crossing_rate,
 )
 
 __version__ = "0.1.0.dev0"
@@ -73,6 +83,10 @@ __all__ = [
     "area_under_curve",
     "asymmetry",
     "Band",
+    "CommonSpatialPattern",
+    "csp_features",
+    "check_passband",
+    "passband_fraction",
     "band_ratio",
     "BANDS_STANDARD",
     "BandSignal",
@@ -84,6 +98,7 @@ __all__ = [
     "concat",
     "ComputationSpec",
     "envelope_correlation",
+    "spectral_connectivity",
     "erd_duration",
     "erd_magnitude",
     "erds_mean",
@@ -123,6 +138,15 @@ __all__ = [
     "spectral_edge",
     "spectral_entropy",
     "stack_rows",
+    "hjorth_complexity",
+    "hjorth_mobility",
+    "amplitude_quantile",
+    "kurtosis",
+    "line_length",
+    "root_mean_square",
+    "skewness",
+    "zero_crossing_rate",
+    "higuchi_fractal_dimension",
     "variance",
     "Window",
     "wpli",

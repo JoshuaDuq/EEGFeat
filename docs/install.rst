@@ -78,7 +78,7 @@ Install optional components as needed depending on your analysis scope:
      - Design matrices, leakage-safe cross-fitting, metrics, nulls, uncertainty, and model
        selection (:mod:`eegfeat.model`).
    * - ``[importance]``
-     - ``scikit-learn>=1.3``, ``shap>=0.44``
+     - ``scikit-learn>=1.3``, ``shap>=0.45``
      - Held-out permutation importance and SHAP explanations
        (:mod:`eegfeat.model.importance`).
    * - ``[dev]``

@@ -3,16 +3,27 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import check_signals, window_mask
-from eegfeat.bands import Band
+from eegfeat.bands import Band, check_passband
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Window
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+
+Orthogonalization = Literal["pairwise"] | None
+
+_FISHER_LIMIT = 0.999999
+"""Clip applied before ``arctanh``, so a correlation of exactly +/-1 stays finite."""
+
+
+def _aec_unit(orthogonalize: Orthogonalization, absolute: bool) -> str:
+    if orthogonalize is None:
+        return "r"
+    return "|r| (orthogonalized)" if absolute else "r (orthogonalized)"
 
 
 def envelope_correlation(
@@ -21,12 +32,22 @@ def envelope_correlation(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     trials: Sequence[str] | npt.NDArray[np.str_] | None = None,
+    orthogonalize: Orthogonalization = "pairwise",
+    absolute: bool = True,
 ) -> FeatureTable:
     """Amplitude envelope correlation between every pair of nodes.
 
-    The Pearson correlation of band envelopes, averaged over the trials in each
-    group. Nodes are channels, or ROIs when ``groups`` is given, in which case a
-    node's envelope is the mean envelope of its member channels.
+    The correlation of band envelopes, averaged across the trials in each group
+    in Fisher ``z``. Nodes are channels, or ROIs when ``groups`` is given, in
+    which case a node's series is the mean analytic signal of its members.
+
+    **On sensor data this measure is dominated by volume conduction unless it is
+    orthogonalized.** One source seen by two electrodes produces a zero-lag
+    envelope correlation with no interaction behind it, so ``orthogonalize``
+    defaults to ``"pairwise"``, matching ``mne_connectivity.envelope_correlation``.
+    Passing ``None`` gives the raw envelope correlation, which is interpretable
+    on source-reconstructed or otherwise leakage-corrected data and misleading on
+    sensors.
 
     **Estimated across trials, so the result has one row per trial group.** See
     :func:`~eegfeat.itpc` for why that is not broadcast to per-epoch rows.
@@ -43,21 +64,202 @@ def envelope_correlation(
     trials : sequence of str, optional
         A label per epoch. One row per distinct label; None gives a single row
         labelled ``"all"``.
+    orthogonalize : {"pairwise", None}, default "pairwise"
+        Remove the zero-lag component before correlating, following Hipp et al.
+        (2012). None correlates the envelopes directly.
+    absolute : bool, default True
+        Take the magnitude of each trial's correlation before averaging. Applies
+        only when orthogonalizing, where the residual sign carries little
+        information; matches MNE's default.
+
+    Returns
+    -------
+    FeatureTable
+        One column per node pair, band and window, with ``space_kind="pair"``.
+
+    References
+    ----------
+    Hipp, J. F. et al. (2012). Large-scale cortical correlation structure of
+    spontaneous oscillatory activity. Nature Neuroscience, 15(6), 884-890.
+    """
+    if orthogonalize not in ("pairwise", None):
+        raise ValueError(f"orthogonalize must be 'pairwise' or None, got {orthogonalize!r}.")
+
+    def matrix(
+        analytic: npt.NDArray[np.complex128], picks: list[list[int]]
+    ) -> npt.NDArray[np.float64]:
+        return _correlation_matrix(analytic, picks, orthogonalize=orthogonalize, absolute=absolute)
+
+    return _pairwise(
+        signals,
+        measure="aec",
+        unit=_aec_unit(orthogonalize, absolute),
+        windows=windows,
+        groups=groups,
+        trials=trials,
+        matrix=matrix,
+        estimator_parameters={"orthogonalize": orthogonalize, "absolute": absolute},
+    )
+
+
+ConnectivityMethod = Literal[
+    "coh",
+    "imcoh",
+    "plv",
+    "ciplv",
+    "ppc",
+    "pli",
+    "wpli",
+    "wpli2_debiased",
+]
+
+_METHOD_UNITS: dict[str, str] = {
+    "coh": "coherence",
+    "imcoh": "|imaginary coherency|",
+    "plv": "plv",
+    "ciplv": "ciplv",
+    "ppc": "ppc",
+    "pli": "pli",
+    "wpli": "wpli",
+    "wpli2_debiased": "wpli2 (debiased)",
+}
+
+_RECTIFIED: frozenset[str] = frozenset({"imcoh"})
+"""Methods whose sign follows which node of a pair came first.
+
+Imaginary coherency is antisymmetric -- swapping the two channels negates it --
+so a table of *unordered* pairs cannot carry its sign without also carrying an
+order. The magnitude is taken instead, which is the usual scalar summary and is
+what makes the column well defined. Verified against the estimator rather than
+assumed: ciplv looks like it should behave the same way and does not.
+"""
+
+_DIRECTED: dict[str, str] = {
+    "dpli": (
+        "dPLI is directional: dPLI(a, b) and dPLI(b, a) sum to one, so a table of "
+        "unordered pairs would report one direction and imply the other. Symmetrizing "
+        "it is a silent error rather than an approximation."
+    ),
+    "cohy": (
+        "Coherency is complex, and a FeatureTable column is real. Use 'coh' for its "
+        "magnitude or 'imcoh' for its imaginary part."
+    ),
+}
+
+
+def spectral_connectivity(
+    signal: Signal,
+    *,
+    method: ConnectivityMethod,
+    bands: Sequence[Band],
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    trials: Sequence[str] | npt.NDArray[np.str_] | None = None,
+    mode: Literal["multitaper", "fourier"] = "multitaper",
+) -> FeatureTable:
+    """Spectral connectivity between every pair of nodes.
+
+    Delegates the estimation to ``mne_connectivity.spectral_connectivity_epochs``,
+    so the cross-spectral density is computed once, in one place, for every method.
+
+    Takes a broadband :class:`~eegfeat.Signal` and a list of bands, rather than
+    pre-filtered :class:`~eegfeat.BandSignal` objects, because the band is a
+    parameter of the spectral estimation rather than a prior filtering step.
+
+    Bands are reduced on this side with :meth:`~eegfeat.Band.mask`, not by the
+    estimator's ``faverage``, so the half-open convention holds: mne-connectivity
+    treats ``[fmin, fmax]`` as closed and would put a shared edge bin in both of
+    two adjacent bands.
+
+    Requires the optional dependency: ``pip install eegfeat[connectivity]``.
+
+    Parameters
+    ----------
+    signal : Signal
+        Broadband epochs.
+    method : str
+        One of ``"coh"``, ``"imcoh"``, ``"plv"``, ``"ciplv"``, ``"ppc"``,
+        ``"pli"``, ``"wpli"``, ``"wpli2_debiased"``. Prefer ``"wpli2_debiased"``
+        over ``"wpli"`` at low trial counts: it removes the sample-size bias that
+        makes wPLI rise as trials fall.
+
+        ``"imcoh"`` is reported as a magnitude, because its sign is a statement
+        about which node came first and these pairs are unordered. ``"dpli"`` and
+        ``"cohy"`` are refused rather than misrepresented; see the error each
+        raises.
+    bands : sequence of Band
+        Bands to estimate in.
+    windows : sequence of Window
+        Analysis windows.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. Channel-level connectivity is averaged
+        within each ROI block.
+    trials : sequence of str, optional
+        A label per epoch. One row per distinct label.
+    mode : {"multitaper", "fourier"}, default "multitaper"
+        Spectral estimator passed to mne-connectivity.
 
     Returns
     -------
     FeatureTable
         One column per node pair, band and window, with ``space_kind="pair"``.
     """
-    return _pairwise(
-        signals,
-        measure="aec",
-        unit="r",
-        windows=windows,
-        groups=groups,
-        trials=trials,
-        matrix=_correlation_matrix,
-    )
+    if method in _DIRECTED:
+        raise ValueError(f"{method!r} is not available here. {_DIRECTED[method]}")
+    if method not in _METHOD_UNITS:
+        raise ValueError(
+            f"unknown connectivity method {method!r}; expected one of " f"{sorted(_METHOD_UNITS)}."
+        )
+    if mode not in ("multitaper", "fourier"):
+        raise ValueError(f"mode must be 'multitaper' or 'fourier', got {mode!r}.")
+
+    row_groups, labels = _resolve_rows(trials, signal.data.shape[0])
+    if np.any(np.bincount(row_groups, minlength=len(labels)) < 2):
+        raise ValueError(
+            f"{method} requires at least two epochs in every trial group: these "
+            "estimators average a cross-spectrum over epochs."
+        )
+    estimator = _require_mne_connectivity()
+    node_names, picks = _nodes(signal.ch_names, groups)
+
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
+    for band in bands:
+        if signal.passband is not None:
+            check_passband(band, *signal.passband, source=method)
+        for window in windows:
+            mask = window_mask(signal.times, window)
+            matrices = []
+            for row in range(len(labels)):
+                data = signal.data[row_groups == row][:, :, mask]
+                result = estimator(
+                    data,
+                    method=method,
+                    sfreq=signal.sfreq,
+                    fmin=band.fmin,
+                    fmax=band.fmax,
+                    mode=mode,
+                    faverage=False,
+                    verbose=False,
+                )
+                matrices.append(_band_mean(result, band, rectify=method in _RECTIFIED))
+            columns.extend(
+                _pair_columns(
+                    np.stack([_reduce_to_nodes(m, picks) for m in matrices]),
+                    node_names,
+                    band,
+                    window,
+                    method,
+                    _METHOD_UNITS[method],
+                    signal,
+                    {
+                        "mode": mode,
+                        "band_edges": "half_open",
+                        "frequency_reduction": "mean",
+                        "rectified": method in _RECTIFIED,
+                    },
+                )
+            )
+    return _table(columns, labels)
 
 
 def wpli(
@@ -70,14 +272,10 @@ def wpli(
 ) -> FeatureTable:
     """Weighted phase lag index between every pair of nodes.
 
-    Delegates the estimation to ``mne_connectivity.spectral_connectivity_epochs``,
-    ensuring standard cross-spectral density calculation.
-
-    Takes a broadband :class:`~eegfeat.Signal` and a list of bands, rather than
-    pre-filtered :class:`~eegfeat.BandSignal` objects, because the band is a
-    parameter of the spectral estimation rather than a prior filtering step.
-
-    Requires the optional dependency: ``pip install eegfeat[connectivity]``.
+    A shorthand for :func:`spectral_connectivity` with ``method="wpli"``; see it
+    for what the estimation does and for the other measures it reaches. At low
+    trial counts prefer ``method="wpli2_debiased"``, which corrects the
+    sample-size bias that makes wPLI grow as the number of trials falls.
 
     Parameters
     ----------
@@ -88,8 +286,7 @@ def wpli(
     windows : sequence of Window
         Analysis windows.
     groups : mapping of str to sequence of str, optional
-        ROI name to member channels. Channel-level connectivity is averaged
-        within each ROI block.
+        ROI name to member channels.
     trials : sequence of str, optional
         A label per epoch. One row per distinct label.
 
@@ -98,41 +295,14 @@ def wpli(
     FeatureTable
         One column per node pair, band and window, with ``space_kind="pair"``.
     """
-    row_groups, labels = _resolve_rows(trials, signal.data.shape[0])
-    if np.any(np.bincount(row_groups, minlength=len(labels)) < 2):
-        raise ValueError("wPLI requires at least two epochs in every trial group.")
-    estimator = _require_mne_connectivity()
-    node_names, picks = _nodes(signal.ch_names, groups)
-
-    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
-    for band in bands:
-        for window in windows:
-            mask = window_mask(signal.times, window)
-            matrices = []
-            for row in range(len(labels)):
-                data = signal.data[row_groups == row][:, :, mask]
-                result = estimator(
-                    data,
-                    method="wpli",
-                    sfreq=signal.sfreq,
-                    fmin=band.fmin,
-                    fmax=band.fmax,
-                    faverage=True,
-                    verbose=False,
-                )
-                matrices.append(_dense(result))
-            columns.extend(
-                _pair_columns(
-                    np.stack([_reduce_to_nodes(m, picks) for m in matrices]),
-                    node_names,
-                    band,
-                    window,
-                    "wpli",
-                    "a.u.",
-                    signal,
-                )
-            )
-    return _table(columns, labels)
+    return spectral_connectivity(
+        signal,
+        method="wpli",
+        bands=bands,
+        windows=windows,
+        groups=groups,
+        trials=trials,
+    )
 
 
 def global_efficiency(pairs: FeatureTable) -> FeatureTable:
@@ -244,15 +414,67 @@ def _checked(
 
 
 def _correlation_matrix(
-    envelope: npt.NDArray[np.float64], picks: list[list[int]]
+    analytic: npt.NDArray[np.complex128],
+    picks: list[list[int]],
+    *,
+    orthogonalize: Orthogonalization,
+    absolute: bool,
 ) -> npt.NDArray[np.float64]:
-    # One series per node: a channel, or an ROI's mean envelope.
-    series = np.stack([envelope[:, pick, :].mean(axis=1) for pick in picks], axis=1)
-    with warnings.catch_warnings():
+    # One series per node: a channel, or the mean analytic signal of an ROI. The
+    # analytic signal rather than the envelope, because orthogonalization needs phase.
+    series = np.stack([analytic[:, pick, :].mean(axis=1) for pick in picks], axis=1)
+    with warnings.catch_warnings(), np.errstate(invalid="ignore", divide="ignore"):
         warnings.simplefilter("ignore")
-        per_trial = np.stack([np.atleast_2d(np.corrcoef(trial)) for trial in series])
-        matrix = np.nanmean(per_trial, axis=0)
+        per_trial = np.stack(
+            [
+                _trial_correlation(trial, orthogonalize=orthogonalize, absolute=absolute)
+                for trial in series
+            ]
+        )
+        # Fisher z, not a plain mean: r is not additive, and a correlation averaged
+        # on its own scale is biased toward zero. The same reasoning as
+        # eegfeat.model.aggregate.subject_level_r, and the same clip to keep
+        # arctanh finite at exactly +/-1.
+        bounded = np.clip(per_trial, -_FISHER_LIMIT, _FISHER_LIMIT)
+        matrix = np.tanh(np.nanmean(np.arctanh(bounded), axis=0))
     return np.asarray(np.atleast_2d(matrix), dtype=float)
+
+
+def _trial_correlation(
+    trial: npt.NDArray[np.complex128],
+    *,
+    orthogonalize: Orthogonalization,
+    absolute: bool,
+) -> npt.NDArray[np.float64]:
+    """Envelope correlation matrix for one trial.
+
+    The orthogonalized branch follows Hipp et al. (2012) as implemented by
+    ``mne_connectivity.envelope_correlation``: node ``i`` is projected onto the
+    plane orthogonal to node ``j`` before its envelope is correlated with ``j``'s,
+    which removes the zero-lag component that volume conduction produces. The
+    result is asymmetric, so it is averaged with its transpose.
+    """
+    magnitude = np.abs(trial)
+    if orthogonalize is None:
+        return np.asarray(np.atleast_2d(np.corrcoef(magnitude)), dtype=float)
+
+    conjugate_scaled = np.conj(trial) / magnitude
+    centred = magnitude - magnitude.mean(axis=-1, keepdims=True)
+    spread = np.linalg.norm(centred, axis=-1)
+    spread = np.where(spread == 0.0, 1.0, spread)
+
+    n_nodes = trial.shape[0]
+    corr = np.empty((n_nodes, n_nodes), dtype=float)
+    for node in range(n_nodes):
+        orth = np.abs((trial[node] * conjugate_scaled).imag)
+        orth[node] = 1.0  # self-projection is degenerate; zeroed by the centring below
+        orth = orth - orth.mean(axis=-1, keepdims=True)
+        orth_spread = np.linalg.norm(orth, axis=-1)
+        orth_spread = np.where(orth_spread == 0.0, 1.0, orth_spread)
+        corr[node] = (orth * centred).sum(axis=-1) / spread / orth_spread
+    if absolute:
+        corr = np.abs(corr)
+    return np.asarray((corr.T + corr) / 2.0, dtype=float)
 
 
 def _reduce_to_nodes(
@@ -272,15 +494,28 @@ def _reduce_to_nodes(
     return out
 
 
-def _dense(result: Any) -> npt.NDArray[np.float64]:
-    """Square connectivity matrix from an mne-connectivity result.
+def _band_mean(result: Any, band: Band, *, rectify: bool = False) -> npt.NDArray[np.float64]:
+    """Square connectivity matrix averaged over the band's half-open frequencies.
 
     Taken from the estimator's own ``output="dense"`` rather than rebuilt from the
     flat vector: the flat form is the whole matrix raveled, not a triangle, and
     reconstructing it by hand silently permutes every pair.
     """
     dense = np.asarray(result.get_data(output="dense"), dtype=float)
-    matrix = dense[:, :, 0] if dense.ndim == 3 else dense
+    if dense.ndim != 3:
+        raise ValueError(f"expected a (nodes, nodes, freqs) connectivity result, got {dense.shape}")
+    freqs = np.asarray(result.freqs, dtype=float)
+    keep = band.mask(freqs)
+    if not keep.any():
+        raise ValueError(
+            f"band {band.name!r} [{band.fmin}, {band.fmax}) contains none of the "
+            f"frequencies the estimator returned ({freqs.min()} to {freqs.max()} Hz). "
+            "Use a longer window or a wider band."
+        )
+    selected = np.abs(dense[:, :, keep]) if rectify else dense[:, :, keep]
+    # Rectify before averaging: a sign that flips across the band would otherwise
+    # cancel to nearly nothing and read as an absence of coupling.
+    matrix = selected.mean(axis=2)
     # Only the lower triangle is populated.
     return np.asarray(matrix + matrix.T, dtype=float)
 
@@ -293,10 +528,14 @@ def _pair_columns(
     measure: str,
     unit: str,
     signal: BandSignal | Signal,
+    estimator_parameters: Mapping[str, object],
 ) -> list[tuple[FeatureMeta, npt.NDArray[np.float64]]]:
     computation = ComputationSpec.create(
         measure,
-        estimator=("per-trial-pearson-mean" if measure == "aec" else "mne-connectivity-wpli"),
+        estimator=("per-trial-fisher-z-mean" if measure == "aec" else "mne-connectivity"),
+        # Orthogonalization and band-edge handling change what is measured, not
+        # merely how precisely; two columns that differ in them are different features.
+        estimator_parameters=dict(estimator_parameters),
         input_source=signal.source,
         input_computation=signal.computation.record(),
         # The node set belongs to the specification: channel-level and ROI-level
@@ -345,7 +584,8 @@ def _pairwise(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None,
     trials: Sequence[str] | npt.NDArray[np.str_] | None,
-    matrix: Callable[[npt.NDArray[np.float64], list[list[int]]], npt.NDArray[np.float64]],
+    matrix: Callable[[npt.NDArray[np.complex128], list[list[int]]], npt.NDArray[np.float64]],
+    estimator_parameters: Mapping[str, object],
 ) -> FeatureTable:
     check_signals(signals, windows)
     row_groups, labels = _resolve_rows(trials, signals[0].n_epochs)
@@ -353,17 +593,26 @@ def _pairwise(
 
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
     for signal in signals:
-        envelope = signal.envelope
+        analytic = signal.analytic
         for window in windows:
             mask = window_mask(signal.times, window)
             stacked = np.stack(
                 [
-                    matrix(envelope[row_groups == row][:, :, mask], picks)
+                    matrix(analytic[row_groups == row][:, :, mask], picks)
                     for row in range(len(labels))
                 ]
             )
             columns.extend(
-                _pair_columns(stacked, node_names, signal.band, window, measure, unit, signal)
+                _pair_columns(
+                    stacked,
+                    node_names,
+                    signal.band,
+                    window,
+                    measure,
+                    unit,
+                    signal,
+                    estimator_parameters,
+                )
             )
     return _table(columns, labels)
 

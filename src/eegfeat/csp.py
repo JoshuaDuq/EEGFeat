@@ -1,0 +1,373 @@
+"""Common spatial patterns, fitted where they cannot see the labels they predict.
+
+CSP is supervised: it uses the class labels to find spatial filters, so fitting
+it on a whole dataset and then cross-validating the classifier reports an
+accuracy the method did not earn. The leak is invisible in the numbers and
+survives every downstream precaution.
+
+:func:`csp_features` therefore takes the folds up front and builds one table in
+which **every row was transformed by filters fitted without it**, and records
+those folds in each column's computation so a table built under one split cannot
+be quietly reused under another. :class:`CommonSpatialPattern` is the estimator
+underneath, for callers driving their own loop.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+import numpy as np
+import numpy.typing as npt
+from scipy.linalg import eigh
+
+from eegfeat._validation import blank_non_finite
+from eegfeat.signal import Signal
+from eegfeat.spectra import Window
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+
+__all__ = ["CommonSpatialPattern", "csp_features"]
+
+
+class _Fold(Protocol):
+    """What this module needs of a fold; ``eegfeat.model.Fold`` satisfies it."""
+
+    @property
+    def train(self) -> npt.NDArray[np.intp]: ...
+
+    @property
+    def test(self) -> npt.NDArray[np.intp]: ...
+
+
+def _fold_indices(fold: Any) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    if hasattr(fold, "train") and hasattr(fold, "test"):
+        return np.asarray(fold.train, dtype=np.intp), np.asarray(fold.test, dtype=np.intp)
+    train, test = fold
+    return np.asarray(train, dtype=np.intp), np.asarray(test, dtype=np.intp)
+
+
+def _covariance(epochs: npt.NDArray[np.float64], regularization: float) -> npt.NDArray[np.float64]:
+    """Trace-normalized covariance, averaged over epochs.
+
+    Normalizing each epoch by its own trace before averaging is the original
+    algorithm's step for removing between-subject and between-trial magnitude
+    differences, so one loud epoch cannot decide the filters on its own.
+    """
+    n_channels = epochs.shape[1]
+    total = np.zeros((n_channels, n_channels), dtype=float)
+    used = 0
+    for epoch in epochs:
+        if not np.isfinite(epoch).all():
+            continue
+        centred = epoch - epoch.mean(axis=-1, keepdims=True)
+        covariance = centred @ centred.T
+        trace = np.trace(covariance)
+        if not np.isfinite(trace) or trace <= 0.0:
+            continue
+        total += covariance / trace
+        used += 1
+    if used == 0:
+        raise ValueError("no epoch in this class had finite data with non-zero variance.")
+    mean = total / used
+    if regularization > 0.0:
+        # Shrink toward a sphere. With more channels than usable epochs the class
+        # covariance is singular and the generalized eigenproblem has no solution.
+        mean = (1.0 - regularization) * mean + regularization * np.trace(
+            mean
+        ) / n_channels * np.eye(n_channels)
+    return mean
+
+
+@dataclass(frozen=True, eq=False)
+class CommonSpatialPattern:
+    """Spatial filters maximizing the variance ratio between two classes.
+
+    Parameters
+    ----------
+    filters : ndarray, shape (n_components, n_channels)
+        One spatial filter per component, in the order the components are
+        emitted: alternating ends of the eigenvalue spectrum, so the first
+        favours ``classes[0]`` and the second ``classes[1]``.
+    patterns : ndarray, shape (n_components, n_channels)
+        The corresponding forward patterns, which are what may be read
+        topographically. A filter is not a pattern and does not map to the scalp.
+    eigenvalues : ndarray, shape (n_components,)
+        Fraction of the pooled variance each component assigns to ``classes[0]``.
+    """
+
+    filters: npt.NDArray[np.float64]
+    patterns: npt.NDArray[np.float64]
+    eigenvalues: npt.NDArray[np.float64]
+    ch_names: tuple[str, ...]
+    classes: tuple[int, int]
+    computation: ComputationSpec
+
+    @property
+    def n_components(self) -> int:
+        """Number of spatial filters."""
+        return int(self.filters.shape[0])
+
+    @classmethod
+    def fit(
+        cls,
+        signal: Signal,
+        labels: npt.NDArray[np.intp] | Sequence[int],
+        *,
+        rows: npt.NDArray[np.intp] | None = None,
+        n_components: int = 4,
+        regularization: float = 0.0,
+    ) -> CommonSpatialPattern:
+        """Fit filters on the given rows only.
+
+        Parameters
+        ----------
+        signal : Signal
+            Broadband or band-filtered epochs. CSP assumes the band is already
+            chosen: its variance ratio is only meaningful within one.
+        labels : array-like of int
+            One label per epoch of ``signal``, exactly two distinct values.
+        rows : ndarray of int, optional
+            Which epochs may contribute. None uses all of them, which is correct
+            for description and leaks for prediction.
+        n_components : int, default 4
+            Number of filters, taken in pairs from the two ends of the spectrum,
+            so it must be even and at most the channel count.
+        regularization : float, default 0.0
+            Shrinkage toward a sphere, in ``[0, 1)``. Raise it when there are
+            more channels than epochs.
+
+        Returns
+        -------
+        CommonSpatialPattern
+        """
+        y = np.asarray(labels)
+        if y.shape != (signal.data.shape[0],):
+            raise ValueError(
+                f"labels must have one entry per epoch; got {y.shape} for "
+                f"{signal.data.shape[0]} epochs."
+            )
+        if isinstance(n_components, bool) or not isinstance(n_components, (int, np.integer)):
+            raise ValueError(f"n_components must be an even integer, got {n_components!r}.")
+        if n_components < 2 or n_components % 2:
+            raise ValueError(f"n_components must be even and at least 2, got {n_components}.")
+        if n_components > len(signal.ch_names):
+            raise ValueError(
+                f"n_components ({n_components}) exceeds the {len(signal.ch_names)} channels "
+                "available; CSP cannot return more filters than sensors."
+            )
+        if not 0.0 <= regularization < 1.0:
+            raise ValueError(f"regularization must be in [0, 1), got {regularization}.")
+
+        selected = np.arange(y.size, dtype=np.intp) if rows is None else np.asarray(rows, np.intp)
+        present = np.unique(y[selected])
+        if present.size != 2:
+            raise ValueError(
+                f"CSP separates exactly two classes; these rows carry {present.tolist()}."
+            )
+        first, second = (int(present[0]), int(present[1]))
+
+        covariances = [
+            _covariance(signal.data[selected[y[selected] == label]], regularization)
+            for label in (first, second)
+        ]
+        pooled = covariances[0] + covariances[1]
+        try:
+            values, vectors = eigh(covariances[0], pooled)
+        except np.linalg.LinAlgError as error:  # pragma: no cover - needs a singular pool
+            raise ValueError(
+                "the pooled covariance is singular, so no spatial filter is defined. "
+                "Raise regularization, use fewer channels, or supply more epochs."
+            ) from error
+
+        order = np.argsort(values)[::-1]
+        values, vectors = values[order], vectors[:, order]
+        # Alternate ends: the largest eigenvalue favours the first class, the
+        # smallest the second, and a pair from each end is what CSP is for.
+        half = n_components // 2
+        picks = np.empty(n_components, dtype=int)
+        picks[0::2] = np.arange(half)
+        picks[1::2] = values.size - 1 - np.arange(half)
+
+        filters = np.asarray(vectors[:, picks].T, dtype=float)
+        patterns = np.asarray(np.linalg.pinv(vectors)[picks], dtype=float)
+        return cls(
+            filters=filters,
+            patterns=patterns,
+            eigenvalues=np.asarray(values[picks], dtype=float),
+            ch_names=tuple(signal.ch_names),
+            classes=(first, second),
+            computation=ComputationSpec.create(
+                "csp",
+                n_components=n_components,
+                regularization=regularization,
+                n_fit_epochs=int(selected.size),
+                classes=[first, second],
+                covariance="trace_normalized_per_epoch_mean",
+                input_computation=signal.computation.record(),
+            ),
+        )
+
+    def transform(
+        self, signal: Signal, *, rows: npt.NDArray[np.intp] | None = None
+    ) -> npt.NDArray[np.float64]:
+        """Project epochs and return each component's log relative power.
+
+        Returns
+        -------
+        ndarray, shape (n_rows, n_components)
+            ``log(var_j / sum_k var_k)``, the standard CSP feature. The
+            normalization makes it independent of the epoch's overall amplitude,
+            so it describes how power is distributed across components rather
+            than how loud the epoch was.
+        """
+        if tuple(signal.ch_names) != self.ch_names:
+            raise ValueError(
+                "this CSP was fitted on different channels, in a different order; "
+                f"fitted on {self.ch_names} and asked to transform {tuple(signal.ch_names)}."
+            )
+        selected = (
+            np.arange(signal.data.shape[0], dtype=np.intp)
+            if rows is None
+            else np.asarray(rows, np.intp)
+        )
+        projected = np.einsum("ij,njt->nit", self.filters, signal.data[selected])
+        with np.errstate(invalid="ignore", divide="ignore"):
+            # Every filter mixes every channel, so one bad sample is bad in all
+            # components at that instant. Blanked, it drops out of the variance the
+            # way a NaN sample already does instead of voiding the whole epoch.
+            variance = np.nanvar(blank_non_finite(projected), axis=2)
+            total = variance.sum(axis=1, keepdims=True)
+            values = np.log(np.where(total > 0.0, variance / total, np.nan))
+        return np.asarray(values, dtype=float)
+
+
+def _fold_signature(folds: Sequence[Any]) -> str:
+    """A digest of the exact split, so a table cannot be reused under another one."""
+    payload = ";".join(
+        f"{np.asarray(train).tolist()}|{np.asarray(test).tolist()}"
+        for train, test in (_fold_indices(fold) for fold in folds)
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def csp_features(
+    signal: Signal,
+    labels: npt.NDArray[np.intp] | Sequence[int],
+    *,
+    folds: Sequence[Any],
+    window: Window | None = None,
+    n_components: int = 4,
+    regularization: float = 0.0,
+) -> FeatureTable:
+    """Cross-fitted CSP features: every row transformed by filters that never saw it.
+
+    For each fold the filters are fitted on its training rows and applied to its
+    test rows, so no row's features depend on its own label. **Use the same folds
+    downstream.** Fitting a classifier under a different split would place a row
+    in a training set whose features already encode the test labels, which is the
+    leak this function exists to prevent; the split's digest is recorded in every
+    column's computation so the two can be checked against each other.
+
+    Every row must be tested exactly once, which is what
+    :func:`~eegfeat.model.loso_folds` and
+    :func:`~eegfeat.model.within_subject_folds` produce.
+
+    Parameters
+    ----------
+    signal : Signal
+        Epochs, already restricted to the band of interest. CSP compares variance
+        between classes, which is only meaningful within one band.
+    labels : array-like of int
+        One label per epoch, exactly two distinct values across the whole set.
+    folds : sequence
+        Objects with ``train`` and ``test`` index arrays, such as
+        :class:`~eegfeat.model.Fold`, or plain ``(train, test)`` pairs.
+    window : Window, optional
+        Recorded on every column so the table says what it covers. The signal is
+        used whole; slice it before calling if you want less.
+    n_components : int, default 4
+        Number of filters, even.
+    regularization : float, default 0.0
+        Shrinkage toward a sphere, in ``[0, 1)``.
+
+    Returns
+    -------
+    FeatureTable
+        One row per epoch and one column per component, ``space_kind="global"``
+        because a spatial filter is a weighting of every channel rather than a
+        location.
+    """
+    y = np.asarray(labels)
+    n_epochs = int(signal.data.shape[0])
+    if y.shape != (n_epochs,):
+        raise ValueError(f"labels must have one entry per epoch; got {y.shape} for {n_epochs}.")
+    if not folds:
+        raise ValueError(
+            "csp_features requires at least one fold; features cannot be cross-fitted."
+        )
+
+    values = np.full((n_epochs, n_components), np.nan)
+    tested = np.zeros(n_epochs, dtype=bool)
+    for index, fold in enumerate(folds, start=1):
+        train, test = _fold_indices(fold)
+        if np.intersect1d(train, test).size:
+            raise ValueError(f"fold {index}: train and test rows overlap.")
+        if tested[test].any():
+            raise ValueError(
+                f"fold {index}: some rows are tested twice, so their features would "
+                "depend on which fold wrote them last."
+            )
+        fitted = CommonSpatialPattern.fit(
+            signal,
+            y,
+            rows=train,
+            n_components=n_components,
+            regularization=regularization,
+        )
+        values[test] = fitted.transform(signal, rows=test)
+        tested[test] = True
+
+    if not tested.all():
+        missing = int((~tested).sum())
+        raise ValueError(
+            f"{missing} of {n_epochs} rows are in no fold's test set, so they have no "
+            "features that were fitted without them. Supply folds that test every row."
+        )
+
+    label = window.name if window is not None else "all"
+    bounds = (window.tmin, window.tmax) if window is not None else None
+    computation = ComputationSpec.create(
+        "csp_features",
+        n_components=n_components,
+        regularization=regularization,
+        n_folds=len(folds),
+        # The split is part of the specification: the same epochs cross-fitted
+        # under a different one are different numbers with the same name.
+        folds=_fold_signature(folds),
+        cross_fitted=True,
+        input_computation=signal.computation.record(),
+    )
+    meta = tuple(
+        FeatureMeta(
+            measure="csp_log_power",
+            band=signal.band,
+            space=f"component{component + 1:02d}",
+            space_kind="global",
+            window=label,
+            normalization="raw",
+            unit="log relative power",
+            source=signal.source,
+            window_bounds=bounds,
+            computation=computation,
+            freq_resolution_hz=None,
+        )
+        for component in range(n_components)
+    )
+    return FeatureTable(
+        values=values,
+        coverage=np.isfinite(values).astype(float),
+        meta=meta,
+        row_ids=signal.row_ids,
+    )

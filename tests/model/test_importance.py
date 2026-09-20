@@ -462,3 +462,18 @@ def test_aggregation_refuses_a_feature_no_fold_could_score(
     )
     with pytest.raises(ValueError, match="No fold scored"):
         aggregate_by(importance, alpha_beta_meta, "band")
+
+
+def test_an_infinite_fold_value_is_skipped_like_a_missing_one() -> None:
+    # A fold counts as successful when any feature survived it, so one feature's
+    # infinity must not become that feature's mean across folds: the guard above
+    # already calls a non-finite value missing, and nanmean alone does not.
+    from eegfeat.model.importance import _combine_folds
+
+    folds = [
+        np.array([1.0, np.inf, 3.0]),
+        np.array([3.0, 2.0, np.nan]),
+        np.array([2.0, 2.0, 5.0]),
+    ]
+    _, values = _combine_folds(folds, n_folds=3, min_complete_fraction=0.5, label="test")
+    assert values == pytest.approx([2.0, 2.0, 4.0])

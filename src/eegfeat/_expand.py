@@ -7,7 +7,8 @@ from typing import Literal, TypeAlias, TypeVar
 import numpy as np
 import numpy.typing as npt
 
-from eegfeat.bands import Band
+from eegfeat._validation import blank_non_finite
+from eegfeat.bands import Band, check_passband
 from eegfeat.baseline import normalize
 from eegfeat.groups import SpatialUnit, aggregate
 from eegfeat.qc import band_coverage
@@ -99,6 +100,8 @@ def expand(
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
     for band in bands if bands is not None else (None,):
+        if band is not None and spectra.passband is not None:
+            check_passband(band, *spectra.passband, source=measure)
         integration_weights = None
         if weighting == "band_integral":
             if band is None:
@@ -204,13 +207,18 @@ def _check_band(
 Series = TypeVar("Series", bound=TimeSeries)
 
 SignalKernel: TypeAlias = Callable[
-    [Series, npt.NDArray[np.float64], npt.NDArray[np.float64]],
+    [Series, npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.bool_]],
     dict[str, npt.NDArray[np.float64]],
 ]
-"""Measure one window of a series.
+"""Measure one window of a series, given ``(series, trace, times, mask)``.
 
 Generic in the series type, so a kernel written against :class:`BandSignal` stays
 typed as such while :func:`expand_signal` also accepts a plain :class:`Signal`.
+
+``trace`` and ``times`` are already restricted to the window; ``mask`` is the
+boolean selector that produced them, for a kernel that also has to index an
+unwindowed array on the series. Recovering it from ``times`` by value would
+work only while the two arrays are the same floats.
 """
 
 
@@ -225,6 +233,7 @@ def expand_signal(
     include_global: bool,
     mode: Normalization,
     parameters: Mapping[str, object],
+    flags_of: Callable[[Series], Mapping[str, npt.NDArray[np.bool_]]] | None = None,
     row_groups: npt.NDArray[np.int_] | None = None,
     row_labels: tuple[str, ...] | None = None,
 ) -> FeatureTable:
@@ -233,20 +242,37 @@ def expand_signal(
     ``row_groups`` maps each epoch to an output row, for measures estimated across
     trials rather than within one. The kernel then returns one value per row
     instead of per epoch, and coverage is averaged over each group's epochs.
+
+    ``flags_of`` annotates cells whose value rests on a condition of the input
+    rather than on the measurement, such as a baseline too degenerate to anchor a
+    ratio. It returns arrays shaped ``(n_epochs, n_channels)``, broadcast across
+    windows, and a flag set on any member channel marks the whole spatial unit.
     """
     check_signals(signals, windows)
     if (row_groups is None) != (row_labels is None):
         raise ValueError("row_groups and row_labels must be given together.")
+    if flags_of is not None and row_groups is not None:
+        # Flags are per epoch and channel; a group row has no single epoch to carry
+        # them, and silently reducing them would misreport which trial was flagged.
+        raise ValueError("flags_of cannot be combined with cross-trial row_groups.")
     columns: list[_Column] = []
     flag_columns: dict[str, list[npt.NDArray[np.bool_]]] = {}
 
     for signal in signals:
-        trace = trace_of(signal)
+        # Blanked once here rather than in each kernel: the coverage taken from the
+        # same signal a few lines below already counts a non-finite sample as
+        # missing, and a kernel reducing over the raw trace would contradict it.
+        trace = blank_non_finite(trace_of(signal))
+        # One flag per epoch and channel, held across every window of this signal.
+        signal_flags = {
+            key: np.repeat(array[:, :, np.newaxis], len(windows), axis=2)
+            for key, array in (flags_of(signal) if flags_of is not None else {}).items()
+        }
         by_measure: dict[str, list[npt.NDArray[np.float64]]] = {}
         coverages: list[npt.NDArray[np.float64]] = []
         for window in windows:
             mask = window_mask(signal.times, window)
-            measured = kernel(signal, trace[:, :, mask], signal.times[mask])
+            measured = kernel(signal, trace[:, :, mask], signal.times[mask], mask)
             for name, values in measured.items():
                 by_measure.setdefault(name, []).append(values)
             per_epoch = signal.coverage[:, :, mask].mean(axis=2)
@@ -291,7 +317,7 @@ def expand_signal(
                 )
 
             new_columns, new_flags = _collect(
-                spatial_units, windows, {}, make_meta, skip_window=None
+                spatial_units, windows, signal_flags, make_meta, skip_window=None
             )
             columns.extend(new_columns)
             for key, arrays in new_flags.items():

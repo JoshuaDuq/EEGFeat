@@ -61,7 +61,7 @@ def test_within_subject_classification_serves_run_splits() -> None:
     runs = np.tile(np.repeat(["r1", "r2", "r3", "r4"], 2), 2).astype(object)
     y = np.tile([0, 1], groups.size // 2).astype(np.intp)
     x = np.ones((groups.size, 2))
-    folds = within_subject_folds(groups, runs, inner_splits=2, seed=0)
+    folds = within_subject_folds(groups, runs, inner_splits=2)
     inner_run = InnerSplit(grouping="run", stratified=True, n_splits=2)
     predictions = cross_fit_classification(
         folds, x, y, groups, PIPE, GRID, inner=inner_run, seed=0, runs=runs
@@ -76,7 +76,7 @@ def test_within_subject_classification_applies_harmonization() -> None:
     y = np.tile([0, 1], groups.size // 2).astype(np.intp)
     x = np.column_stack([np.ones(groups.size), np.zeros(groups.size)])
     x[groups == "s2", -1] = 1.0
-    folds = within_subject_folds(groups, runs, inner_splits=2, seed=0)
+    folds = within_subject_folds(groups, runs, inner_splits=2)
     inner_run = InnerSplit(grouping="run", stratified=True, n_splits=2)
     predictions = cross_fit_classification(
         folds,
@@ -98,7 +98,7 @@ def test_within_subject_classification_raises_when_training_fold_has_one_class()
     runs = np.tile(np.repeat(["r1", "r2", "r3", "r4"], 2), 2).astype(object)
     y = np.zeros(groups.size, dtype=np.intp)
     y[groups == "s2"] = 1
-    folds = within_subject_folds(groups, runs, inner_splits=2, seed=0)
+    folds = within_subject_folds(groups, runs, inner_splits=2)
     inner_run = InnerSplit(grouping="run", stratified=True, n_splits=2)
     with pytest.raises(ValueError, match="one class"):
         cross_fit_classification(

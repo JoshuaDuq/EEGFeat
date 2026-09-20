@@ -69,8 +69,9 @@ def sample_entropy(
         s: TimeSeries,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        del s, times
+        del s, times, mask
         return {"sampen": _per_channel(trace, lambda x: _sample_entropy(x, order, r))}
 
     return expand_signal(
@@ -152,8 +153,9 @@ def multiscale_entropy(
         s: TimeSeries,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        del s, times
+        del s, times, mask
 
         def at_scale(x: npt.NDArray[np.float64], scale: int) -> float:
             coarse = _coarse_grain(x, scale)
@@ -182,6 +184,109 @@ def multiscale_entropy(
             "coarse_graining": "nonoverlapping_mean",
         },
     )
+
+
+def higuchi_fractal_dimension(
+    series: Sequence[TimeSeries],
+    *,
+    windows: Sequence[Window],
+    k_max: int = 10,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    r"""Higuchi's fractal dimension of the signal within each window.
+
+    The curve is re-traced at a range of strides :math:`k`, and its mean length
+    :math:`L(k)` falls as :math:`k^{-D}`. The dimension :math:`D` is the slope of
+    :math:`\log L(k)` against :math:`-\log k`, and it measures how much structure
+    survives coarse sampling: about 1 for a smooth oscillation, about 1.5 for
+    Brownian motion, about 2 for white noise.
+
+    It is not an alternative spelling of :func:`~eegfeat.sample_entropy`. Sample
+    entropy asks how predictable the signal is from its own recent past; this
+    asks how its length scales, and the two order real recordings differently.
+    It is also far cheaper: linear in the window length rather than quadratic.
+
+    Parameters
+    ----------
+    series : sequence of TimeSeries
+        Raw signals or band envelopes.
+    windows : sequence of Window
+        Analysis windows.
+    k_max : int, default 10
+        Largest stride. The window needs more than ``k_max`` samples, and the
+        estimate settles as ``k_max`` grows; 10 is the common choice.
+    groups : mapping of str to sequence of str, optional
+        ROI name to member channels. None gives one column per channel.
+    include_global : bool, default True
+        Also emit the mean across all channels.
+
+    Returns
+    -------
+    FeatureTable
+        Fractal dimension, dimensionless. NaN for a window with a non-finite
+        sample or too few samples for the largest stride.
+
+    References
+    ----------
+    Higuchi, T. (1988). Approach to an irregular time series on the basis of the
+    fractal theory. Physica D: Nonlinear Phenomena, 31(2), 277-283.
+    """
+    if isinstance(k_max, bool) or not isinstance(k_max, Integral) or k_max < 2:
+        raise ValueError(f"k_max must be an integer of at least 2, got {k_max!r}.")
+    strides = int(k_max)
+
+    def kernel(
+        s: TimeSeries,
+        trace: npt.NDArray[np.float64],
+        times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
+    ) -> dict[str, npt.NDArray[np.float64]]:
+        del s, times, mask
+        return {"higuchi_fd": _per_channel(trace, lambda x: _higuchi(x, strides))}
+
+    return expand_signal(
+        series,
+        trace_of=lambda s: s.amplitude,
+        kernel=kernel,
+        units={"higuchi_fd": "a.u."},
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        mode="raw",
+        parameters={"k_max": strides},
+    )
+
+
+def _higuchi(x: npt.NDArray[np.float64], k_max: int) -> float:
+    """Curve length against stride, fitted in log-log space."""
+    values = np.asarray(x, dtype=float)
+    n = values.size
+    # A gap would shorten one sub-curve and not the others, tilting the fit; the
+    # measure is about how length scales, so a partial curve is not comparable.
+    if n <= k_max or not np.isfinite(values).all():
+        return float("nan")
+
+    lengths = np.empty(k_max, dtype=float)
+    for k in range(1, k_max + 1):
+        per_start = np.empty(k, dtype=float)
+        for m in range(k):
+            sub = values[m::k]
+            if sub.size < 2:
+                per_start[m] = np.nan
+                continue
+            steps = int((n - m - 1) // k)
+            # (n - 1) / (steps * k) restores the scale the stride removed, and the
+            # remaining 1/k makes lengths at different strides comparable.
+            per_start[m] = np.abs(np.diff(sub)).sum() * (n - 1) / (steps * k * k)
+        lengths[k - 1] = np.nanmean(per_start)
+
+    usable = np.isfinite(lengths) & (lengths > 0.0)
+    if int(usable.sum()) < 2:
+        return float("nan")
+    log_k = -np.log(np.arange(1, k_max + 1, dtype=float))
+    slope = np.polyfit(log_k[usable], np.log(lengths[usable]), 1)[0]
+    return float(slope)
 
 
 def _scale_name(scale: int) -> str:

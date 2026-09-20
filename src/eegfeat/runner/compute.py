@@ -27,7 +27,7 @@ from eegfeat.identity import epoch_row_ids
 from eegfeat.microstates import MicrostateSegmentation, segment
 from eegfeat.runner.measures import GRAPH, MEASURES, Measure
 from eegfeat.runner.recipe import WHOLE_EPOCH, FeatureSpec, Recipe
-from eegfeat.signal import BandSignal, Signal
+from eegfeat.signal import BandSignal, Signal, _passband
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec, FeatureTable, concat
 
@@ -197,6 +197,7 @@ class RecordingInputs:
                     if value is not None
                 },
             ),
+            passband=_passband(self.epochs),
         )
 
     def trials(self) -> tuple[str, ...] | None:

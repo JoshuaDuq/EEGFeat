@@ -8,18 +8,35 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import expand_signal, window_mask
+from eegfeat._validation import blank_non_finite
 from eegfeat.baseline import normalize as _normalize
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
 
-_MIN_BASELINE_POWER = 1e-12
-"""Smallest baseline power that can anchor a ratio.
+_MIN_BASELINE_FRACTION = 1e-6
+"""Smallest baseline power that can anchor a ratio, as a fraction of the epoch's own.
 
-Deliberately not the ``1e-20`` power floor used elsewhere: a baseline that small
-turns a quiet channel into an ERDS value of order 1e6 percent, which is
-arithmetically valid and physically meaningless. Baselines below this floor
-are invalidated to NaN to prevent artificially inflated ERD/ERS ratios.
+A baseline near zero turns a quiet channel into an ERDS value of order 1e6
+percent, which is arithmetically valid and physically meaningless. The guard is
+relative rather than an absolute number of V², because absolute power is a
+property of the band and the montage, not of the data being valid: a gamma
+envelope of well under a microvolt is ordinary EEG, and an absolute floor near
+1e-12 V² discards it. A baseline a millionth of the same channel's power over
+the whole epoch is a dropout, not a quiet channel, at any montage scale.
+
+Refused baselines yield NaN and set the ``baseline_degenerate`` flag, so a
+withheld value is distinguishable from one that was never measurable.
+"""
+
+_EXTREME_POWER_RATIO = 1e4
+"""Power ratio above which a value is reported but flagged rather than withheld.
+
+A baseline a hundred times smaller in amplitude than the epoch's peak yields an
+ERDS of order 1e6 percent. That is suspicious, but it is a measurement, not a
+missing value: a hundredfold response is what stimulation artifact and muscle
+look like, and no scale-free rule separates that from a true response. So the
+value stands and ``baseline_extreme_ratio`` marks it for the caller's own QC.
 """
 
 ErdsScale = Literal["percent", "db"]
@@ -517,10 +534,11 @@ def _erds_measure(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
         reference, deviation = _baseline_stats(signal, baseline)
-        selected = np.isin(signal.times, times)
-        power = signal.power[:, :, selected]
+        # The expander's own selector, not one recovered from the time values.
+        power = signal.power[:, :, mask]
         onset_crossing = (
             np.isfinite(power)
             & np.isfinite(reference[:, :, np.newaxis])
@@ -530,10 +548,22 @@ def _erds_measure(
         # taking one is cheaper than it looks and keeps the definitions together.
         return {measure: _measures(signal, trace, times, onset_crossing)[measure]}
 
+    def flags_of(signal: BandSignal) -> dict[str, npt.NDArray[np.bool_]]:
+        reference, _, degenerate = _baseline_reference(signal, baseline)
+        with warnings.catch_warnings(), np.errstate(invalid="ignore", divide="ignore"):
+            warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+            peak = np.nanmax(_power(signal), axis=2)
+            extreme = ~degenerate & (peak > _EXTREME_POWER_RATIO * reference)
+        return {
+            "baseline_degenerate": degenerate,
+            "baseline_extreme_ratio": np.asarray(extreme, dtype=np.bool_),
+        }
+
     return expand_signal(
         signals,
         trace_of=trace_of,
         kernel=kernel,
+        flags_of=flags_of,
         units={measure: _UNITS[normalize][measure]},
         windows=windows,
         groups=groups,
@@ -549,19 +579,48 @@ def _erds_measure(
 def _baseline_stats(
     signal: BandSignal, baseline: Window
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    reference, deviation, degenerate = _baseline_reference(signal, baseline)
+    return np.where(degenerate, np.nan, reference), deviation
+
+
+def _power(signal: BandSignal) -> npt.NDArray[np.float64]:
+    """Instantaneous power with non-finite samples blanked.
+
+    Read here rather than through the analysis trace, so nothing has blanked it
+    yet. It matters more than a wrong mean: an infinity makes the baseline
+    reference non-finite, which is read as degenerate, and every ERDS measure for
+    that channel is withheld over a single bad sample.
+    """
+    return blank_non_finite(signal.power)
+
+
+def _baseline_reference(
+    signal: BandSignal, baseline: Window
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.bool_]]:
+    """Baseline mean power, its spread, and which cells cannot anchor a ratio."""
     mask = window_mask(signal.times, baseline)
-    power = signal.power[:, :, mask]
+    full = _power(signal)
+    power = full[:, :, mask]
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
         warnings.filterwarnings("ignore", "Degrees of freedom <= 0", RuntimeWarning)
         reference = np.nanmean(power, axis=2)
         deviation = np.nanstd(power, axis=2)
-    reference = np.where(reference > _MIN_BASELINE_POWER, reference, np.nan)
-    return reference, deviation
+        # The whole epoch, not just the baseline, so the comparison is against this
+        # channel's own scale rather than an assumed unit of measurement.
+        scale = np.nanmean(full, axis=2)
+    with np.errstate(invalid="ignore"):
+        degenerate: npt.NDArray[np.bool_] = np.asarray(
+            ~np.isfinite(reference)
+            | (reference <= 0.0)
+            | (np.isfinite(scale) & (reference <= _MIN_BASELINE_FRACTION * scale)),
+            dtype=np.bool_,
+        )
+    return reference, deviation, degenerate
 
 
 def _trace(signal: BandSignal, baseline: Window, mode: ErdsScale) -> npt.NDArray[np.float64]:
-    power = signal.power
+    power = _power(signal)
     reference, _ = _baseline_stats(signal, baseline)
     return _normalize(power, baseline=reference, mode=mode)
 

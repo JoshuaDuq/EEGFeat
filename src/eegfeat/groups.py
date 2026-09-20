@@ -89,5 +89,7 @@ def _mean_over_channels(
         # A channel that produced no value is absent from the group, not a zero in
         # it; a group where none did is an all-NaN slice by design.
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
-        mean = np.where(finite.any(axis=1), np.nanmean(subset, axis=1), np.nan)
+        mean = np.where(
+            finite.any(axis=1), np.nanmean(np.where(finite, subset, np.nan), axis=1), np.nan
+        )
     return mean, coverage[:, picks, :].mean(axis=1)

@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import expand_signal, window_mask
+from eegfeat._validation import blank_non_finite
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
@@ -327,8 +328,9 @@ def _burst_measure(
         signal: BandSignal,
         trace: npt.NDArray[np.float64],
         times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        del times
+        del times, mask
         level = _resolve_threshold(signal, threshold, baseline, windows)
         return {measure: _measures(trace, level, signal.sfreq, min_duration_ms)[measure]}
 
@@ -376,7 +378,11 @@ def _resolve_threshold(
     )
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "All-NaN slice", RuntimeWarning)
-        return np.nanquantile(signal.envelope[:, :, calibration], float(threshold), axis=2)
+        # The envelope is read here rather than through the analysis trace, so it
+        # arrives unblanked; a percentile is an order statistic, and an infinity
+        # left among the samples pushes the threshold up a rank.
+        calibrated = blank_non_finite(signal.envelope[:, :, calibration])
+        return np.nanquantile(calibrated, float(threshold), axis=2)
 
 
 def _measures(
@@ -429,7 +435,10 @@ def _extract_single(
         rate = 0.0 if np.isfinite(duration_sec) and duration_sec > 0 else np.nan
         return 0.0, rate, np.nan, np.nan, 0.0
 
-    fraction_above = float(np.mean(above))
+    # Over the samples that exist, not over the window length: a missing sample is
+    # not a sample that stayed below threshold, and counting it as one would report
+    # a smaller share the more data went missing.
+    fraction_above = float(np.count_nonzero(above) / np.count_nonzero(np.isfinite(trace)))
     starts, ends = _intervals(above, trace.size)
     run_lengths = np.array([e - s for s, e in zip(starts, ends, strict=True)], dtype=int)
     surviving = run_lengths >= min_samples

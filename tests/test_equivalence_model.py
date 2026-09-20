@@ -70,7 +70,7 @@ def test_within_subject_predictions_match_the_reference_pipeline(
     ws_runs = reference["ws_runs"].astype(object)
     pipe = Pipeline([("regressor", Ridge())])
     param_grid = {"regressor__alpha": [0.1, 1.0, 10.0]}
-    folds = within_subject_folds(ws_groups, ws_runs, inner_splits=2, outer_splits=2, seed=42)
+    folds = within_subject_folds(ws_groups, ws_runs, inner_splits=2, outer_splits=2)
 
     results = cross_fit_regression(
         folds,

@@ -6,7 +6,6 @@ from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
-from scipy.ndimage import uniform_filter1d
 
 from eegfeat._expand import Kernel, expand
 from eegfeat.aperiodic import aperiodic_ratio
@@ -148,16 +147,6 @@ def _smooth(
         with np.errstate(invalid="ignore", divide="ignore"):
             out[..., index] = np.where(count > 0, total / count, np.nan)
     return out
-
-
-def _centred_boxcar(values: npt.NDArray[np.float64], width: int) -> npt.NDArray[np.float64]:
-    # scipy puts an even window one bin further below its output bin than above it,
-    # which moves the spectrum, and so the peak, half a bin up. Averaging it with the
-    # same window one bin higher centres it, with half weight on the two end bins.
-    boxcar = uniform_filter1d(values, size=width, axis=3, mode="nearest")
-    if width % 2:
-        return boxcar
-    return 0.5 * (boxcar + uniform_filter1d(values, size=width, axis=3, mode="nearest", origin=-1))
 
 
 def _find_peak(

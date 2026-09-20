@@ -152,6 +152,7 @@ To extract instantaneous amplitude dynamics, oscillatory bursts, and ERDS:
    beta_signal = ef.BandSignal.from_epochs(
        epochs,
        band=ef.Band("beta", 13.0, 30.0),
+       recording="sample-epo.fif",
        pad_sec=0.5,
    )
 

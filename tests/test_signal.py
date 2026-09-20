@@ -1,9 +1,13 @@
+import logging
+import re
+import warnings
+
 import mne
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.signal import BandSignal, Signal, TimeSeries
+from eegfeat.bands import BANDS_STANDARD, Band
+from eegfeat.signal import BandSignal, Signal, TimeSeries, _required_filter_length
 
 BETA = Band("beta", 13.0, 30.0)
 
@@ -281,3 +285,93 @@ def test_channel_names_must_be_nonempty_strings() -> None:
             sfreq=100.0,
             row_ids=(("test", 0, "event"),),
         )
+
+
+def test_a_band_reaching_exactly_nyquist_raises() -> None:
+    with pytest.raises(ValueError, match="Nyquist"):
+        BandSignal.from_epochs(_epochs(10.0), Band("hf", 80.0, 100.0), recording="test")
+
+
+# The bands and epoch lengths a caller actually combines. Every cell used to be
+# untested; delta on short epochs raised MNE's own "filter_length, if a string"
+# error, and alpha on very short epochs silently filtered with a truncated kernel.
+_DURATIONS = (0.5, 1.0, 2.0, 4.0, 10.0)
+
+
+@pytest.mark.parametrize("band", BANDS_STANDARD, ids=lambda b: b.name)
+@pytest.mark.parametrize("dur", _DURATIONS)
+def test_every_band_and_epoch_length_either_filters_cleanly_or_refuses(
+    band: Band, dur: float
+) -> None:
+    epochs = _epochs(10.0, dur=dur)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            signal = BandSignal.from_epochs(epochs, band, recording="test")
+    except ValueError as error:
+        # The only acceptable failure is our own, and it has to say what to change.
+        assert band.name in str(error)
+        assert "at least" in str(error)
+        return
+    assert signal.analytic.shape == (3, 2, len(epochs.times))
+    assert np.isfinite(signal.analytic).all()
+
+
+@pytest.mark.parametrize("band", BANDS_STANDARD, ids=lambda b: b.name)
+def test_the_refusal_names_an_epoch_length_that_actually_works(band: Band) -> None:
+    sfreq = 200.0
+    try:
+        BandSignal.from_epochs(_epochs(10.0, sfreq=sfreq, dur=0.5), band, recording="test")
+    except ValueError as error:
+        samples = int(re.search(r"at least (\d+) samples", str(error)).group(1))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            signal = BandSignal.from_epochs(
+                _epochs(10.0, sfreq=sfreq, dur=samples / sfreq), band, recording="test"
+            )
+        assert np.isfinite(signal.analytic).all()
+        # Tight, not merely sufficient: one sample fewer must still be refused,
+        # or the advice sends the caller to collect more data than they need.
+        with pytest.raises(ValueError, match="at least"):
+            BandSignal.from_epochs(
+                _epochs(10.0, sfreq=sfreq, dur=(samples - 1) / sfreq), band, recording="test"
+            )
+
+
+@pytest.mark.parametrize("sfreq", (128.0, 200.0, 250.0, 500.0))
+@pytest.mark.parametrize("band", BANDS_STANDARD, ids=lambda b: b.name)
+def test_required_filter_length_matches_what_mne_designs(band: Band, sfreq: float) -> None:
+    # The refusal is only trustworthy if it predicts MNE's own 'auto' length exactly.
+    if band.fmax >= sfreq / 2.0:
+        pytest.skip("band above Nyquist at this sampling rate")
+    records: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record.getMessage())
+
+    handler = _Capture()
+    logger = logging.getLogger("mne")
+    logger.addHandler(handler)
+    previous = mne.set_log_level("INFO", return_old_level=True)
+    try:
+        mne.filter.filter_data(
+            np.zeros((1, 20000)), sfreq, band.fmin, band.fmax, filter_length="auto", verbose="info"
+        )
+    finally:
+        logger.removeHandler(handler)
+        mne.set_log_level(previous)
+
+    designed = int(
+        re.search(r"(\d+) samples", [r for r in records if "Filter length:" in r][-1]).group(1)
+    )
+    assert _required_filter_length(band, sfreq) == designed
+
+
+def test_delta_on_short_epochs_no_longer_raises_mnes_internal_error() -> None:
+    # Regression: two-second epochs at 250 Hz used to fail with MNE's
+    # 'filter_length, if a string, must be a human-readable time' error.
+    epochs = _epochs(2.0, sfreq=250.0, dur=2.0)
+    signal = BandSignal.from_epochs(epochs, Band("delta", 1.0, 4.0), recording="test")
+    assert signal.analytic.shape == (3, 2, 500)
+    assert np.isfinite(signal.analytic).all()

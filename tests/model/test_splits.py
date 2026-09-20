@@ -116,7 +116,6 @@ def test_create_within_subject_folds_respects_outer_cv_splits() -> None:
         blocks=blocks,
         inner_splits=5,
         outer_splits=2,
-        seed=42,
     )
     assert len(folds) == 2
 
@@ -129,7 +128,6 @@ def test_create_within_subject_folds_requires_runs() -> None:
             blocks=None,
             inner_splits=2,
             outer_splits=2,
-            seed=42,
         )
 
 
@@ -142,7 +140,6 @@ def test_create_within_subject_folds_rejects_insufficient_subject_blocks() -> No
             blocks=blocks,
             inner_splits=2,
             outer_splits=2,
-            seed=42,
         )
 
 
@@ -154,7 +151,6 @@ def test_create_within_subject_folds_supports_forward_ordering() -> None:
         blocks=blocks,
         inner_splits=3,
         outer_splits=2,
-        seed=42,
         ordered_runs=True,
     )
     assert len(folds) == 1
@@ -175,7 +171,6 @@ def test_create_within_subject_folds_raises_when_ordered_runs_cannot_be_formed()
             blocks=blocks,
             inner_splits=2,
             outer_splits=2,
-            seed=42,
             ordered_runs=True,
         )
 
@@ -184,9 +179,7 @@ def test_forward_cv_needs_three_ordered_runs() -> None:
     groups = np.array(["sub-0001"] * 4, dtype=object)
     blocks = np.array([1, 1, 2, 2], dtype=object)
     with pytest.raises(ValueError, match="at least three ordered runs"):
-        within_subject_folds(
-            groups=groups, blocks=blocks, inner_splits=2, seed=42, ordered_runs=True
-        )
+        within_subject_folds(groups=groups, blocks=blocks, inner_splits=2, ordered_runs=True)
 
 
 def test_forward_cv_refuses_a_run_it_cannot_place_in_order() -> None:
@@ -196,11 +189,9 @@ def test_forward_cv_refuses_a_run_it_cannot_place_in_order() -> None:
     blocks = np.array(["1", "1", "2", "2", "3", "3", "rest", "rest"], dtype=object)
 
     with pytest.raises(ValueError, match="carry no run number"):
-        within_subject_folds(
-            groups=groups, blocks=blocks, inner_splits=2, seed=0, ordered_runs=True
-        )
+        within_subject_folds(groups=groups, blocks=blocks, inner_splits=2, ordered_runs=True)
 
-    folds = within_subject_folds(groups, blocks, inner_splits=2, seed=0, ordered_runs=False)
+    folds = within_subject_folds(groups, blocks, inner_splits=2, ordered_runs=False)
     used = {int(i) for fold in folds for i in [*fold.train.tolist(), *fold.test.tolist()]}
     assert used == set(range(8))
 
@@ -209,7 +200,7 @@ def test_within_subject_folds_accept_integer_subject_ids() -> None:
     # Subject ids read from a targets table are often integers; they must match themselves.
     groups = np.array([1] * 6 + [2] * 6, dtype=object)
     blocks = np.array([1, 1, 2, 2, 3, 3] * 2, dtype=object)
-    folds = within_subject_folds(groups, blocks, inner_splits=3, seed=0)
+    folds = within_subject_folds(groups, blocks, inner_splits=3)
     assert sorted({fold.subject for fold in folds if fold.subject is not None}) == ["1", "2"]
     for fold in folds:
         assert set(groups[fold.train]) == set(groups[fold.test]) == {int(str(fold.subject))}

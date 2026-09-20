@@ -28,8 +28,10 @@ def _signal(band: Band, value: float) -> BandSignal:
     )
 
 
-def _mean_kernel(signal: BandSignal, trace: np.ndarray, times: np.ndarray) -> dict[str, np.ndarray]:
-    del signal, times
+def _mean_kernel(
+    signal: BandSignal, trace: np.ndarray, times: np.ndarray, mask: np.ndarray
+) -> dict[str, np.ndarray]:
+    del signal, times, mask
     return {"mean": trace.mean(axis=2), "count": np.full(trace.shape[:2], trace.shape[2], float)}
 
 

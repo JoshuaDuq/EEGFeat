@@ -204,23 +204,53 @@ def test_a_peak_at_the_window_end_leaves_no_rebound() -> None:
     assert np.isnan(table.select(measure="erds_rebound_latency").values).all()
 
 
-def test_a_near_dead_channel_is_withheld_rather_than_amplified() -> None:
-    # A 0.1 uV baseline envelope is power 1e-14, below the 1e-12 guard.
-    # Without that guard this returns an ERDS of order 1e6 percent.
+def test_an_enormous_response_is_reported_but_flagged() -> None:
+    # A 0.1 uV baseline against a 100 uV response is an ERDS of order 1e8 percent.
+    # Suspicious, but a measurement: it is reported, and the flag says so.
     n = 201
     envelope = np.full((1, 1, n), 1e-7)
-    envelope[:, :, n // 2 :] = 1e-5
-    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
-    assert np.isnan(table.select(measure="erds_mean").values).all()
+    envelope[:, :, n // 2 :] = 1e-4
+    table = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.values.item() == pytest.approx(1e6 * 100.0 - 100.0)
+    assert table.flags["baseline_extreme_ratio"].all()
+    assert not table.flags["baseline_degenerate"].any()
 
 
 def test_a_healthy_channel_is_not_withheld_by_the_guard() -> None:
-    # 10 uV envelope is power 1e-10, comfortably above the guard.
     n = 201
     envelope = np.full((1, 1, n), 1e-5)
     envelope[:, :, n // 2 :] = 1e-5 * np.sqrt(0.5)
-    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
-    assert table.select(measure="erds_mean").values.item() == pytest.approx(-50.0)
+    table = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.values.item() == pytest.approx(-50.0)
+    assert not table.flags["baseline_extreme_ratio"].any()
+    assert not table.flags["baseline_degenerate"].any()
+
+
+def test_a_low_amplitude_band_is_not_withheld_for_being_small() -> None:
+    # The guard used to be an absolute 1e-12 V^2, which discards a sub-microvolt
+    # gamma envelope: ordinary EEG, not a fault. The result must depend only on the
+    # ratio, so the same data in volts and in microvolts has to agree.
+    n = 201
+    envelope = np.full((1, 1, n), 5e-7)  # 0.5 uV: power 2.5e-13, under the old floor
+    envelope[:, :, n // 2 :] = 5e-7 * np.sqrt(0.5)
+    volts = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    micro = erds_mean(
+        [_signal(envelope * 1e6)], baseline=BASE, windows=[STIM], include_global=False
+    )
+    assert volts.values.item() == pytest.approx(-50.0)
+    assert volts.values.item() == pytest.approx(micro.values.item())
+    assert not volts.flags["baseline_degenerate"].any()
+
+
+def test_a_baseline_with_no_signal_at_all_is_withheld_and_flagged() -> None:
+    # A channel that dropped out through the baseline window cannot anchor a ratio
+    # at any scale, so it is NaN and says why.
+    n = 201
+    envelope = np.full((1, 1, n), 1e-5)
+    envelope[:, :, : n // 2] = 0.0
+    table = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    assert np.isnan(table.values).all()
+    assert table.flags["baseline_degenerate"].all()
 
 
 # --- the split public surface ---------------------------------------------------------

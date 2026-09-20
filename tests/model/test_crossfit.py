@@ -37,7 +37,7 @@ def test_no_fold_is_fitted_on_the_subject_it_predicts() -> None:
 
 def test_the_same_loop_serves_within_subject_folds_grouped_on_runs() -> None:
     # The only things that change between designs are the folds and the inner grouping.
-    folds = within_subject_folds(GROUPS, RUNS, inner_splits=2, seed=0)
+    folds = within_subject_folds(GROUPS, RUNS, inner_splits=2)
     predictions = cross_fit_regression(
         folds, X, Y, GROUPS, PIPE, GRID, inner=BY_RUN, seed=0, runs=RUNS
     )
@@ -47,7 +47,7 @@ def test_the_same_loop_serves_within_subject_folds_grouped_on_runs() -> None:
 def test_within_subject_folds_cannot_be_grouped_by_subject() -> None:
     # Caught at the entry point, where the message can name the real problem, rather than
     # surfacing as "at least 2 groups" from inside tuning.
-    folds = within_subject_folds(GROUPS, RUNS, inner_splits=2, seed=0)
+    folds = within_subject_folds(GROUPS, RUNS, inner_splits=2)
     with pytest.raises(ValueError, match="within-subject"):
         cross_fit_regression(folds, X, Y, GROUPS, PIPE, GRID, inner=BY_SUBJECT, seed=0)
 

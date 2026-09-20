@@ -534,7 +534,7 @@ def test_one_subject_with_constant_predictions_does_not_zero_the_whole_draw() ->
     runs = np.tile(np.repeat(["r1", "r2", "r3"], 8), 4).astype(object)
     x = np.column_stack([np.repeat(np.arange(4.0), 24), rng.normal(size=96)])
     y = x[:, 1] + rng.normal(size=96)
-    folds = within_subject_folds(groups, runs, inner_splits=3, seed=0)
+    folds = within_subject_folds(groups, runs, inner_splits=3)
     pipe = Pipeline([("regressor", _ConstantForFirstSubject())])
     preds = cross_fit_regression(
         folds,

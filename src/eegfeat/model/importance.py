@@ -10,6 +10,7 @@ from sklearn.base import is_classifier
 from sklearn.inspection import permutation_importance as sklearn_perm_importance
 from sklearn.pipeline import Pipeline
 
+from eegfeat._validation import blank_non_finite
 from eegfeat.model._deps import require_shap
 from eegfeat.model.crossfit import (
     _fit_fold,
@@ -272,7 +273,9 @@ def _combine_folds(
     per_fold = np.vstack(successful)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning, message=r"Mean of empty slice")
-        values = np.asarray(np.nanmean(per_fold, axis=0), dtype=np.float64)
+        # The same reading of "missing" the fold filter above used: one feature's
+        # non-finite value drops out of the average rather than becoming it.
+        values = np.asarray(np.nanmean(blank_non_finite(per_fold), axis=0), dtype=np.float64)
     return per_fold, values
 
 

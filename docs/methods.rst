@@ -168,7 +168,12 @@ ERDS measures time-varying power changes in band-limited signals relative to a b
    \text{ERDS}_{\text{dB}}(t) &= 10 \log_{10}\left(\frac{P(t)}{B}\right)
    \end{aligned}
 
-where :math:`P(t)` is the instantaneous power derived from the Hilbert envelope :math:`|z(t)|^2`, and :math:`B` is the mean baseline power. To prevent extreme instability on low-amplitude channels, the baseline is guarded such that :math:`B \ge 10^{-12}\,\text{V}^2`; channels failing this guard evaluate to NaN.
+where :math:`P(t)` is the instantaneous power derived from the Hilbert envelope
+:math:`|z(t)|^2`, and :math:`B` is the mean baseline power. A baseline is
+rejected when it is non-finite, non-positive, or no more than :math:`10^{-6}` of
+that channel's mean power over the whole epoch. Such cells evaluate to NaN and
+carry the ``baseline_degenerate`` flag; the relative guard avoids imposing a
+unit-dependent absolute power floor.
 
 Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}_{k=1}^K` within defined analysis windows:
 
@@ -207,9 +212,12 @@ From the surviving burst intervals, five measures are extracted per window:
 Time-Domain Measures
 --------------------
 
-``variance``, ``peak_to_peak``, ``mean_amplitude`` and ``area_under_curve``
-summarize a series within a window. They accept a raw :class:`~eegfeat.Signal` or
-a :class:`~eegfeat.BandSignal`, reading the signal itself in the first case and
+``variance``, ``mean_amplitude``, ``peak_to_peak``, ``area_under_curve``,
+``amplitude_quantile``, ``root_mean_square``, ``skewness``, ``kurtosis``,
+``line_length`` and ``zero_crossing_rate`` summarize a series within a window.
+``hjorth_mobility`` and ``hjorth_complexity`` provide the standard Hjorth
+parameters. They accept a raw :class:`~eegfeat.Signal` or a
+:class:`~eegfeat.BandSignal`, reading the signal itself in the first case and
 the envelope in the second.
 
 Non-finite samples are excluded and reported through ``coverage``. Coverage is
@@ -380,12 +388,16 @@ Connectivity
 ------------
 
 ``envelope_correlation`` is the Pearson correlation of band envelopes between
-every pair of nodes; ``wpli`` is the weighted phase lag index, which discounts
-zero-lag coupling and so is less vulnerable to volume conduction.
+every pair of nodes. ``spectral_connectivity`` exposes several frequency-domain
+estimators, including coherence, PLV, PPC, PLI, and wPLI. ``wpli`` is a shorthand
+for the weighted phase lag index, which discounts zero-lag coupling and so is less
+vulnerable to volume conduction.
 
-**wPLI delegates to** ``mne_connectivity.spectral_connectivity_epochs``, the
-canonical implementation for cross-spectral phase lag calculation. It is an
-optional dependency: ``pip install eegfeat[connectivity]``.
+**Spectral connectivity delegates to** ``mne_connectivity.spectral_connectivity_epochs``,
+the canonical implementation for cross-spectral estimation. It is an optional dependency:
+``pip install eegfeat[connectivity]``. At low trial counts, prefer
+``method="wpli2_debiased"`` over ``method="wpli"`` when using
+:func:`~eegfeat.spectral_connectivity`.
 
 Every wPLI trial group must contain at least two epochs. This minimum prevents
 the degenerate single-epoch estimate; it does not establish that the sample
@@ -393,8 +405,18 @@ size is sufficient for reliable estimation. Estimator warnings remain visible.
 
 Nodes are channels, or ROIs when ``groups`` is given, in which case the
 channel-level matrix is averaged within each ROI block and a node's own block
-excludes the diagonal. Both measures are estimated across trials, so results have
-one row per trial group; see :func:`~eegfeat.itpc`.
+excludes the diagonal. These connectivity measures are estimated across trials,
+so results have one row per trial group; see :func:`~eegfeat.itpc`.
+
+Common Spatial Patterns
+-----------------------
+
+:class:`~eegfeat.CommonSpatialPattern` finds spatial filters that maximize the
+variance ratio between two classes. Because the labels determine the filters,
+:func:`~eegfeat.csp_features` fits them on each training fold and transforms only
+the corresponding held-out rows. Reuse the same folds for the downstream model;
+the split signature is recorded in the feature computation metadata. CSP expects
+band-restricted input, an even number of components, and exactly two classes.
 
 Graph Measures
 --------------

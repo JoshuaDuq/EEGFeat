@@ -13,13 +13,17 @@ from eegfeat._validation import (
     validate_names,
     validate_nonempty_shape,
 )
-from eegfeat.bands import Band
+from eegfeat.bands import Band, check_passband
 from eegfeat.identity import epoch_row_ids
 from eegfeat.table import ComputationSpec, RowId
 
-_FILTER_LENGTH_MULTIPLIER = 6.6
-_MIN_FILTER_LENGTH = 3
-_DEFAULT_LOW_FREQ_HZ = 0.1
+# MNE derives an "auto" FIR length from the narrower of the two transition
+# bandwidths, not from fmin: length_seconds = _HAMMING_LENGTH_FACTOR / min(trans).
+# These constants mirror mne.filter._length_factors["hamming"] and the "auto"
+# transition rule, so _required_filter_length reproduces MNE exactly.
+_HAMMING_LENGTH_FACTOR = 3.3
+_TRANSITION_FRACTION = 0.25
+_MIN_TRANSITION_HZ = 2.0
 
 
 @runtime_checkable
@@ -91,6 +95,13 @@ class Signal:
     coverage: npt.NDArray[np.float64]
     row_ids: tuple[RowId, ...]
     computation: ComputationSpec
+    passband: tuple[float | None, float | None] | None = None
+    """The recording's filter edges, when the source object reported them.
+
+    Carried so a measure that takes this signal *and* a band -- spectral
+    connectivity, for one -- can tell that the band lies outside what
+    preprocessing left behind. None when the signal came from bare arrays.
+    """
 
     def __post_init__(self) -> None:
         _validate_series(self.data, self.times, self.ch_names, self.coverage, self.sfreq, "data")
@@ -140,6 +151,7 @@ class Signal:
             coverage=np.isfinite(data).astype(float),
             row_ids=epoch_row_ids(selected, recording, data.shape[0]),
             computation=ComputationSpec.create("mne.Epochs.get_data", picks="eeg", exclude="bads"),
+            passband=_passband(selected),
         )
 
     @classmethod
@@ -185,6 +197,17 @@ class Signal:
                 ComputationSpec.create("provided-array") if computation is None else computation
             ),
         )
+
+
+def _passband(source: Any) -> tuple[float | None, float | None] | None:
+    """Filter edges from an MNE object's ``info``, or None if it has none."""
+    info = getattr(source, "info", None)
+    if info is None:
+        return None
+    try:
+        return float(info["highpass"]), float(info["lowpass"])
+    except (KeyError, TypeError, ValueError):  # pragma: no cover - exotic info dicts
+        return None
 
 
 def _validate_series(
@@ -387,11 +410,16 @@ class BandSignal:
         """
         selected = epochs.copy().pick("eeg", exclude="bads")
         sfreq = float(selected.info["sfreq"])
-        if band.fmax > sfreq / 2.0:
+        # Nyquist itself is excluded, not just frequencies above it: MNE needs a
+        # non-zero upper transition band below sfreq/2 to design the filter at all.
+        if band.fmax >= sfreq / 2.0:
             raise ValueError(
-                f"band {band.name!r} reaches {band.fmax} Hz, above the Nyquist "
+                f"band {band.name!r} reaches {band.fmax} Hz, at or above the Nyquist "
                 f"frequency {sfreq / 2.0} of this recording."
             )
+        check_passband(
+            band, selected.info["highpass"], selected.info["lowpass"], source="this band signal"
+        )
 
         data = np.asarray(selected.get_data(), dtype=float)
         n_epochs, n_channels, n_times = data.shape
@@ -400,12 +428,26 @@ class BandSignal:
         pad = _padding_samples(pad_sec, pad_cycles, band.fmin, sfreq, n_times)
         padded = np.pad(flat, ((0, 0), (pad, pad)), mode="reflect") if pad else flat
 
+        # Refuse rather than filter with a truncated kernel: a band this narrow cannot
+        # be resolved from an epoch this short, and reflecting more of it adds no
+        # information. MNE would only warn, and the distortion is invisible downstream.
+        required = _required_filter_length(band, sfreq)
+        if required > padded.shape[-1]:
+            minimum = _minimum_epoch_samples(required, pad_sec, pad_cycles, band.fmin, sfreq)
+            raise ValueError(
+                f"band {band.name!r} ({band.fmin}-{band.fmax} Hz) needs a {required}-sample "
+                f"({required / sfreq:.3f} s) filter, but these {n_times}-sample "
+                f"({n_times / sfreq:.3f} s) epochs pad to only {padded.shape[-1]} samples. "
+                f"Use epochs of at least {minimum} samples ({minimum / sfreq:.3f} s), raise "
+                f"pad_sec or pad_cycles, or choose a band with a wider transition."
+            )
+
         filtered = mne.filter.filter_data(
             padded,
             sfreq,
             l_freq=band.fmin,
             h_freq=band.fmax,
-            filter_length=_filter_length(padded.shape[-1], sfreq, band.fmin),
+            filter_length="auto",
             n_jobs=n_jobs,
             verbose=False,
         )
@@ -431,7 +473,7 @@ class BandSignal:
                 band={"name": band.name, "fmin": band.fmin, "fmax": band.fmax},
                 pad_sec=pad_sec,
                 pad_cycles=pad_cycles,
-                filter_length=_filter_length(padded.shape[-1], sfreq, band.fmin),
+                filter_length=required,
                 n_jobs=n_jobs,
                 picks="eeg",
                 exclude="bads",
@@ -449,13 +491,56 @@ def _padding_samples(
     return max(0, min(int(round(seconds * sfreq)), n_times - 1))
 
 
-def _filter_length(n_times: int, sfreq: float, fmin: float) -> str:
-    # MNE's own default would exceed the signal for a low fmin on a short epoch,
-    # so fall back to the longest odd length that fits.
-    low = fmin if fmin > 0 else _DEFAULT_LOW_FREQ_HZ
-    if int(_FILTER_LENGTH_MULTIPLIER * sfreq / low) < n_times:
-        return "auto"
-    safe = n_times - 1
-    if safe % 2 == 0:
-        safe -= 1
-    return str(max(safe, _MIN_FILTER_LENGTH))
+def _transition_bandwidths(band: Band, sfreq: float) -> tuple[float, float]:
+    """MNE's ``'auto'`` transition bandwidths for this band, in Hz."""
+    lower = (
+        min(max(band.fmin * _TRANSITION_FRACTION, _MIN_TRANSITION_HZ), band.fmin)
+        if band.fmin > 0
+        else np.inf  # fmin of zero is a low-pass: only the upper edge constrains it
+    )
+    upper = min(max(band.fmax * _TRANSITION_FRACTION, _MIN_TRANSITION_HZ), sfreq / 2.0 - band.fmax)
+    return lower, upper
+
+
+def _required_filter_length(band: Band, sfreq: float) -> int:
+    """Samples MNE's ``filter_length="auto"`` will use for this band.
+
+    Verified to agree exactly with ``mne.filter.filter_data`` across sampling
+    rates and bands; :func:`_minimum_epoch_samples` inverts it to say how long an
+    epoch has to be before that filter fits.
+    """
+    narrowest = min(_transition_bandwidths(band, sfreq))
+    if not (np.isfinite(narrowest) and narrowest > 0.0):
+        raise ValueError(
+            f"band {band.name!r} ({band.fmin}-{band.fmax} Hz) leaves no transition band "
+            f"below the Nyquist frequency {sfreq / 2.0} Hz."
+        )
+    length = max(int(np.ceil(_HAMMING_LENGTH_FACTOR / narrowest * sfreq)), 1)
+    return length + (length - 1) % 2  # firwin needs an odd length
+
+
+def _minimum_epoch_samples(
+    required: int, pad_sec: float, pad_cycles: float, fmin: float, sfreq: float
+) -> int:
+    """Shortest epoch whose reflect-padded length reaches ``required`` samples.
+
+    Padding is capped at ``n_times - 1`` by ``np.pad(mode="reflect")``, so the
+    padded length is ``n_times + 2*pad`` once the cap stops binding and
+    ``3*n_times - 2`` while it does. Both regimes are checked and the smaller
+    admissible epoch wins.
+    """
+    cycles_sec = pad_cycles / fmin if np.isfinite(fmin) and fmin > 0 and pad_cycles > 0 else 0.0
+    seconds = max(pad_sec, cycles_sec)
+    uncapped = int(round(seconds * sfreq)) if np.isfinite(seconds) and seconds > 0 else 0
+
+    candidates = []
+    capped = -(-(required + 2) // 3)  # ceil, while pad == n_times - 1
+    # The cap binds up to and including n_times == uncapped + 1, where both regimes
+    # give the same padded length; stopping one short leaves a gap in which neither
+    # candidate qualifies and the answer overshoots.
+    if capped <= uncapped + 1:
+        candidates.append(capped)
+    full = required - 2 * uncapped
+    if full >= uncapped + 1:
+        candidates.append(full)
+    return max(min(candidates, default=required), 2)

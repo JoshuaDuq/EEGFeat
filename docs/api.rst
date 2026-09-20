@@ -49,6 +49,10 @@ Core Data Structures
    :members:
    :show-inheritance:
 
+.. autofunction:: eegfeat.passband_fraction
+
+.. autofunction:: eegfeat.check_passband
+
 .. autoclass:: eegfeat.Signal
    :members:
    :show-inheritance:
@@ -221,6 +225,22 @@ Time-Domain Measures
 
 .. autofunction:: eegfeat.variance
 
+.. autofunction:: eegfeat.amplitude_quantile
+
+.. autofunction:: eegfeat.kurtosis
+
+.. autofunction:: eegfeat.line_length
+
+.. autofunction:: eegfeat.root_mean_square
+
+.. autofunction:: eegfeat.skewness
+
+.. autofunction:: eegfeat.zero_crossing_rate
+
+.. autofunction:: eegfeat.hjorth_mobility
+
+.. autofunction:: eegfeat.hjorth_complexity
+
 .. autofunction:: eegfeat.mean_amplitude
 
 .. autofunction:: eegfeat.peak_to_peak
@@ -276,7 +296,14 @@ Phase & Connectivity
 
 .. autofunction:: eegfeat.envelope_correlation
 
+.. autofunction:: eegfeat.spectral_connectivity
+
 .. autofunction:: eegfeat.wpli
+
+.. autoclass:: eegfeat.CommonSpatialPattern
+   :members:
+
+.. autofunction:: eegfeat.csp_features
 
 .. autofunction:: eegfeat.global_efficiency
 
@@ -284,6 +311,8 @@ Phase & Connectivity
 
 Complexity & Entropy
 --------------------
+
+.. autofunction:: eegfeat.higuchi_fractal_dimension
 
 .. autofunction:: eegfeat.sample_entropy
 

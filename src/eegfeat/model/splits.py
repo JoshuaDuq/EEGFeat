@@ -99,11 +99,13 @@ def run_aware_cv(
 def run_aware_inner_cv(
     blocks_train: npt.NDArray[np.object_],
     n_splits: int,
-    seed: int,
-    fold: int,
-    subject: str,
 ) -> list[tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]] | None:
-    _ = (seed, fold, subject)
+    """Run-disjoint inner splits for one training fold.
+
+    Takes no seed: :class:`~sklearn.model_selection.GroupKFold` partitions groups
+    deterministically, so these splits are reproducible without one. It gained a
+    ``shuffle`` option in scikit-learn 1.6, which this package does not require.
+    """
     block_cv, _ = run_aware_cv(blocks_train, n_splits=n_splits)
     if block_cv is None:
         return None
@@ -133,11 +135,14 @@ def within_subject_folds(
     blocks: npt.NDArray[np.object_] | None,
     *,
     inner_splits: int,
-    seed: int,
     outer_splits: int | None = None,
     ordered_runs: bool = False,
 ) -> tuple[Fold, ...]:
-    _ = seed
+    """Per-subject, run-disjoint outer folds.
+
+    Takes no seed: both the forward-ordered and the GroupKFold path partition runs
+    deterministically, so the folds are reproducible without one.
+    """
     if blocks is None:
         raise ValueError("Within-subject CV requires run labels for every subject.")
     blocks_arr = np.asarray(blocks)

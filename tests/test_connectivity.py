@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from scipy.signal import hilbert
 
 import eegfeat as ef
 from eegfeat.bands import Band
@@ -32,19 +33,117 @@ def _signal(envelope: np.ndarray) -> BandSignal:
     )
 
 
+def _analytic(real: np.ndarray) -> BandSignal:
+    """Hilbert a real band-limited signal, as ``BandSignal.from_epochs`` does.
+
+    Casting a bare envelope to complex, as an earlier version of these fixtures
+    did, leaves every channel at zero phase. Nothing that reads phase can be
+    tested against such a signal.
+    """
+    return _signal(hilbert(np.asarray(real, dtype=float), axis=-1))
+
+
+def _slow_drive(rng: np.random.RandomState, n_epochs: int, n_times: int) -> np.ndarray:
+    # Slow relative to the 10 Hz carrier, or the Hilbert envelope does not recover it.
+    t = np.arange(n_times) / SFREQ
+    phase = rng.rand(n_epochs, 1) * 2 * np.pi
+    return 1.0 + 0.8 * np.sin(2 * np.pi * 0.7 * t[np.newaxis, :] + phase)
+
+
 def _shared_driver(strength: float, n_epochs: int = 8, n_times: int = 401) -> BandSignal:
+    """C3 and C4 share a slow amplitude envelope but sit a quarter cycle apart.
+
+    Two interacting sources: the amplitude coupling is real and survives
+    orthogonalization, because the phase lag is not zero.
+    """
     rng = np.random.RandomState(0)
-    driver = rng.rand(n_epochs, 1, n_times)
-    envelope = rng.rand(n_epochs, 4, n_times)
-    envelope[:, :2, :] += strength * driver
-    return _signal(envelope)
+    t = np.arange(n_times) / SFREQ
+    carrier = 2 * np.pi * 10.0 * t
+    drive = _slow_drive(rng, n_epochs, n_times)
+    noise = rng.randn(n_epochs, 4, n_times) / max(strength, 1e-9)
+    real = np.stack(
+        [
+            drive * np.cos(carrier),
+            drive * np.cos(carrier + np.pi / 2),
+            rng.randn(n_epochs, n_times),
+            rng.randn(n_epochs, n_times),
+        ],
+        axis=1,
+    )
+    return _analytic(real + 0.1 * noise)
+
+
+def _zero_lag_leakage(strength: float, n_epochs: int = 8, n_times: int = 401) -> BandSignal:
+    """One source reaching C3 and C4 at different gains, plus independent sensor noise.
+
+    That is what volume conduction looks like: not two coupled sources, but one
+    source counted twice. It is the case orthogonalization exists to remove.
+    """
+    rng = np.random.RandomState(0)
+    t = np.arange(n_times) / SFREQ
+    drive = _slow_drive(rng, n_epochs, n_times)
+    source = drive * np.cos(2 * np.pi * 10.0 * t)
+    sensor_noise = 0.15 * rng.randn(n_epochs, 2, n_times) / max(strength, 1e-9)
+    real = np.stack(
+        [
+            source + sensor_noise[:, 0],
+            0.8 * source + sensor_noise[:, 1],
+            rng.randn(n_epochs, n_times),
+            rng.randn(n_epochs, n_times),
+        ],
+        axis=1,
+    )
+    return _analytic(real)
+
+
+def _by_pair(table) -> dict[str, float]:
+    return dict(zip([m.space for m in table.meta], table.values[0], strict=True))
 
 
 def test_channels_sharing_a_driver_correlate_and_others_do_not() -> None:
-    table = envelope_correlation([_shared_driver(5.0)], windows=[WINDOW])
-    values = dict(zip([m.space for m in table.meta], table.values[0], strict=True))
+    values = _by_pair(envelope_correlation([_shared_driver(5.0)], windows=[WINDOW]))
     assert values["C3-C4"] > 0.8
     assert abs(values["P3-P4"]) < 0.3
+
+
+def test_zero_lag_coupling_is_suppressed_but_lagged_coupling_survives() -> None:
+    # The two fixtures carry identical amplitude coupling on C3-C4 and differ only
+    # in phase. Volume conduction is the zero-lag one, so it is the one that has to
+    # go; a measure that cannot tell them apart is measuring the head, not the brain.
+    lagged = _by_pair(envelope_correlation([_shared_driver(5.0)], windows=[WINDOW]))
+    zero_lag = _by_pair(envelope_correlation([_zero_lag_leakage(5.0)], windows=[WINDOW]))
+    assert lagged["C3-C4"] > 0.8
+    # The residual is not zero, because the leakage fixture carries independent
+    # sensor noise. Across seeds it lands anywhere in 0.03-0.08, so what is
+    # asserted is the suppression ratio rather than a bound tuned to one draw.
+    assert zero_lag["C3-C4"] < 0.15
+    assert lagged["C3-C4"] / zero_lag["C3-C4"] > 10.0
+
+
+def test_without_orthogonalization_leakage_is_indistinguishable_from_coupling() -> None:
+    # Why the default is "pairwise": the raw correlation reports the same strong
+    # edge for both, which is exactly the failure mode.
+    lagged = _by_pair(
+        envelope_correlation([_shared_driver(5.0)], windows=[WINDOW], orthogonalize=None)
+    )
+    zero_lag = _by_pair(
+        envelope_correlation([_zero_lag_leakage(5.0)], windows=[WINDOW], orthogonalize=None)
+    )
+    assert lagged["C3-C4"] > 0.8
+    assert zero_lag["C3-C4"] > 0.8
+
+
+def test_an_unknown_orthogonalization_raises() -> None:
+    with pytest.raises(ValueError, match="orthogonalize"):
+        envelope_correlation([_shared_driver(1.0)], windows=[WINDOW], orthogonalize="symmetric")
+
+
+def test_the_orthogonalization_setting_is_recorded_and_changes_the_feature_name() -> None:
+    orthogonalized = envelope_correlation([_shared_driver(1.0)], windows=[WINDOW])
+    raw = envelope_correlation([_shared_driver(1.0)], windows=[WINDOW], orthogonalize=None)
+    parameters = orthogonalized.meta[0].computation.parameters["estimator_parameters"]
+    assert parameters == {"orthogonalize": "pairwise", "absolute": True}
+    assert orthogonalized.names[0] != raw.names[0]
 
 
 def test_the_coupled_pair_is_the_one_labelled_as_coupled() -> None:
@@ -107,7 +206,9 @@ def test_trial_correlations_are_averaged_instead_of_pooling_samples() -> None:
     envelope[1, 0] = 1.0 + x
     envelope[1, 1] = 2.0 - x
 
-    table = envelope_correlation([_signal(envelope)], windows=[WINDOW])
+    # orthogonalize=None because this fixture is a bare envelope with no phase;
+    # the subject here is how trials are combined, not how leakage is removed.
+    table = envelope_correlation([_signal(envelope)], windows=[WINDOW], orthogonalize=None)
     values = dict(zip([meta.space for meta in table.meta], table.values[0], strict=True))
 
     assert values["C3-C4"] == pytest.approx(0.0, abs=1e-12)
@@ -433,8 +534,10 @@ def test_wpli_preserves_estimator_reliability_warnings(monkeypatch) -> None:
     import eegfeat.connectivity as connectivity
 
     class Result:
+        freqs = np.array([8.0, 10.0, 12.0])
+
         def get_data(self, output):
-            return np.zeros((4, 4, 1))
+            return np.zeros((4, 4, 3))
 
     def estimate(*args, **kwargs):
         warnings.warn("too few cycles", UserWarning, stacklevel=2)
@@ -450,3 +553,187 @@ def test_wpli_preserves_estimator_reliability_warnings(monkeypatch) -> None:
     )
     with pytest.warns(UserWarning, match="too few cycles"):
         ef.wpli(signal, bands=[ALPHA], windows=[WINDOW])
+
+
+# --- agreement with the reference implementation --------------------------------------
+
+
+@pytest.mark.skipif(
+    __import__("importlib.util", fromlist=["util"]).find_spec("mne_connectivity") is None,
+    reason="mne-connectivity is not installed",
+)
+@pytest.mark.parametrize("fixture", [_shared_driver, _zero_lag_leakage])
+def test_orthogonalized_aec_agrees_with_mne_connectivity(fixture) -> None:
+    # The defaults exist to match MNE, so they are worth nothing unless the numbers
+    # match too. Compared per trial, before the Fisher-z averaging that MNE has no
+    # equivalent of.
+    from mne_connectivity import envelope_correlation as reference
+
+    from eegfeat.connectivity import _trial_correlation
+
+    signal = fixture(5.0)
+    for trial in signal.analytic:
+        ours = _trial_correlation(trial, orthogonalize="pairwise", absolute=True)
+        theirs = np.squeeze(
+            np.asarray(
+                reference([trial], orthogonalize="pairwise", absolute=True).get_data("dense")
+            )
+        )
+        np.testing.assert_allclose(ours, theirs, rtol=0, atol=0)
+
+
+# --- wPLI band edges ------------------------------------------------------------------
+
+
+def _estimator_returning_frequency_as_value(monkeypatch, freqs):
+    """Stub whose connectivity value at each frequency is that frequency."""
+    import eegfeat.connectivity as connectivity
+
+    class Result:
+        def __init__(self):
+            self.freqs = np.asarray(freqs, dtype=float)
+
+        def get_data(self, output):
+            lower = np.tril(np.ones((4, 4)), -1)[:, :, np.newaxis]
+            return lower * np.asarray(freqs, dtype=float)[np.newaxis, np.newaxis, :]
+
+    monkeypatch.setattr(connectivity, "_require_mne_connectivity", lambda: lambda *a, **k: Result())
+
+
+def _broadband(n_epochs: int = 4) -> ef.Signal:
+    return ef.Signal.from_arrays(
+        data=np.ones((n_epochs, 4, 401)),
+        times=np.arange(401) / SFREQ,
+        ch_names=CHANNELS,
+        sfreq=SFREQ,
+        row_ids=tuple(("test", i, "event") for i in range(n_epochs)),
+    )
+
+
+def test_wpli_reduces_bands_half_open_so_an_edge_bin_is_not_counted_twice(monkeypatch) -> None:
+    # mne-connectivity treats [fmin, fmax] as closed, so 13 Hz would otherwise land in
+    # both alpha and beta. Band.mask is half-open, and this is where that is enforced.
+    _estimator_returning_frequency_as_value(monkeypatch, [8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
+    table = ef.wpli(
+        _broadband(),
+        bands=[Band("alpha", 8.0, 13.0), Band("beta", 13.0, 15.0)],
+        windows=[WINDOW],
+    )
+    by_band = {(m.band.name, m.space): v for m, v in zip(table.meta, table.values[0], strict=True)}
+    assert by_band[("alpha", "C3-C4")] == pytest.approx(np.mean([8, 9, 10, 11, 12]))
+    assert by_band[("beta", "C3-C4")] == pytest.approx(np.mean([13, 14]))
+
+
+def test_wpli_refuses_a_band_the_estimator_returned_no_frequencies_for(monkeypatch) -> None:
+    _estimator_returning_frequency_as_value(monkeypatch, [20.0, 21.0])
+    with pytest.raises(ValueError, match="contains none of the frequencies"):
+        ef.wpli(_broadband(), bands=[Band("alpha", 8.0, 13.0)], windows=[WINDOW])
+
+
+# --- spectral_connectivity --------------------------------------------------------------
+
+_HAS_MNE_CONNECTIVITY = (
+    __import__("importlib.util", fromlist=["util"]).find_spec("mne_connectivity") is not None
+)
+_SUPPORTED = ["coh", "imcoh", "plv", "ciplv", "ppc", "pli", "wpli", "wpli2_debiased"]
+
+
+def _coupled_broadband(n_epochs: int = 24, lag: int = 6) -> ef.Signal:
+    rng = np.random.RandomState(1)
+    n = 401
+    t = np.arange(n) / SFREQ
+    source = (1.0 + 0.8 * np.sin(2 * np.pi * 0.7 * t)) * np.cos(2 * np.pi * 10.0 * t)
+    data = np.stack(
+        [
+            np.stack(
+                [
+                    source + 0.3 * rng.randn(n),
+                    np.roll(source, lag) + 0.3 * rng.randn(n),
+                    rng.randn(n),
+                    rng.randn(n),
+                ]
+            )
+            for _ in range(n_epochs)
+        ]
+    )
+    return ef.Signal.from_arrays(
+        data=data,
+        times=t,
+        ch_names=CHANNELS,
+        sfreq=SFREQ,
+        row_ids=tuple(("test", i, "event") for i in range(n_epochs)),
+    )
+
+
+@pytest.mark.skipif(not _HAS_MNE_CONNECTIVITY, reason="mne-connectivity is not installed")
+@pytest.mark.parametrize("method", _SUPPORTED)
+def test_every_supported_method_produces_a_finite_pair_table(method: str) -> None:
+    table = ef.spectral_connectivity(
+        _coupled_broadband(), method=method, bands=[ALPHA], windows=[WINDOW]
+    )
+    assert table.values.shape == (1, 6)  # 4 nodes -> 4*3/2 pairs
+    assert np.isfinite(table.values).all()
+    assert all(m.space_kind == "pair" for m in table.meta)
+    assert all(m.measure == method for m in table.meta)
+    values = _by_pair(table)
+    assert values["C3-C4"] > max(values["P3-P4"], values["C3-P3"])
+
+
+@pytest.mark.skipif(not _HAS_MNE_CONNECTIVITY, reason="mne-connectivity is not installed")
+@pytest.mark.parametrize("method", _SUPPORTED)
+def test_node_order_does_not_change_any_reported_value(method: str) -> None:
+    # These pairs are unordered, so exchanging two channels must not move a number.
+    # imcoh is antisymmetric and only survives this because it is reported rectified.
+    signal = _coupled_broadband()
+    swapped = ef.Signal.from_arrays(
+        data=signal.data[:, [1, 0, 2, 3], :],
+        times=signal.times,
+        ch_names=("C4", "C3", "P3", "P4"),
+        sfreq=signal.sfreq,
+        row_ids=signal.row_ids,
+    )
+    direct = _by_pair(
+        ef.spectral_connectivity(signal, method=method, bands=[ALPHA], windows=[WINDOW])
+    )
+    other = _by_pair(
+        ef.spectral_connectivity(swapped, method=method, bands=[ALPHA], windows=[WINDOW])
+    )
+    assert direct["C3-C4"] == pytest.approx(other["C4-C3"], rel=1e-9)
+
+
+@pytest.mark.skipif(not _HAS_MNE_CONNECTIVITY, reason="mne-connectivity is not installed")
+def test_wpli_is_exactly_spectral_connectivity_with_that_method() -> None:
+    signal = _coupled_broadband()
+    np.testing.assert_array_equal(
+        ef.wpli(signal, bands=[ALPHA], windows=[WINDOW]).values,
+        ef.spectral_connectivity(signal, method="wpli", bands=[ALPHA], windows=[WINDOW]).values,
+    )
+
+
+@pytest.mark.parametrize(
+    ("method", "match"),
+    [("dpli", "directional"), ("cohy", "complex"), ("nonsense", "unknown connectivity method")],
+)
+def test_methods_that_cannot_be_an_unordered_pair_are_refused(method: str, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        ef.spectral_connectivity(_broadband(), method=method, bands=[ALPHA], windows=[WINDOW])
+
+
+def test_an_unknown_spectral_mode_is_refused() -> None:
+    with pytest.raises(ValueError, match="mode must be"):
+        ef.spectral_connectivity(
+            _broadband(), method="wpli", bands=[ALPHA], windows=[WINDOW], mode="wavelet"
+        )
+
+
+def test_the_method_and_mode_are_recorded_and_separate_the_columns(monkeypatch) -> None:
+    _estimator_returning_frequency_as_value(monkeypatch, [8.0, 9.0, 10.0])
+    coh = ef.spectral_connectivity(_broadband(), method="coh", bands=[ALPHA], windows=[WINDOW])
+    pli = ef.spectral_connectivity(_broadband(), method="pli", bands=[ALPHA], windows=[WINDOW])
+    assert coh.meta[0].computation.parameters["estimator_parameters"]["mode"] == "multitaper"
+    assert coh.meta[0].unit != pli.meta[0].unit
+    # Same band, same window, same values: only the estimator differs, and the names
+    # still have to, or a concat would collide and a graph would mix the two.
+    assert coh.names[0] != pli.names[0]
+    joined = ef.concat([coh, pli])
+    assert len(set(joined.names)) == len(joined.names)

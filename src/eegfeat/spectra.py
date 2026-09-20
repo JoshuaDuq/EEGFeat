@@ -98,7 +98,15 @@ def gradient_weights(freqs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 def band_integration_weights(
     freqs: npt.NDArray[np.float64], fmin: float, fmax: float
 ) -> npt.NDArray[np.float64]:
-    """Piecewise-linear quadrature weights over exact frequency bounds."""
+    """Piecewise-linear quadrature weights over exact frequency bounds.
+
+    The bounds are closed: the integral runs up to and including ``fmax``, with
+    an interpolated contribution from the bin above it. That is not the
+    half-open convention :meth:`eegfeat.Band.mask` uses to assign bins to bands,
+    and :meth:`~eegfeat.Band.mask` explains where the two meet. No area is
+    double counted between adjacent bands -- the shared boundary splits the
+    edge bin between them -- but the supports are not identical.
+    """
     axis = np.asarray(freqs, dtype=float)
     if axis.size < 2 or axis[0] > fmin or axis[-1] < fmax:
         raise ValueError(
@@ -161,6 +169,12 @@ class Spectra:
     row_ids: tuple[RowId, ...]
     computation: ComputationSpec
     flags: Mapping[str, npt.NDArray[np.bool_]] = field(default_factory=dict)
+    passband: tuple[float | None, float | None] | None = None
+    """The recording's filter edges, when the source object reported them.
+
+    Carried so a measure can tell that a requested band lies outside what
+    preprocessing left behind. None when the spectra came from bare arrays.
+    """
 
     def __post_init__(self) -> None:
         if self.data.ndim != 4:
@@ -272,6 +286,7 @@ class Spectra:
             support=np.ones(data.shape, dtype=float),
             row_ids=epoch_row_ids(spectrum, recording, data.shape[0]),
             computation=ComputationSpec.create(method, **params),
+            passband=_passband(spectrum),
         )
 
     @classmethod
@@ -338,7 +353,19 @@ class Spectra:
                 n_cycles=np.asarray(n_cycles, dtype=float),
                 frequencies_hz=freqs,
             ),
+            passband=_passband(tfr),
         )
+
+
+def _passband(source: Any) -> tuple[float | None, float | None] | None:
+    """Filter edges from an MNE object's ``info``, or None if it has none."""
+    info = getattr(source, "info", None)
+    if info is None:
+        return None
+    try:
+        return float(info["highpass"]), float(info["lowpass"])
+    except (KeyError, TypeError, ValueError):  # pragma: no cover - exotic info dicts
+        return None
 
 
 def support_restricted_mask(
