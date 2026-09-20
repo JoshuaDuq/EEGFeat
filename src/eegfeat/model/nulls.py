@@ -156,6 +156,8 @@ def permute(
         if not np.all(np.isfinite(trial_arr)):
             msg = "circular_shift_within_run requires finite within-run trial indices."
             raise ValueError(msg)
+        if trial_arr.ndim != 1 or np.any(trial_arr != np.floor(trial_arr)):
+            raise ValueError("Circular shifts require 1-D integer trial indices.")
         trial_indices_arr = trial_arr.astype(np.intp)
     else:
         trial_indices_arr = None
@@ -204,6 +206,10 @@ def permute(
             # Missing run labels were refused above, so every run here is a real one.
             for r in pd.unique(runs_arr[subj_mask]):
                 run_idx = np.where(subj_mask & (runs_arr == r))[0]
+                if np.unique(trial_indices_arr[run_idx]).size != run_idx.size:
+                    raise ValueError(
+                        "Circular shifts require unique trial indices within each run."
+                    )
                 order = np.argsort(trial_indices_arr[run_idx], kind="stable")
                 ordered_run_idx = run_idx[order]
                 n_trials = len(ordered_run_idx)
@@ -283,6 +289,12 @@ def permutation_test(
     trial_indices: npt.NDArray[np.intp] | None = None,
     aggregation: AggregationConfig = _DEFAULT_AGGREGATION,
 ) -> NullResult:
+    if residualize_on:
+        raise ValueError(
+            "Nuisance-adjusted permutation inference requires a nuisance-preserving "
+            "null procedure. This function permutes raw labels and does not support "
+            "residualize_on; refitting nuisance regression after shuffling is insufficient."
+        )
     rng = np.random.default_rng(seed)
     groups_arr = np.asarray(groups, dtype=object)
     # Each draw needs only the point estimate, so the per-draw bootstrap CI is skipped.

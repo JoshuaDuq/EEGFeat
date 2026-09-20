@@ -44,6 +44,7 @@ class MicrostateSegmentation:
     sfreq: float
     row_ids: tuple[RowId, ...]
     global_explained_variance: float
+    computation: ComputationSpec
 
     @property
     def n_states(self) -> int:
@@ -112,6 +113,11 @@ def segment(
         raise ValueError(f"min_duration_ms must be non-negative, got {min_duration_ms}.")
 
     data = signal.data
+    if not np.isfinite(data).all() or np.any(np.ptp(data, axis=1) == 0.0):
+        raise ValueError(
+            "Microstate topographies must be finite with nonzero spatial variance "
+            "at every sample; reject invalid data before segmentation."
+        )
     contributing = np.ones(data.shape[0], dtype=bool) if fit_on is None else np.asarray(fit_on)
     if contributing.shape != (data.shape[0],):
         raise ValueError(
@@ -151,6 +157,20 @@ def segment(
         sfreq=signal.sfreq,
         row_ids=signal.row_ids,
         global_explained_variance=_global_explained_variance(data, templates, states),
+        computation=ComputationSpec.create(
+            "sign_normalized_kmeans",
+            input_computation=signal.computation.record(),
+            channels=signal.ch_names,
+            templates=templates.tolist(),
+            fit_rows=[signal.row_ids[i] for i in np.flatnonzero(contributing)],
+            n_states=n_states,
+            random_state=random_state,
+            n_init=20,
+            min_duration_ms=min_duration_ms,
+            min_peak_distance_ms=min_peak_distance_ms,
+            max_peaks_per_epoch=max_peaks_per_epoch,
+            peak_prominence=peak_prominence,
+        ),
     )
 
 
@@ -286,6 +306,7 @@ def microstate_transitions(
                             "pair",
                             window,
                             "probability",
+                            segmentation.computation,
                         ),
                         matrices[:, source, target],
                     )
@@ -520,7 +541,14 @@ def _transitions(states: npt.NDArray[np.int_], n_states: int) -> npt.NDArray[np.
     return out
 
 
-def _meta(measure: str, space: str, kind: Any, window: Window, unit: str) -> FeatureMeta:
+def _meta(
+    measure: str,
+    space: str,
+    kind: Any,
+    window: Window,
+    unit: str,
+    computation: ComputationSpec,
+) -> FeatureMeta:
     return FeatureMeta(
         measure=measure,
         band=None,
@@ -531,7 +559,7 @@ def _meta(measure: str, space: str, kind: Any, window: Window, unit: str) -> Fea
         unit=unit,
         source="microstates",
         window_bounds=(window.tmin, window.tmax),
-        computation=ComputationSpec.create(measure),
+        computation=ComputationSpec.create(measure, segmentation=computation.record()),
         freq_resolution_hz=None,
     )
 
@@ -553,7 +581,12 @@ def _per_state(
             ]
         )
         for index, label in enumerate(segmentation.labels):
-            columns.append((_meta(measure, label, "state", window, unit), values[:, index]))
+            columns.append(
+                (
+                    _meta(measure, label, "state", window, unit, segmentation.computation),
+                    values[:, index],
+                )
+            )
     return _assemble(columns, segmentation.row_ids)
 
 

@@ -172,3 +172,35 @@ def test_prediction_intervals_refuse_misaligned_inputs(
     }
     with pytest.raises(ValueError, match=message):
         prediction_intervals(**{**base, **kwargs})
+
+
+@pytest.mark.parametrize("invalid", [np.nan, np.inf])
+def test_calibration_does_not_drop_nonfinite_scores(invalid) -> None:
+    scores = np.arange(20.0)
+    scores[-1] = invalid
+    with pytest.raises(ValueError, match="finite"):
+        _compute_conformal_quantile(scores, 0.1)
+    with pytest.raises(ValueError, match="finite"):
+        _order_stat_quantile(scores, 0.1, tail="upper")
+
+
+class NonfiniteRegressor(DummyRegressor):
+    def predict(self, X):
+        predictions = super().predict(X)
+        predictions[0] = np.nan
+        return predictions
+
+
+@pytest.mark.parametrize("method", ["split", "cv_plus"])
+def test_intervals_reject_nonfinite_model_predictions(method) -> None:
+    X = np.arange(40.0).reshape(-1, 1)
+    model = Pipeline([("regressor", NonfiniteRegressor())])
+    with pytest.raises(ValueError, match="finite"):
+        prediction_intervals(model, X, X[:, 0], X[:5], method=method)
+
+
+@pytest.mark.parametrize("method", ["split", "cv_plus", "quantile"])
+def test_intervals_reject_multidimensional_targets(method) -> None:
+    X = np.arange(40.0).reshape(-1, 1)
+    with pytest.raises(ValueError, match="y_train must be.*1-D"):
+        prediction_intervals(PIPE, X, X, X[:5], method=method)

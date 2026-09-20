@@ -337,8 +337,8 @@ def _mean_vector_length(
     weighted = np.where(finite, amplitude * unit_phase, 0.0)
     resultant = np.abs(weighted.sum(axis=2))
     if not normalize:
-        total = np.maximum(finite.sum(axis=2), 1)
-        return np.asarray(resultant / total, dtype=float)
+        total = finite.sum(axis=2)
+        return np.where(total > 0, resultant / np.maximum(total, 1), np.nan)
     weight = np.where(finite, amplitude, 0.0).sum(axis=2)
     with np.errstate(invalid="ignore", divide="ignore"):
         return np.where(weight > EPS, resultant / weight, np.nan)

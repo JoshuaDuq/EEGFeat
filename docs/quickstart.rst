@@ -45,6 +45,10 @@ Workflow 1: Spectral Features from PSD
 When working with stationary resting-state or whole-epoch recordings, start from an MNE
 ``Spectrum`` (e.g. computed via Welch or multitaper):
 
+For multitaper, pass ``normalization="full"`` to ``compute_psd`` and include
+``"normalization": "full"`` in ``estimator_parameters``. The default MNE
+multitaper normalization is not a density in V²/Hz and is rejected.
+
 .. code-block:: python
 
    import mne

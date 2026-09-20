@@ -276,8 +276,9 @@ class BandSignal:
 
     @property
     def phase(self) -> npt.NDArray[np.float64]:
-        """Instantaneous phase in radians, in ``[-pi, pi]``."""
-        return np.angle(self.analytic)
+        """Instantaneous phase in radians; undefined for zero or non-finite signals."""
+        valid = np.isfinite(self.analytic) & (self.envelope > 0.0)
+        return np.where(valid, np.angle(self.analytic), np.nan)
 
     @property
     def power(self) -> npt.NDArray[np.float64]:

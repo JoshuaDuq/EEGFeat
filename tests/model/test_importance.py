@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 from sklearn.dummy import DummyRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import make_scorer
 from sklearn.pipeline import Pipeline
@@ -32,6 +33,28 @@ PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 needs_shap = pytest.mark.skipif(
     importlib.util.find_spec("shap") is None, reason="shap not installed"
 )
+
+
+def test_shap_binary_tree_output_keeps_class_and_feature_axes_separate() -> None:
+    class TreeExplainer:
+        def __init__(self, model):
+            pass
+
+        def shap_values(self, X):
+            values = X - X.mean(axis=0)
+            return np.stack([-values, values], axis=-1)
+
+    X = np.random.default_rng(0).normal(size=(20, 3))
+    model = Pipeline([("classifier", RandomForestClassifier(n_estimators=2, random_state=0))])
+    model.fit(X, (X[:, 0] > 0).astype(int))
+    fake_shap = types.ModuleType("shap")
+    fake_shap.TreeExplainer = TreeExplainer
+    with (
+        patch("eegfeat.model.importance.require_shap", return_value=None),
+        patch.dict("sys.modules", {"shap": fake_shap}),
+    ):
+        result = shap_importance(model, X, ["a", "b", "c"])
+    np.testing.assert_allclose(result.values, np.abs(X - X.mean(axis=0)).mean(axis=0))
 
 
 class _LinearExplainerStandIn:

@@ -17,6 +17,50 @@ TRAIN = np.arange(8, dtype=np.intp)
 TEST = np.arange(8, 12, dtype=np.intp)
 
 
+def test_nuisance_removal_is_invariant_to_covariate_units() -> None:
+    covariates = np.random.default_rng(3).normal(size=(40, 2))
+    y = 2 + covariates @ np.array([3.0, 5.0])
+    fitted = fit_nuisance_model(
+        y,
+        covariates * [1e12, 1e-12],
+        np.arange(30),
+        np.arange(30, 40),
+        columns=("a", "b"),
+    )
+    np.testing.assert_allclose(fitted.train_residual, 0, atol=1e-10)
+    np.testing.assert_allclose(fitted.test_residual, 0, atol=1e-10)
+
+
+def test_staged_nuisance_removal_is_invariant_to_covariate_units() -> None:
+    rng = np.random.default_rng(3)
+    covariates = rng.normal(size=(40, 2))
+    X = covariates @ np.array([[3.0, 1.0], [5.0, 2.0]])
+    y = X[:, 0] + rng.normal(size=40)
+    groups = np.repeat(["a", "b", "c", "d"], 10)
+    scaled = covariates * [1e12, 1e-12]
+    fitted = fit_staged_residual_preprocessor(
+        X=X,
+        y=y,
+        covariates=scaled,
+        groups=groups,
+        rows=np.arange(30),
+        columns=("a", "b"),
+    )
+    np.testing.assert_allclose(
+        fitted.transform_features(X, scaled, np.arange(40), groups),
+        0,
+        atol=1e-10,
+    )
+    reference = fit_nuisance_model(
+        y, covariates, np.arange(30), np.arange(30, 40), columns=("a", "b")
+    )
+    np.testing.assert_allclose(
+        fitted.nuisance_prediction(scaled, np.arange(30, 40)),
+        reference.test_prediction,
+        atol=1e-10,
+    )
+
+
 def test_the_nuisance_model_is_fitted_on_training_rows_only() -> None:
     # If the test rows entered the fit, the test residuals would be centred by
     # construction and the held-out score would be optimistic.

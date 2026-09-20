@@ -403,3 +403,50 @@ def test_two_node_sets_give_the_one_pair_between_them() -> None:
     )
 
     assert [m.nodes for m in table.meta] == [("central", "parietal")]
+
+
+def test_wpli_rejects_single_epoch_trial_groups() -> None:
+    signal = ef.Signal.from_arrays(
+        data=np.random.default_rng(0).normal(size=(3, 4, 401)),
+        times=np.arange(401) / SFREQ,
+        ch_names=CHANNELS,
+        sfreq=SFREQ,
+        row_ids=tuple(("test", i, "event") for i in range(3)),
+    )
+    with pytest.raises(ValueError, match="at least two epochs"):
+        ef.wpli(signal, bands=[ALPHA], windows=[WINDOW], trials=["a", "a", "b"])
+
+
+@pytest.mark.parametrize("invalid", [np.nan, np.inf])
+def test_missing_edges_are_not_treated_as_observed_disconnections(invalid) -> None:
+    pairs = _pair_table("aec", 0.8)
+    values = pairs.values.copy()
+    values[0, 0] = invalid
+    incomplete = replace(pairs, values=values, coverage=np.isfinite(values).astype(float))
+    assert np.isnan(global_efficiency(incomplete).values).all()
+    assert np.isnan(clustering_coefficient(incomplete, threshold=0.5).values).all()
+
+
+def test_wpli_preserves_estimator_reliability_warnings(monkeypatch) -> None:
+    import warnings
+
+    import eegfeat.connectivity as connectivity
+
+    class Result:
+        def get_data(self, output):
+            return np.zeros((4, 4, 1))
+
+    def estimate(*args, **kwargs):
+        warnings.warn("too few cycles", UserWarning, stacklevel=2)
+        return Result()
+
+    monkeypatch.setattr(connectivity, "_require_mne_connectivity", lambda: estimate)
+    signal = ef.Signal.from_arrays(
+        data=np.ones((2, 4, 401)),
+        times=np.arange(401) / SFREQ,
+        ch_names=CHANNELS,
+        sfreq=SFREQ,
+        row_ids=tuple(("test", i, "event") for i in range(2)),
+    )
+    with pytest.warns(UserWarning, match="too few cycles"):
+        ef.wpli(signal, bands=[ALPHA], windows=[WINDOW])

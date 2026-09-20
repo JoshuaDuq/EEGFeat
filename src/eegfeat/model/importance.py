@@ -153,10 +153,16 @@ def shap_importance(
         explainer = shap.KernelExplainer(predict_fn, background)
         shap_values = explainer.shap_values(X_trans, nsamples=100)
 
-    if isinstance(shap_values, list) and len(shap_values) == 2:
-        shap_values = shap_values[1]
-    elif isinstance(shap_values, list):
-        shap_values = np.mean(np.abs(np.stack(shap_values)), axis=0)
+    shap_values = np.asarray(shap_values, dtype=float)
+    if shap_values.ndim == 3:
+        # SHAP >= 0.45 places the output/class axis last.
+        shap_values = (
+            shap_values[:, :, 1]
+            if is_classifier(final_estimator) and shap_values.shape[2] == 2
+            else np.mean(np.abs(shap_values), axis=2)
+        )
+    if shap_values.shape != X_trans.shape:
+        raise ValueError("SHAP values must align with the explained samples and features.")
 
     # A feature the pipeline dropped has no effect on the prediction, so its value is 0.
     names = tuple(feature_names)

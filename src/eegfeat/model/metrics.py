@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -77,18 +76,9 @@ def _subset_classification_metrics(
     auc = np.nan
     ap = np.nan
     if y_prob is not None and len(np.unique(y_true)) == 2:
-        y_prob_arr = np.asarray(y_prob, dtype=float)
-        if y_prob_arr.ndim == 2 and y_prob_arr.shape[1] >= 2:
-            y_prob_1d = y_prob_arr[:, 1]
-        elif y_prob_arr.ndim == 1:
-            y_prob_1d = y_prob_arr
-        else:
-            y_prob_1d = y_prob_arr.ravel()
-        prob_mask = np.isfinite(y_prob_1d) & np.isfinite(y_true)
-        if np.sum(prob_mask) >= 2 and len(np.unique(y_true[prob_mask])) == 2:
-            with contextlib.suppress(ValueError, TypeError):
-                auc = float(roc_auc_score(y_true[prob_mask], y_prob_1d[prob_mask]))
-                ap = float(average_precision_score(y_true[prob_mask], y_prob_1d[prob_mask]))
+        positive_probability = y_prob[:, 1] if y_prob.ndim == 2 else y_prob
+        auc = float(roc_auc_score(y_true, positive_probability))
+        ap = float(average_precision_score(y_true, positive_probability))
 
     return {
         "accuracy": acc,
@@ -117,6 +107,12 @@ def classification_metrics(
         raise ValueError(msg)
     y_t = np.asarray(y_true, dtype=np.intp)
     y_p = np.asarray(y_pred, dtype=np.intp)
+    if y_prob is not None:
+        y_prob = np.asarray(y_prob, dtype=float)
+        if y_prob.shape not in ((len(y_t),), (len(y_t), 2)):
+            raise ValueError("y_prob must have shape (n_trials,) or (n_trials, 2).")
+        if not np.isfinite(y_prob).all():
+            raise ValueError("y_prob must be finite for every trial; no trials may be dropped.")
     cm = confusion_matrix(y_t, y_p, labels=[0, 1]).astype(np.intp)
 
     if groups is not None:
@@ -259,11 +255,11 @@ def within_subject_centered_metrics(
         t_sub = t[mask]
         f_sub = f[mask]
         n_sub = n[mask]
-        if len(t_sub) < 2:
+        if len(t_sub) < 2 or np.all(t_sub == t_sub[0]):
             continue
         cent_t = t_sub - np.mean(t_sub)
         denom = float(cent_t @ cent_t)
-        if denom <= 1e-12:
+        if denom == 0.0:
             continue
         cent_f = f_sub - np.mean(f_sub)
         cent_n = n_sub - np.mean(n_sub)
@@ -332,11 +328,11 @@ def within_condition_metrics(
     for subj in pd.unique(grp):
         mask = grp == subj
         cells = _within_condition_cells(mask, cond)
-        if not cells:
+        if not cells or all(np.all(t[cell] == t[cell[0]]) for cell in cells):
             continue
         centered_t = _center_within_cells(t, cells)
         denominator = float(centered_t @ centered_t)
-        if denominator <= 1e-12:
+        if denominator == 0.0:
             continue
         centered_f = _center_within_cells(f, cells)
         centered_n = _center_within_cells(n, cells)

@@ -230,13 +230,22 @@ class Spectra:
         spectrum : mne.time_frequency.Spectrum or EpochsSpectrum
             A computed power spectrum. A continuous ``Spectrum`` gains a
             leading epoch axis of length 1.
+        estimator_parameters : dict
+            Parameters used to compute the spectrum. Multitaper spectra must
+            be computed with ``normalization="full"`` and declare it here;
+            MNE's default ``"length"`` does not provide density in V²/Hz.
 
         Returns
         -------
         Spectra
             With a single window named ``"all"`` spanning the whole segment.
         """
-        data = np.asarray(spectrum.get_data(), dtype=float)
+        data = np.asarray(spectrum.get_data())
+        if np.iscomplexobj(data):
+            raise ValueError(
+                "Spectrum contains complex coefficients, not power; use output='power'."
+            )
+        data = np.asarray(data, dtype=float)
         if data.ndim == 2:
             data = data[np.newaxis, ...]
         if data.ndim != 3:
@@ -247,6 +256,11 @@ class Spectra:
         data = data[:, :, np.newaxis, :]
         params = dict(estimator_parameters)
         method = str(params.pop("method", getattr(spectrum, "method", "unknown")))
+        if method == "multitaper" and params.get("normalization") != "full":
+            raise ValueError(
+                'Multitaper PSD requires normalization="full" when computing the '
+                "spectrum and in estimator_parameters to establish density units."
+            )
         return cls(
             data=data,
             freqs=np.asarray(spectrum.freqs, dtype=float),

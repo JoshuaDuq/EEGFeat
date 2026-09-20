@@ -64,6 +64,22 @@ def test_band_power_puts_the_oscillation_in_its_band(tmp_path) -> None:
     assert np.all(alpha > 100 * theta)
 
 
+@pytest.mark.parametrize("sfreq", [100.0, 200.0])
+def test_multitaper_power_has_physical_units_independent_of_sampling_rate(tmp_path, sfreq):
+    times = np.arange(int(4 * sfreq)) / sfreq
+    amplitude = 2e-6
+    data = np.tile(amplitude * np.sin(2 * np.pi * 10 * times), (3, 1, 1))
+    epochs = mne.EpochsArray(data, mne.create_info(["Cz"], sfreq, "eeg"), verbose=False)
+    result = features(
+        tmp_path,
+        '[spectra]\nmethod = "multitaper"\nbandwidth = 1.0\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n',
+        epochs,
+    )
+    np.testing.assert_allclose(result.epochs.values, amplitude**2 / 2, rtol=0.02, atol=0)
+
+
 def test_spatial_levels_choose_the_columns(tmp_path) -> None:
     result = features(
         tmp_path,

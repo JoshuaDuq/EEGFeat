@@ -387,6 +387,10 @@ zero-lag coupling and so is less vulnerable to volume conduction.
 canonical implementation for cross-spectral phase lag calculation. It is an
 optional dependency: ``pip install eegfeat[connectivity]``.
 
+Every wPLI trial group must contain at least two epochs. This minimum prevents
+the degenerate single-epoch estimate; it does not establish that the sample
+size is sufficient for reliable estimation. Estimator warnings remain visible.
+
 Nodes are channels, or ROIs when ``groups`` is given, in which case the
 channel-level matrix is averaged within each ROI block and a node's own block
 excludes the diagonal. Both measures are estimated across trials, so results have
@@ -401,7 +405,7 @@ summarizes a power table. Both graph metrics are computed directly without
 third-party network graph dependencies.
 
 Global efficiency converts nonzero edge weights :math:`w_{ij}` into path distances
-:math:`L_{ij} = 1/|w_{ij}|`, treats zero and non-finite weights as absent edges,
+:math:`L_{ij} = 1/|w_{ij}|`, treats zero weights as absent edges,
 computes all-pairs shortest paths via Floyd-Warshall, and averages inverse distance
 across all node pairs. A disconnected pair contributes exactly zero:
 
@@ -410,6 +414,9 @@ across all node pairs. A disconnected pair contributes exactly zero:
    E_{\text{global}} = \frac{2}{N (N - 1)} \sum_{i < j} \frac{1}{d_{ij}}
 
 where :math:`N` is the number of network nodes.
+
+A non-finite edge makes either graph summary NaN with zero output coverage.
+An unmeasured connection cannot be interpreted as an observed disconnection.
 
 The clustering coefficient **binarizes** the connectivity matrix at user-specified ``threshold`` :math:`\theta` (:math:`A_{ij} = 1` if :math:`|w_{ij}| > \theta`, else :math:`0`), and computes the average local clustering coefficient over nodes with degree :math:`k_i \ge 2`:
 
@@ -420,7 +427,7 @@ The clustering coefficient **binarizes** the connectivity matrix at user-specifi
    C &= \frac{1}{|\{i : k_i \ge 2\}|} \sum_{i : k_i \ge 2} C_i
    \end{aligned}
 
-where :math:`(A^3)_{ii}` is the diagonal entry of the cubed adjacency matrix (representing twice the number of triangles :math:`T_i` containing node :math:`i`), and :math:`k_i = \sum_j A_{ij}` is the node degree. Nodes with :math:`k_i < 2` are excluded from the average rather than counted as zero, so networks too sparse to contain a triangle evaluate to NaN rather than an artificially suppressed value.
+where :math:`(A^3)_{ii}` is the diagonal entry of the cubed adjacency matrix (representing twice the number of triangles :math:`T_i` containing node :math:`i`), and :math:`k_i = \sum_j A_{ij}` is the node degree. Nodes with :math:`k_i < 2` are excluded from the average. The result is NaN only when no node has at least two neighbors; eligible nodes with no triangles contribute zero.
 
 
 Microstates
@@ -447,7 +454,14 @@ Segments shorter than ``min_duration_ms`` are absorbed into neighbouring states:
 Cluster indices are arbitrary, so unmatched templates are labelled ``state1``
 onward. A-D labels require one-to-one topographic matching to an identified
 reference set and are not assigned automatically. The segmentation exposes its
-templates and global explained variance. From the resulting sequence :math:`s(t)`,
+templates and global explained variance. Feature identities include the fitted
+templates, channel order, contributing rows, and segmentation settings, so
+independently fitted ``state1`` columns cannot silently represent the same
+feature. Segmentation rejects non-finite or spatially constant maps rather
+than assigning them to an arbitrary state. This implementation uses ordinary
+k-means on sign-normalized maps, not the polarity-invariant modified k-means
+objective used by Pycrostates; these estimators are not interchangeable.
+From the resulting sequence :math:`s(t)`,
 four temporal statistics are derived:
 
 - **coverage**: Fractional occupancy time: :math:`\frac{1}{T} \sum_t \mathbb{I}[s(t) = k]` (compositional, sums to 1 across states).

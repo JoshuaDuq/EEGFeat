@@ -163,3 +163,41 @@ def test_centred_metrics_refuse_two_dimensional_input() -> None:
 
     with pytest.raises(ValueError, match="aligned 1-D arrays"):
         within_subject_centered_metrics(values, values, np.zeros((3, 2)), groups)
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e-7])
+def test_centered_r2_is_invariant_to_measurement_units(scale) -> None:
+    y = np.tile(np.arange(4.0), 2) * scale
+    groups = np.repeat(["a", "b"], 4)
+    conditions = np.tile(["c", "c", "d", "d"], 2)
+    result = within_subject_centered_metrics(y, y, np.zeros(8), groups)
+    assert result["within_subject_centered_full_r2"] == pytest.approx(1.0)
+    result = within_condition_metrics(y, y, np.zeros(8), groups, conditions)
+    assert result["within_condition_centered_full_r2"] == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        np.array([0.1, 0.9, np.nan, np.nan]),
+        np.array([0.1, 0.9, np.inf, 0.2]),
+        np.ones((4, 3)) / 3,
+        np.array([0.1, 0.9, 0.1]),
+    ],
+)
+def test_auc_rejects_invalid_probability_inputs(probabilities) -> None:
+    with pytest.raises(ValueError, match="y_prob"):
+        classification_metrics(
+            np.array([0, 1, 0, 1]),
+            np.array([0, 1, 1, 0]),
+            y_prob=probabilities,
+        )
+
+
+def test_centered_r2_rejects_constant_targets_despite_roundoff() -> None:
+    y = np.full(3, 0.1)
+    groups = np.full(3, "s")
+    result = within_subject_centered_metrics(y, y, np.zeros(3), groups)
+    assert np.isnan(result["within_subject_centered_full_r2"])
+    result = within_condition_metrics(y, y, np.zeros(3), groups, np.full(3, "c"))
+    assert np.isnan(result["within_condition_centered_full_r2"])

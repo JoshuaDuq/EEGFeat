@@ -190,6 +190,7 @@ class RecordingInputs:
             row_ids=epoch_row_ids(self.epochs, self.recording, data.shape[0]),
             computation=ComputationSpec.create(
                 self.recipe.spectra.method,
+                normalization="full" if self.recipe.spectra.method == "multitaper" else "density",
                 settings={
                     key: value
                     for key, value in self.recipe.spectra.__dict__.items()
@@ -266,6 +267,7 @@ class RecordingInputs:
                 fmin=max(0.0, settings.fmin - resolution),
                 fmax=min(self.sfreq / 2.0, settings.fmax + resolution),
                 bandwidth=settings.bandwidth,
+                normalization="full",
                 n_jobs=self.n_jobs,
                 verbose=False,
             )

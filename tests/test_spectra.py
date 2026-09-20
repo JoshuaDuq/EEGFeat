@@ -56,9 +56,13 @@ def test_from_epochs_spectrum_gains_a_singleton_window_axis() -> None:
     epochs = mne.EpochsArray(
         np.random.RandomState(0).randn(5, 2, 400) * 1e-6, info, tmin=-1.0, verbose="ERROR"
     )
-    spectrum = epochs.compute_psd("multitaper", fmin=2.0, fmax=40.0, verbose="ERROR")
+    spectrum = epochs.compute_psd(
+        "multitaper", fmin=2.0, fmax=40.0, normalization="full", verbose="ERROR"
+    )
     spectra = Spectra.from_spectrum(
-        spectrum, recording="test", estimator_parameters={"bandwidth": None}
+        spectrum,
+        recording="test",
+        estimator_parameters={"bandwidth": None, "normalization": "full"},
     )
     assert spectra.data.ndim == 4
     assert spectra.data.shape[0] == 5
@@ -79,6 +83,33 @@ def test_from_continuous_spectrum_gains_epoch_and_window_axes() -> None:
     spectra = Spectra.from_spectrum(spectrum, recording="test", estimator_parameters={"n_fft": 400})
     assert spectra.data.shape[0] == 1
     assert spectra.data.shape[2] == 1
+
+
+@pytest.mark.parametrize("parameters", [{}, {"normalization": "length"}])
+def test_multitaper_spectrum_requires_explicit_density_normalization(parameters) -> None:
+    import mne
+
+    epochs = mne.EpochsArray(
+        np.random.default_rng(0).normal(size=(2, 1, 400)),
+        mne.create_info(["Cz"], 100.0, "eeg"),
+        verbose=False,
+    )
+    spectrum = epochs.compute_psd("multitaper", verbose=False)
+    with pytest.raises(ValueError, match="normalization.*full"):
+        Spectra.from_spectrum(spectrum, recording="test", estimator_parameters=parameters)
+
+
+def test_complex_fourier_coefficients_cannot_be_interpreted_as_power() -> None:
+    from types import SimpleNamespace
+
+    spectrum = SimpleNamespace(
+        get_data=lambda: np.ones((1, 3), dtype=complex) * (1 + 2j),
+        freqs=np.array([1.0, 2.0, 3.0]),
+        ch_names=["Cz"],
+        method="welch",
+    )
+    with pytest.raises(ValueError, match="complex.*power"):
+        Spectra.from_spectrum(spectrum, recording="test", estimator_parameters={})
 
 
 def test_non_finite_input_lowers_coverage_rather_than_raising() -> None:

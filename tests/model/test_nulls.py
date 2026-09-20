@@ -31,6 +31,63 @@ FOLDS = loso_folds(GROUPS)
 BY_SUBJECT = InnerSplit(grouping="subject", n_splits=2)
 
 
+@pytest.mark.parametrize(
+    "trial_indices",
+    [
+        np.array([0.0, 1.5, 2.0, 3.0]),
+        np.array([0, 1, 1, 3]),
+    ],
+)
+def test_circular_shifts_require_unambiguous_integer_trial_order(trial_indices) -> None:
+    with pytest.raises(ValueError, match="integer|unique"):
+        permute(
+            np.arange(4.0),
+            np.full(4, "s"),
+            np.full(4, "r"),
+            trial_indices,
+            config=NullConfig(scheme="circular_shift_within_run", min_retained_trials=2),
+            rng=np.random.default_rng(0),
+        )
+
+
+def test_label_permutation_refuses_nuisance_adjusted_inference() -> None:
+    covariates = np.sin(Y).reshape(-1, 1)
+    predictions = cross_fit_regression(
+        FOLDS,
+        X,
+        Y,
+        GROUPS,
+        PIPE,
+        {},
+        inner=BY_SUBJECT,
+        seed=0,
+        covariates=covariates,
+        residualize_on=("nuisance",),
+    )
+
+    def negative_mse(truth, prediction):
+        return -float(np.mean((truth - prediction) ** 2))
+
+    observed = _prediction_statistic(predictions, GROUPS, _DEFAULT_AGGREGATION, negative_mse)
+    with pytest.raises(ValueError, match="nuisance-preserving"):
+        permutation_test(
+            FOLDS,
+            X,
+            Y,
+            GROUPS,
+            RUNS,
+            PIPE,
+            {},
+            observed,
+            config=NullConfig(n_permutations=3),
+            inner=BY_SUBJECT,
+            seed=0,
+            covariates=covariates,
+            residualize_on=("nuisance",),
+            metric_fn=negative_mse,
+        )
+
+
 def test_the_shift_set_is_the_whole_cycle_including_the_identity() -> None:
     assert circular_shift_group(11) == tuple(range(11))
 

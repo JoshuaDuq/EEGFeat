@@ -168,6 +168,9 @@ scale, deconfound, or reduce dimensionality with PCA. ``harmonization="intersect
 only features finite for every training group; ``"union_impute"`` keeps the full feature union.
 Target residualization is enabled with ``covariates=...`` and ``residualize_on=...`` on the
 cross-fitting call, so nuisance models are fitted within each outer training fold.
+Nuisance least-squares fits scale their training design before solving so that
+changing covariate units does not silently remove a regressor through the
+numerical rank cutoff.
 
 Evaluation and aggregation
 --------------------------
@@ -180,6 +183,10 @@ correlation averages Fisher ``z`` values with equal subject weighting. Use
 precision, F1, precision, recall, specificity, and the confusion matrix. Passing ``groups``
 makes every scalar a mean over subjects with equal subject weight; the confusion matrix stays
 pooled over trials, so accuracy recomputed from it will not match the reported ``accuracy``.
+Pearson correlation and centered R² do not apply an absolute variance floor by
+default: their definedness must not depend on measurement units. Classification
+probabilities and model-selection predictions must be finite for every trial;
+failed predictions cannot be dropped to improve a score.
 
 .. code-block:: python
 
@@ -210,9 +217,16 @@ and ``"circular_shift_within_run"``; ``"run_wise"`` is an accepted alias for
 ``"within_subject_within_run"``, named after the upstream pipeline's ``runwise``. Both shuffle
 labels within each run of each subject — no scheme exchanges whole runs, because run structure
 is paradigm-specific. Run-aware schemes require ``runs``; circular shifts additionally require
-finite within-run trial indices.
+finite integer trial indices that are unique within each subject/run.
 Incomplete fits abort the procedure with an error instead of dropping failed draws,
 preventing distortion of the null distribution.
+
+``permutation_test`` rejects ``residualize_on``. Permuting raw targets and then
+refitting nuisance regression destroys the nuisance–target association; this
+does not implement a nuisance-preserving conditional null. Such inference needs
+a separately validated residual-permutation procedure with appropriate
+exchangeability restrictions, as discussed by
+`Winkler et al. (2014) <https://pmc.ncbi.nlm.nih.gov/articles/PMC4010955/>`_.
 
 .. code-block:: python
 
@@ -244,6 +258,11 @@ pooled across trials, so participants with more trials contribute more scores. T
 implementation does not establish a distribution-free coverage guarantee for a new
 participant. The returned object stores ``lower``, ``upper``, ``alpha``, and ``method``;
 it does not contain realized test-set coverage.
+
+Split conformal targets coverage ``1 - alpha`` under exchangeable trials. The
+CV+ methods use ``alpha`` in each tail and do not carry a universal
+``1 - alpha`` finite-sample guarantee. Non-finite calibration scores or model
+predictions raise; silently discarding them would change the calibration sample.
 
 .. code-block:: python
 

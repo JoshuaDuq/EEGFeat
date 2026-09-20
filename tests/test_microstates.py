@@ -176,6 +176,32 @@ def test_segment_reports_its_missing_dependency_clearly() -> None:
         segment(signal)
 
 
+@requires_sklearn
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, 0.0])
+def test_invalid_topographies_are_not_assigned_to_state_one(invalid) -> None:
+    from dataclasses import replace
+
+    signal, _ = _planted()
+    data = signal.data.copy()
+    data[0, :, 0] = invalid
+    with pytest.raises(ValueError, match="finite.*nonzero spatial variance"):
+        segment(replace(signal, data=data))
+
+
+@requires_sklearn
+def test_independently_fitted_maps_have_distinct_feature_identities() -> None:
+    from dataclasses import replace
+
+    signal, _ = _planted()
+    other = replace(signal, data=signal.data[:, ::-1, :].copy())
+    first = segment(signal)
+    second = segment(other)
+    for measure in (microstate_coverage, microstate_transitions):
+        first_table = measure(first, windows=[WINDOW])
+        second_table = measure(second, windows=[WINDOW])
+        assert set(first_table.names).isdisjoint(second_table.names)
+
+
 # --- metric definitions ---------------------------------------------------------------
 
 

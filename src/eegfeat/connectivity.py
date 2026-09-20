@@ -98,8 +98,10 @@ def wpli(
     FeatureTable
         One column per node pair, band and window, with ``space_kind="pair"``.
     """
-    estimator = _require_mne_connectivity()
     row_groups, labels = _resolve_rows(trials, signal.data.shape[0])
+    if np.any(np.bincount(row_groups, minlength=len(labels)) < 2):
+        raise ValueError("wPLI requires at least two epochs in every trial group.")
+    estimator = _require_mne_connectivity()
     node_names, picks = _nodes(signal.ch_names, groups)
 
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
@@ -109,17 +111,15 @@ def wpli(
             matrices = []
             for row in range(len(labels)):
                 data = signal.data[row_groups == row][:, :, mask]
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    result = estimator(
-                        data,
-                        method="wpli",
-                        sfreq=signal.sfreq,
-                        fmin=band.fmin,
-                        fmax=band.fmax,
-                        faverage=True,
-                        verbose=False,
-                    )
+                result = estimator(
+                    data,
+                    method="wpli",
+                    sfreq=signal.sfreq,
+                    fmin=band.fmin,
+                    fmax=band.fmax,
+                    faverage=True,
+                    verbose=False,
+                )
                 matrices.append(_dense(result))
             columns.extend(
                 _pair_columns(
@@ -139,8 +139,9 @@ def global_efficiency(pairs: FeatureTable) -> FeatureTable:
     """Average inverse shortest path length over the network.
 
     Nonzero edge strength is transformed to distance as ``1 / |weight|`` and
-    paths are shortest by that distance. Zero and non-finite weights are absent
-    edges; disconnected pairs contribute exactly zero efficiency.
+    paths are shortest by that distance. Zero weights are absent edges;
+    disconnected pairs contribute exactly zero efficiency. A non-finite edge
+    makes the graph summary undefined, since missing is not disconnected.
 
     Parameters
     ----------
@@ -161,7 +162,7 @@ def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureT
     Edges above ``threshold`` in absolute weight are retained (:math:`A_{ij} = 1`)
     and subthreshold edges set to zero, then the unweighted clustering coefficient
     is averaged over nodes with at least two neighbors. The threshold is an explicit
-    required argument.
+    required argument. A non-finite edge makes the graph summary undefined.
 
     Parameters
     ----------
@@ -385,7 +386,8 @@ def _graph_measure(
         nodes = _validate_graph_edges(pairs, indices)
         values = np.empty(pairs.n_rows)
         for row in range(pairs.n_rows):
-            values[row] = reduce(_square(pairs, indices, nodes, row))
+            matrix = _square(pairs, indices, nodes, row)
+            values[row] = reduce(matrix) if np.isfinite(matrix).all() else np.nan
         template = pairs.meta[indices[0]]
         columns.append(
             (
@@ -496,7 +498,7 @@ def _global_efficiency(matrix: npt.NDArray[np.float64]) -> float:
     n = matrix.shape[0]
     if n <= 1:
         return float("nan")
-    weights = np.abs(np.nan_to_num(matrix, nan=0.0))
+    weights = np.abs(matrix)
     length = np.full_like(weights, np.inf)
     present = weights > 0.0
     length[present] = 1.0 / weights[present]
@@ -516,7 +518,7 @@ def _global_efficiency(matrix: npt.NDArray[np.float64]) -> float:
 
 
 def _clustering(matrix: npt.NDArray[np.float64], threshold: float) -> float:
-    adjacency = (np.abs(np.nan_to_num(matrix, nan=0.0)) > threshold).astype(float)
+    adjacency = (np.abs(matrix) > threshold).astype(float)
     np.fill_diagonal(adjacency, 0.0)
     degree = adjacency.sum(axis=1)
     triangles = np.diag(adjacency @ adjacency @ adjacency)

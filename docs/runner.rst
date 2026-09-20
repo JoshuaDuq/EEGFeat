@@ -144,7 +144,9 @@ Spectra
    entry uses, so every window shares one frequency grid.
 ``multitaper``
    Computed in each window, with an optional ``bandwidth``. The grid follows the window
-   length, so windows measured together must be equally long.
+   length, so windows measured together must be equally long. Uses MNE's
+   ``normalization="full"`` so the output is density in V²/Hz, independent of
+   sampling rate.
 ``morlet``
    One time-frequency decomposition per recording on ``n_freqs`` = 40 frequencies
    (``spacing`` = ``"log"``), with ``n_cycles = clip(f / n_cycles_factor, min_cycles,

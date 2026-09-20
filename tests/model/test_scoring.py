@@ -5,7 +5,7 @@ import pytest
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
 
-from eegfeat.model.scoring import pearsonr_scorer, safe_pearsonr, scoring_dict
+from eegfeat.model.scoring import _selection_pearsonr, pearsonr_scorer, safe_pearsonr, scoring_dict
 
 
 def test_perfect_correlation_is_one() -> None:
@@ -13,10 +13,20 @@ def test_perfect_correlation_is_one() -> None:
     assert r == pytest.approx(1.0)
 
 
-def test_a_constant_predictor_gives_nan_rather_than_a_divide_by_zero() -> None:
+@pytest.mark.parametrize("scale", [1e-12, 1e-7, 1.0, 1e7])
+def test_correlation_and_selection_do_not_depend_on_measurement_units(scale) -> None:
+    X = np.arange(10.0).reshape(-1, 1)
+    y = X[:, 0] * scale
+    model = LinearRegression().fit(X, y)
+    assert safe_pearsonr(y, model.predict(X))[0] == pytest.approx(1.0)
+    assert pearsonr_scorer()(model, X, y) == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("constant", [0.0, 0.1])
+def test_a_constant_predictor_gives_nan_rather_than_a_divide_by_zero(constant) -> None:
     # Zero variance makes Pearson undefined. Returning NaN keeps the fold in the record
     # as unscored; returning 0.0 would claim a measured absence of correlation.
-    r, p = safe_pearsonr(np.zeros(5), np.arange(5.0))
+    r, p = safe_pearsonr(np.full(3, constant), np.arange(3.0))
     assert np.isnan(r) and np.isnan(p)
 
 
@@ -55,3 +65,12 @@ def test_the_selection_scorer_leaves_a_constant_target_undefined() -> None:
     X = np.arange(10.0).reshape(-1, 1)
     model = LinearRegression().fit(X, np.arange(10.0))
     assert np.isnan(pearsonr_scorer()(model, X, np.full(10, 2.0)))
+
+
+def test_model_selection_cannot_drop_failed_predictions() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        _selection_pearsonr(np.arange(4.0), np.array([0.0, 1.0, np.nan, np.nan]))
+
+
+def test_model_selection_recognizes_inexact_constant_predictions() -> None:
+    assert _selection_pearsonr(np.arange(3.0), np.full(3, 0.1)) == 0.0

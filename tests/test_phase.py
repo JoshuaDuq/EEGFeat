@@ -333,3 +333,19 @@ def test_a_silent_amplitude_band_yields_nan_rather_than_zero() -> None:
 def test_the_result_is_a_feature_table() -> None:
     slow, fast = _coupled(0.5)
     assert isinstance(pac(slow, fast, windows=[WINDOW]), FeatureTable)
+
+
+@pytest.mark.parametrize("measure", [itpc, ppc])
+def test_flatlines_do_not_imply_perfect_phase_locking(measure) -> None:
+    signal = _from_phase(np.zeros((4, 1, 201)), amplitude=0.0)
+    table = measure([signal], windows=[WINDOW], include_global=False)
+    assert np.isnan(table.values).all()
+    assert table.flags["insufficient_trials"].all()
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+def test_pac_requires_a_defined_phase(normalize) -> None:
+    slow = _from_phase(np.zeros((4, 1, 201)), amplitude=0.0)
+    fast = _from_phase(np.zeros((4, 1, 201)), band=GAMMA)
+    table = pac(slow, fast, windows=[WINDOW], normalize=normalize, include_global=False)
+    assert np.isnan(table.values).all()

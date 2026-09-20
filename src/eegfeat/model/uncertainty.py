@@ -31,7 +31,8 @@ class PredictionIntervals:
 
 def _compute_conformal_quantile(residuals: npt.NDArray[np.float64], alpha: float) -> float:
     arr = np.sort(np.asarray(residuals, dtype=np.float64))
-    arr = arr[np.isfinite(arr)]
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("Calibration scores must be finite; no observations may be dropped.")
     n_cal = len(arr)
     if n_cal == 0:
         raise ValueError("Calibration set cannot be empty.")
@@ -43,7 +44,8 @@ def _compute_conformal_quantile(residuals: npt.NDArray[np.float64], alpha: float
 
 def _order_stat_quantile(values: npt.NDArray[np.float64], alpha: float, *, tail: str) -> float:
     arr = np.sort(np.asarray(values, dtype=np.float64))
-    arr = arr[np.isfinite(arr)]
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("Calibration candidates must be finite; no observations may be dropped.")
     n = arr.size
     if n == 0:
         return np.nan
@@ -105,10 +107,11 @@ def _split_conformal(
     model_proper.fit(X_train[train_idx], y_train[train_idx])
 
     residuals = np.abs(y_train[cal_idx] - model_proper.predict(X_train[cal_idx]))
-    residuals = residuals[np.isfinite(residuals)]
     q_hat = _compute_conformal_quantile(residuals, alpha)
 
     y_test_pred = np.asarray(model_proper.predict(X_test), dtype=np.float64)
+    if not np.all(np.isfinite(y_test_pred)):
+        raise ValueError("Test predictions must be finite.")
     return y_test_pred - q_hat, y_test_pred + q_hat
 
 
@@ -156,17 +159,11 @@ def _conformal_cv_plus(
     upper_chunks: list[npt.NDArray[np.float64]] = []
 
     for train_idx, val_idx in splits:
-        if len(train_idx) == 0 or len(val_idx) == 0:
-            continue
         model_fold = cast(Pipeline, clone(model))
         model_fold.fit(X_train[train_idx], y_train[train_idx])
 
         val_preds = np.asarray(model_fold.predict(X_train[val_idx]), dtype=np.float64)
         residuals = np.abs(y_train[val_idx] - val_preds)
-        residuals = residuals[np.isfinite(residuals)]
-        if residuals.size == 0:
-            continue
-
         test_preds = np.asarray(model_fold.predict(X_test), dtype=np.float64)
         lower_chunks.append(test_preds[:, None] - residuals[None, :])
         upper_chunks.append(test_preds[:, None] + residuals[None, :])
@@ -225,8 +222,6 @@ def _conformal_quantile(
     upper_chunks: list[npt.NDArray[np.float64]] = []
 
     for train_idx, val_idx in splits:
-        if len(train_idx) == 0 or len(val_idx) == 0:
-            continue
         low = _quantile_model(model, alpha / 2.0, seed).fit(X_train[train_idx], y_train[train_idx])
         high = _quantile_model(model, 1.0 - alpha / 2.0, seed).fit(
             X_train[train_idx], y_train[train_idx]
@@ -237,10 +232,6 @@ def _conformal_quantile(
             np.asarray(low.predict(X_train[val_idx]), dtype=np.float64) - y_val,
             y_val - np.asarray(high.predict(X_train[val_idx]), dtype=np.float64),
         )
-        scores = scores[np.isfinite(scores)]
-        if scores.size == 0:
-            continue
-
         lower_chunks.append(
             np.asarray(low.predict(X_test), dtype=np.float64)[:, None] - scores[None, :]
         )
@@ -263,7 +254,13 @@ def prediction_intervals(
     seed: int = 42,
     groups: npt.NDArray[np.object_] | None = None,
 ) -> PredictionIntervals:
-    """Compute conformal prediction intervals marginal over the calibration unit."""
+    """Compute intervals calibrated over trials.
+
+    Split conformal targets coverage 1 - alpha for exchangeable trials. The
+    CV+ methods use alpha in each tail, not a universal 1 - alpha guarantee.
+    Group-disjoint fitting alone does not establish coverage for dependent
+    trials or new subjects; calibration scores are still pooled over trials.
+    """
     if not (0.0 < alpha < 1.0):
         msg = f"alpha must be between 0.0 and 1.0, got {alpha}."
         raise ValueError(msg)
@@ -277,6 +274,12 @@ def prediction_intervals(
     y_tr = np.asarray(y_train, dtype=np.float64)
     X_te = np.asarray(X_test, dtype=np.float64)
 
+    if y_tr.ndim != 1 or not np.all(np.isfinite(y_tr)):
+        raise ValueError("y_train must be a finite 1-D array.")
+
+    if X_tr.ndim != 2 or X_te.ndim != 2:
+        raise ValueError("X_train and X_test must be 2-D.")
+
     if len(X_tr) == 0 or len(y_tr) == 0 or len(X_te) == 0:
         msg = "Training and test arrays must not be empty."
         raise ValueError(msg)
@@ -286,9 +289,6 @@ def prediction_intervals(
 
     if groups is not None and len(groups) != len(X_tr):
         raise ValueError(f"groups has {len(groups)} rows and X_train has {len(X_tr)}.")
-
-    if X_tr.ndim != 2 or X_te.ndim != 2:
-        raise ValueError("X_train and X_test must be 2-D.")
 
     if X_te.shape[1] != X_tr.shape[1]:
         raise ValueError(f"X_test has {X_te.shape[1]} columns and X_train has {X_tr.shape[1]}.")

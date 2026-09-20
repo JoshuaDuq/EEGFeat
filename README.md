@@ -33,7 +33,7 @@ pip install eegfeat
 | `[model]` | Cross-validated modeling pipelines and evaluation | `scikit-learn>=1.3` |
 | `[connectivity]` | Weighted Phase Lag Index (wPLI) | `mne-connectivity>=0.7` |
 | `[microstates]` | Microstate segmentation and dynamics | `scikit-learn>=1.3` |
-| `[importance]` | SHAP importance over cross-validation folds | `shap>=0.44`, `scikit-learn>=1.3` |
+| `[importance]` | SHAP importance over cross-validation folds | `shap>=0.45`, `scikit-learn>=1.3` |
 | `[dev]` | Testing, typing, and linting tools | `pytest`, `mypy`, `ruff`, `black` |
 
 ```bash
@@ -312,7 +312,7 @@ print(f"Permutation p-value: {null.p_value:.3f}")
 
 ### 5. Uncertainty and Feature Importance
 
-- **Conformal Prediction Intervals**: Generate finite-sample, distribution-free prediction bounds:
+- **Prediction Intervals**: Compute trial-calibrated bounds. Formal conformal coverage requires exchangeability; group-disjoint splits alone do not guarantee coverage for dependent EEG trials or new subjects. CV+ uses `alpha` in each tail, so `alpha=0.10` is not a universal 90% coverage guarantee:
 
 ```python
 intervals = efm.prediction_intervals(
