@@ -99,7 +99,7 @@
   "coverage": "sub-01_task-pain_run-01_features_coverage.tsv",
   "columns": [
     {
-      "name": "eeg_band-power_theta_f3_baseline_log10_pb791fc0befe4",
+      "name": "eeg_band-power_theta_f3_baseline_log10_p59bf33cb66c7",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -127,6 +127,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -150,10 +151,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "b791fc0befe40c1ab7601be5f54790c76fc97b5dc6bd0bd470407500ead3a92c"
+      "parameter_hash": "59bf33cb66c7103ef319b73c41acb1f12bfd1a70e37dea71910eeac3bd190048"
     },
     {
-      "name": "eeg_band-power_theta_f3_stimulus_log10_p96302e408f15",
+      "name": "eeg_band-power_theta_f3_stimulus_log10_pa2b7a0894e53",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -181,6 +182,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -204,10 +206,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "96302e408f15b359735e1511de7d31bbea4c91177c77a139c883cdca9fc43128"
+      "parameter_hash": "a2b7a0894e533bb07f0d344917e5ba0315cf7c745f3cdee9ecf24b0839f3bc49"
     },
     {
-      "name": "eeg_band-power_theta_fz_baseline_log10_pbe689f0eb6df",
+      "name": "eeg_band-power_theta_fz_baseline_log10_p3541b906d289",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -235,6 +237,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -258,10 +261,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "be689f0eb6dfb32e62d118ecf3ed6421c5dc45ac45232c5c1db4fc8e2baa2f0d"
+      "parameter_hash": "3541b906d289a91925c1da3a4c7a8444b1cb4658e408a930536b996c6d270b04"
     },
     {
-      "name": "eeg_band-power_theta_fz_stimulus_log10_pf1c639070b53",
+      "name": "eeg_band-power_theta_fz_stimulus_log10_p4f2687dea0f3",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -289,6 +292,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -312,10 +316,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "f1c639070b5359c35b197e68ce557c49f17f1a4c882ca4b870fd6b48a2e953c5"
+      "parameter_hash": "4f2687dea0f3c877f1519bd2172dfd99e86849a1074f7d755e7002971e34e77c"
     },
     {
-      "name": "eeg_band-power_theta_f4_baseline_log10_p711518a56bc5",
+      "name": "eeg_band-power_theta_f4_baseline_log10_p56e8680308a8",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -343,6 +347,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -366,10 +371,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "711518a56bc5260d9448fc442c3bdee8608bf036ffc9a5ccbf49c1d8282e1d71"
+      "parameter_hash": "56e8680308a868decbc52910949fde17e63df7f7b14247d11ea36c336b796ecc"
     },
     {
-      "name": "eeg_band-power_theta_f4_stimulus_log10_pd85c67917194",
+      "name": "eeg_band-power_theta_f4_stimulus_log10_pca5c4f54e525",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -397,6 +402,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -420,10 +426,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "d85c679171942197c27d55f0a0c66d93d7f212d880231a81d9b2713337644339"
+      "parameter_hash": "ca5c4f54e5251cb5664166d7b13f4520cef065bbf1df12740a2c322dcc4076c0"
     },
     {
-      "name": "eeg_band-power_theta_c3_baseline_log10_p93a8f6014622",
+      "name": "eeg_band-power_theta_c3_baseline_log10_pfcda86230d69",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -451,6 +457,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -474,10 +481,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "93a8f601462223528c2715ce6fe45db280cc99693add4dfb15d9bb5f42f36346"
+      "parameter_hash": "fcda86230d69e9cc29ae4000c86ef609cd0130e26fcc4c63baa333535102be6e"
     },
     {
-      "name": "eeg_band-power_theta_c3_stimulus_log10_pb4a02dcc2ad9",
+      "name": "eeg_band-power_theta_c3_stimulus_log10_p6f47b21d2801",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -505,6 +512,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -528,10 +536,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "b4a02dcc2ad9733060d74a37d237880748c6ad660240cf47369089ccce441268"
+      "parameter_hash": "6f47b21d2801997b96233848f2d5895bdfedff3fd5e60e47dad565087dfddd5e"
     },
     {
-      "name": "eeg_band-power_theta_cz_baseline_log10_pa6eb7ef5f3e5",
+      "name": "eeg_band-power_theta_cz_baseline_log10_p78e4ffcc6113",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -559,6 +567,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -582,10 +591,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "a6eb7ef5f3e51c02094532e8d635f23a58ca95e9f06214f771ff70280397e047"
+      "parameter_hash": "78e4ffcc6113328c7ff9f74c847a9ca441bd85b1406bb6425c6972071f739bbe"
     },
     {
-      "name": "eeg_band-power_theta_cz_stimulus_log10_p3b8ee577502a",
+      "name": "eeg_band-power_theta_cz_stimulus_log10_p7d7ab1af9d28",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -613,6 +622,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -636,10 +646,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "3b8ee577502a94ce28963e992c60a51bbcc7c7d5bebbbb4cd0b71e940c480615"
+      "parameter_hash": "7d7ab1af9d28342c7b588925f80c73042e0b8ca466d6e6e9fc73c5c64dec7c11"
     },
     {
-      "name": "eeg_band-power_theta_c4_baseline_log10_p7e2869725334",
+      "name": "eeg_band-power_theta_c4_baseline_log10_pcd17bcc5801a",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -667,6 +677,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -690,10 +701,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "7e28697253341978cf32d77cd66ca66911e847a9c21a3ffc9ec9fa4bcf24b10d"
+      "parameter_hash": "cd17bcc5801a2922a657958d0650492f382c32a1464001bc1e1637b9c04f9755"
     },
     {
-      "name": "eeg_band-power_theta_c4_stimulus_log10_pc6cb3d2214a8",
+      "name": "eeg_band-power_theta_c4_stimulus_log10_pf70c6ae6a78f",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -721,6 +732,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -744,10 +756,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "c6cb3d2214a8d8e9e7ef63ba9a8d3e1906aa6c0d7f82e4a12b1e8a2a487456a1"
+      "parameter_hash": "f70c6ae6a78f45ccb3862e7ac721abd4e04d2b7df86f39cc436fcb9f6783d0a3"
     },
     {
-      "name": "eeg_band-power_theta_p3_baseline_log10_p2a8f49dd801a",
+      "name": "eeg_band-power_theta_p3_baseline_log10_p8474b7321296",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -775,6 +787,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -798,10 +811,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "2a8f49dd801a4935e6853de9173353c6f025051de91e63d552daf7e4a147304d"
+      "parameter_hash": "8474b7321296d5e8a47bba6d0ce5bfdfb52180a9760cb1ab8510c388020278a2"
     },
     {
-      "name": "eeg_band-power_theta_p3_stimulus_log10_p14d529822538",
+      "name": "eeg_band-power_theta_p3_stimulus_log10_pafb915d3ab2b",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -829,6 +842,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -852,10 +866,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "14d5298225385f0ecf00b0859a92825ac3def769c7353f29cedf2621c8099b63"
+      "parameter_hash": "afb915d3ab2b9236d2c32f7a958c23f2ee673a8e8e9bbc775f36913a18980b53"
     },
     {
-      "name": "eeg_band-power_theta_pz_baseline_log10_pce439492c4db",
+      "name": "eeg_band-power_theta_pz_baseline_log10_pe02793246779",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -883,6 +897,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -906,10 +921,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "ce439492c4dbabe2ac11eead0bcba4b9055ae81f00c10e7fc9e229ac5391413a"
+      "parameter_hash": "e02793246779901762d00fac188df411782f8f7ff5c6775ca6d44b4a72419c8c"
     },
     {
-      "name": "eeg_band-power_theta_pz_stimulus_log10_p91f411c6b333",
+      "name": "eeg_band-power_theta_pz_stimulus_log10_pb1ca10fa65fc",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -937,6 +952,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -960,10 +976,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "91f411c6b333824f89284daf8114686963828942cb8a0e28ff0b6e32cc157574"
+      "parameter_hash": "b1ca10fa65fcf1bbc27e345813bdb2f6885f9cd98ca2c95195e40f1199700601"
     },
     {
-      "name": "eeg_band-power_theta_global_baseline_log10_pb16b726e3e93",
+      "name": "eeg_band-power_theta_global_baseline_log10_p0efe171ba98c",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -991,6 +1007,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1014,10 +1031,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "b16b726e3e939e1eb945ee1c9efd4f9f1b02eddbb31b2f86d4a8edd2680500fc"
+      "parameter_hash": "0efe171ba98cc28f31fd78bc31235a3ebdc8d1d2aff9ae7710105a560db47508"
     },
     {
-      "name": "eeg_band-power_theta_global_stimulus_log10_p39f175e271f7",
+      "name": "eeg_band-power_theta_global_stimulus_log10_p1d41967a1a80",
       "measure": "band_power",
       "band": {
         "name": "theta",
@@ -1045,6 +1062,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1068,10 +1086,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "39f175e271f7576af5d7d5d092467e0a4a365a52845405a57700f1c91d520630"
+      "parameter_hash": "1d41967a1a8018cc6e9a21b98455fddca21dabd2d10196e282b67e0bd4173e9a"
     },
     {
-      "name": "eeg_band-power_alpha_f3_baseline_log10_p6895e87136f3",
+      "name": "eeg_band-power_alpha_f3_baseline_log10_p1cb7d7bd0e65",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1099,6 +1117,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1122,10 +1141,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "6895e87136f3d181f486d4979a41cb2b0d50fa320ebe1cd1b5ce83e3d3d76604"
+      "parameter_hash": "1cb7d7bd0e65b36fd952a2c61ab46def04ac92b8c1f28f1d6f6bf1c7c78e7bd3"
     },
     {
-      "name": "eeg_band-power_alpha_f3_stimulus_log10_p7a88fdadb94f",
+      "name": "eeg_band-power_alpha_f3_stimulus_log10_p690fda851917",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1153,6 +1172,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1176,10 +1196,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "7a88fdadb94f25d60e3fbcadf67e72d5e698541b6f9c6a523a42c543e9540363"
+      "parameter_hash": "690fda85191784631acae8fa34a051df1b9651bc57c6a928b2cc092579cb3432"
     },
     {
-      "name": "eeg_band-power_alpha_fz_baseline_log10_pf38bdcf7c412",
+      "name": "eeg_band-power_alpha_fz_baseline_log10_pcbad1a1aca34",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1207,6 +1227,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1230,10 +1251,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "f38bdcf7c41204f120c37f3425af8b04104608672c6b0b5f63e54e11b2e43688"
+      "parameter_hash": "cbad1a1aca34803705edc3941d157146db275fc6aa218788c97b00a6288219a4"
     },
     {
-      "name": "eeg_band-power_alpha_fz_stimulus_log10_pe31313e17cf0",
+      "name": "eeg_band-power_alpha_fz_stimulus_log10_p5639f33291c3",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1261,6 +1282,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1284,10 +1306,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "e31313e17cf00cc6d3af8fc589d390a287b28c7ed7afd9f9fe8cc7ab54f6c246"
+      "parameter_hash": "5639f33291c359a8178968152d536a6bdcef054fee1c760f97e2427ea31fdb5c"
     },
     {
-      "name": "eeg_band-power_alpha_f4_baseline_log10_p8f7b0a867eb5",
+      "name": "eeg_band-power_alpha_f4_baseline_log10_p77e6a6a2e8d3",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1315,6 +1337,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1338,10 +1361,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "8f7b0a867eb56e9dd0104d8f6814401cbb0a07c0c92cc75a940adfa4835db968"
+      "parameter_hash": "77e6a6a2e8d38f68c4cf0f3e41f39da6923cc1252ccdf1f53f57c483166bc86f"
     },
     {
-      "name": "eeg_band-power_alpha_f4_stimulus_log10_p39d0a44fe3c9",
+      "name": "eeg_band-power_alpha_f4_stimulus_log10_p7f2bf5d4f9d3",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1369,6 +1392,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1392,10 +1416,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "39d0a44fe3c9bf97562c7e162270641ecb9dc9802755bceff64734d48c86692f"
+      "parameter_hash": "7f2bf5d4f9d343a97c2e7cde413be0c545a92b55009a30b96a477f720374cb30"
     },
     {
-      "name": "eeg_band-power_alpha_c3_baseline_log10_p958d7f9672e8",
+      "name": "eeg_band-power_alpha_c3_baseline_log10_p21d8d85ae9ba",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1423,6 +1447,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1446,10 +1471,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "958d7f9672e8edc0567bfd4c95e85a556f70a707777e049a31c96cb125b596d0"
+      "parameter_hash": "21d8d85ae9ba35d9d4a27f8fb274f7a77c942954c9f8ba41782382abe61b8de7"
     },
     {
-      "name": "eeg_band-power_alpha_c3_stimulus_log10_p672e1cbf0bf5",
+      "name": "eeg_band-power_alpha_c3_stimulus_log10_p3a6058a56e4b",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1477,6 +1502,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1500,10 +1526,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "672e1cbf0bf5d7ac6d52da2413e2b168909466c4be3ef1ecf9385e6007fa3907"
+      "parameter_hash": "3a6058a56e4b459e3e4227d4b435ab173260bb398b67a5187534c0a30007a120"
     },
     {
-      "name": "eeg_band-power_alpha_cz_baseline_log10_pe4842619593b",
+      "name": "eeg_band-power_alpha_cz_baseline_log10_p70d53d8a35a2",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1531,6 +1557,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1554,10 +1581,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "e4842619593bd7f18095639aa895a365de18b6e21733506e035194d559c6c0ae"
+      "parameter_hash": "70d53d8a35a27670eeab7adff1c28cae0c78993833722c673542269f26d64ce5"
     },
     {
-      "name": "eeg_band-power_alpha_cz_stimulus_log10_p8a2f92f26bcf",
+      "name": "eeg_band-power_alpha_cz_stimulus_log10_p533ee0312a19",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1585,6 +1612,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1608,10 +1636,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "8a2f92f26bcf23dff95df001836c258ac6f88022902b6b9b783c955ddab78781"
+      "parameter_hash": "533ee0312a19558ff9804010a87b222c8085a9655e72eeaf38b54136ab5184eb"
     },
     {
-      "name": "eeg_band-power_alpha_c4_baseline_log10_ped2f6013975e",
+      "name": "eeg_band-power_alpha_c4_baseline_log10_p8fd0e6ec3007",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1639,6 +1667,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1662,10 +1691,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "ed2f6013975ebe47422233c81ee17684057cde3f3be846153e074565bd91c60e"
+      "parameter_hash": "8fd0e6ec30078b013617d97f4edcbdcb9dfd86c920eb983adfcd0db1b9fe02bd"
     },
     {
-      "name": "eeg_band-power_alpha_c4_stimulus_log10_p566139af327e",
+      "name": "eeg_band-power_alpha_c4_stimulus_log10_p7cf484cd856e",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1693,6 +1722,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1716,10 +1746,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "566139af327e70fc8fccecffdf9f20297a1a20b52c996c8e5f4b65d30fce0319"
+      "parameter_hash": "7cf484cd856e63346442c5feeceaa869dd2a8587e3f601629282378a9bc7e19f"
     },
     {
-      "name": "eeg_band-power_alpha_p3_baseline_log10_pea90a698e440",
+      "name": "eeg_band-power_alpha_p3_baseline_log10_p1e1bd83f4dba",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1747,6 +1777,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1770,10 +1801,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "ea90a698e4405e77669967892de69a33684de0d87c2b8a3764eb4d7287c680b5"
+      "parameter_hash": "1e1bd83f4dba9fb1e5fcb173c479d0ec7f2adccae8e90345e4282e83b5ddb7d3"
     },
     {
-      "name": "eeg_band-power_alpha_p3_stimulus_log10_p5d217b27c82e",
+      "name": "eeg_band-power_alpha_p3_stimulus_log10_p0e46e848c464",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1801,6 +1832,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1824,10 +1856,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "5d217b27c82e9cb35b5e74fc2d119d63d491787f4784d92193be9996a7a0e3fc"
+      "parameter_hash": "0e46e848c464e79e2e2963fc7dc9f143f14c1a5bfeeda7519b36f634d4bd9d73"
     },
     {
-      "name": "eeg_band-power_alpha_pz_baseline_log10_p6ed59cf30ab3",
+      "name": "eeg_band-power_alpha_pz_baseline_log10_p01110f035f81",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1855,6 +1887,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1878,10 +1911,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "6ed59cf30ab3302cb2eaca633b4f6da0447756bedaf98bd6809a46a41e0b47de"
+      "parameter_hash": "01110f035f81682edf0c94d2db8e96a88a82258bc30eb41ca8a77e5e78cb88da"
     },
     {
-      "name": "eeg_band-power_alpha_pz_stimulus_log10_p59acdfec85b4",
+      "name": "eeg_band-power_alpha_pz_stimulus_log10_p920ef4006979",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1909,6 +1942,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1932,10 +1966,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "59acdfec85b4dbd44d08868e53c958b0eaf675858c2b504d52b76e3586b8c68b"
+      "parameter_hash": "920ef400697962b91a5222618e24597f1da3196eb5aaef74ebc3abde23beb2af"
     },
     {
-      "name": "eeg_band-power_alpha_global_baseline_log10_p55bf1535a019",
+      "name": "eeg_band-power_alpha_global_baseline_log10_pe2e7a33c2690",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -1963,6 +1997,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -1986,10 +2021,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "55bf1535a019469587822204d323432d98d6082f1958dacd118e98c62671756e"
+      "parameter_hash": "e2e7a33c2690d600b27243d8aed75bc9a59c270b54214468a9f4de7ce7c089c1"
     },
     {
-      "name": "eeg_band-power_alpha_global_stimulus_log10_p6e5f04cf309e",
+      "name": "eeg_band-power_alpha_global_stimulus_log10_p171a8b2e2ae8",
       "measure": "band_power",
       "band": {
         "name": "alpha",
@@ -2017,6 +2052,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2040,10 +2076,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "6e5f04cf309e4b8eadb0c886fb25e53ffd1676a42062713aea631575e1af064e"
+      "parameter_hash": "171a8b2e2ae884cec6ef4904824648c2d9903625e7cad92e9f82e68fb59f0a66"
     },
     {
-      "name": "eeg_band-power_beta_f3_baseline_log10_pe7a0be2ce9c4",
+      "name": "eeg_band-power_beta_f3_baseline_log10_p29dbb17fcfae",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2071,6 +2107,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2094,10 +2131,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "e7a0be2ce9c421c86636cf3181965543998b4f2642d474843554288fde493e45"
+      "parameter_hash": "29dbb17fcfae4c049a051fa0cc52b527c09231a727884ce285f00b3bd2b817aa"
     },
     {
-      "name": "eeg_band-power_beta_f3_stimulus_log10_p8529adac6cb6",
+      "name": "eeg_band-power_beta_f3_stimulus_log10_p5657c7f4c040",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2125,6 +2162,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2148,10 +2186,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "8529adac6cb6b209ee09577149cbc336639ebf761a6927edc3038ab98e8c5826"
+      "parameter_hash": "5657c7f4c040cc027f13a5f30569c6af1d126a6a28e9c149c8d8e32303282a10"
     },
     {
-      "name": "eeg_band-power_beta_fz_baseline_log10_p20b84f2d2c54",
+      "name": "eeg_band-power_beta_fz_baseline_log10_pe747852077ba",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2179,6 +2217,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2202,10 +2241,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "20b84f2d2c5486529c2f78989aad14bd9f9b12e35a02cc0e76ee0b6439bb7fe2"
+      "parameter_hash": "e747852077ba735d3f4d39384991bd65af016d7df659122ebd97d6ec174c8f6d"
     },
     {
-      "name": "eeg_band-power_beta_fz_stimulus_log10_p56570b157747",
+      "name": "eeg_band-power_beta_fz_stimulus_log10_p888939438202",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2233,6 +2272,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2256,10 +2296,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "56570b1577477b1520403b35a2065869e424f6ab2fed00d5bb46db949dbcb6df"
+      "parameter_hash": "8889394382021f7dfadd433ccffc5047304fbd5036a5b1d14725df0c66bf7659"
     },
     {
-      "name": "eeg_band-power_beta_f4_baseline_log10_pc8f53cc79d9f",
+      "name": "eeg_band-power_beta_f4_baseline_log10_pa1f6551047a3",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2287,6 +2327,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2310,10 +2351,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "c8f53cc79d9f4a88806b404bec3dfcd823ec4524ca23221bb82fba094abd707e"
+      "parameter_hash": "a1f6551047a35da0d9ada97e978e0c3fd1918a4290410964f44cd03628b5ac74"
     },
     {
-      "name": "eeg_band-power_beta_f4_stimulus_log10_pf8460629bdf9",
+      "name": "eeg_band-power_beta_f4_stimulus_log10_p582b88d85a78",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2341,6 +2382,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2364,10 +2406,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "f8460629bdf924a03501f1cddf7f23effd9cff3b9b3c6121d3798c5780207723"
+      "parameter_hash": "582b88d85a78cbcffbd52384834165ca18d14547f67134bfda472d79dd776e02"
     },
     {
-      "name": "eeg_band-power_beta_c3_baseline_log10_pb46b0bf97a80",
+      "name": "eeg_band-power_beta_c3_baseline_log10_p88ff5abfb055",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2395,6 +2437,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2418,10 +2461,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "b46b0bf97a80ab904367fae48ff54875fc57dbb894108922bee5d4069069eb97"
+      "parameter_hash": "88ff5abfb055c3bfd31980b24a45a1ef8df4d43d5e97073bfd248cb5cbfdd312"
     },
     {
-      "name": "eeg_band-power_beta_c3_stimulus_log10_pe4204b847c76",
+      "name": "eeg_band-power_beta_c3_stimulus_log10_p55d4871fbb40",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2449,6 +2492,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2472,10 +2516,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "e4204b847c769d026a8ff7292428334591ec9abc3cd6df8dd9110197b438e12e"
+      "parameter_hash": "55d4871fbb40b410f78b29a12470d7eb8aa447185abfa776c0db94edb21616fb"
     },
     {
-      "name": "eeg_band-power_beta_cz_baseline_log10_pa3b66a5f0c3b",
+      "name": "eeg_band-power_beta_cz_baseline_log10_pd46039037579",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2503,6 +2547,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2526,10 +2571,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "a3b66a5f0c3bca13305fafc32f0f856aae1b2b418c8dfaeae9e06c6f52cde11f"
+      "parameter_hash": "d460390375794f9bff2088ffbebf06270cfdaf763d1e37d1dbc5fbdc9415cff5"
     },
     {
-      "name": "eeg_band-power_beta_cz_stimulus_log10_pde5a63059321",
+      "name": "eeg_band-power_beta_cz_stimulus_log10_p7e0f772cec0e",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2557,6 +2602,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2580,10 +2626,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "de5a630593211ca7d1674e75cc27468c31134694bd0eb332d0998d9a13647c4c"
+      "parameter_hash": "7e0f772cec0ee9a9faa54c5d9015e550d907bb647eca53d5e92f57b69438a9a8"
     },
     {
-      "name": "eeg_band-power_beta_c4_baseline_log10_p47168b3debc8",
+      "name": "eeg_band-power_beta_c4_baseline_log10_pfa1a31f91f2c",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2611,6 +2657,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2634,10 +2681,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "47168b3debc8a9660d6f67f844da57fd5a19e48569991bb7ecc5fa4a1e8428df"
+      "parameter_hash": "fa1a31f91f2cdbfa0f164493f8988a867d411b3e1df878a8d469e9b838b25367"
     },
     {
-      "name": "eeg_band-power_beta_c4_stimulus_log10_p39fe24f793e9",
+      "name": "eeg_band-power_beta_c4_stimulus_log10_p861d747176c7",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2665,6 +2712,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2688,10 +2736,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "39fe24f793e983bc5731ed84e750235d8df6bc52c56a578d9a22bf1619e6401d"
+      "parameter_hash": "861d747176c7a9229042b54c0ce1ad7105adf7f67ac9e268fc2f7f556d534331"
     },
     {
-      "name": "eeg_band-power_beta_p3_baseline_log10_p4f45ab8d9eb3",
+      "name": "eeg_band-power_beta_p3_baseline_log10_p8f03c27dbf07",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2719,6 +2767,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2742,10 +2791,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "4f45ab8d9eb354858fe6052e494858f17b48ed419d918935a6ed387a835c8be2"
+      "parameter_hash": "8f03c27dbf07f121c0b2d6998683cd563bceb818a3d0a94de871d508a046196d"
     },
     {
-      "name": "eeg_band-power_beta_p3_stimulus_log10_p490cb12b4598",
+      "name": "eeg_band-power_beta_p3_stimulus_log10_p160b10f3d67d",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2773,6 +2822,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2796,10 +2846,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "490cb12b4598223c03412b0361404f6c73d97012b43ad51886b75f1d301ded49"
+      "parameter_hash": "160b10f3d67d68e1fb93b06dd87caa390ed27049aa2d1cf6cc7985b7ffba8ed6"
     },
     {
-      "name": "eeg_band-power_beta_pz_baseline_log10_pc1a1aed6bc07",
+      "name": "eeg_band-power_beta_pz_baseline_log10_pec498fa1ddb7",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2827,6 +2877,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2850,10 +2901,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "c1a1aed6bc07af48557f7c1f641e35b2a5eca47b54786e3b1b6ea27fbfe66a55"
+      "parameter_hash": "ec498fa1ddb72d0bc3b4c451629c89060f7914e92d75591c1a060ed79e0291f7"
     },
     {
-      "name": "eeg_band-power_beta_pz_stimulus_log10_p830e515ce730",
+      "name": "eeg_band-power_beta_pz_stimulus_log10_p1ecbc3f81c4e",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2881,6 +2932,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2904,10 +2956,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "830e515ce730b2a69f9e5d7bebce759ca8c07f2a8946444fdd00d58a9c6228e4"
+      "parameter_hash": "1ecbc3f81c4e9eac9c5f753648d5aee21634c4b82082ebb7788129c76beafd33"
     },
     {
-      "name": "eeg_band-power_beta_global_baseline_log10_pcb9f80279444",
+      "name": "eeg_band-power_beta_global_baseline_log10_p2e369ae5e78d",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2935,6 +2987,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -2958,10 +3011,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "cb9f80279444de69e568d176a1dd19c6a1191d14982b07ea479761a7613f709c"
+      "parameter_hash": "2e369ae5e78ddb2f4dfe4420f1b22f69f04231819d78223c8b4d384562a081fc"
     },
     {
-      "name": "eeg_band-power_beta_global_stimulus_log10_p04176825ef4c",
+      "name": "eeg_band-power_beta_global_stimulus_log10_pe8f2e4e435c1",
       "measure": "band_power",
       "band": {
         "name": "beta",
@@ -2989,6 +3042,7 @@
           "input_computation": {
             "method": "welch",
             "parameters": {
+              "normalization": "density",
               "settings": {
                 "decim": 4,
                 "fmax": 30.0,
@@ -3012,10 +3066,10 @@
           "weighting": "band_integral"
         }
       },
-      "parameter_hash": "04176825ef4cb1ac47ad335f084b91e83203fc1206a44fc342945c4708511f8b"
+      "parameter_hash": "e8f2e4e435c1eba232a0fc3415a903ac64a2caec9f44f2ecd57ece18f960b10f"
     },
     {
-      "name": "eeg_erds-mean_alpha_central_stimulus_percent_p35d4b57940ac",
+      "name": "eeg_erds-mean_alpha_central_stimulus_percent_pc5ab132dc1e2",
       "measure": "erds_mean",
       "band": {
         "name": "alpha",
@@ -3048,7 +3102,7 @@
                 "name": "alpha"
               },
               "exclude": "bads",
-              "filter_length": "auto",
+              "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
@@ -3068,10 +3122,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "35d4b57940ac106e6966cbf0f8f064097ebdb8473f41ff365778fe7b4c0794df"
+      "parameter_hash": "c5ab132dc1e282fdf6a7c9c17379dfd65314a7a1e354b9aeee7364d43b2a7df9"
     },
     {
-      "name": "eeg_erds-mean_alpha_parietal_stimulus_percent_p86ce38c9f766",
+      "name": "eeg_erds-mean_alpha_parietal_stimulus_percent_pd2fff718cfa9",
       "measure": "erds_mean",
       "band": {
         "name": "alpha",
@@ -3104,7 +3158,7 @@
                 "name": "alpha"
               },
               "exclude": "bads",
-              "filter_length": "auto",
+              "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
@@ -3124,10 +3178,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "86ce38c9f76626dead69be837c83a05139d0d30b2bd038ef9b86e4a7d26862fe"
+      "parameter_hash": "d2fff718cfa922f59ca4fd28e923acdbc2e5dd985a5d829c773210c13f011ce5"
     },
     {
-      "name": "eeg_erds-mean_alpha_global_stimulus_percent_p44af102dba1a",
+      "name": "eeg_erds-mean_alpha_global_stimulus_percent_pa34e913c7dcd",
       "measure": "erds_mean",
       "band": {
         "name": "alpha",
@@ -3160,7 +3214,7 @@
                 "name": "alpha"
               },
               "exclude": "bads",
-              "filter_length": "auto",
+              "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
@@ -3180,10 +3234,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "44af102dba1acca718dbf6589a72f8ead48ca3b218705e3020837a38dd752096"
+      "parameter_hash": "a34e913c7dcd4337e082e62fbc56a64c4b6beea7b14939bb64712a3235cab1c4"
     },
     {
-      "name": "eeg_erds-mean_beta_central_stimulus_percent_p4371e25cbac3",
+      "name": "eeg_erds-mean_beta_central_stimulus_percent_p79774945be2b",
       "measure": "erds_mean",
       "band": {
         "name": "beta",
@@ -3216,7 +3270,7 @@
                 "name": "beta"
               },
               "exclude": "bads",
-              "filter_length": "auto",
+              "filter_length": 205,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
@@ -3236,10 +3290,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "4371e25cbac3935f4a2c02114338d6a4d3bd44dc0776972b807ca36a75e9e3cf"
+      "parameter_hash": "79774945be2b0d348402ccad70e24b66b89a69ea5d2d3b6a0838b3764529b65a"
     },
     {
-      "name": "eeg_erds-mean_beta_parietal_stimulus_percent_p112e4c670f52",
+      "name": "eeg_erds-mean_beta_parietal_stimulus_percent_pcf3bce3d1c06",
       "measure": "erds_mean",
       "band": {
         "name": "beta",
@@ -3272,7 +3326,7 @@
                 "name": "beta"
               },
               "exclude": "bads",
-              "filter_length": "auto",
+              "filter_length": 205,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
@@ -3292,10 +3346,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "112e4c670f52c27af2bca36d69aae87e257efe203c553012203f3198732f7739"
+      "parameter_hash": "cf3bce3d1c06d397815cbc7893f629cb1d65512bb8e6fad7c926a92416a06dee"
     },
     {
-      "name": "eeg_erds-mean_beta_global_stimulus_percent_p8945f577a9e7",
+      "name": "eeg_erds-mean_beta_global_stimulus_percent_p99e0a8206736",
       "measure": "erds_mean",
       "band": {
         "name": "beta",
@@ -3328,7 +3382,7 @@
                 "name": "beta"
               },
               "exclude": "bads",
-              "filter_length": "auto",
+              "filter_length": 205,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
@@ -3348,10 +3402,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "8945f577a9e708716a59afd1932f493f814a851647f4a6a15a3875de39fc32b8"
+      "parameter_hash": "99e0a8206736cbf5ffbb0c866c41b3909e6076a2eea302717d536abec1ee59bc"
     },
     {
-      "name": "eeg_peak-freq-adjusted_alpha_global_baseline_raw_p2e7ef19989fb",
+      "name": "eeg_peak-freq-adjusted_alpha_global_baseline_raw_p8d330fbddc04",
       "measure": "peak_freq_adjusted",
       "band": {
         "name": "alpha",
@@ -3386,6 +3440,7 @@
               "input_computation": {
                 "method": "welch",
                 "parameters": {
+                  "normalization": "density",
                   "settings": {
                     "decim": 4,
                     "fmax": 30.0,
@@ -3417,10 +3472,10 @@
           "weighting": "trapezoid"
         }
       },
-      "parameter_hash": "2e7ef19989fb6820cc012fc0c4061cbb221ff0385c2fcac14d5d74e5bd9a3723"
+      "parameter_hash": "8d330fbddc041666597aed7e4b27f35013ec25676d2900ed84714cce35e85b32"
     },
     {
-      "name": "eeg_peak-freq-adjusted_alpha_global_stimulus_raw_p2738c7963f33",
+      "name": "eeg_peak-freq-adjusted_alpha_global_stimulus_raw_p010341eb3a58",
       "measure": "peak_freq_adjusted",
       "band": {
         "name": "alpha",
@@ -3455,6 +3510,7 @@
               "input_computation": {
                 "method": "welch",
                 "parameters": {
+                  "normalization": "density",
                   "settings": {
                     "decim": 4,
                     "fmax": 30.0,
@@ -3486,11 +3542,13 @@
           "weighting": "trapezoid"
         }
       },
-      "parameter_hash": "2738c7963f33549c3c2c85b6f75d3cdc0993b90b6b36f13165a5b53bf8f1762e"
+      "parameter_hash": "010341eb3a58e805c734164247039c307ef7eefc06176013113e77b6602f0e1d"
     }
   ],
   "flags": {
     "aperiodic_fit_failed": {},
+    "baseline_degenerate": {},
+    "baseline_extreme_ratio": {},
     "cog_fallback": {},
     "edge_hit": {}
   },
@@ -3511,6 +3569,6 @@
     "n_epochs": 16,
     "sfreq": 200.0,
     "mne_version": "1.13.2",
-    "created": "2026-09-20T02:36:16+00:00"
+    "created": "2026-09-20T17:27:46+00:00"
   }
 }

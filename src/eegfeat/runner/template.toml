@@ -42,7 +42,7 @@ epoch_metadata = true               # copy each epoch's metadata into its row
 method = "welch"
 # n_fft = 500                       # welch segment in samples; default 2 s, capped by the shortest window
 
-# How cross-trial measures (itpc, envelope_correlation, wpli) group epochs:
+# How cross-trial measures (itpc, ppc, envelope_correlation, wpli) group epochs:
 # "all" (one group), "event" (by event name) or "metadata" (by a metadata column).
 # [trials]
 # by = "event"

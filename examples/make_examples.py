@@ -206,6 +206,8 @@ def main() -> None:
                 f"{SHOWCASE}_features_coverage.tsv",
                 f"{SHOWCASE}_features.json",
                 f"{SHOWCASE}_crosstrial.tsv",
+                f"{SHOWCASE}_crosstrial_coverage.tsv",
+                f"{SHOWCASE}_crosstrial.json",
             ):
                 shutil.copy(produced / name, HERE / name)
 

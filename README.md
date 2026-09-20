@@ -190,7 +190,7 @@ Recipe rules that matter most:
 - `baseline` is consumed by normalization, burst, and ERDS measures; it is not also an
   analysis window unless the measure permits that combination.
 - `spatial` accepts `channels`, `rois`, and, where supported, `global`.
-- Cross-trial measures such as `itpc`, `envelope_correlation`, `spectral_connectivity`, and
+- Cross-trial measures such as `itpc`, `ppc`, `envelope_correlation`, and
   `wpli` need trial groups with enough epochs and write group-row tables.
 - `series = ["broadband", "alpha"]` selects raw and band-envelope time-domain inputs;
   `pairs` configures PAC; `ratios` and `asymmetry` configure derived power features.
@@ -243,7 +243,9 @@ python -m pip install "eegfeat[model]"
 
 Targets must contain matching `recording`, `epoch`, and `event` keys, plus the target and
 grouping columns. Keep cross-trial tables out of the design: their rows are trial groups, not
-independent epochs.
+independent epochs. Leave-one-group-out evaluation also requires at least two unique groups;
+the checked-in example outputs show one recording, while the modeling example below expects a
+multi-recording cohort.
 
 ```python
 from pathlib import Path

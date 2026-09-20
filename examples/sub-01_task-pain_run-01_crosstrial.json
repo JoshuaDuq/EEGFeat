@@ -1,0 +1,589 @@
+{
+  "eegfeat_version": "0.1.0.dev0",
+  "n_rows": 1,
+  "rows": "groups",
+  "row_labels": [
+    "stim"
+  ],
+  "row_ids": null,
+  "row_columns": [
+    "group"
+  ],
+  "coverage": "sub-01_task-pain_run-01_crosstrial_coverage.tsv",
+  "columns": [
+    {
+      "name": "eeg_itpc_theta_central_baseline_raw_p3a0eb7b0e993",
+      "measure": "itpc",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "central",
+      "space_kind": "roi",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 8.0,
+                "fmin": 4.0,
+                "name": "theta"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "3a0eb7b0e9937d212574f2ca70626c199cb9e649a91105bd999fd9ee91a662f1"
+    },
+    {
+      "name": "eeg_itpc_theta_central_stimulus_raw_pa01e6b93f529",
+      "measure": "itpc",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "central",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 8.0,
+                "fmin": 4.0,
+                "name": "theta"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "a01e6b93f529d2e3fe5e6833b7ab5e20d298567d132578d829bbe3bcc85dd781"
+    },
+    {
+      "name": "eeg_itpc_theta_parietal_baseline_raw_pcb7ee1e490f1",
+      "measure": "itpc",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "parietal",
+      "space_kind": "roi",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 8.0,
+                "fmin": 4.0,
+                "name": "theta"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "cb7ee1e490f1fecb7a1e6cc6828ad0e8e1ade8f43fda65e0da617fe00c9fa26a"
+    },
+    {
+      "name": "eeg_itpc_theta_parietal_stimulus_raw_pa6d583ea567a",
+      "measure": "itpc",
+      "band": {
+        "name": "theta",
+        "fmin": 4.0,
+        "fmax": 8.0
+      },
+      "space": "parietal",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 8.0,
+                "fmin": 4.0,
+                "name": "theta"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "a6d583ea567ab51768e8d281fcc03836e905af782bea6d5b099d07a8cb5cbfc4"
+    },
+    {
+      "name": "eeg_itpc_alpha_central_baseline_raw_p771a657f5494",
+      "measure": "itpc",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "central",
+      "space_kind": "roi",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "771a657f54949bf94a3d4ebbe7d11375153f7dcf12aa0ca59b4ebbb449ba856f"
+    },
+    {
+      "name": "eeg_itpc_alpha_central_stimulus_raw_pb06f0c0c60a3",
+      "measure": "itpc",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "central",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "b06f0c0c60a3aedcddc41cef09846c55532ac7802b6aecca2bd63ce55602e228"
+    },
+    {
+      "name": "eeg_itpc_alpha_parietal_baseline_raw_pa5929842df50",
+      "measure": "itpc",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "parietal",
+      "space_kind": "roi",
+      "window": "baseline",
+      "window_bounds": [
+        -1.5,
+        -0.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "a5929842df507f9cb8cf5a18b12da7567974c39d60b960087cfb32bbcde43e79"
+    },
+    {
+      "name": "eeg_itpc_alpha_parietal_stimulus_raw_p2c17fc28f79e",
+      "measure": "itpc",
+      "band": {
+        "name": "alpha",
+        "fmin": 8.0,
+        "fmax": 13.0
+      },
+      "space": "parietal",
+      "space_kind": "roi",
+      "window": "stimulus",
+      "window_bounds": [
+        0.5,
+        3.5
+      ],
+      "normalization": "raw",
+      "unit": "a.u.",
+      "source": "hilbert",
+      "freq_resolution_hz": null,
+      "phase_band": null,
+      "amplitude_band": null,
+      "nodes": null,
+      "computation": {
+        "method": "itpc",
+        "parameters": {
+          "input_computation": {
+            "method": "mne.filter.filter_data+scipy.signal.hilbert",
+            "parameters": {
+              "band": {
+                "fmax": 13.0,
+                "fmin": 8.0,
+                "name": "alpha"
+              },
+              "exclude": "bads",
+              "filter_length": 331,
+              "n_jobs": 1,
+              "pad_cycles": 3.0,
+              "pad_sec": 0.5,
+              "picks": "eeg"
+            }
+          },
+          "input_source": "hilbert",
+          "normalization": "raw",
+          "parameters": {
+            "min_valid_trials": 2,
+            "trials": [
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim",
+              "stim"
+            ]
+          },
+          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+        }
+      },
+      "parameter_hash": "2c17fc28f79ecd138be9478392a9528240067ab5ce6ad9f5c2494f6218a07236"
+    }
+  ],
+  "flags": {
+    "insufficient_trials": {}
+  },
+  "provenance": {
+    "input": "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+    "recipe": "recipe.toml",
+    "recipe_sha256": "1570489eff36d0a8f613c2ca09a408506ba913daa317b5f713eec07246b0d232",
+    "channels": [
+      "F3",
+      "Fz",
+      "F4",
+      "C3",
+      "Cz",
+      "C4",
+      "P3",
+      "Pz"
+    ],
+    "n_epochs": 16,
+    "sfreq": 200.0,
+    "mne_version": "1.13.2",
+    "created": "2026-09-20T17:27:46+00:00"
+  }
+}

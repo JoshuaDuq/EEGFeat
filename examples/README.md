@@ -4,6 +4,7 @@ Real files, produced by the real pipeline, from simulated recordings. Five subje
 each, sixteen trials per run. Regenerate everything with:
 
 ```bash
+python -m pip install -e ".[model]"
 python examples/make_examples.py
 ```
 
@@ -24,6 +25,10 @@ python examples/make_examples.py
 - [`sub-01_task-pain_run-01_crosstrial.tsv`](sub-01_task-pain_run-01_crosstrial.tsv) — measures
   defined across trials rather than within one, here inter-trial phase coherence. One row per
   trial group, kept out of the per-epoch table on purpose.
+- [`sub-01_task-pain_run-01_crosstrial_coverage.tsv`](sub-01_task-pain_run-01_crosstrial_coverage.tsv)
+  — finite-data coverage for the cross-trial table.
+- [`sub-01_task-pain_run-01_crosstrial.json`](sub-01_task-pain_run-01_crosstrial.json) — the
+  cross-trial metadata and provenance sidecar.
 
 ## What the modelling writes
 

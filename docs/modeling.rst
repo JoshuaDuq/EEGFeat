@@ -65,6 +65,7 @@ resulting ``*_features.tsv`` paths to :func:`eegfeat.io.read_dataset`:
 
 .. code-block:: python
 
+   import eegfeat.model as efm
    from eegfeat.io import read_dataset
 
    dataset = read_dataset(
