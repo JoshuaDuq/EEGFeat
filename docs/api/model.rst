@@ -1,11 +1,10 @@
 Predictive Modeling
 ===================
 
-The modeling API is available when the ``model`` extra is installed. All model inputs are
-per-epoch arrays or tables; cross-trial group-row tables are not accepted by
-:func:`eegfeat.model.build_design`.
+Available with the ``model`` extra. Inputs are per-epoch arrays or tables.
+:func:`eegfeat.model.build_design` rejects cross-trial group-row tables.
 
-The workflow that uses these functions end to end is in :doc:`/guides/modeling`.
+The workflow is in :doc:`/guides/modeling`.
 
 
 Design and preprocessing

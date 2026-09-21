@@ -4,14 +4,13 @@ Example Output
 .. raw:: html
 
    <p class="hero-lede">
-     Real files, produced by the real pipeline, from simulated recordings. Five
-     subjects, two runs each, sixteen trials per run — enough to see exactly what
-     comes out before pointing any of it at your own data.
+     Files written by <code>examples/make_examples.py</code> from simulated
+     recordings. Five subjects, two runs each, sixteen trials per run.
    </p>
 
-Everything below lives in the `examples/ directory
-<https://github.com/JoshuaDuq/EEGFeatML/tree/main/examples>`_ of the repository.
-Regenerate it all with:
+The files are in the `examples/ directory
+<https://github.com/JoshuaDuq/EEGFeatML/tree/main/examples>`_.
+Regenerate them with
 
 .. code-block:: bash
 
@@ -22,62 +21,60 @@ What feature extraction writes
 ------------------------------
 
 `recipe.toml <https://github.com/JoshuaDuq/EEGFeatML/blob/main/examples/recipe.toml>`_
-is the input: bands, windows, regions, and one entry per measure. ``eegfeat run``
-applies it to every epochs file and writes, for each recording:
+sets bands, windows, regions, and one entry per measure. ``eegfeat run`` applies
+it to every epochs file and writes, per recording,
 
 .. list-table::
    :header-rows: 1
    :widths: 42 58
 
    * - File
-     - What it contains
+     - Contents
    * - ``*_features.tsv``
-     - One row per epoch. The first columns are the epoch's identity and the
-       metadata you attached to it (``subject``, ``run``, ``trial``,
-       ``intensity``, ``rating``, ``painful``); everything after that is a
-       feature, named for what it measures.
+     - One row per epoch. Leading columns are the epoch identity and the
+       metadata attached to it (``subject``, ``run``, ``trial``,
+       ``intensity``, ``rating``, ``painful``). The remaining columns are
+       features.
    * - ``*_features_coverage.tsv``
-     - The same shape, saying what fraction of each cell was finite.
+     - Same shape. Fraction of finite input behind each cell.
    * - ``*_features.json``
-     - The sidecar. Every column's measure, band, space, window, unit,
-       normalization, full computation parameters and hash, plus flags and the
-       provenance of the run.
+     - Sidecar. For each column, the measure, band, space, window, unit,
+       normalization, computation parameters, and hash. Also flags and run
+       provenance.
    * - ``*_crosstrial.tsv``
-     - Measures defined across trials rather than within one — here inter-trial
-       phase coherence. One row per trial group, kept out of the per-epoch table
-       on purpose (:ref:`why <concepts-row-kinds>`).
+     - Measures defined on a set of trials. In this recipe, inter-trial phase
+       coherence. One row per trial group. These rows are not written into the
+       per-epoch table (:ref:`concepts-row-kinds`).
    * - ``*_crosstrial_coverage.tsv``
-     - Finite-data coverage for the cross-trial table.
+     - Finite-input coverage for the cross-trial table.
    * - ``*_crosstrial.json``
-     - The cross-trial metadata and provenance sidecar.
+     - Cross-trial metadata and provenance.
 
-Reading ``sub-01_task-pain_run-01_features.json`` alongside its TSV is the fastest
-way to understand :ref:`what a column name means <concepts-naming>` in practice.
+``sub-01_task-pain_run-01_features.json`` next to its TSV is a concrete example
+of :ref:`concepts-naming`.
 
 What modeling writes
 --------------------
 
-Leave-one-subject-out ridge regression predicting ``rating`` from the band power
-and ERDS columns, scored per subject and tested against 200 within-subject
-permutations.
+Leave-one-subject-out ridge regression of ``rating`` on the band-power and ERDS
+columns. Scores are per subject. The cohort correlation is tested against 200
+within-subject permutations.
 
 .. list-table::
    :header-rows: 1
    :widths: 42 58
 
    * - File
-     - What it contains
+     - Contents
    * - ``example_model_scores.tsv``
-     - The cohort result with its confidence interval and permutation *p*, then
-       each subject's own correlation.
+     - Cohort correlation, its confidence interval, and the permutation *p*,
+       then each subject's correlation.
    * - ``example_model_predictions.tsv``
-     - Every held-out prediction, with the fold it came from, so you can plot or
-       re-score it yourself.
+     - Held-out prediction for every trial, with the fold index.
 
 .. note::
 
-   The numbers are what this simulation deserves, not a benchmark: alpha really is
-   suppressed in proportion to stimulus intensity here, and the rating carries a
-   lot of noise that no EEG feature could explain.
+   These numbers describe the simulation. Alpha power falls with stimulus
+   intensity. ``rating`` includes noise that these EEG features do not explain.
 
-The workflow that produces them is documented in :doc:`/guides/modeling`.
+The calls that produce the model files are in :doc:`/guides/modeling`.

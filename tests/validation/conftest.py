@@ -9,11 +9,14 @@ and is reused on later runs.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from importlib.util import find_spec
+from pathlib import Path
 
 import pytest
 
+from validation import report
 from validation.loaders import Recording, load_eegbci, load_sleep, load_ssvep
 
 ENABLE = "EEGFEAT_DATASETS"
@@ -34,6 +37,14 @@ if find_spec("sklearn") is None:
     ]
 if find_spec("mne_connectivity") is None:
     collect_ignore += ["test_connectivity.py"]
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "validates(*measures, kind, claim, criterion, dataset=None): what a validation test "
+        "establishes, rendered into the docs scorecard",
+    )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -69,3 +80,53 @@ def sleep_recordings() -> list[Recording]:
 @pytest.fixture(scope="session")
 def ssvep_recording() -> Recording:
     return load_ssvep()
+
+
+# --- results the docs render -----------------------------------------------------------
+
+_OBSERVED: dict[str, str] = {}
+_ROWS: dict[str, report.Row] = {}
+
+
+@pytest.fixture
+def record(request: pytest.FixtureRequest) -> Callable[[str], None]:
+    """Store the observed value a test is about to assert on, for the results table."""
+
+    def _record(observed: str) -> None:
+        _OBSERVED[request.node.nodeid] = observed
+
+    return _record
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> Iterator[None]:
+    outcome = yield
+    if call.when != "call":
+        return
+    marker = item.get_closest_marker("validates")
+    if marker is None:
+        return
+    result = outcome.get_result()
+    if result.skipped:
+        return
+    # Parametrized cases share a marker; the first case's observed value is kept
+    # unless a later case recorded its own.
+    observed = _OBSERVED.pop(item.nodeid, "")
+    _ROWS[item.nodeid] = report.Row(
+        nodeid=item.nodeid,
+        measures=tuple(marker.args),
+        kind=marker.kwargs["kind"],
+        dataset=str(marker.kwargs.get("dataset") or getattr(item.module, "DATASET", "")),
+        claim=marker.kwargs["claim"],
+        criterion=marker.kwargs["criterion"],
+        observed=observed,
+        passed=result.passed,
+        run=datetime.now(UTC).replace(microsecond=0).isoformat(),
+    )
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    del session
+    if not _ROWS:
+        return
+    report.write(_ROWS.values(), Path(__file__).parents[2] / "docs" / "validation")

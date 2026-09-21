@@ -4,9 +4,8 @@ Concepts
 .. raw:: html
 
    <p class="hero-lede">
-     The five ideas the rest of the documentation assumes: what the containers are
-     for, what a <code>FeatureTable</code> guarantees, how columns are named, why
-     cross-trial measures live in their own table, and what a missing value means.
+     Containers, <code>FeatureTable</code> fields, column names, cross-trial
+     tables, and missing values.
    </p>
 
 .. _concepts-mental-model:
@@ -14,10 +13,11 @@ Concepts
 From MNE objects to feature tables
 ----------------------------------
 
-``eegfeat`` accepts standard MNE objects (``Spectrum``, ``EpochsTFR``, or ``Epochs``), wraps
-them into strongly validated containers, and passes those containers to feature extractor
-functions. Spectra and time-frequency representations are precomputed with MNE;
-:class:`~eegfeat.BandSignal` can apply its documented band-pass and Hilbert transform:
+``eegfeat`` accepts MNE ``Spectrum``, ``EpochsTFR``, and ``Epochs`` objects.
+Spectra and time-frequency representations are computed in MNE, then wrapped.
+:class:`~eegfeat.BandSignal` is the exception.
+:meth:`~eegfeat.BandSignal.from_epochs` applies its documented band-pass and
+Hilbert transform.
 
 .. grid:: 3
    :gutter: 3
@@ -30,17 +30,16 @@ functions. Spectra and time-frequency representations are precomputed with MNE;
 
    .. grid-item-card:: 2. Extract Features
 
-      Call pure extractor functions with explicit parameterization, windows, and ROIs.
+      Call an extractor with explicit bands, windows, and regions of interest.
 
-   .. grid-item-card:: 3. Query & Export
+   .. grid-item-card:: 3. Query and Export
 
-      Filter columns via :meth:`~eegfeat.FeatureTable.select`, check :attr:`~eegfeat.FeatureTable.coverage`,
-      or export via :meth:`~eegfeat.FeatureTable.to_dataframe`.
+      Filter columns with :meth:`~eegfeat.FeatureTable.select`, read
+      :attr:`~eegfeat.FeatureTable.coverage`, or export with
+      :meth:`~eegfeat.FeatureTable.to_dataframe`.
 
-The library deliberately does not choose your spectral estimator, your filter, or your
-trial grouping. Those are the caller's decisions, stated explicitly at the point of
-wrapping. The :doc:`/guides/runner` is a caller that makes them once, in a recipe, and
-applies them to a whole folder.
+The spectral estimator, the filter, and the trial grouping are arguments of the
+wrapper, or keys in a runner recipe. See :doc:`/guides/runner`.
 
 .. _concepts-containers:
 
@@ -52,67 +51,66 @@ The containers
    :widths: 24 76
 
    * - Container
-     - What it holds
+     - Contents
    * - :class:`~eegfeat.Spectra`
-     - A power spectrum or a time-frequency representation, with the estimator
-       parameters that produced it. It records which of the two it contains, so
-       operations defined for one reject the other rather than conflating units.
+     - A power spectrum or a time-frequency representation, plus the estimator
+       parameters that produced it. The container records which of the two it
+       holds. An operation defined for one rejects the other.
    * - :class:`~eegfeat.Signal`
-     - Broadband time-domain data, for descriptors of the waveform itself.
+     - Broadband time-domain data.
    * - :class:`~eegfeat.BandSignal`
-     - Band-limited analytic signal — the only container that will filter and
-       Hilbert-transform for you, because doing so is part of its definition.
+     - Band-limited analytic signal. ``from_epochs`` filters and takes the
+       Hilbert transform.
    * - :class:`~eegfeat.Band`
      - A named half-open frequency interval.
    * - :class:`~eegfeat.Window`
      - A named time interval within the epoch.
 
-Bands and windows are named, not positional, everywhere. A column knows it is
-``alpha`` in ``baseline``, which is what makes a table selectable after the fact.
+Bands and windows are named, not positional. A column records that it is
+``alpha`` in ``baseline``, and :meth:`~eegfeat.FeatureTable.select` matches
+those fields.
 
 .. _concepts-feature-table:
 
 Anatomy of a feature table
 --------------------------
 
-Every extractor returns a :class:`~eegfeat.FeatureTable`, which is five aligned
-things rather than one array:
+Every extractor returns a :class:`~eegfeat.FeatureTable` with five aligned
+parts.
 
 ``values``
-   Shape ``(n_rows, n_features)``. The numbers.
+   Shape ``(n_rows, n_features)``.
 
 ``coverage``
-   The same shape. The fraction of numerically finite input that produced each
-   value, in ``[0, 1]``. This is **not** an artifact-free-data score — it says how
-   much of the input existed, not how clean it was. For Morlet input,
-   :attr:`~eegfeat.Spectra.support` separately records the fraction of the
-   requested window that had complete wavelet support.
+   Same shape. Fraction of finite input behind each value, in ``[0, 1]``.
+   This is the fraction of the input that was present. It is not an artifact
+   score. For Morlet input, :attr:`~eegfeat.Spectra.support` is the fraction of
+   the requested window with complete wavelet support.
 
 ``meta``
-   One :class:`~eegfeat.FeatureMeta` per column, describing the measure, band,
-   space, window, normalization, unit, source, and the full
-   :class:`~eegfeat.ComputationSpec` that produced it. Every field is constant
-   across rows by construction.
+   One :class:`~eegfeat.FeatureMeta` per column. Fields are the measure, band,
+   space, window, normalization, unit, source, and the
+   :class:`~eegfeat.ComputationSpec` that produced the column. Each field is
+   constant across rows.
 
 ``flags``
-   Per-cell boolean annotations — ``cog_fallback``, ``edge_hit``,
-   ``aperiodic_fit_failed``. Facts that vary by row belong here, never in ``meta``.
+   Per-cell boolean annotations, for example ``cog_fallback``, ``edge_hit``,
+   and ``aperiodic_fit_failed``. A fact that varies by row belongs here.
 
 ``row_ids`` / ``row_labels``
-   How the rows are identified. See below.
+   Row identity. See below.
 
-The consequence worth internalizing: a table that has been sliced, concatenated,
-written to disk and read back still knows what each of its numbers is. Selection
-by :meth:`~eegfeat.FeatureTable.select` matches on structured metadata, not on
-string-matching the column name.
+Slicing, concatenation, and a round trip through disk keep this metadata.
+:meth:`~eegfeat.FeatureTable.select` matches the metadata. It does not parse
+the column name.
 
 .. _concepts-naming:
 
-What a column name means
-------------------------
+Column names
+------------
 
-Column names are generated, never hand-written. They are exactly six
-underscore-separated fields plus a hash suffix:
+Column names are generated. Each name is six underscore-separated fields and a
+hash suffix.
 
 .. code-block:: text
 
@@ -123,53 +121,48 @@ underscore-separated fields plus a hash suffix:
   domain            space   |  normalization   of the complete column spec
                           window
 
-Field values have their own underscores and spaces replaced by hyphens, so the
-split into six fields is unambiguous. A missing band renders as ``broadband`` and
-a missing window as ``all``.
+Underscores and spaces inside a field are replaced by hyphens, so the split
+into six fields is unambiguous. A missing band is written ``broadband``. A
+missing window is written ``all``.
 
-The hash matters. Two columns that differ only in a computation parameter — a
-different ``fit_range``, a different burst threshold — produce the same six
-readable fields and different hashes, so they can coexist in one table and cannot
-be mistaken for each other. It digests the complete column specification, not just
-the parameters you passed.
+The hash is the SHA-256 of the full column specification, not only the
+arguments passed to the extractor. Two columns that differ only in a parameter
+such as ``fit_range`` or a burst threshold share the six readable fields and
+differ in the hash. Both can sit in one table.
 
 .. _concepts-row-kinds:
 
 Epoch rows and group rows
 -------------------------
 
-Two kinds of table exist, and they are never merged.
+There are two kinds of table. They are not merged.
 
-**Per-epoch tables** have one row per epoch and carry ``row_ids``: a
-``(recording, epoch index, event)`` triple for each row. This is what makes
-concatenation across recordings safe, and it is the only kind
-:func:`eegfeat.model.build_design` accepts.
+**Per-epoch tables** have one row per epoch. ``row_ids`` is a
+``(recording, epoch index, event)`` triple per row. Concatenation across
+recordings uses that triple. :func:`eegfeat.model.build_design` accepts only
+per-epoch tables.
 
-**Group-row tables** come from measures that are undefined within a single trial —
-inter-trial phase coherence, phase locking, envelope correlation, wPLI, and their
-graph summaries. A phase coherence value describes a *set* of trials. These tables
-carry ``row_labels`` naming their trial groups, and are forbidden from carrying
-``row_ids`` at all.
+**Group-row tables** come from measures that are undefined on one trial.
+Those measures are inter-trial phase coherence, pairwise phase consistency,
+envelope correlation, wPLI, and their graph summaries. The value describes a
+set of trials. The table carries ``row_labels`` for those groups and cannot
+carry ``row_ids``.
 
-The separation is enforced rather than advised, because broadcasting a group value
-back onto its constituent epochs manufactures pseudo-replication: the same number
-repeated across rows that a model will treat as independent observations. The
-runner writes the two kinds to separate files for the same reason — see
-:doc:`/guides/runner`.
+Copying a group value onto its member epochs repeats one number across rows.
+A model then treats those rows as independent observations. The runner writes
+the two kinds of table to separate files. See :doc:`/guides/runner`.
 
 .. _concepts-missing:
 
 Missing values
 --------------
 
-``NaN`` in ``values`` means the value was withheld because of a data condition, not
-that the computation produced a nonsensical number. Non-finite input is treated as
-missing throughout rather than propagated: a measure that cannot be estimated from
-the data it was given returns ``NaN`` and reports what happened in ``coverage`` and
-``flags``, instead of returning a number whose provenance you would have to
-reconstruct.
+``NaN`` in ``values`` means the value was withheld because of the input.
+Non-finite samples are treated as missing. A measure that cannot be estimated
+returns ``NaN`` and records the condition in ``coverage`` and ``flags``.
 
-This is why ``coverage`` is worth reading before trusting a cell. A value computed
-from 3% of its intended input is a number, and it is a number you probably do not
-want in a design matrix; ``max_feature_missingness`` in
-:class:`~eegfeat.model.PreprocessingConfig` exists to act on exactly this.
+A finite value can still come from a small fraction of its input. Read
+``coverage`` with the value. ``max_feature_missingness`` in
+:class:`~eegfeat.model.PreprocessingConfig` is a separate check. It drops a
+column when the fraction of ``NaN`` rows exceeds the threshold. It does not
+read ``coverage``.

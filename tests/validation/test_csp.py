@@ -8,6 +8,8 @@ movement higher, in every subject.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 from sklearn.metrics import roc_auc_score
@@ -19,6 +21,8 @@ from validation.loaders import Recording
 MU = ef.Band("mu", 8.0, 13.0)
 BETA = ef.Band("beta", 13.0, 30.0)
 WINDOW = ef.Window("window", 0.5, 3.5)
+
+DATASET = "eegbci"
 
 
 def _band_limited(recording: Recording, band: ef.Band) -> ef.Signal:
@@ -33,9 +37,15 @@ def _band_limited(recording: Recording, band: ef.Band) -> ef.Signal:
     )
 
 
+@pytest.mark.validates(
+    "csp_features",
+    kind="decoding",
+    claim="Cross-fitted CSP components separate movement from rest in every subject",
+    criterion="first component AUC below 0.5, second above; best above 0.6 in every subject",
+)
 @pytest.mark.parametrize("band", [MU, BETA], ids=lambda band: band.name)
 def test_cross_fitted_components_separate_movement_from_rest(
-    eegbci_recordings: list[Recording], band: ef.Band
+    eegbci_recordings: list[Recording], band: ef.Band, record: Callable[[str], None]
 ) -> None:
     best = []
     for recording in eegbci_recordings:
@@ -54,10 +64,20 @@ def test_cross_fitted_components_separate_movement_from_rest(
         # Components alternate: the first favours the first class (rest), the second the other.
         assert aucs[0] < 0.5 < aucs[1], (recording.name, aucs.round(2))
         best.append(np.max(np.abs(aucs - 0.5)) + 0.5)
+    record(
+        f"{band.name}: best component AUC {min(best):.2f} to {max(best):.2f}, mean "
+        f"{float(np.mean(best)):.2f} over {len(best)} subjects"
+    )
     assert np.min(best) > 0.6, np.round(best, 2)
     assert np.mean(best) > 0.75, np.round(best, 2)
 
 
+@pytest.mark.validates(
+    "csp_features",
+    kind="formula",
+    claim="CSP filters and patterns are mutually inverse",
+    criterion="filters times patterns transposed is the identity to 1e-8",
+)
 def test_filters_and_patterns_are_mutually_inverse(eegbci_recordings: list[Recording]) -> None:
     recording = eegbci_recordings[0]
     signal = _band_limited(recording, BETA)

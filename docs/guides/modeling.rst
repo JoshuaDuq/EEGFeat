@@ -4,40 +4,41 @@ Predictive Modeling
 .. raw:: html
 
    <p class="hero-lede">
-     Carry self-describing EEG feature tables into <strong>group-disjoint</strong>,
-     leakage-safe predictive modeling with nested tuning, subject-level evaluation,
-     permutation nulls, conformal intervals, and metadata-aware importance.
+     Grouped cross-validation on per-epoch feature tables, with tuning inside
+     the training folds, subject-level scores, permutation nulls, conformal
+     intervals, and feature importance.
    </p>
 
-``eegfeat.model`` is an optional scikit-learn-based subpackage. Install it with
-``pip install "eegfeat[model]"``. Add ``pip install "eegfeat[importance]"`` for SHAP
-importance; held-out permutation importance is included in the model extra.
+``eegfeat.model`` is optional. Install it with ``pip install "eegfeat[model]"``.
+SHAP needs ``pip install "eegfeat[importance]"``. Held-out permutation
+importance is included in ``model``.
 
-The modeling boundary
----------------------
+Inputs
+------
 
-Modeling is defined for one row per epoch. The input :class:`~eegfeat.FeatureTable` must carry
-``row_ids`` containing ``(recording, epoch, event)`` for every row. The target frame passed to
-:func:`eegfeat.model.build_design` must contain matching ``recording``, ``epoch``, and ``event``
-columns, the target column, and a grouping column such as ``subject_id``.
+Modeling uses one row per epoch. The :class:`~eegfeat.FeatureTable` must carry
+``row_ids`` of ``(recording, epoch, event)`` for every row. The target frame
+passed to :func:`eegfeat.model.build_design` must contain the same
+``recording``, ``epoch``, and ``event`` columns, the target column, and a
+grouping column such as ``subject_id``.
 
-Tables from cross-trial measures are intentionally not accepted
-(:ref:`concepts-row-kinds`). ITPC, envelope correlation,
-wPLI, and graph summaries have group rows rather than independent epoch rows; broadcasting
-those values into an epoch-level design would create pseudo-replication.
+Cross-trial tables are rejected (:ref:`concepts-row-kinds`). ITPC, envelope
+correlation, wPLI, and graph summaries have one row per trial group. Copying a
+group value onto its epochs repeats one number across rows.
 
 Building a cohort
 -----------------
 
-For in-memory data, compute the same measures for each recording and stack the resulting
-per-epoch tables. :func:`eegfeat.stack_rows` preserves input order, values, coverage, flags,
-and metadata while rejecting duplicate row identities. Recordings of a cohort exclude different
-bad channels, so their schemas differ; ``columns="union"`` keeps every column any recording
-measured and marks a column a recording did not measure as NaN with zero coverage. That is the
-cohort matrix fold-local harmonization is defined over: ``harmonization="intersection"`` then
-drops, within each fold, the columns some training subject lacks. The target frame must be
-assembled in the same canonical-key space; it is aligned by ``build_design`` rather than by row
-position.
+For tables already in memory, compute the same measures per recording and stack
+the per-epoch tables. :func:`eegfeat.stack_rows` keeps input order, values,
+coverage, flags, and metadata, and it rejects duplicate row identities.
+Recordings drop different bad channels, so their columns differ.
+``columns="union"`` keeps every column any recording measured. A column a
+recording did not measure is NaN with zero coverage. With
+``harmonization="intersection"``, each fold then drops columns that some
+training subject lacks. The target frame uses the same ``recording``,
+``epoch``, and ``event`` keys. :func:`eegfeat.model.build_design` aligns rows
+on those keys.
 
 .. code-block:: python
 
@@ -61,8 +62,8 @@ position.
        groups="subject_id",
    )
 
-For runner output, write epoch descriptors with :func:`eegfeat.io.write_table` and pass the
-resulting ``*_features.tsv`` paths to :func:`eegfeat.io.read_dataset`:
+For runner output, pass the ``*_features.tsv`` paths to
+:func:`eegfeat.io.read_dataset`.
 
 .. code-block:: python
 
@@ -82,27 +83,28 @@ resulting ``*_features.tsv`` paths to :func:`eegfeat.io.read_dataset`:
        groups="subject_id",
    )
 
-``read_dataset`` stacks onto the union of the feature columns; pass ``columns="identical"`` to
-require one schema across the cohort instead. It reads the descriptor columns named by each
-JSON sidecar. It constructs the
-canonical key columns from the table's stored ``row_ids`` and refuses descriptors that disagree
-with those identities. It does not infer targets or grouping variables from filenames; include
-them in the descriptor rows when writing the tables.
+``read_dataset`` stacks the union of the feature columns. Pass
+``columns="identical"`` to require one schema. Descriptor columns are those
+named in each JSON sidecar. The canonical key columns are rebuilt from the
+stored ``row_ids``, and a descriptor that disagrees with those identities is
+rejected. Targets and grouping variables are not read from filenames. Put them
+in the descriptor rows when writing the tables.
 
 Selecting features and covariates
 ---------------------------------
 
-:class:`eegfeat.model.Selection` filters structured metadata fields, not generated feature-name
-fragments. Its fields are ``measure``, ``band``, ``space_kind``, ``window``, ``normalization``,
-and ``space``. Optional numeric covariates are appended to ``X`` after the feature columns and
-are tracked by ``Design.covariate_columns``.
+:class:`eegfeat.model.Selection` filters on metadata fields, not on substrings
+of the generated column name. The fields are ``measure``, ``band``,
+``space_kind``, ``window``, ``normalization``, and ``space``. Numeric
+covariates are appended to ``X`` after the feature columns and listed in
+``Design.covariate_columns``.
 
-``measure`` matches ``FeatureMeta.measure``, the label on the column, which is not always the
-name of the function or recipe entry that produced it: :func:`eegfeat.integrated_band_power`
-labels its columns ``"band_power"``, :func:`eegfeat.peak_frequency` labels them
-``"peak_freq_adjusted"``, and :func:`eegfeat.aperiodic` emits both ``"slope"`` and
-``"offset"``. Read the labels a cohort actually carries with
-``sorted({m.measure for m in cohort_table.meta})``.
+``measure`` matches ``FeatureMeta.measure``, the label stored on the column.
+That label is not always the function name or the recipe key.
+:func:`eegfeat.integrated_band_power` labels columns ``"band_power"``.
+:func:`eegfeat.peak_frequency` labels them ``"peak_freq_adjusted"``.
+:func:`eegfeat.aperiodic` emits both ``"slope"`` and ``"offset"``. The labels
+in a cohort are ``sorted({m.measure for m in cohort_table.meta})``.
 
 .. code-block:: python
 
@@ -122,16 +124,17 @@ labels its columns ``"band_power"``, :func:`eegfeat.peak_frequency` labels them
        selection=selection,
    )
 
-Missing covariates raise by default. Set ``strict_covariates=False`` only when dropping absent
-requested covariates is part of the analysis plan. A target column cannot also be a covariate.
+A missing covariate raises. ``strict_covariates=False`` drops requested
+covariates that are absent from the target frame. The target column cannot
+also be a covariate.
 
 Group-disjoint cross-fitting
 ----------------------------
 
-The outer split defines the evaluation question. :func:`eegfeat.model.loso_folds` evaluates
-generalization to unseen groups. :func:`eegfeat.model.within_subject_folds` evaluates held-out
-runs within each subject and requires complete run labels. Inner tuning uses
-:class:`eegfeat.model.InnerSplit` and never crosses the selected grouping boundary.
+The outer split is the evaluation. :func:`eegfeat.model.loso_folds` holds out
+groups. :func:`eegfeat.model.within_subject_folds` holds out runs within each
+subject and requires a run label on every row. Inner tuning uses
+:class:`eegfeat.model.InnerSplit` and stays inside the outer grouping.
 
 .. code-block:: python
 
@@ -159,36 +162,41 @@ runs within each subject and requires complete run labels. Inner tuning uses
        seed=42,
    )
 
-The available regression pipelines are ``elasticnet_pipeline``, ``ridge_pipeline``, and
-``random_forest_pipeline``. Classification pipelines are ``svm_pipeline``, ``logistic_pipeline``,
-``random_forest_classifier_pipeline``, and ``ensemble_pipeline``; their targets must use 0/1
-labels for :func:`eegfeat.model.classification_metrics`.
+Regression pipelines are ``elasticnet_pipeline``, ``ridge_pipeline``, and
+``random_forest_pipeline``. Classification pipelines are ``svm_pipeline``,
+``logistic_pipeline``, ``random_forest_classifier_pipeline``, and
+``ensemble_pipeline``. :func:`eegfeat.model.classification_metrics` requires
+labels in ``{0, 1}``.
 
-Preprocessing is fold-local. Pipelines replace infinities, drop all-NaN columns, enforce feature
-and subject missingness limits, impute, remove constant columns, and optionally select features,
-scale, deconfound, or reduce dimensionality with PCA. ``harmonization="intersection"`` keeps
-only features finite for every training group; ``"union_impute"`` keeps the full feature union.
-Target residualization is enabled with ``covariates=...`` and ``residualize_on=...`` on the
-cross-fitting call, so nuisance models are fitted within each outer training fold.
-Nuisance least-squares fits scale their training design before solving so that
-changing covariate units does not silently remove a regressor through the
-numerical rank cutoff.
+Preprocessing is fit on the training rows of the fold. The pipeline replaces
+infinities, drops all-NaN columns, applies the feature and subject missingness
+limits, imputes, removes constant columns, and can select features, scale,
+deconfound, or reduce dimension with PCA. ``harmonization="intersection"``
+keeps features that are finite for every training group.
+``harmonization="union_impute"`` keeps the full feature union. Target
+residualization is ``covariates=...`` and ``residualize_on=...`` on the
+cross-fitting call, so the nuisance model is fit inside each outer training
+fold. Those least-squares fits scale the training design before solving. The
+numerical rank cutoff then does not depend on the units of the covariates.
 
-Evaluation and aggregation
---------------------------
+Evaluation
+----------
 
-Use :func:`eegfeat.model.fold_results` to recover predictions in fold order and to map them back
-to the design groups. :func:`eegfeat.model.regression_metrics` returns overall Pearson ``r``,
-``R²``, explained variance, and subject-level correlation summaries. The default subject-level
-correlation averages Fisher ``z`` values with equal subject weighting. Use
-:func:`eegfeat.model.classification_metrics` for accuracy, balanced accuracy, AUC, average
-precision, F1, precision, recall, specificity, and the confusion matrix. Passing ``groups``
-makes every scalar a mean over subjects with equal subject weight; the confusion matrix stays
-pooled over trials, so accuracy recomputed from it will not match the reported ``accuracy``.
-Pearson correlation and centered R² do not apply an absolute variance floor by
-default: their definedness must not depend on measurement units. Classification
-probabilities and model-selection predictions must be finite for every trial;
-failed predictions cannot be dropped to improve a score.
+:func:`eegfeat.model.fold_results` returns predictions in fold order and maps
+them back to the design groups. :func:`eegfeat.model.regression_metrics`
+returns Pearson ``r``, ``R²``, explained variance, and subject-level
+correlation. The default subject-level correlation averages Fisher ``z`` with
+equal weight per subject. :func:`eegfeat.model.classification_metrics` returns
+accuracy, balanced accuracy, AUC, average precision, F1, precision, recall,
+specificity, and the confusion matrix. With ``groups``, each scalar is a mean
+over subjects with equal subject weight. The confusion matrix stays pooled
+over trials, so accuracy recomputed from it differs from the reported
+``accuracy``.
+
+Pearson correlation and centered ``R²`` use no absolute variance floor, so
+whether they are defined does not depend on the units of the target.
+Classification probabilities and the predictions used for model selection must
+be finite on every trial. A failed prediction is an error.
 
 .. code-block:: python
 
@@ -205,38 +213,36 @@ failed predictions cannot be dropped to improve a score.
    )
    print(metrics["subject_level_r"])
 
-For uncertainty around a subject-level summary, use :func:`eegfeat.model.bootstrap_mean_ci`
-and :func:`eegfeat.model.paired_signflip_p_value` on a pre-specified vector of subject-level
-statistics. The returned ``per_subject`` records from ``regression_metrics`` use ``{"subject":
-..., "r": ...}`` mappings.
+:func:`eegfeat.model.bootstrap_mean_ci` and
+:func:`eegfeat.model.paired_signflip_p_value` take a pre-specified vector of
+subject-level statistics. Each ``per_subject`` record from
+``regression_metrics`` is ``{"subject": ..., "r": ...}``.
 
 Permutation nulls
 -----------------
 
-:func:`eegfeat.model.permutation_test` refits the complete cross-fitting procedure for each
-draw. ``NullConfig.scheme`` supports ``"within_subject"``, ``"within_subject_within_run"``,
-and ``"circular_shift_within_run"``; ``"run_wise"`` is an accepted alias for
-``"within_subject_within_run"``, named after the upstream pipeline's ``runwise``. Both shuffle
-labels within each run of each subject — no scheme exchanges whole runs, because run structure
-is paradigm-specific. Run-aware schemes require ``runs``; circular shifts additionally require
-finite integer trial indices that are unique within each subject/run.
-Incomplete fits abort the procedure with an error instead of dropping failed draws,
-preventing distortion of the null distribution.
+:func:`eegfeat.model.permutation_test` refits the full cross-fitting procedure
+on each draw. ``NullConfig.scheme`` accepts ``"within_subject"``,
+``"within_subject_within_run"``, and ``"circular_shift_within_run"``.
+``"run_wise"`` is an alias of ``"within_subject_within_run"``, the name used
+for this shuffle in the upstream pipeline (``runwise``). Both of those schemes
+shuffle labels inside each run of each subject. No scheme exchanges whole runs.
+Run structure differs by paradigm. Run-aware schemes require ``runs``.
+Circular shifts also require finite integer trial indices that are unique
+inside each subject and run. A draw that fails to fit raises. Failed draws are
+not dropped from the null.
 
-The tail is chosen by ``greater_is_better``, which defaults to ``True`` and must be
-set to ``False`` for any metric where a smaller value is better. A correlation or an
-:math:`R^2` improves upward, so the default is right for the example below; an error
-metric such as ``mean_squared_error`` improves *downward*, and leaving the default in
-place counts the wrong tail — a strong effect then returns :math:`p \approx 1` and a
-worthless model returns a small one. The direction cannot be inferred from an arbitrary
-``metric_fn``, so it has to be declared.
+``greater_is_better`` chooses the tail. The default is ``True``. Set it to
+``False`` when a smaller value is the better score, as with
+``mean_squared_error``. Left at the default, a strong effect on an error
+metric returns :math:`p \approx 1`, and a model at chance returns a small
+:math:`p`. The direction is an argument. It is not inferred from ``metric_fn``.
 
-``permutation_test`` rejects ``residualize_on``. Permuting raw targets and then
-refitting nuisance regression destroys the nuisance–target association; this
-does not implement a nuisance-preserving conditional null. Such inference needs
-a separately validated residual-permutation procedure with appropriate
-exchangeability restrictions, as discussed by
-`Winkler et al. (2014) <https://pmc.ncbi.nlm.nih.gov/articles/PMC4010955/>`_.
+``permutation_test`` rejects ``residualize_on``. Permuting the raw target and
+then refitting the nuisance regression removes the association between the
+nuisance and the target. A null that keeps that association needs its own
+residual-permutation procedure and its own exchangeability conditions
+(Winkler et al., 2014, https://pmc.ncbi.nlm.nih.gov/articles/PMC4010955/).
 
 .. code-block:: python
 
@@ -258,21 +264,21 @@ exchangeability restrictions, as discussed by
    )
    print(null.p_value)
 
-Conformal prediction intervals
-------------------------------
+Conformal intervals
+-------------------
 
-:func:`eegfeat.model.prediction_intervals` returns lower and upper bounds using ``"split"``,
-``"cv_plus"``, or ``"quantile"`` conformal calibration. Providing ``groups`` makes the
-model-fitting and calibration splits group-disjoint. Calibration scores are nevertheless
-pooled across trials, so participants with more trials contribute more scores. The
-implementation does not establish a distribution-free coverage guarantee for a new
-participant. The returned object stores ``lower``, ``upper``, ``alpha``, and ``method``;
-it does not contain realized test-set coverage.
+:func:`eegfeat.model.prediction_intervals` returns bounds for ``"split"``,
+``"cv_plus"``, or ``"quantile"`` conformal calibration. With ``groups``, the
+fitting split and the calibration split are group-disjoint. Calibration scores
+are still pooled over trials, so a participant with more trials contributes
+more scores. The procedure does not give a distribution-free coverage guarantee
+for a new participant. The result stores ``lower``, ``upper``, ``alpha``, and
+``method``. It does not store the coverage realized on a test set.
 
-Split conformal targets coverage ``1 - alpha`` under exchangeable trials. The
-CV+ methods use ``alpha`` in each tail and do not carry a universal
-``1 - alpha`` finite-sample guarantee. Non-finite calibration scores or model
-predictions raise; silently discarding them would change the calibration sample.
+Split conformal targets coverage :math:`1 - \alpha` when trials are
+exchangeable. The CV+ methods put :math:`\alpha` in each tail and have no
+general finite-sample guarantee of coverage :math:`1 - \alpha`. A non-finite
+calibration score or prediction raises.
 
 .. code-block:: python
 
@@ -289,18 +295,20 @@ predictions raise; silently discarding them would change the calibration sample.
    )
    lower, upper = intervals.lower, intervals.upper
 
-Importance and metadata
------------------------
+Importance
+----------
 
-:func:`eegfeat.model.permutation_importance_over_folds` computes held-out permutation
-importance for the same fold-fitted models used for evaluation. Pass the selected feature names
-so scores remain attributable after fold-local filtering. Use
-:func:`eegfeat.model.shap_importance_over_folds` for SHAP explanations; PCA and other steps
-that mix input columns cannot be mapped back to one original feature.
+:func:`eegfeat.model.permutation_importance_over_folds` computes held-out
+permutation importance on the same fold-fitted models used for evaluation.
+Pass the feature names that were selected so a score can be matched after
+fold-local column drops. :func:`eegfeat.model.shap_importance_over_folds`
+computes SHAP values. A step such as PCA that mixes columns cannot be mapped
+back to one input feature.
 
-The aggregation example below uses the feature-only ``design`` from the cohort section. If
-covariates are included, fit importance on a matching pipeline and pass
-``design.column_names``; do not aggregate covariate scores with EEG ``FeatureMeta`` records.
+The example below uses the feature-only ``design`` from the cohort section.
+With covariates, fit importance on a pipeline with the same covariate count and
+pass ``design.column_names``. Covariate scores are not aggregated with EEG
+``FeatureMeta`` records.
 
 .. code-block:: python
 
@@ -317,5 +325,5 @@ covariates are included, fit importance on a matching pipeline and pass
    )
    by_band = efm.aggregate_by(importance, cohort_table.meta, field="band")
 
-Importance values are changes in the selected scoring metric on held-out data; they are not
-causal effects.
+The reported value is the change in the scoring metric on held-out data when
+that feature is permuted.

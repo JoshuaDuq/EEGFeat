@@ -38,3 +38,9 @@ jobs:
       - run: pip install -e ".[dev,model,connectivity,microstates]" ${{ matrix.mne }} ${{ matrix.pins }}
       - run: python -c "import mne; print(mne.__version__)"
       - run: pytest tests/validation -ra --durations=10
+      # The suite rewrites docs/validation from what it observed; keep each run's copy.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-results-${{ strategy.job-index }}
+          path: docs/validation/

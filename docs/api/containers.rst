@@ -1,9 +1,8 @@
 Containers and I/O
 ==================
 
-The types every measure accepts and returns. :class:`~eegfeat.FeatureTable` is the
-output of every extractor; the rest are the inputs. What these types guarantee, and
-why the guarantees matter, is explained in :doc:`/concepts`.
+:class:`~eegfeat.FeatureTable` is the return type of every extractor. The other
+types on this page are inputs. Field definitions are in :doc:`/concepts`.
 
 Feature tables
 --------------

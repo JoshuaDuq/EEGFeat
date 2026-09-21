@@ -15,6 +15,8 @@ WHOLE_EPOCH = ef.Window("epoch", 0.0, 30.0)
 OCCIPITAL = "Pz-Oz"
 MU = ef.Band("mu", 8.0, 13.0)
 
+DATASET = "sleep"
+
 
 @pytest.fixture(scope="module")
 def sleep_signal(sleep_recordings: list[Recording]) -> tuple[ef.Signal, np.ndarray, np.ndarray]:
@@ -24,6 +26,18 @@ def sleep_signal(sleep_recordings: list[Recording]) -> tuple[ef.Signal, np.ndarr
     return signal, data, recording.metadata["stage"].to_numpy()
 
 
+@pytest.mark.validates(
+    "root_mean_square",
+    "peak_to_peak",
+    "mean_amplitude",
+    "amplitude_quantile",
+    "skewness",
+    "kurtosis",
+    "line_length",
+    kind="formula",
+    claim="The time-domain measures are their NumPy and SciPy formulas",
+    criterion="relative error below 1e-7",
+)
 def test_time_domain_formulas(sleep_signal: tuple[ef.Signal, np.ndarray, np.ndarray]) -> None:
     signal, data, _ = sleep_signal
 
@@ -47,6 +61,14 @@ def test_time_domain_formulas(sleep_signal: tuple[ef.Signal, np.ndarray, np.ndar
     )
 
 
+@pytest.mark.validates(
+    "root_mean_square",
+    "peak_to_peak",
+    "line_length",
+    kind="physiology",
+    claim="Slow waves are larger and smoother than wake EEG at Pz-Oz",
+    criterion="wake-vs-N3 AUC above 0.7 for RMS and peak-to-peak, below 0.3 for line length",
+)
 def test_slow_waves_are_large_and_smooth(
     sleep_signal: tuple[ef.Signal, np.ndarray, np.ndarray],
 ) -> None:
@@ -64,6 +86,12 @@ def test_slow_waves_are_large_and_smooth(
     assert auc(ef.line_length) < 0.3
 
 
+@pytest.mark.validates(
+    "asymmetry",
+    kind="formula",
+    claim="Asymmetry is right minus left on log power",
+    criterion="relative error below 1e-12",
+)
 def test_asymmetry_is_right_minus_left_on_log_power(
     eegbci_recordings: list[Recording],
 ) -> None:

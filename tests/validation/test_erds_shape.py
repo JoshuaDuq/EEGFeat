@@ -15,6 +15,8 @@ band's low edge was chosen from that null, and its false-onset rate is asserted.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 from scipy.stats import ttest_1samp
@@ -29,6 +31,8 @@ BASELINE = ef.Window("baseline", -1.0, 0.0)
 MOVEMENT = ef.Window("movement", 0.5, 3.5)
 WHOLE = ef.Window("epoch", 0.0, 6.0)
 HAND = {"hand": ["FC3", "C5", "C3", "C1", "CP3", "FC4", "C2", "C4", "C6", "CP4"]}
+
+DATASET = "eegbci"
 
 
 @pytest.fixture(scope="module")
@@ -69,6 +73,14 @@ def _per_subject_difference(
     return np.array(out)
 
 
+@pytest.mark.validates(
+    "erd_magnitude",
+    "erd_duration",
+    "ers_magnitude",
+    kind="physiology",
+    claim="Movement deepens and lengthens desynchronization and shortens synchronization",
+    criterion="ERD larger and ERS smaller during movement in 90 percent of subjects; p below 1e-5",
+)
 @pytest.mark.parametrize("band", [MU, BETA], ids=lambda band: band.name)
 def test_movement_deepens_and_lengthens_desynchronization(
     long_recordings: list[Recording], hand_signals: dict[str, list[ef.BandSignal]], band: ef.Band
@@ -83,6 +95,19 @@ def test_movement_deepens_and_lengthens_desynchronization(
     assert ttest_1samp(difference, 0.0, alternative="less").pvalue < 1e-5
 
 
+@pytest.mark.validates(
+    "erds_mean",
+    "erd_magnitude",
+    "erd_duration",
+    "ers_magnitude",
+    "ers_duration",
+    "erds_slope",
+    "erds_peak_latency",
+    "erds_rebound_latency",
+    kind="formula",
+    claim="The ERDS measures are the documented trace's mean, balance, slope and argmaxes",
+    criterion="relative error below 1e-9; durations tile the window",
+)
 def test_measures_are_tied_to_each_other_and_to_the_trace(
     hand_signals: dict[str, list[ef.BandSignal]],
 ) -> None:
@@ -100,6 +125,7 @@ def test_measures_are_tied_to_each_other_and_to_the_trace(
     ers_duration = ef.ers_duration([signal], **kwargs).values
     slope = ef.erds_slope([signal], **kwargs).values
     peak = ef.erds_peak_latency([signal], **kwargs).values
+    rebound = ef.erds_rebound_latency([signal], **kwargs).values
 
     # The trace itself, from the documented definition.
     power = signal.power
@@ -119,11 +145,28 @@ def test_measures_are_tied_to_each_other_and_to_the_trace(
     np.testing.assert_allclose(mean, balance, rtol=1e-9)
     fitted = np.array([[np.polyfit(times, cell, 1)[0] for cell in epoch] for epoch in trace])
     np.testing.assert_allclose(slope, fitted, rtol=1e-6)
-    np.testing.assert_array_equal(peak, times[np.argmax(np.abs(trace), axis=2)])
+    peak_index = np.argmax(np.abs(trace), axis=2)
+    np.testing.assert_array_equal(peak, times[peak_index])
+    # The rebound is the largest value strictly after the peak; NaN when the peak is last.
+    after = np.arange(times.size)[None, None, :] > peak_index[..., None]
+    expected_rebound = np.where(
+        after.any(axis=2),
+        times[np.argmax(np.where(after, trace, -np.inf), axis=2)],
+        np.nan,
+    )
+    np.testing.assert_array_equal(rebound, expected_rebound)
 
 
+@pytest.mark.validates(
+    "erds_onset_latency",
+    kind="behaviour",
+    claim="The default six-cycle persistence keeps the onset's false-positive rate low",
+    criterion="above 0.9 at a fixed 100 ms; below 0.15 at the default; lower still at 1500 ms",
+)
 def test_onset_default_persistence_holds_the_null_rate_down(
-    long_recordings: list[Recording], hand_signals: dict[str, list[ef.BandSignal]]
+    long_recordings: list[Recording],
+    hand_signals: dict[str, list[ef.BandSignal]],
+    record: Callable[[str], None],
 ) -> None:
     """On rest trials an onset is a false positive.
 
@@ -150,6 +193,10 @@ def test_onset_default_persistence_holds_the_null_rate_down(
     fixed = rest_rate(min_duration_ms=100.0)
     default = rest_rate()
     longer = rest_rate(min_duration_ms=1500.0)
+    record(
+        f"beta rest trials with an onset: {fixed:.2f} at 100 ms, {default:.2f} at the six-cycle "
+        f"default, {longer:.2f} at 1500 ms"
+    )
     assert fixed > 0.9, fixed
     assert default < 0.15, default
     assert fixed > default > longer, (fixed, default, longer)

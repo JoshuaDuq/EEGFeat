@@ -9,6 +9,8 @@ and that is recorded rather than asserted.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 
@@ -19,8 +21,18 @@ from validation.test_regression import design as design_fixture
 
 design = design_fixture
 
+DATASET = "sleep"
 
-def test_importance_points_at_the_occipital_derivation(design: efm.Design) -> None:
+
+@pytest.mark.validates(
+    "permutation_importance_over_folds",
+    kind="decoding",
+    claim="Held-out permutation importance points at the derivation that carries sleep depth",
+    criterion="Pz-Oz carries more than 60 percent of the total; every value finite",
+)
+def test_importance_points_at_the_occipital_derivation(
+    design: efm.Design, record: Callable[[str], None]
+) -> None:
     folds = efm.loso_folds(design.groups)
     importance = efm.permutation_importance_over_folds(
         folds,
@@ -44,11 +56,20 @@ def test_importance_points_at_the_occipital_derivation(design: efm.Design) -> No
     table = _relative_power(Recording(recording.name, recording.epochs[keep]))
     by_space = efm.aggregate_by(importance, table.meta, "space")
     total = sum(by_space.values())
+    record(f"Pz-Oz carries {by_space['Pz-Oz'] / total:.2f} of the total importance")
     assert by_space["Pz-Oz"] / total > 0.6, by_space
 
 
+@pytest.mark.validates(
+    "prediction_intervals",
+    kind="behaviour",
+    claim="Conformal intervals reach nominal coverage on exchangeable epochs",
+    criterion="split and CV+ within 0.85 to 0.95 at 90 percent nominal; quantile at least 0.9",
+)
 @pytest.mark.parametrize("method", ["split", "cv_plus", "quantile"])
-def test_intervals_cover_exchangeable_epochs(design: efm.Design, method: str) -> None:
+def test_intervals_cover_exchangeable_epochs(
+    design: efm.Design, method: str, record: Callable[[str], None]
+) -> None:
     rng = np.random.default_rng(SEED)
     order = rng.permutation(len(design.y))
     calibrate, test = order[: 2 * len(order) // 3], order[2 * len(order) // 3 :]
@@ -64,6 +85,7 @@ def test_intervals_cover_exchangeable_epochs(design: efm.Design, method: str) ->
     assert np.isfinite(intervals.lower).all() and np.isfinite(intervals.upper).all()
     assert np.all(intervals.lower <= intervals.upper)
     covered = np.mean((design.y[test] >= intervals.lower) & (design.y[test] <= intervals.upper))
+    record(f"{method}: coverage {covered:.3f} at 90 percent nominal")
     if method == "quantile":
         assert covered >= 0.9, covered
     else:

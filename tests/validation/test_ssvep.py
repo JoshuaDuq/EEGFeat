@@ -8,6 +8,8 @@ spectral feature extractor has to get right.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 
@@ -16,6 +18,8 @@ from validation.loaders import Recording
 
 OCCIPITAL = {"occipital": ["O1", "Oz", "O2"]}
 SEGMENT_SEC = 8.0
+
+DATASET = "ssvep"
 
 
 @pytest.fixture(scope="module")
@@ -57,13 +61,31 @@ def _occipital_log_ratio(
     return ef.band_ratio(power, numerator.name, denominator.name).values[:, 0]
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    "band_ratio",
+    kind="physiology",
+    claim="Occipital power at 12 Hz against 15 Hz separates the flicker conditions on every trial",
+    criterion="smallest 12 Hz-trial ratio above largest 15 Hz-trial ratio",
+)
 def test_power_at_the_flicker_frequency_separates_every_trial(
-    spectra: ef.Spectra, flicker_hz: np.ndarray
+    spectra: ef.Spectra, flicker_hz: np.ndarray, record: Callable[[str], None]
 ) -> None:
     ratio = _occipital_log_ratio(spectra, ef.Band("f12", 11.5, 12.5), ef.Band("f15", 14.5, 15.5))
+    record(
+        f"12 Hz trials at least {ratio[flicker_hz == 12.0].min():.2f}, 15 Hz trials at most "
+        f"{ratio[flicker_hz == 15.0].max():.2f} (log10 ratio)"
+    )
     assert ratio[flicker_hz == 12.0].min() > ratio[flicker_hz == 15.0].max()
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    "band_ratio",
+    kind="physiology",
+    claim="The second harmonic (24 against 30 Hz) separates the conditions on every trial",
+    criterion="smallest 12 Hz-trial ratio above largest 15 Hz-trial ratio",
+)
 def test_the_second_harmonic_follows_the_flicker(
     spectra: ef.Spectra, flicker_hz: np.ndarray
 ) -> None:
@@ -71,6 +93,13 @@ def test_the_second_harmonic_follows_the_flicker(
     assert ratio[flicker_hz == 12.0].min() > ratio[flicker_hz == 15.0].max()
 
 
+@pytest.mark.validates(
+    "mean_psd",
+    "band_ratio",
+    kind="physiology",
+    claim="The line at the flicker frequency stands above its 3 Hz neighbourhood only when driven",
+    criterion="driven trials' minimum SNR above undriven trials' maximum, at 12 and at 15 Hz",
+)
 @pytest.mark.parametrize("frequency", [12.0, 15.0])
 def test_the_flicker_line_stands_above_its_neighbourhood(
     spectra: ef.Spectra, flicker_hz: np.ndarray, frequency: float
@@ -83,7 +112,15 @@ def test_the_flicker_line_stands_above_its_neighbourhood(
     assert snr[driven].min() > snr[~driven].max()
 
 
-def test_peak_frequency_recovers_the_flicker(spectra: ef.Spectra, flicker_hz: np.ndarray) -> None:
+@pytest.mark.validates(
+    "peak_frequency",
+    kind="physiology",
+    claim="With smoothing off and alpha excluded, the peak lands on the flicker frequency",
+    criterion="condition medians within 0.3 Hz of 12 and 15 Hz; 70 percent of trials within",
+)
+def test_peak_frequency_recovers_the_flicker(
+    spectra: ef.Spectra, flicker_hz: np.ndarray, record: Callable[[str], None]
+) -> None:
     """A narrow entrained line needs the search told not to smooth it away.
 
     The default 1 Hz smoothing suits broad endogenous peaks; here it blurs the
@@ -98,6 +135,11 @@ def test_peak_frequency_recovers_the_flicker(spectra: ef.Spectra, flicker_hz: np
         include_global=False,
     )
     found = peak.values[:, 0]
+    record(
+        f"medians {np.median(found[flicker_hz == 12.0]):.2f} and "
+        f"{np.median(found[flicker_hz == 15.0]):.2f} Hz; "
+        f"{int((np.abs(found - flicker_hz) < 0.3).sum())} of {found.size} trials within 0.3 Hz"
+    )
     assert np.isfinite(found).all()
     for frequency in (12.0, 15.0):
         assert abs(np.median(found[flicker_hz == frequency]) - frequency) < 0.3

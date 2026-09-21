@@ -4,14 +4,12 @@ Command Line Runner
 .. raw:: html
 
    <p class="hero-lede">
-     Compute features for a whole folder of preprocessed MNE epochs files from one
-     declarative <strong>recipe</strong>, without writing Python. Every table the runner
-     writes keeps its column metadata and loads back as a <code>FeatureTable</code>.
+     Compute features for a folder of preprocessed MNE epochs files from one
+     TOML recipe. Each written table loads back as a <code>FeatureTable</code>.
    </p>
 
-The library leaves spectral estimation, band filtering and trial grouping to its caller.
-The runner is a caller: a recipe states those choices once, and ``eegfeat run`` applies
-them to every recording.
+A recipe sets spectral estimation, band-pass filtering, and trial grouping.
+``eegfeat run`` applies that recipe to every recording.
 
 Quick Start
 -----------
@@ -22,15 +20,15 @@ Quick Start
    eegfeat check recipe.toml    # validate it, then try it on the first recording
    eegfeat run recipe.toml      # compute features for every recording
 
-``python -m eegfeat`` is the same command. ``check`` writes nothing: it catches what
-loading a recipe cannot, such as an ROI naming a channel the data lacks, a window
-outside the epochs, or a Morlet wavelet longer than the epoch.
+``python -m eegfeat`` is the same command. ``check`` writes nothing. It loads the
+recipe and runs the first recording, which catches an ROI that names a missing
+channel, a window outside the epochs, or a Morlet wavelet longer than the epoch.
 
 The Recipe
 ----------
 
-A recipe is a TOML file. Relative paths resolve against its directory, unknown keys
-are errors, and every problem found is reported at once.
+A recipe is a TOML file. Relative paths resolve against the recipe's directory.
+Unknown keys are errors. Every problem found is reported together.
 
 .. code-block:: toml
 
@@ -143,21 +141,20 @@ Spectra
    each window. The default segment is 2 s, capped by the shortest window any spectral
    entry uses, so every window shares one frequency grid.
 ``multitaper``
-   Computed in each window with a frequency-smoothing ``bandwidth`` in Hz, 2.0 by
-   default. The default is fixed in hertz on purpose: MNE's own default is
-   ``8 / window_length`` Hz, which on a 1 s window smooths over ±4 Hz, wider than the
-   delta or theta band. A bandwidth below ``1 / window_length`` cannot be realised and
-   is refused. The grid follows the window length, so windows measured together must
-   be equally long. Uses MNE's ``normalization="full"`` so the output is density in
-   V²/Hz, independent of sampling rate.
+   Computed in each window with a frequency-smoothing ``bandwidth`` in Hz. The
+   default is 2.0 Hz. MNE's own default is ``8 / window_length`` Hz, which on a
+   1 s window smooths by ±4 Hz, wider than delta or theta. A bandwidth below
+   ``1 / window_length`` is rejected. The frequency grid follows the window
+   length, so windows measured together must be the same length. The call uses
+   MNE ``normalization="full"``, and the output is a density in V²/Hz.
 ``morlet``
-   One time-frequency decomposition per recording on ``n_freqs`` = 40 frequencies
-   (``spacing`` = ``"log"``), with ``n_cycles = clip(f / n_cycles_factor, min_cycles,
-   max_cycles)`` (2.0, 3.0, 15.0) and ``decim`` = 4, matching the reference pipeline.
-   Each window keeps only the coefficients its wavelets can account for. The lowest
-   wavelet must fit inside the epoch. Power is divided by the recording's sampling
-   rate, so ``mean_tfr_power`` is a smoothed density in V²/Hz rather than MNE's
-   rate-dependent raw wavelet power.
+   One time-frequency decomposition per recording. Defaults are ``n_freqs`` = 40,
+   ``spacing`` = ``"log"``, ``n_cycles = clip(f / n_cycles_factor, min_cycles,
+   max_cycles)`` with factors (2.0, 3.0, 15.0), and ``decim`` = 4. Each window
+   keeps the coefficients whose wavelet support lies inside it. The lowest
+   wavelet must fit inside the epoch. Power is divided by the sampling rate of
+   the recording. ``mean_tfr_power`` is then a smoothed density in V²/Hz. MNE's
+   raw wavelet power scales with the sampling rate.
 
 Outputs
 -------
@@ -178,8 +175,8 @@ The input tree is mirrored under the output root. For
 Measures estimated within an epoch go to ``_features``. Its rows start with ``epoch``,
 ``selection`` and ``event``, then the epoch metadata, then the features. Measures
 estimated across trials (``itpc``, ``ppc``, ``envelope_correlation``, ``wpli`` and their graph
-summaries) go to ``_crosstrial``, keyed by ``group``. The two are never merged; see
-:ref:`concepts-row-kinds` for why. Missing values are ``n/a``.
+summaries) go to ``_crosstrial``, keyed by ``group``. The two files are separate.
+See :ref:`concepts-row-kinds`. Missing values are written ``n/a``.
 
 Load a table back with its metadata:
 
@@ -191,11 +188,12 @@ Load a table back with its metadata:
    table = read_table("derivatives/eegfeat/sub-01/eeg/sub-01_task-rest_features.tsv")
    alpha = table.select(band=ef.Band("alpha", 8.0, 13.0), space="global")
 
-For predictive modeling across recordings, pass several per-epoch ``*_features.tsv`` paths
-to :func:`eegfeat.io.read_dataset`. The loader stacks the tables onto the union of their
-feature columns and restores the descriptor columns written by the runner alongside canonical
-``recording``, ``epoch``, and ``event`` keys. Include target and grouping variables in the epoch metadata if they are needed
-by :func:`eegfeat.model.build_design`; descriptor columns are not feature columns.
+For modeling across recordings, pass several per-epoch ``*_features.tsv`` paths to
+:func:`eegfeat.io.read_dataset`. The loader stacks tables on the union of their
+feature columns and restores the descriptor columns written by the runner, plus
+``recording``, ``epoch``, and ``event`` from the stored row identity. Put target
+and grouping variables in the epoch metadata when :func:`eegfeat.model.build_design`
+needs them. Descriptor columns are separate from feature columns.
 
 .. code-block:: python
 

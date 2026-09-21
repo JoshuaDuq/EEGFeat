@@ -1,45 +1,45 @@
 # Example output
 
-Real files, produced by the real pipeline, from simulated recordings. Five subjects, two runs
-each, sixteen trials per run. Regenerate everything with:
+Output of `examples/make_examples.py` from simulated recordings. Five subjects, two runs
+each, sixteen trials per run. Regenerate with
 
 ```bash
 python -m pip install -e ".[model]"
 python examples/make_examples.py
 ```
 
-## What the feature extraction writes
+## Feature extraction
 
-[`recipe.toml`](recipe.toml) is the input: bands, windows, regions, and one entry per measure.
-`eegfeat run` applies it to every epochs file and writes, for each recording:
+[`recipe.toml`](recipe.toml) sets bands, windows, regions, and one entry per measure.
+`eegfeat run` applies it to every epochs file and writes, for each recording,
 
 - [`sub-01_task-pain_run-01_features.tsv`](sub-01_task-pain_run-01_features.tsv) — one row per
-  epoch. The first columns are the epoch's identity and the metadata you attached to it
-  (`subject`, `run`, `trial`, `intensity`, `rating`, `painful`); everything after that is a
-  feature, named for what it measures.
+  epoch. Leading columns are the epoch identity and the metadata attached to it
+  (`subject`, `run`, `trial`, `intensity`, `rating`, `painful`). The remaining columns are
+  features.
 - [`sub-01_task-pain_run-01_features_coverage.tsv`](sub-01_task-pain_run-01_features_coverage.tsv)
-  — the same shape, saying what fraction of each cell was finite.
-- [`sub-01_task-pain_run-01_features.json`](sub-01_task-pain_run-01_features.json) — the sidecar.
-  Every column's measure, band, space, window, unit, normalization, full computation parameters
-  and hash, plus flags and the provenance of the run.
+  — same shape. Fraction of finite input behind each cell.
+- [`sub-01_task-pain_run-01_features.json`](sub-01_task-pain_run-01_features.json) — sidecar.
+  For each column, the measure, band, space, window, unit, normalization, computation
+  parameters, and hash. Also flags and run provenance.
 - [`sub-01_task-pain_run-01_crosstrial.tsv`](sub-01_task-pain_run-01_crosstrial.tsv) — measures
-  defined across trials rather than within one, here inter-trial phase coherence. One row per
-  trial group, kept out of the per-epoch table on purpose.
+  defined on a set of trials. In this recipe, inter-trial phase coherence. One row per
+  trial group. These rows are not written into the per-epoch table.
 - [`sub-01_task-pain_run-01_crosstrial_coverage.tsv`](sub-01_task-pain_run-01_crosstrial_coverage.tsv)
-  — finite-data coverage for the cross-trial table.
-- [`sub-01_task-pain_run-01_crosstrial.json`](sub-01_task-pain_run-01_crosstrial.json) — the
-  cross-trial metadata and provenance sidecar.
+  — finite-input coverage for the cross-trial table.
+- [`sub-01_task-pain_run-01_crosstrial.json`](sub-01_task-pain_run-01_crosstrial.json) —
+  cross-trial metadata and provenance.
 
-## What the modelling writes
+## Modeling
 
-Leave-one-subject-out ridge regression predicting `rating` from the band power and ERDS columns,
-scored per subject and tested against 200 within-subject permutations.
+Leave-one-subject-out ridge regression of `rating` on the band-power and ERDS columns.
+Scores are per subject. The cohort correlation is tested against 200 within-subject
+permutations.
 
-- [`example_model_scores.tsv`](example_model_scores.tsv) — the cohort result with its confidence
-  interval and permutation *p*, then each subject's own correlation.
-- [`example_model_predictions.tsv`](example_model_predictions.tsv) — every held-out prediction,
-  with the fold it came from, so you can plot or re-score it yourself.
+- [`example_model_scores.tsv`](example_model_scores.tsv) — cohort correlation, its confidence
+  interval, and the permutation *p*, then each subject's correlation.
+- [`example_model_predictions.tsv`](example_model_predictions.tsv) — held-out prediction for
+  every trial, with the fold index.
 
-The numbers are what this simulation deserves, not a benchmark: alpha really is suppressed in
-proportion to stimulus intensity here, and the rating carries a lot of noise that no EEG feature
-could explain.
+These numbers describe the simulation. Alpha power falls with stimulus intensity. `rating`
+includes noise that these EEG features do not explain.

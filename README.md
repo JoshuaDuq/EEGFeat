@@ -5,16 +5,14 @@
 [![MNE-Python ≥ 1.8](https://img.shields.io/badge/mne--python-≥1.8-blue.svg)](https://mne.tools/stable/)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](https://joshuaduq.github.io/EEGFeat/)
 
-Labelled EEG feature extraction and leakage-safe modeling for preprocessed MNE data.
+EEG feature extraction and grouped predictive modeling for preprocessed MNE data.
 
-Features come back as `FeatureTable` objects, not bare arrays: every value stays linked to its
-band, window, spatial unit, normalization, coverage, and computation parameters. Column names
-carry the same information, so a table reads on its own months later:
+A result is a `FeatureTable`. Each column keeps its band, window, spatial unit, normalization, coverage, and computation parameters. The column name carries the same fields.
 
 ```text
 eeg_erds-mean_alpha_central_stimulus_db_pd6572187a139
-│   │         │     │       │        │  └─ parameter hash (first 12 hex)
-│   │         │     │       │        └─ normalization: raw, log10, log_ratio, db, percent
+│   │         │     │       │        │  └─ parameter hash (first 12 hex of SHA-256)
+│   │         │     │       │        └─ normalization (raw, log10, log_ratio, db, percent)
 │   │         │     │       └─ time window, or "all"
 │   │         │     └─ channel, ROI, or "global"
 │   │         └─ band, or "broadband"
@@ -22,18 +20,17 @@ eeg_erds-mean_alpha_central_stimulus_db_pd6572187a139
 └─ domain
 ```
 
-## Where to start
-
-| Goal | Start here |
+| Goal | Section |
 | :--- | :--- |
-| Explore interactively or build a custom pipeline | [Python API](#python-api) |
+| Call the library from Python | [Python API](#python-api) |
 | Apply one recipe to many epochs files | [Batch runner](#batch-runner) |
 | Predict a target from per-epoch features | [Modeling](#modeling) |
-| See real output — tables, sidecars, model scores | [`examples/`](examples/) |
+| Look up a measure | [Measures](#measures) |
+| See written files | [`examples/`](examples/) |
 
 ## Install
 
-Requires Python 3.11+ and preprocessed MNE `Epochs`. Not yet on PyPI, so install from source:
+Python 3.11 or newer. Input is preprocessed MNE `Epochs`. The package is not on PyPI.
 
 ```bash
 git clone https://github.com/JoshuaDuq/EEGFeat.git
@@ -44,23 +41,24 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[model]"
 ```
 
-Core dependencies are just `numpy`, `scipy`, `pandas`, and `mne`. The rest are extras:
+Core dependencies are `numpy`, `scipy`, `pandas`, and `mne`.
 
-| Extra | Enables |
+| Extra | Adds |
 | :--- | :--- |
-| `model` | scikit-learn pipelines, grouped cross-fitting, metrics, nulls, and uncertainty |
+| `model` | scikit-learn pipelines, grouped cross-fitting, metrics, nulls, uncertainty |
 | `connectivity` | `mne-connectivity` for spectral connectivity and wPLI |
 | `microstates` | scikit-learn microstate segmentation |
-| `importance` | SHAP-based importance; permutation importance is in `model` |
-| `docs` | Sphinx documentation |
-| `dev` | tests, typing, linting, and formatting |
+| `importance` | SHAP. Permutation importance is included in `model` |
+| `docs` | This documentation, built with Sphinx |
+| `dev` | tests, typing, lint, format |
 
-To contribute, take them all: `pip install -e ".[dev,model,connectivity,microstates,importance,docs]"`
+Development install:
+
+```bash
+python -m pip install -e ".[dev,model,connectivity,microstates,importance,docs]"
+```
 
 ## Python API
-
-Load epochs, define bands and windows, build a spectral or time-domain container, compute
-tables, concatenate.
 
 ```python
 import mne
@@ -74,7 +72,6 @@ baseline = ef.Window("baseline", -0.5, -0.1)
 stimulus = ef.Window("stimulus", 0.1, 0.6)
 rois = {"central": ["C3", "Cz", "C4"]}
 
-# PSD features take an explicit MNE Spectrum or EpochsSpectrum.
 spectrum = epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0, tmin=0.0, tmax=0.8)
 spectra = ef.Spectra.from_spectrum(
     spectrum,
@@ -86,7 +83,6 @@ spectra = ef.Spectra.from_spectrum(
 power = ef.integrated_band_power(spectra, bands=[alpha, beta], groups=rois, normalize="log10")
 peak = ef.peak_frequency(spectra, band=alpha, groups=rois)
 
-# BandSignal filters, Hilbert-transforms, and retains the analytic signal.
 alpha_signal = ef.BandSignal.from_epochs(epochs, alpha, recording="sub-01", pad_sec=0.5)
 erds = ef.erds_mean([alpha_signal], baseline=baseline, windows=[stimulus], groups=rois)
 bursts = ef.burst_rate([alpha_signal], baseline=baseline, windows=[stimulus], groups=rois)
@@ -95,61 +91,54 @@ features = ef.concat([power, peak, erds, bursts])
 print(features.to_dataframe())
 ```
 
-`estimator_parameters` is not bookkeeping: it goes into each column's parameter hash, along
-with the frequency axis and sampling rate read off the object itself. Two tables whose grids,
-ranges or rates differ therefore cannot land on the same column name.
+`estimator_parameters` is part of the column hash, together with the frequency axis and sampling rate read from the object. A different grid, range, or sampling rate produces a different column name.
 
-The declared half of that is on you. MNE keeps none of the estimator's own keyword arguments
-on a `Spectrum` — there is no `n_per_seg`, `n_overlap` or `window` to recover — so a setting
-you vary without recording it here is a setting the hash cannot see. Two subjects computed
-with different Welch segment lengths but the same declaration will stack into one variable,
-with the processing difference left inside it. Record every parameter you varied.
+MNE does not store the estimator keyword arguments on a `Spectrum`. `n_per_seg`, `n_overlap`, and `window` cannot be read back from it. Record every parameter that varies. Two recordings computed with different Welch segment lengths and the same `estimator_parameters` share a column name.
 
-### Choosing a container
+### Containers
 
-| Container | Use for |
+| Constructor | Input |
 | :--- | :--- |
-| `Spectra.from_spectrum` | PSD-based power and spectral descriptors |
-| `Spectra.from_tfr` | An uncorrected MNE `EpochsTFR`; pass the original `n_cycles` so wavelet support can be checked, and the original `sfreq` so Morlet power is scaled to a V²/Hz density independent of sampling rate |
-| `Signal.from_epochs` | Broadband time-domain measures |
-| `BandSignal.from_epochs` | Band envelopes, phase, power, bursts, ERDS, and band-limited time-domain measures |
+| `Spectra.from_spectrum` | PSD from Welch or multitaper. Power and spectral descriptors. |
+| `Spectra.from_tfr` | Morlet `EpochsTFR`. Pass the original `n_cycles` and the `sfreq` from before decimation. |
+| `Signal.from_epochs` | Broadband time series. |
+| `BandSignal.from_epochs` | Band-pass and Hilbert transform. Envelopes, phase, bursts, ERDS, band-limited time-domain measures. |
 
-For multitaper PSD, compute with `normalization="full"` and record the same setting in
-`estimator_parameters`.
+`n_cycles` is used to drop Morlet coefficients whose wavelet support falls outside the window. `sfreq` scales Morlet power to a density in V²/Hz.
 
-### Tables and files
+For a multitaper PSD, call `compute_psd` with `normalization="full"` and store that setting in `estimator_parameters`. Other multitaper normalizations are rejected.
+
+### Files
 
 ```python
 from eegfeat.io import read_dataset, read_table, write_table
 
-rows = epochs.metadata  # None is valid; otherwise one row per epoch.
+rows = epochs.metadata  # None, or one row per epoch.
 write_table(features, "sub-01_features.tsv", rows=rows)
 restored = read_table("sub-01_features.tsv")
 
 dataset = read_dataset(["sub-01_features.tsv", "sub-02_features.tsv"])
 ```
 
-`write_table` writes three files: the values TSV, a `_coverage.tsv` matrix giving the finite
-fraction behind each cell, and a JSON sidecar with column metadata, flags, row identities, and
-provenance. `read_dataset` loads per-epoch bundles into `dataset.table`, with descriptor columns
-in `dataset.targets`.
+`write_table` writes three files.
 
-Put target, subject, and run columns in `rows` if the tables will be modeled; they carry through
-to `dataset.targets`. For in-memory cohorts with different channel sets, use
-`stack_rows(..., columns="union")`.
+| File | Contents |
+| :--- | :--- |
+| `*_features.tsv` | Values |
+| `*_features_coverage.tsv` | Fraction of finite input behind each cell |
+| `*_features.json` | Column metadata, flags, row identity, provenance |
+
+`read_dataset` returns per-epoch features in `dataset.table` and descriptor columns in `dataset.targets`. Put the target, subject, and run in `rows` when the tables will be modeled. For in-memory tables whose channel sets differ, use `stack_rows(..., columns="union")`.
 
 ## Batch runner
 
-The runner reads FIF epochs files recursively and mirrors their paths below the output root.
-Start from a generated recipe:
+The runner reads FIF epochs files recursively and mirrors that tree under the output root. `python -m eegfeat` is the same entry point. Run `check` before a long job. It writes nothing.
 
 ```bash
-eegfeat init recipe.toml   # write a commented starting recipe
-eegfeat check recipe.toml  # validate, survey recordings, try the first one, write nothing
-eegfeat run recipe.toml    # compute features for every recording
+eegfeat init recipe.toml   # commented recipe
+eegfeat check recipe.toml  # load the recipe and run the first recording
+eegfeat run recipe.toml    # every recording
 ```
-
-`python -m eegfeat` is equivalent. Always `check` before a long batch job.
 
 <details>
 <summary>Minimal recipe</summary>
@@ -201,49 +190,44 @@ spatial = ["rois"]
 
 </details>
 
-Each `[[features]]` entry names one eegfeat measure; its other keys are that function's own
-parameters. The rules that matter most:
+Each `[[features]]` entry sets `measure` to one function name. The other keys are that function's parameters.
 
-- Paths resolve against the recipe file. Unknown sections and keys are errors, not warnings.
-- Bands are `[low, high)` in Hz; omit `[bands]` for delta through gamma (1–45 Hz).
-- Windows are seconds from the epoch origin; omit `[windows]` to measure the whole epoch. The
-  name `all` is reserved.
-- `baseline` is consumed by normalization, burst, and ERDS measures. It is not also an analysis
-  window unless the measure permits that combination.
-- `spatial` accepts `channels`, `rois`, and, where supported, `global`.
-- `[spectra]` selects `welch` (default), `multitaper`, or `morlet` estimation.
-- `[trials]` groups epochs for cross-trial measures by `all`, `event`, or `metadata`. Those
-  measures (`itpc`, `ppc`, `envelope_correlation`, `wpli`) need enough epochs per group and
-  write group-row tables.
-- `series = ["broadband", "alpha"]` selects raw and band-envelope time-domain inputs; `pairs`
-  configures PAC; `ratios` and `asymmetry` configure derived power features.
-
-**Options and exit codes.**
+| Item | Rule |
+| :--- | :--- |
+| Paths | Resolved against the recipe file. Unknown sections and keys are errors. |
+| Bands | `[low, high)` in Hz. If `[bands]` is omitted, the bands are delta through gamma (1–45 Hz). |
+| Windows | Seconds from the epoch origin. If `[windows]` is omitted, the measure uses the whole epoch. The name `all` is reserved. |
+| `baseline` | Consumed by normalization, bursts, and ERDS. It is an analysis window only for measures that allow that combination. |
+| `spatial` | `channels`, `rois`, and, where the measure supports it, `global`. |
+| `[spectra]` | `welch` (default), `multitaper`, or `morlet`. |
+| `[trials]` | Groups for cross-trial measures. `all`, `event`, or `metadata`. |
+| Cross-trial measures | `itpc`, `ppc`, `envelope_correlation`, `wpli`. They need enough epochs per group and write group-row tables. |
+| `series` | Time-domain and complexity input. `broadband` and band names (envelopes). |
+| `pairs` | PAC only. `[["theta", "gamma"]]` is `[phase, amplitude]`. |
+| `ratios`, `asymmetry` | Derived power features on a power measure. |
 
 ```bash
 eegfeat run recipe.toml --overwrite --n-jobs 4
 eegfeat run recipe.toml --progress-json
 ```
 
-`--overwrite` replaces an existing result bundle; without it, existing results stop the run.
-`--n-jobs` (default 1) goes to MNE filtering and spectral estimation. `--progress-json` emits
-one JSON event per line, for a front end.
+| Flag | Effect |
+| :--- | :--- |
+| `--overwrite` | Replace an existing result bundle. Without it, an existing result stops the run. |
+| `--n-jobs` | Passed to MNE filtering and spectral estimation. Default 1. |
+| `--progress-json` | One JSON object per line. |
 
 | Exit code | Meaning |
 | :--- | :--- |
-| `0` | All recordings succeeded |
-| `1` | The run completed, but some recordings failed |
-| `2` | The recipe or inputs prevented the run from starting |
+| `0` | Every recording succeeded |
+| `1` | The run finished, and at least one recording failed |
+| `2` | The recipe or the inputs stopped the run before computation |
 
-**Output.** Per-epoch measures go to `*_features.tsv`, cross-trial measures to a separate
-`*_crosstrial.tsv` bundle. Each bundle gets its coverage matrix and JSON sidecar, plus one
-`eegfeat_run.json` summary per run. Only FIF epochs files are read.
+Per-epoch measures are written to `*_features.tsv`. Cross-trial measures are written to `*_crosstrial.tsv`. Each bundle has a coverage TSV and a JSON sidecar. One `eegfeat_run.json` summarizes the run. Only FIF epochs files are read.
 
 ## Modeling
 
-Needs the `model` extra and per-epoch bundles only — cross-trial tables stay out of the design,
-because their rows are trial groups, not independent epochs. Targets must carry matching
-`recording`, `epoch`, and `event` keys plus the target and grouping columns.
+Requires the `model` extra. `build_design` takes per-epoch tables. Cross-trial rows are trial groups and are not part of the design. The target frame needs `recording`, `epoch`, and `event`, plus the target column and the grouping column.
 
 ```python
 from pathlib import Path
@@ -254,8 +238,7 @@ from eegfeat.io import read_dataset
 
 dataset = read_dataset(sorted(Path("derivatives/eegfeat").rglob("*_features.tsv")))
 
-# Selection filters on the measure *label* in the sidecar ("band_power"),
-# not the function name (integrated_band_power).
+# "band_power" is the label stored on the column. The function name is integrated_band_power.
 selection = efm.Selection(measure=("band_power", "erds_mean"), band=("alpha", "beta"))
 design = efm.build_design(
     dataset.table,
@@ -286,64 +269,54 @@ metrics, _ = efm.regression_metrics(y_true, y_pred, groups=np.asarray(eval_group
 print(metrics["subject_level_r"])
 ```
 
-`loso_folds` needs at least two unique groups, so this expects a multi-recording cohort; the
-checked-in [`examples/`](examples/) outputs cover one recording. Use `within_subject_folds` for
-run-disjoint within-subject evaluation.
+`loso_folds` needs at least two groups. The files in [`examples/`](examples/) are one recording. `within_subject_folds` holds out runs within each subject.
 
-Preprocessing and hyperparameter tuning are fitted inside the training folds. Regression
-pipelines include ridge, elastic net, and random forest; classification includes logistic, SVM,
-random forest, and ensemble pipelines with binary labels. `permutation_test` refits the whole
-cross-fitting procedure; SHAP importance needs the `importance` extra.
+Preprocessing and hyperparameter tuning are fit on the training rows of each fold. Regression pipelines are ridge, elastic net, and random forest. Classification pipelines are logistic regression, SVM, random forest, and an ensemble, with labels in `{0, 1}`. `permutation_test` refits the full procedure on each draw. SHAP requires the `importance` extra.
 
 ## Measures
 
-All of these are exported from `eegfeat` and documented in the
-[API reference](https://joshuaduq.github.io/EEGFeat/api/index.html).
+Exported from `eegfeat`. Definitions and signatures are in the [API reference](https://joshuaduq.github.io/EEGFeat/api/index.html).
 
-| Input or purpose | Functions | Row semantics |
+| Family | Functions | Rows |
 | :--- | :--- | :--- |
-| PSD/TFR power | `mean_psd`, `integrated_band_power`, `mean_tfr_power` | Per epoch |
-| Spectral descriptors | `peak_frequency`, `spectral_centroid`, `spectral_bandwidth`, `spectral_edge`, `spectral_entropy`, `aperiodic`, `aperiodic_ratio` | Per epoch |
+| PSD and TFR power | `mean_psd`, `integrated_band_power`, `mean_tfr_power` | Per epoch |
+| Spectral shape | `peak_frequency`, `spectral_centroid`, `spectral_bandwidth`, `spectral_edge`, `spectral_entropy`, `aperiodic`, `aperiodic_ratio` | Per epoch |
 | Time domain | `variance`, `mean_amplitude`, `peak_to_peak`, `area_under_curve`, `peak_amplitude`, `peak_latency`, `amplitude_quantile`, `kurtosis`, `line_length`, `root_mean_square`, `skewness`, `zero_crossing_rate`, `hjorth_mobility`, `hjorth_complexity` | Per epoch |
 | Bursts and ERDS | `burst_count`, `burst_rate`, `burst_duration`, `burst_amplitude`, `fraction_above_threshold`, `erds_mean`, `erds_slope`, `erd_magnitude`, `erd_duration`, `ers_magnitude`, `ers_duration`, `erds_onset_latency`, `erds_peak_latency`, `erds_rebound_latency` | Per epoch |
-| Cross-trial phase/connectivity | `itpc`, `ppc`, `envelope_correlation`, `spectral_connectivity`, `wpli` | One row per trial group |
-| Phase-amplitude coupling | `pac` | Per epoch; no surrogate correction |
+| Cross-trial phase and connectivity | `itpc`, `ppc`, `envelope_correlation`, `spectral_connectivity`, `wpli` | One row per trial group |
+| Phase-amplitude coupling | `pac` | Per epoch. No surrogate correction. |
 | Derived power | `band_ratio`, `asymmetry` | Per epoch |
-| Graph summaries | `global_efficiency`, `clustering_coefficient` | Reduce a pairwise table |
+| Graph summaries | `global_efficiency`, `clustering_coefficient` | One value from a pairwise table |
 | Complexity | `sample_entropy`, `multiscale_entropy`, `higuchi_fractal_dimension` | Per epoch |
 | Microstates | `segment`, `microstate_coverage`, `microstate_duration`, `microstate_occurrence`, `microstate_transitions` | Per epoch |
-| Supervised spatial filters | `CommonSpatialPattern`, `csp_features` | Cross-fitted per epoch |
+| Supervised spatial filters | `CommonSpatialPattern`, `csp_features` | Per epoch, fit inside each training fold |
 
-`spectral_connectivity` and `wpli` require the `connectivity` extra; microstate measures require
-`microstates`.
+`spectral_connectivity` and `wpli` require the `connectivity` extra. Microstate measures require `microstates`.
 
-> [!IMPORTANT]
-> `csp_features` gives descriptive held-out features and **cannot** serve as a fixed classifier
-> design, even with the same folds. To predict, fit `CommonSpatialPattern` inside each training
-> fold, transform both train and test with that same fit, and repeat inside inner tuning.
-> `build_design` rejects assembled CSP columns.
+`csp_features` fits inside each training fold and returns that fold's held-out rows. `build_design` rejects those columns. For classification, fit `CommonSpatialPattern` on the training rows of each fold, transform the training and test rows with that fit, and repeat the fit inside inner tuning. An assembled CSP table still leaks under the same folds, because each fit uses labels from epochs that another fold holds out.
 
-## Design guarantees
+## Behavior
 
-- Bands outside an input recording's passband raise; partially truncated bands warn and record
-  coverage.
-- Morlet windows keep only coefficients with complete temporal support.
-- ERDS and burst baselines are explicit; they are never learned from the analysis window.
-- Non-finite samples become coverage and flags, not silently dropped temporal neighbours.
-- Cross-trial tables are never broadcast into per-epoch modeling data.
-- Subject-level metrics weight subjects equally by default.
+- A band outside the recording passband raises. A band that is only partly inside the passband warns, and coverage records the portion used.
+- A Morlet window average uses coefficients whose wavelet support lies inside the window.
+- The ERDS and burst baseline is the window passed by the caller.
+- Non-finite samples are omitted from the statistic and recorded in `coverage` and `flags`. Samples on either side of a gap do not become neighbours.
+- A cross-trial value is not copied onto the epochs that formed it.
+- Subject-level metrics give each subject equal weight by default.
 
 ## Documentation
 
-- [Concepts](https://joshuaduq.github.io/EEGFeat/concepts.html) — containers, table anatomy, column names, missing values
-- [Quickstart](https://joshuaduq.github.io/EEGFeat/quickstart.html) — containers, measures, and table I/O
-- [Feature tables and files](https://joshuaduq.github.io/EEGFeat/guides/tables.html) — querying, TSV/JSON I/O, cohort stacking
-- [Runner guide](https://joshuaduq.github.io/EEGFeat/guides/runner.html) — complete TOML schema and CLI behavior
-- [Modeling guide](https://joshuaduq.github.io/EEGFeat/guides/modeling.html) — designs, cross-fitting, metrics, nulls, importance
-- [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html) — definitions and assumptions
-- [API reference](https://joshuaduq.github.io/EEGFeat/api/index.html) — public signatures
-- [Example output](https://joshuaduq.github.io/EEGFeat/examples.html) — real files from a simulated cohort
-- [Validation](https://joshuaduq.github.io/EEGFeat/guides/validation.html) — known effects recovered from public MNE datasets
+| Page | Contents |
+| :--- | :--- |
+| [Concepts](https://joshuaduq.github.io/EEGFeat/concepts.html) | Containers, table fields, column names, missing values |
+| [Quickstart](https://joshuaduq.github.io/EEGFeat/quickstart.html) | PSD, Morlet, and ERDS examples |
+| [Feature tables and files](https://joshuaduq.github.io/EEGFeat/guides/tables.html) | `select`, TSV and JSON, stacking |
+| [Runner](https://joshuaduq.github.io/EEGFeat/guides/runner.html) | TOML schema and CLI |
+| [Modeling](https://joshuaduq.github.io/EEGFeat/guides/modeling.html) | Designs, cross-fitting, metrics, nulls, importance |
+| [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html) | Definitions |
+| [API reference](https://joshuaduq.github.io/EEGFeat/api/index.html) | Signatures |
+| [Example output](https://joshuaduq.github.io/EEGFeat/examples.html) | Files from a simulated cohort |
+| [Validation](https://joshuaduq.github.io/EEGFeat/guides/validation.html) | Known effects on public MNE datasets |
 
 ## Development
 
@@ -354,10 +327,13 @@ python -m black --check src tests
 python -m mypy
 ```
 
-The validation suite checks the library against public MNE datasets (PhysioNet motor
-movement, SSVEP, ERP CORE, Sleep-EDF): known physiology has to come out of real
-recordings, and the formulas have to agree with direct computation on them. It downloads
-about 350 MB on first use and is skipped unless asked for:
+Beyond the unit tests, a validation suite runs every public function on four public
+datasets (PhysioNet motor movement, MNE's SSVEP example, ERP CORE, Sleep-EDF) and checks
+three things: that each formula matches an independent computation on real data, that
+different estimators of the same quantity agree, and that textbook effects come out. The
+[scorecard](https://joshuaduq.github.io/EEGFeat/guides/validation.html) is written by the
+suite itself on each run. It downloads about 350 MB on first use and is skipped unless asked
+for:
 
 ```bash
 EEGFEAT_DATASETS=1 python -m pytest tests/validation -ra
@@ -365,4 +341,4 @@ EEGFEAT_DATASETS=1 python -m pytest tests/validation -ra
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

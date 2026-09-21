@@ -8,6 +8,8 @@ must reproduce exactly when peak rejection is switched off.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -17,6 +19,8 @@ import eegfeat as ef
 from validation.loaders import Recording
 
 FIT_RANGE = (2.0, 30.0)
+
+DATASET = "sleep"
 
 
 @pytest.fixture(scope="module")
@@ -48,6 +52,12 @@ def _least_squares_slopes(spectra: ef.Spectra) -> np.ndarray:
     return np.array([[np.polyfit(log_f, channel, 1)[0] for channel in epoch] for epoch in log_p])
 
 
+@pytest.mark.validates(
+    "aperiodic",
+    kind="formula",
+    claim="With peak rejection off, the aperiodic fit is least squares in log-log space",
+    criterion="relative error below 1e-9",
+)
 def test_without_peak_rejection_the_fit_is_ordinary_least_squares(
     spectra: list[ef.Spectra],
 ) -> None:
@@ -64,6 +74,12 @@ def test_without_peak_rejection_the_fit_is_ordinary_least_squares(
         )
 
 
+@pytest.mark.validates(
+    "aperiodic",
+    kind="estimator",
+    claim="The robust slope tracks plain least squares",
+    criterion="correlation above 0.98; median absolute difference below 0.1",
+)
 def test_peak_rejection_only_nudges_the_slope(spectra: list[ef.Spectra]) -> None:
     """Rejecting points above the line changes the slope a little, and never wildly."""
     for spectrum in spectra:
@@ -74,6 +90,12 @@ def test_peak_rejection_only_nudges_the_slope(spectra: list[ef.Spectra]) -> None
         assert np.median(np.abs(slope - plain)) < 0.1
 
 
+@pytest.mark.validates(
+    "aperiodic_ratio",
+    kind="formula",
+    claim="Dividing by the fitted line leaves a spectrum centred on one",
+    criterion="median log10 ratio within 0.05 of zero",
+)
 def test_flattened_spectrum_is_centred_on_one(spectra: list[ef.Spectra]) -> None:
     """Dividing by the fitted line leaves a spectrum whose typical value is unity."""
     for spectrum in spectra:
@@ -82,9 +104,16 @@ def test_flattened_spectrum_is_centred_on_one(spectra: list[ef.Spectra]) -> None
         assert abs(np.nanmedian(np.log10(ratio.data[:, :, 0, inside]))) < 0.05
 
 
+@pytest.mark.validates(
+    "aperiodic",
+    kind="physiology",
+    claim="The aperiodic slope steepens wake, N2, N3",
+    criterion="median ordering holds; wake-vs-N3 AUC below 0.1, both derivations, both subjects",
+)
 def test_slope_steepens_with_sleep_depth(
-    sleep_recordings: list[Recording], spectra: list[ef.Spectra]
+    sleep_recordings: list[Recording], spectra: list[ef.Spectra], record: Callable[[str], None]
 ) -> None:
+    summary: list[str] = []
     for recording, spectrum in zip(sleep_recordings, spectra, strict=True):
         fit = ef.aperiodic(spectrum, fit_range=FIT_RANGE, include_global=False)
         slope = fit.select(measure="slope")
@@ -92,6 +121,10 @@ def test_slope_steepens_with_sleep_depth(
         frame["stage"] = recording.metadata["stage"].to_numpy()
 
         medians = frame.groupby("stage").median()
+        summary.append(
+            f"{recording.name} Pz-Oz: wake {medians.loc['W', 'Pz-Oz']:.2f}, N2 "
+            f"{medians.loc['N2', 'Pz-Oz']:.2f}, N3 {medians.loc['N3', 'Pz-Oz']:.2f}"
+        )
         for channel in medians.columns:
             ordered = medians.loc[["W", "N2", "N3"], channel]
             assert ordered.is_monotonic_decreasing, (recording.name, channel, ordered)
@@ -100,3 +133,4 @@ def test_slope_steepens_with_sleep_depth(
         deep = (kept["stage"] == "N3").astype(int)
         for channel in medians.columns:
             assert roc_auc_score(deep, kept[channel]) < 0.1, (recording.name, channel)
+    record("median slope " + "; ".join(summary))

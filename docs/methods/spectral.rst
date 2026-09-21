@@ -1,168 +1,126 @@
 Spectral Methods
 ================
 
-How power is integrated over a band, how it is normalized, and how the shape of
-the spectrum is summarized. Every measure here is estimated from a
-:class:`~eegfeat.Spectra` container, so it applies equally to Welch, multitaper,
-and Morlet input unless a section says otherwise.
+Power integrated over a band, normalization of that power, and summaries of
+spectral shape. Each measure reads a :class:`~eegfeat.Spectra` container and
+applies to Welch, multitaper, and Morlet input unless a section says otherwise.
 
-Signatures for these functions are in :doc:`/api/spectral`.
+Signatures are in :doc:`/api/spectral`.
 
 Spectral Power
 --------------
 
-``integrated_band_power`` integrates a PSD over exact numerical band boundaries:
+``integrated_band_power`` integrates a PSD over the band limits.
 
 .. math::
 
    P_B = \int_{f_{\min}}^{f_{\max}} S(f)\,df
 
-Piecewise-linear quadrature includes interpolated contributions at both boundaries,
-so changing from a linear to a logarithmic grid does not silently change the
-represented interval. For EEG PSD in V²/Hz the result is V².
+Quadrature is piecewise linear and includes interpolated contributions at both
+boundaries, so a linear grid and a logarithmic grid represent the same interval.
+For an EEG PSD in V²/Hz the integral is in V².
 
-``mean_psd`` divides that integral by band width and retains V²/Hz units.
-``mean_tfr_power`` is the corresponding frequency-weighted mean for Morlet
-time-frequency power, and is also in V²/Hz: MNE's wavelets are normalized to
-unit energy, so the power they return for a stationary signal is the one-sided
-density at the wavelet's frequency, smoothed over its bandwidth, multiplied by
-the sampling rate. :meth:`~eegfeat.Spectra.from_tfr` divides that factor out,
-which is why it requires the rate the TFR was computed from (a decimated TFR
-reports only the decimated rate). Without the division the same recording
-resampled from 250 to 500 Hz reports twice the raw power, and the aperiodic
-offset fitted on it shifts by :math:`\log_{10}` of the rate. The TFR is still a
-distinct representation, because a wavelet already averages power over its own
-bandwidth and integrating it over a band again would count that spectral mass
-more than once; :class:`~eegfeat.Spectra` records which representation it
-contains, and these operations reject the wrong one instead of conflating them.
+``mean_psd`` divides that integral by the bandwidth and stays in V²/Hz.
+``mean_tfr_power`` is the same frequency-weighted mean of Morlet power, also in
+V²/Hz. MNE normalizes its Morlet wavelets to unit energy, so the power it
+returns for a stationary signal is the one-sided density at the wavelet
+frequency, smoothed over the wavelet bandwidth, times the sampling rate.
+:meth:`~eegfeat.Spectra.from_tfr` divides that factor out and therefore needs
+the sampling rate the TFR was computed at. A decimated TFR reports only the
+decimated rate. Without the division, resampling a recording from 250 Hz to
+500 Hz doubles the raw power, and an aperiodic offset fitted to it shifts by
+:math:`\log_{10}` of the rate ratio.
 
-The three functions are summaries of an already estimated spectral
-representation; they do not introduce a new PSD estimator. When the input was
-produced by Welch averaging, its statistical provenance is the short-segment
-modified-periodogram estimator of `Peter D. Welch (1967)
-<https://doi.org/10.1109/TAU.1967.1161901>`__. When it was produced by
-multitaper estimation, the relevant method is `David J. Thomson (1982)
-<https://doi.org/10.1109/PROC.1982.12433>`__. For ``mean_tfr_power``, the
-underlying Morlet construction follows `Jean Morlet, G. Arens, E. Fourgeau,
-and D. Giard (1982) <https://doi.org/10.1190/1.1441328>`__. The integration
-and averaging performed here are deterministic numerical summaries of those
-estimates.
+A wavelet already averages power over its own bandwidth. Integrating that
+representation over a band again counts the same spectral mass more than once,
+so ``mean_tfr_power`` averages within the band and does not integrate it.
+:class:`~eegfeat.Spectra` records which representation it holds. Each function
+rejects the other representation.
 
-The implementation first constructs exact piecewise-linear integration weights
-on the requested band and then reduces finite bins with those weights. In
-pseudocode, the core reductions are:
+These functions summarize an estimate MNE has already computed. Welch input is
+the short-segment modified periodogram of Welch (1967). Multitaper input is
+Thomson (1982). Morlet input follows Morlet, Arens, Fourgeau, and Giard (1982).
 
-.. code-block:: python
-
-   weights = band_integration_weights(freqs, fmin, fmax)
-   selected = weights > 0.0
-   finite = np.isfinite(power[..., selected])
-   selected_power = power[..., selected]
-   selected_weights = weights[selected]
-   weighted_sum = np.sum(np.where(finite, selected_power * selected_weights, 0.0), axis=-1)
-   weight_sum = np.sum(np.where(finite, selected_weights, 0.0), axis=-1)
-   mean = np.where(weight_sum > 0, weighted_sum / weight_sum, np.nan)
-   integral = np.where(finite.all(axis=-1), weighted_sum, np.nan)
-
-Thus ``mean_psd`` and ``mean_tfr_power`` return a weighted mean, whereas
-``integrated_band_power`` returns the weighted integral and invalidates a cell
-if any bin required by the integration is non-finite.
+Integration weights are the piecewise-linear weights on
+:math:`[f_{\min}, f_{\max})`. ``mean_psd`` and ``mean_tfr_power`` average over
+the finite bins. ``integrated_band_power`` returns NaN if any weighted bin is
+non-finite.
 
 Normalization
 -------------
 
-Power normalization is applied per channel before spatial aggregation:
+Normalization is applied per channel, then channels are aggregated. An ROI
+value is the mean of the per-channel normalized values.
 
 - **log10**: :math:`\log_{10}(\max(P, \epsilon))`
 - **log_ratio**: :math:`\log_{10}\left(\frac{\max(P, \epsilon)}{\max(B, \epsilon)}\right)`
 - **db**: :math:`10 \log_{10}\left(\frac{\max(P, \epsilon)}{\max(B, \epsilon)}\right)`
 - **percent**: :math:`\frac{P - \max(B, \epsilon)}{\max(B, \epsilon)} \cdot 100`
 
-where :math:`B` is the baseline power in a designated reference window, and
-:math:`\epsilon = 10^{-20}`. Logarithmic ratios floor both numerator and
-denominator; percent normalization floors the denominator only, so a true zero
-power remains an exact :math:`-100\%` decrease.
+:math:`B` is mean power in the named baseline window and
+:math:`\epsilon = 10^{-20}`. Logarithmic forms floor the numerator and the
+denominator. Percent floors the denominator only, so zero power is an exact
+:math:`-100\%` change.
 
-Applying normalization per channel before spatial aggregation ensures that region-of-interest (ROI) values reflect the mean of log-ratios rather than the log-ratio of channel means.
+The baseline forms are relative power, in the sense of Pfurtscheller and Lopes
+da Silva (1999). The sign and the units are the ones written above.
 
-The corresponding implementation is:
-
-.. code-block:: python
-
-   epsilon = 1e-20
-   floored_power = np.maximum(power, epsilon)
-   floored_baseline = np.maximum(baseline, epsilon)
-   log_ratio = np.log10(floored_power / floored_baseline)
-   normalized_db = 10.0 * log_ratio
-   normalized_percent = (power - floored_baseline) / floored_baseline * 100.0
-
-The percent branch intentionally retains the unfloored numerator, so zero
-power is reported as an exact :math:`-100\%` change.
-
-The baseline-referenced percentage and logarithmic forms are relative-power
-estimators rather than a separate spectral decomposition. Their interpretation
-as event-related synchronization or desynchronization follows the baseline
-logic formalized by `Gert Pfurtscheller and F. H. Lopes da Silva (1999)
-<https://doi.org/10.1016/S1388-2457(99)00141-8>`__; the sign convention and
-units remain the explicit choices of this package.
-
-For baseline-normalized spectral power, coverage is the minimum of the analysis
-and baseline coverage per channel, and flags from either window propagate to the
-result. The baseline name and time bounds are included in the computation metadata.
+For baseline-normalized power, coverage is the minimum of the analysis-window
+and baseline coverage on that channel. Flags from either window are copied to
+the result. The baseline name and its time bounds are stored in the column
+metadata.
 
 Wavelet Support Restriction
 ---------------------------
 
-When computing spectral power or features across time-frequency representations (TFRs), Morlet wavelet kernels possess frequency-dependent temporal duration. For a Morlet wavelet at center frequency :math:`f` parameterized with :math:`n_{\text{cycles}}` cycles, the temporal half-support is:
+A Morlet wavelet at frequency :math:`f` with :math:`n_{\text{cycles}}` cycles
+has temporal half-support
 
 .. math::
 
    \tau(f) = \frac{5 n_{\text{cycles}}}{2 \pi f}
 
-A time-frequency coefficient at time coordinate :math:`t` draws upon underlying signal data from :math:`[t - \tau(f), t + \tau(f)]`. Consequently, a coefficient is mathematically attributable to an analysis window :math:`[t_{\min}, t_{\max}]` if and only if its full temporal support is contained entirely within the window bounds:
+The coefficient at time :math:`t` uses samples in
+:math:`[t - \tau(f), t + \tau(f)]`. It belongs to an analysis window
+:math:`[t_{\min}, t_{\max}]` when that support lies inside the window.
 
 .. math::
 
    t_{\min} + \tau(f) \le t \le t_{\max} - \tau(f)
 
-Bins failing this condition are masked out prior to window averaging. Frequencies where :math:`\tau(f) > (t_{\max} - t_{\min}) / 2` retain no attributable coefficients across the window and are returned as NaN, preventing edge and baseline leakage.
+Coefficients outside this interval are excluded before the window mean. If
+:math:`\tau(f) > (t_{\max} - t_{\min}) / 2`, the frequency has no usable
+coefficient in the window and the result is NaN.
 
 Peak Frequency
 --------------
 
-A bare argmax is a poor peak estimator on real spectra, so ``peak_frequency``
-applies three corrections by default, each of which can be switched off.
+``peak_frequency`` applies three corrections to the in-band argmax. Each can
+be turned off.
 
-**Aperiodic adjustment.** The fitted 1/f component is divided out first, so the
-search runs on :math:`P(f) / P_{\text{ap}}(f)` where a pure power law is flat at
-one. Without this step a steep spectrum reports the low edge of the band
-whatever the oscillation is doing, because the largest raw value in the band is
-simply the leftmost one. The fit spans ``fit_range``, defaulting to
-:math:`(\min(2, f_{\min}), \max(40, f_{\max}))`, which deliberately reaches
-outside the band: a 1/f slope estimated from a five-hertz window is not a 1/f
-slope. This sets the measure name to ``peak_freq_adjusted``.
+**Aperiodic adjustment.** The search runs on
+:math:`P(f) / P_{\text{ap}}(f)`, where a pure power law is flat at one. On a
+steep spectrum the largest raw bin in the band is the low edge, whatever the
+oscillation does. The fit uses ``fit_range``, default
+:math:`(\min(2, f_{\min}), \max(40, f_{\max}))`, which extends outside the
+analysis band. A slope estimated on a window a few hertz wide is not stable.
+With this adjustment the measure name is ``peak_freq_adjusted``.
 
-The separation of aperiodic background and oscillatory peaks is grounded in the
-spectral parameterization of `Thomas Donoghue, Matar Haller, Erik J. Peterson,
-Paroma Varma, Priyadarshini Sebastian, Richard Gao, Torben Noto, Antonio H.
-Lara, Joni D. Wallis, Robert T. Knight, Avgusta Shestyuk, and Bradley Voytek
-(2020) <https://doi.org/10.1038/s41593-020-00744-x>`__. This implementation
-uses that scientific distinction but deliberately exposes a compact robust
-aperiodic fit rather than claiming to reproduce the complete FOOOF model.
+The split between aperiodic background and oscillatory peaks follows Donoghue
+et al. (2020). The fit itself is the robust log-log line in
+`Aperiodic Fit`_. It is a straight line. FOOOF also estimates a knee and uses
+a different peak model.
 
-**Smoothing.** The spectrum is averaged over frequencies within the requested
-``smoothing_hz`` interval around each output frequency. Distances are measured in
-hertz, so bandwidth stays fixed on linear and logarithmic grids. Non-finite bins
-are excluded without closing the gap.
+**Smoothing.** Each frequency is replaced by the mean of bins within
+``smoothing_hz``. Distances are in hertz on both linear and logarithmic grids.
+Non-finite bins are left out of the mean. The gap is not filled.
 
-**Prominence guard.** If the maximum stands less than ``min_prominence`` above
-the band median, in :math:`\log_{10}` units, the centre of gravity
-:math:`\sum f P(f) / \sum P(f)` is reported instead and the ``cog_fallback``
-flag is set. A centre of gravity degrades gracefully when no oscillation is
-present; an argmax does not.
+**Prominence guard.** If the maximum is less than ``min_prominence`` above the
+band median, in :math:`\log_{10}` units, the reported frequency is the centre
+of gravity :math:`\sum f P(f) / \sum P(f)` and ``cog_fallback`` is set.
 
-The surviving maximum is then refined by parabolic interpolation through the
-discrete maximum and its two neighbours:
+The retained maximum is refined by parabolic interpolation through the peak bin
+and its two neighbours.
 
 .. math::
 
@@ -171,105 +129,56 @@ discrete maximum and its two neighbours:
    f_{\text{peak}} &= f_k + \delta \cdot \frac{f_{k+1} - f_{k-1}}{2}
    \end{aligned}
 
-where :math:`k` is the discrete argmax index. Interpolation requires at least
-three frequency bins in the band, which is also the definition domain of an
-interior maximum; narrower bands raise. Set ``interpolate=False`` to report the
-discrete bin frequency itself without interpolation.
+:math:`k` is the discrete argmax. Interpolation needs at least three bins,
+which is also the requirement for an interior maximum. Narrower bands raise.
+``interpolate=False`` returns the bin frequency.
 
-If the discrete maximum falls on the first or last bin of the band, the
-``edge_hit`` flag is set, indicating that the true peak may lie outside the
-evaluated band. Every column additionally reports ``freq_resolution_hz``, the
-median in-band bin spacing, so the precision the grid could support is visible
-alongside the estimate.
-
-At the implementation level, the final interpolation is equivalent to:
-
-.. code-block:: python
-
-   denominator = left - 2.0 * centre + right
-   delta = 0.5 * (left - right) / denominator
-   delta = np.where(np.isfinite(delta), np.clip(delta, -0.5, 0.5), 0.0)
-   peak_frequency = frequency[index] + delta * neighbour_spacing
-
-The code uses ``delta = 0`` at a zero denominator and for edge maxima; a
-prominence failure instead returns the power-weighted centre of gravity.
+A zero denominator, or a non-finite :math:`\delta`, is treated as
+:math:`\delta = 0`. :math:`\delta` is clipped to :math:`[-0.5, 0.5]`. A maximum
+on the first or last bin of the band is not interpolated, and ``edge_hit`` is
+set. Every column also stores ``freq_resolution_hz``, the median in-band bin
+spacing.
 
 Spectral Centroid and Bandwidth
 -------------------------------
 
-The spectral centroid represents the spectral center of mass within a band:
+The spectral centroid is the centre of mass of power in the band.
 
 .. math::
 
    f_c = \frac{\sum_i f_i P(f_i) \Delta f_i}{\sum_i P(f_i) \Delta f_i}
 
-Spectral bandwidth is the mass-weighted standard deviation around the centroid:
+Bandwidth is the mass-weighted standard deviation about that centroid.
 
 .. math::
 
    \text{BW} = \sqrt{\frac{\sum_i (f_i - f_c)^2 P(f_i) \Delta f_i}{\sum_i P(f_i) \Delta f_i}}
 
-Both measures utilize central-difference frequency weights :math:`\Delta f_i` (:func:`numpy.gradient`), consistent with standard spectral descriptor conventions.
-
-The centroid and bandwidth definitions are the first two spectral moments
-described by `Geoffroy Peeters (2004)
-<https://recherche.ircam.fr/anasyn/peeters/ARTICLES/Peeters_2003_cuidadoaudiofeatures.pdf>`__.
-The frequency weighting used here is adapted to a PSD density, so the
-calculation integrates spectral mass rather than treating unequal frequency
-bins as equally probable observations.
-
-The calculation is implemented as:
-
-.. code-block:: python
-
-   weights = np.broadcast_to(np.gradient(freqs), power.shape)
-   mass = np.where(np.isfinite(power), power * weights, 0.0)
-   total = np.sum(mass, axis=-1)
-   centroid = np.where(total > 0.0,
-                       np.sum(mass * freqs, axis=-1) / total,
-                       np.nan)
-   bandwidth = np.sqrt(np.where(
-       total > 0.0,
-       np.sum(mass * (freqs - centroid[..., None]) ** 2, axis=-1) / total,
-       np.nan,
-   ))
+:math:`\Delta f_i` is the central difference from :func:`numpy.gradient`.
+Weighting by :math:`\Delta f_i` integrates a density. Unequal bins are not
+treated as equally probable samples. The two quantities are the first spectral
+moments in Peeters (2004), adapted here to a PSD.
 
 Spectral Edge Frequency
 -----------------------
 
-Spectral edge frequency (SEF) is the frequency below which a specified fraction (:math:`\alpha`, default 0.95) of the band power is concentrated:
+Spectral edge frequency is the lowest grid frequency at which the cumulative
+band power reaches a fraction :math:`\alpha`. The default is 0.95.
 
 .. math::
 
    \frac{\sum_{i=0}^{k} P(f_i) \Delta f_i}{\sum_{i} P(f_i) \Delta f_i} \ge \alpha
 
-The value is computed directly via search without interpolation, returning the frequency grid coordinate that first meets or exceeds the cumulative threshold.
-
-SEF is a cumulative-power quantile, not a peak-frequency estimator. Its use as
-an EEG summary is exemplified by `Hazel H. Szeto (1990)
-<https://doi.org/10.1203/00006450-199003000-00018>`__, who defined the spectral
-edge as the frequency below which a specified percentage of electrocortical
-power resides. The package keeps the quantile configurable rather than
-assuming the 90-percent convention used in that study.
-
-The exact reduction is:
-
-.. code-block:: python
-
-   mass = np.where(np.isfinite(power), power * weights, 0.0)
-   total = np.sum(mass, axis=-1)
-   cumulative = np.cumsum(mass, axis=-1) / total[..., None]
-   reached = cumulative >= percentile
-   index = np.where(reached.any(axis=-1), reached.argmax(axis=-1), freqs.size - 1)
-   edge_frequency = np.where(total > 0.0, freqs[index], np.nan)
-
-If no bin reaches the requested fraction because of floating-point rounding,
-the implementation returns the final frequency bin.
+There is no interpolation between bins. If floating-point rounding means no bin
+reaches :math:`\alpha`, the last bin is returned. Szeto (1990) used this
+quantile for electrocortical maturation, with :math:`\alpha = 0.90`. The
+quantile here is the ``percentile`` argument.
 
 Spectral Entropy
 ----------------
 
-Spectral entropy measures the uniformity of the spectral distribution within a band, normalized to :math:`[0, 1]`:
+Spectral entropy is the normalized Shannon entropy of the in-band power
+distribution, in :math:`[0, 1]`.
 
 .. math::
 
@@ -278,146 +187,95 @@ Spectral entropy measures the uniformity of the spectral distribution within a b
    H &= -\frac{\sum_i p_i \ln(p_i)}{\ln(N)}
    \end{aligned}
 
-where :math:`N` is the number of frequency bins in the band. A value of 1 indicates uniform power across the band, while 0 indicates concentration in a single bin. This discrete definition requires an approximately uniform frequency grid; non-uniform grids are rejected because bin probabilities and density-weighted spectral mass are different quantities. Recompute or interpolate a non-uniform PSD onto a uniform-Hz grid before calculating entropy. Because the normalization depends on :math:`\ln(N)`, entropy values across bands with different bin counts are not directly comparable.
+:math:`N` is the number of bins. :math:`H = 1` is uniform power across the
+band. :math:`H = 0` is power in a single bin. The undefined term
+:math:`0 \ln 0` is omitted. The definition uses one count per bin and requires
+an approximately uniform frequency grid. A non-uniform grid is rejected.
+Interpolate onto a uniform grid in hertz first. Because the denominator is
+:math:`\ln(N)`, values from bands with different bin counts are not comparable.
 
-This is the normalized entropy of the power-spectrum proportions introduced for
-EEG irregularity by `T. Inouye, K. Shinosaki, H. Sakamoto, S. Toi, S. Ukai,
-A. Iyama, Y. Katsuda, and M. Hirano (1991)
-<https://doi.org/10.1016/0013-4694(91)90138-T>`__. The implementation retains
-their information-theoretic interpretation while making the frequency-grid
-assumption explicit.
-
-The implementation uses uniform-bin mass and omits the undefined ``0 log 0``
-term:
-
-.. code-block:: python
-
-   mass = np.where(np.isfinite(power), power, 0.0)
-   n_bins = mass.shape[-1]
-   total = np.sum(mass, axis=-1)
-   probability = np.where(total[..., None] > 0.0,
-                          mass / total[..., None], 0.0)
-   entropy_terms = np.where(probability > 0.0,
-                            probability * np.log(probability), 0.0)
-   entropy = np.where(total > 0.0,
-                      -np.sum(entropy_terms, axis=-1) / np.log(n_bins),
-                      np.nan)
+This is the entropy of the power-spectrum proportions in Inouye et al. (1991).
 
 Aperiodic Fit
 -------------
 
-The aperiodic (1/f) background is modeled in log-log space:
+The aperiodic background is a line in log-log coordinates.
 
 .. math::
 
    \log_{10} P(f) = \text{offset} + \text{slope} \cdot \log_{10} f
 
-Fitting uses iterative peak rejection: an initial least-squares line is fit over ``fit_range``, residuals :math:`r(f) = \log_{10} P(f) - (\text{offset} + \text{slope} \log_{10} f)` are computed, and points with positive residuals exceeding :math:`z \cdot \text{MAD}(r)` (default :math:`z = 2.5`) are rejected before refitting, repeated up to ``max_iterations`` times. Only positive residuals are excluded because oscillatory peaks project above the aperiodic component and would otherwise artificially flatten the estimated slope.
+An initial least-squares line is fit on ``fit_range``. Residuals are
+:math:`r(f) = \log_{10} P(f) - (\text{offset} + \text{slope} \log_{10} f)`.
+Points with :math:`r(f) > z \cdot \mathrm{MAD}(r)` are removed and the line is
+refit, up to ``max_iterations`` times. The default is :math:`z = 2.5`. Only
+positive residuals are removed. Oscillatory peaks sit above the aperiodic
+component, and leaving them in flattens the slope. The threshold is
+:math:`z \cdot \mathrm{MAD}`. The residual median is not subtracted. The loop
+stops when MAD is non-finite or below :math:`10^{-12}`, fewer than 5 points
+remain, or the mask stops changing. Only positive finite power enters the fit.
 
-Alongside ``slope`` and ``offset``, the fit reports ``r_squared``: the coefficient
-of determination of the line over the points that survived peak rejection. The
-rejected peaks are deliberately excluded from it, since an alpha peak is not a
-failure of the aperiodic model and scoring against it would read low for every
-healthy spectrum. What it does detect is a bend the line cannot follow — a
-spectral knee inside ``fit_range``, which most EEG has somewhere in the default
-2–40 Hz window — and that is the case which silently biases the exponent.
-`Donoghue et al. (2020) <https://doi.org/10.1038/s41593-020-00744-x>`_ report a
-fit statistic for the same reason; an exponent should not be reported without one.
+The column ``r_squared`` is the coefficient of determination on the points that
+survived rejection. Rejected peaks are left out of it. An alpha peak is not a
+failure of the line, and scoring the line against that peak is low on ordinary
+spectra. The statistic does respond to a knee inside ``fit_range``. Most EEG
+spectra have a knee somewhere in the default 2–40 Hz window, and a straight
+line through a knee biases the exponent. Donoghue et al. (2020) report a fit
+statistic for the same reason.
 
-If the fit cannot be estimated, ``aperiodic_ratio`` returns NaNs for that cell
-and marks ``aperiodic_fit_failed``. It never labels an unchanged raw spectrum as
-aperiodic-adjusted.
+On :math:`f > 0` the fitted power is
+:math:`10^{\text{offset} + \text{slope} \log_{10} f}`, and aperiodic-adjusted
+power is the ratio of the observed power to that curve. If the fit fails,
+``aperiodic_ratio`` returns NaN for that cell and sets
+``aperiodic_fit_failed``. The unadjusted spectrum is not relabelled as
+adjusted.
 
-For each cell, the fitted curve and adjustment are evaluated as:
-
-.. code-block:: python
-
-   positive = freqs > 0.0
-   log_frequency = np.zeros_like(freqs)
-   np.log10(freqs, where=positive, out=log_frequency)
-   fitted_log_power = offset + slope * log_frequency
-   aperiodic_power = 10.0 ** fitted_log_power
-   adjusted_power = np.where(positive, power / aperiodic_power, power)
-
-Only positive finite power values enter the fit; non-positive frequencies are
-not transformed, and failed fits return NaN with ``aperiodic_fit_failed``.
-
-The robust rejection loop is equivalent to:
-
-.. code-block:: python
-
-   keep = np.isfinite(power) & (power > 0.0)
-   log_power = np.full_like(power, np.nan)
-   log_power[keep] = np.log10(power[keep])
-   for _ in range(max_iterations):
-       slope, offset = np.polyfit(log_frequency[keep],
-                                  log_power[keep], 1)
-       residual = log_power - (offset + slope * log_frequency)
-       mad = median_abs_deviation(residual[keep], scale="normal")
-       tightened = keep & (residual <= peak_rejection_z * mad)
-       if (not np.isfinite(mad) or mad < 1e-12
-               or tightened.sum() < 5 or np.array_equal(tightened, keep)):
-           break
-       keep = tightened
-
-The rejection test is applied exactly as :math:`r(f) > z\,\mathrm{MAD}`; the
-residual median is not subtracted from the threshold. This is intentionally a
-compact project-specific robust fit, not a claim of
-bit-for-bit equivalence to FOOOF or another spectral-parameterization package.
-
-The fitted line is therefore a named scientific model, while the positive-
-residual rejection rule and its stopping criteria are implementation choices.
-They should not be cited as an exact reimplementation of any software package
-unless those settings are reproduced independently.
+The line is the model above. FOOOF (Donoghue et al., 2020) adds a knee
+parameter and a different peak parameterization. Matching those settings is a
+separate analysis.
 
 Band Ratio and Asymmetry
 ------------------------
 
-Band power ratios and hemispheric asymmetry indices operate on computed band power tables. To maintain mathematical consistency across linear and logarithmic scales, the transformation adapts to the input normalization:
+Ratios and asymmetry are computed from a band-power table. The arithmetic
+follows the normalization already stored on that table.
 
-**Band Ratio:** For raw linear power, the ratio between numerator band :math:`A`
-and denominator band :math:`B` is:
+For raw power the ratio of band :math:`A` to band :math:`B` is
 
 .. math::
 
    R_{A/B} = \frac{P_A}{P_B}
 
-For raw or percent-normalized input, the function divides the stored feature
-values. Only raw input therefore has the physical interpretation
-:math:`P_A/P_B`; for percent input it is a ratio of percentage changes. When
-the input is logarithmic (``"log10"``, ``"log_ratio"``, or ``"db"``), division
-is replaced by subtraction of the already-normalized values:
+Raw and percent input are divided as stored. Only raw input is the power ratio
+:math:`P_A / P_B`. Percent input is a ratio of percentage changes. For
+``log10``, ``log_ratio``, and ``db`` the stored values are subtracted.
 
 .. math::
 
    R_{A/B} = P_A^{(\mathrm{log})} - P_B^{(\mathrm{log})}
 
-For ``"log10"`` this equals :math:`\log_{10}(P_A/P_B)`. For
-``"log_ratio"`` it is the difference between the two baseline-relative log
-ratios,
-:math:`\log_{10}((P_A/B_A)/(P_B/B_B))`; ``"db"`` is ten times that
+``log10`` input gives :math:`\log_{10}(P_A / P_B)`. ``log_ratio`` input gives
+:math:`\log_{10}((P_A / B_A) / (P_B / B_B))`. ``db`` input is ten times that
 baseline-relative difference.
 
-**Hemispheric Asymmetry:** For a left-right homologous channel pair :math:`(L, R)`,
-raw power asymmetry is defined as the normalized difference:
+For a homologous pair :math:`(L, R)`, raw asymmetry is
 
 .. math::
 
    A_{L, R} = \frac{P_R - P_L}{P_R + P_L}
 
-For percent-normalized input, the same normalized difference is applied to the
-stored percentage values. For logarithmic input, the implementation instead
-uses the plain difference of the already-normalized values:
+Percent input uses the same expression on the stored percentages. Logarithmic
+input subtracts the stored values.
 
 .. math::
 
    A_{L, R} = P_R^{(\mathrm{log})} - P_L^{(\mathrm{log})}
 
-Thus ``"log10"`` produces :math:`\log_{10}(P_R/P_L)`. ``"log_ratio"``
-produces :math:`\log_{10}((P_R/B_R)/(P_L/B_L))`, and ``"db"`` produces ten
-times that baseline-relative difference.
+``log10`` input gives :math:`\log_{10}(P_R / P_L)`. ``log_ratio`` input gives
+:math:`\log_{10}((P_R / B_R) / (P_L / B_L))`. ``db`` input is ten times that
+difference, in dB. A zero denominator or a zero sum returns NaN.
 
-**Units:** the output unit names the scale the result is on, because the same subtraction means different things on different scales. A ``"db"`` input carries the factor of ten through the subtraction, so the result is a difference in dB rather than a bare log ratio:
+The output unit names the scale of that result.
 
 .. list-table::
    :header-rows: 1
@@ -441,27 +299,9 @@ times that baseline-relative difference.
      - ``dB``
      - ``dB``
 
-The band-ratio operation is a deterministic arithmetic transform of two
-already-computed band-power columns; no unique historical estimator is claimed
-for it. The left-right asymmetry convention is the power-asymmetry framework
-used by `Richard J. Davidson, John P. Chapman, Linda J. Chapman, and John B.
-Henriques (1990) <https://doi.org/10.1111/j.1469-8986.1990.tb01970.x>`__.
-Because log-ratio asymmetry is a different scale, it is reported as such rather
-than being silently called the same raw-power index.
-
-The corresponding elementwise operations are:
-
-.. code-block:: python
-
-   if normalization in {"log10", "log_ratio", "db"}:
-       band_ratio = numerator - denominator
-       asymmetry = right - left
-   else:
-       band_ratio = np.where(denominator != 0.0,
-                             numerator / denominator, np.nan)
-       total = right + left
-       asymmetry = np.where(total != 0.0,
-                            (right - left) / total, np.nan)
+The left-minus-right form follows the power-asymmetry index of Davidson,
+Chapman, Chapman, and Henriques (1990). Log-ratio asymmetry is reported in the
+unit of its input, from the table above.
 
 References
 ----------

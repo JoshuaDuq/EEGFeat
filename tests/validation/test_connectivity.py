@@ -9,6 +9,8 @@ frequency in the driven condition.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import mne_connectivity
 import numpy as np
 import pytest
@@ -22,6 +24,8 @@ NEIGHBOURS = [("C3", "C1"), ("C4", "C2"), ("O1", "Oz"), ("O2", "Oz"), ("Cz", "C1
 DISTANT = [("Fp1", "O2"), ("Fp2", "O1"), ("F7", "P8"), ("F8", "P7"), ("Fpz", "Oz"), ("AF3", "PO8")]
 OCCIPITAL = ["O1", "Oz", "O2", "PO9", "PO10", "P7", "P8"]
 STIMULATION = ef.Window("stimulation", 1.0, 19.0)
+
+DATASET = "eegbci"
 
 
 @pytest.fixture(scope="module")
@@ -45,6 +49,12 @@ def _pairs(table: ef.FeatureTable) -> dict[tuple[str, str], float]:
     return values
 
 
+@pytest.mark.validates(
+    "envelope_correlation",
+    kind="formula",
+    claim="Raw envelope correlation is the Fisher-z mean of per-trial envelope correlations",
+    criterion="relative error below 1e-9 on the first fifty pairs",
+)
 def test_raw_envelope_correlation_is_the_fisher_mean_of_trial_correlations(
     alpha: ef.BandSignal,
 ) -> None:
@@ -58,8 +68,14 @@ def test_raw_envelope_correlation_is_the_fisher_mean_of_trial_correlations(
         assert value == pytest.approx(np.tanh(np.mean(np.arctanh(per_trial))), rel=1e-9)
 
 
+@pytest.mark.validates(
+    "envelope_correlation",
+    kind="physiology",
+    claim="Neighbouring electrodes correlate far more than distant ones until orthogonalized",
+    criterion="raw near minus far above 0.2; orthogonalized near below half of raw",
+)
 def test_volume_conduction_shows_and_orthogonalization_removes_it(
-    alpha: ef.BandSignal,
+    alpha: ef.BandSignal, record: Callable[[str], None]
 ) -> None:
     raw = _pairs(ef.envelope_correlation([alpha], windows=[WINDOW], orthogonalize=None))
     orthogonalized = _pairs(ef.envelope_correlation([alpha], windows=[WINDOW]))
@@ -70,10 +86,21 @@ def test_volume_conduction_shows_and_orthogonalization_removes_it(
 
     near_orth = np.mean([orthogonalized[pair] for pair in NEIGHBOURS])
     far_orth = np.mean([orthogonalized[pair] for pair in DISTANT])
+    record(
+        f"raw near {near_raw:.2f} against far {far_raw:.2f}; orthogonalized near "
+        f"{near_orth:.2f} against far {far_orth:.2f}"
+    )
     assert near_orth < near_raw / 2.0, (near_orth, near_raw)
     assert abs(near_orth - far_orth) < 0.1, (near_orth, far_orth)
 
 
+@pytest.mark.validates(
+    "global_efficiency",
+    "clustering_coefficient",
+    kind="behaviour",
+    claim="Graph summaries of a real network lie in their defined ranges",
+    criterion="efficiency in (0, 1], clustering in [0, 1]",
+)
 def test_graph_summaries_are_well_formed(alpha: ef.BandSignal) -> None:
     pairs = ef.envelope_correlation([alpha], windows=[WINDOW], orthogonalize=None)
     efficiency = ef.global_efficiency(pairs).values
@@ -83,6 +110,12 @@ def test_graph_summaries_are_well_formed(alpha: ef.BandSignal) -> None:
     assert 0.0 <= clustering[0, 0] <= 1.0
 
 
+@pytest.mark.validates(
+    "wpli",
+    kind="estimator",
+    claim="wPLI reproduces a direct mne_connectivity call on the same epochs",
+    criterion="relative error below 1e-9 on every pair",
+)
 def test_wpli_reproduces_a_direct_mne_connectivity_call(resting: Recording) -> None:
     signal = ef.Signal.from_epochs(resting.epochs, recording=resting.name)
     table = ef.wpli(signal, bands=[ALPHA], windows=[WINDOW])
@@ -116,6 +149,12 @@ def six_channels(resting: Recording) -> ef.Signal:
     )
 
 
+@pytest.mark.validates(
+    "spectral_connectivity",
+    kind="estimator",
+    claim="Every spectral connectivity method reproduces mne_connectivity",
+    criterion="relative error below 1e-9 for all eight methods",
+)
 @pytest.mark.parametrize("method", METHODS)
 def test_every_method_reproduces_mne_connectivity(six_channels: ef.Signal, method: str) -> None:
     table = ef.spectral_connectivity(
@@ -143,7 +182,16 @@ def test_every_method_reproduces_mne_connectivity(six_channels: ef.Signal, metho
         assert value == pytest.approx(expected, rel=1e-9)
 
 
-def test_debiased_wpli_does_not_grow_as_trials_fall(six_channels: ef.Signal) -> None:
+@pytest.mark.validates(
+    "spectral_connectivity",
+    "wpli",
+    kind="behaviour",
+    claim="Plain wPLI rises as trials fall; the debiased form does not",
+    criterion="wPLI at 10 trials above wPLI at 42 by 0.1; debiased within 0.05",
+)
+def test_debiased_wpli_does_not_grow_as_trials_fall(
+    six_channels: ef.Signal, record: Callable[[str], None]
+) -> None:
     """Plain wPLI is biased upward at low trial counts; the squared debiased form is not."""
     rng = np.random.default_rng(0)
     wpli, debiased = {}, {}
@@ -160,10 +208,20 @@ def test_debiased_wpli_does_not_grow_as_trials_fall(six_channels: ef.Signal) -> 
         debiased[count] = ef.spectral_connectivity(
             subset, method="wpli2_debiased", bands=[ALPHA], windows=[WINDOW]
         ).values.mean()
+    record(
+        f"wPLI {wpli[42]:.2f} at 42 trials, {wpli[10]:.2f} at 10; debiased {debiased[42]:.2f} "
+        f"and {debiased[10]:.2f}"
+    )
     assert wpli[10] > wpli[42] + 0.1, wpli
     assert abs(debiased[10] - debiased[42]) < 0.05, debiased
 
 
+@pytest.mark.validates(
+    "spectral_connectivity",
+    kind="physiology",
+    claim="Occipital coherence rises at whichever frequency is being flickered",
+    criterion="driven condition above the other by 0.03 at 12 and at 15 Hz",
+)
 def test_coherence_rises_at_the_flicker_frequency(ssvep_recording: Recording) -> None:
     signal = ef.Signal.from_epochs(
         ssvep_recording.epochs, recording=ssvep_recording.name, picks=OCCIPITAL

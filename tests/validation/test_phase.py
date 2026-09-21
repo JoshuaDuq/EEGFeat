@@ -10,6 +10,8 @@ which is recorded here as a limit rather than asserted away.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 
@@ -19,6 +21,8 @@ from validation.loaders import Recording
 OCCIPITAL = {"occipital": ["O1", "Oz", "O2"]}
 STIMULATION = ef.Window("stimulation", 1.0, 19.0)
 WHOLE_EPOCH = ef.Window("epoch", 0.0, 30.0)
+
+DATASET = "ssvep"
 
 
 @pytest.fixture(scope="module")
@@ -31,12 +35,23 @@ def _flicker_band(ssvep_recording: Recording, frequency: float) -> ef.BandSignal
     return ef.BandSignal.from_epochs(ssvep_recording.epochs, band, recording=ssvep_recording.name)
 
 
+@pytest.mark.validates(
+    "itpc",
+    "ppc",
+    kind="physiology",
+    claim="Phase locks across trials at the flicker frequency only in the driven condition",
+    criterion="driven above undriven by 0.1 for ITPC and PPC, at 12 and at 15 Hz",
+)
 @pytest.mark.parametrize("frequency", [12.0, 15.0])
 def test_phase_locks_across_trials_only_when_driven(
-    ssvep_recording: Recording, condition: np.ndarray, frequency: float
+    ssvep_recording: Recording,
+    condition: np.ndarray,
+    frequency: float,
+    record: Callable[[str], None],
 ) -> None:
     signal = _flicker_band(ssvep_recording, frequency)
     driven = f"{int(frequency)}hz"
+    summary: list[str] = []
     for measure in (ef.itpc, ef.ppc):
         table = measure(
             [signal],
@@ -47,9 +62,19 @@ def test_phase_locks_across_trials_only_when_driven(
         )
         by_condition = dict(zip(table.row_labels, table.values[:, 0], strict=True))
         other = next(label for label in by_condition if label != driven)
+        summary.append(
+            f"{measure.__name__} {by_condition[driven]:.2f} driven, {by_condition[other]:.2f} not"
+        )
         assert by_condition[driven] > by_condition[other] + 0.1, (measure.__name__, by_condition)
+    record(f"{int(frequency)} Hz band: " + "; ".join(summary))
 
 
+@pytest.mark.validates(
+    "ppc",
+    kind="behaviour",
+    claim="Pairwise phase consistency sits near zero without a locked response",
+    criterion="absolute value below 0.1",
+)
 def test_undriven_ppc_is_near_zero(ssvep_recording: Recording, condition: np.ndarray) -> None:
     """PPC has no small-sample bias, so trials without a locked response sit near zero."""
     signal = _flicker_band(ssvep_recording, 12.0)
@@ -60,6 +85,12 @@ def test_undriven_ppc_is_near_zero(ssvep_recording: Recording, condition: np.nda
     assert abs(by_condition["15hz"]) < 0.1, by_condition
 
 
+@pytest.mark.validates(
+    "itpc",
+    kind="formula",
+    claim="ITPC is the documented formula, trials first then time",
+    criterion="relative error below 1e-9",
+)
 def test_itpc_is_the_documented_formula(ssvep_recording: Recording, condition: np.ndarray) -> None:
     signal = _flicker_band(ssvep_recording, 12.0)
     table = ef.itpc([signal], windows=[STIMULATION], trials=condition, include_global=False)
@@ -72,6 +103,13 @@ def test_itpc_is_the_documented_formula(ssvep_recording: Recording, condition: n
         np.testing.assert_allclose(table.values[row], expected, rtol=1e-9)
 
 
+@pytest.mark.validates(
+    "zero_crossing_rate",
+    "hjorth_mobility",
+    kind="formula",
+    claim="On a narrow band the zero-crossing rate is twice the Hjorth mobility (Rice)",
+    criterion="within 6 percent per cell and 1 percent on average",
+)
 def test_zero_crossings_follow_rices_formula_on_a_narrow_band(
     ssvep_recording: Recording,
 ) -> None:
@@ -92,6 +130,13 @@ def test_zero_crossings_follow_rices_formula_on_a_narrow_band(
     np.testing.assert_allclose(crossings.mean(), 2.0 * mobility.mean(), rtol=0.01)
 
 
+@pytest.mark.validates(
+    "pac",
+    kind="formula",
+    claim="Phase-amplitude coupling is the documented mean vector length",
+    dataset="sleep",
+    criterion="relative error below 1e-9",
+)
 def test_pac_is_the_documented_formula(sleep_recordings: list[Recording]) -> None:
     recording = sleep_recordings[0]
     slow = ef.BandSignal.from_epochs(recording.epochs, ef.Band("so", 0.5, 1.5), recording="x")
@@ -103,6 +148,13 @@ def test_pac_is_the_documented_formula(sleep_recordings: list[Recording]) -> Non
     np.testing.assert_allclose(table.values, weighted / amplitude.sum(axis=2), rtol=1e-9)
 
 
+@pytest.mark.validates(
+    "pac",
+    kind="behaviour",
+    claim="Raw mean vector length stays well above zero with the coupling destroyed",
+    dataset="sleep",
+    criterion="surrogate median above 0.03, all values in [0, 1]",
+)
 def test_raw_pac_needs_a_null(sleep_recordings: list[Recording]) -> None:
     """Even with the coupling destroyed, the mean vector length stays well above zero.
 

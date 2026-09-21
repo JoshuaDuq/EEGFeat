@@ -62,6 +62,8 @@ bands = ["mu"]
 spatial = ["rois"]
 """
 
+DATASET = "eegbci"
+
 
 def _eegfeat(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -80,6 +82,12 @@ def workspace(eegbci_recordings: list[Recording], tmp_path_factory: pytest.TempP
     return root
 
 
+@pytest.mark.validates(
+    "eegfeat command",
+    kind="behaviour",
+    claim="eegfeat check validates a recipe against real files and writes nothing",
+    criterion="exit 0; recordings listed; no output directory",
+)
 def test_check_validates_without_writing(workspace: Path) -> None:
     result = _eegfeat("check", "recipe.toml", cwd=workspace)
     assert result.returncode == 0, result.stderr
@@ -87,6 +95,12 @@ def test_check_validates_without_writing(workspace: Path) -> None:
     assert not (workspace / "features").exists()
 
 
+@pytest.mark.validates(
+    "eegfeat command",
+    kind="behaviour",
+    claim="eegfeat check names a channel the recordings lack",
+    criterion="exit 1 and the channel named",
+)
 def test_check_reports_a_channel_the_data_lacks(workspace: Path) -> None:
     broken = RECIPE.replace('hand = ["C3", "C4"]', 'hand = ["C3", "C4", "Nope"]')
     (workspace / "broken.toml").write_text(broken)
@@ -95,6 +109,13 @@ def test_check_reports_a_channel_the_data_lacks(workspace: Path) -> None:
     assert "Nope" in result.stdout + result.stderr
 
 
+@pytest.mark.validates(
+    "eegfeat command",
+    "runner",
+    kind="behaviour",
+    claim="eegfeat run writes per-epoch and cross-trial bundles with a JSON progress stream",
+    criterion="two bundles of each kind, as the recipe says; a second run refused",
+)
 def test_run_writes_a_bundle_per_recording(workspace: Path) -> None:
     result = _eegfeat("run", "recipe.toml", "--progress-json", cwd=workspace)
     assert result.returncode == 0, result.stderr

@@ -9,6 +9,8 @@ resampled. Both are checked on the motor data.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 
@@ -20,6 +22,8 @@ BETA = ef.Band("beta", 13.0, 30.0)
 WINDOW = ef.Window("movement", 0.5, 3.5)
 FREQS = np.arange(6.0, 31.0, 1.0)
 N_CYCLES = FREQS / 2.0
+
+DATASET = "eegbci"
 
 
 def _morlet_band_means(recording: Recording, epochs: object) -> ef.FeatureTable:
@@ -57,24 +61,53 @@ def first(eegbci_recordings: list[Recording]) -> Recording:
     return eegbci_recordings[0]
 
 
+@pytest.mark.validates(
+    "Spectra.from_tfr",
+    "mean_tfr_power",
+    kind="estimator",
+    claim="Wavelet power divided by the sampling rate matches a Welch PSD of the same window",
+    criterion="median ratio within 0.9 to 1.1; log correlation above 0.95",
+)
 @pytest.mark.parametrize("band", [MU, BETA], ids=lambda band: band.name)
-def test_wavelet_density_matches_welch(first: Recording, band: ef.Band) -> None:
+def test_wavelet_density_matches_welch(
+    first: Recording, band: ef.Band, record: Callable[[str], None]
+) -> None:
     morlet = _morlet_band_means(first, first.epochs).select(band=band).values
     welch = _welch_band_means(first, first.epochs).select(band=band).values
     ratio = morlet / welch
+    record(
+        f"{band.name}: median ratio {np.median(ratio):.2f}, log correlation "
+        f"{np.corrcoef(np.log(morlet.ravel()), np.log(welch.ravel()))[0, 1]:.2f}"
+    )
     assert 0.9 < np.median(ratio) < 1.1, np.median(ratio)
     assert np.corrcoef(np.log(morlet.ravel()), np.log(welch.ravel()))[0, 1] > 0.95
 
 
-def test_wavelet_density_does_not_depend_on_the_sampling_rate(first: Recording) -> None:
+@pytest.mark.validates(
+    "Spectra.from_tfr",
+    "mean_tfr_power",
+    kind="behaviour",
+    claim="The wavelet density does not change when the recording is resampled",
+    criterion="median ratio at 80 against 160 Hz within 2 percent of one",
+)
+def test_wavelet_density_does_not_depend_on_the_sampling_rate(
+    first: Recording, record: Callable[[str], None]
+) -> None:
     """The same recording at half the rate must report the same density."""
     original = _morlet_band_means(first, first.epochs).values
     resampled = _morlet_band_means(first, first.epochs.copy().resample(80.0)).values
     ratio = resampled / original
+    record(f"median ratio 80 Hz against 160 Hz: {np.median(ratio):.3f}")
     assert abs(np.median(ratio) - 1.0) < 0.02, np.median(ratio)
     assert np.percentile(np.abs(ratio - 1.0), 90) < 0.1
 
 
+@pytest.mark.validates(
+    "Spectra.from_tfr",
+    kind="behaviour",
+    claim="Support is partial where wavelets overrun the window while coverage stays full",
+    criterion="support at most 1 and below 1 somewhere; coverage exactly 1",
+)
 def test_support_is_partial_where_wavelets_overrun_the_window(first: Recording) -> None:
     """Support is a statement about the wavelets, coverage about finite data."""
     tfr = first.epochs.compute_tfr(

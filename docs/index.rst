@@ -4,14 +4,12 @@ eegfeat
 .. raw:: html
 
    <p class="hero-lede">
-     Labelled, mathematically sound <strong>spectral</strong>, <strong>temporal</strong>,
-     and <strong>connectivity</strong> feature extraction plus leakage-safe <strong>predictive
-     modeling</strong> for <strong>MNE</strong> objects. Turns raw spectra, time-frequency
-     arrays, and analytic band signals into structured, inspectable <code>FeatureTable</code>
-     outputs, then carries per-epoch tables into grouped model evaluation.
+     <strong>Spectral</strong>, <strong>temporal</strong>, and <strong>connectivity</strong>
+     features for <strong>MNE</strong> objects, returned as <code>FeatureTable</code>,
+     and grouped model evaluation on per-epoch tables.
    </p>
 
-.. grid:: 4
+.. grid:: 1 2 3 3
    :gutter: 3
    :class-container: nav-cards
 
@@ -39,6 +37,12 @@ eegfeat
 
       Real files from a simulated five-subject cohort.
 
+   .. grid-item-card:: Validation
+      :link: guides/validation
+      :link-type: doc
+
+      Every function checked on four public datasets; the scorecard the tests write.
+
 ----
 
 What It Computes
@@ -52,9 +56,9 @@ What It Computes
       :link: methods/spectral
       :link-type: doc
 
-      Trapezoidal frequency-weighted band power, centroid, bandwidth, Shannon
-      entropy and SEF95, iterative Huber/MAD 1/f fitting with prominence-gated
-      peak detection, and exact per-frequency Morlet support masking.
+      Trapezoidal band power, centroid, bandwidth, Shannon entropy and SEF95,
+      iterative MAD 1/f fitting, prominence-gated peak detection, and Morlet
+      support masking.
 
       ``integrated_band_power`` · ``peak_frequency`` · ``aperiodic_ratio``
 
@@ -92,9 +96,9 @@ What It Computes
       :link: guides/modeling
       :link-type: doc
 
-      Per-epoch design matrices, group-disjoint nested validation, fold-local
-      preprocessing, permutation nulls, conformal intervals, and metadata-aware
-      importance.
+      Per-epoch design matrices, group-disjoint nested validation, preprocessing
+      inside the training fold, permutation nulls, conformal intervals, and
+      importance with the column metadata attached.
 
       ``build_design`` · ``cross_fit_regression`` · ``permutation_test``
 
@@ -102,20 +106,17 @@ What It Computes
       :link: guides/runner
       :link-type: doc
 
-      One declarative TOML recipe applied to a folder of preprocessed epochs
-      files, writing metadata-carrying tables that load straight back as
-      ``FeatureTable`` objects.
+      One TOML recipe applied to a folder of preprocessed epochs files. Each
+      written table loads back as a ``FeatureTable``.
 
       ``eegfeat run`` · ``eegfeat check``
 
-Every measure above is defined, with its assumptions and failure modes, in
-:doc:`methods/index`. Signatures and parameters are in :doc:`api/index`.
+Definitions are in :doc:`methods/index`. Signatures are in :doc:`api/index`.
 
 .. raw:: html
 
    <p class="dev-status">
-     <strong>Status</strong> — <code>eegfeat</code> is in active pre-release development.
-     The public API is stable, strictly typed, and verified across comprehensive unit and property test suites.
+     <strong>Status.</strong> Pre-release. The public API is stable.
    </p>
 
 .. toctree::
@@ -125,6 +126,7 @@ Every measure above is defined, with its assumptions and failure modes, in
    install
    quickstart
    concepts
+   guides/validation
 
 .. toctree::
    :hidden:
@@ -133,7 +135,6 @@ Every measure above is defined, with its assumptions and failure modes, in
    guides/tables
    guides/runner
    guides/modeling
-   guides/validation
    examples
 
 .. toctree::

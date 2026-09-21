@@ -9,6 +9,8 @@ put the null near zero and the observed value in its far tail.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -30,6 +32,8 @@ BANDS = [
 ]
 CONFIG = efm.PreprocessingConfig(max_feature_missingness=0.2)
 INNER = efm.InnerSplit(grouping="subject", n_splits=2)
+
+DATASET = "sleep"
 
 
 def _relative_power(recording: Recording) -> ef.FeatureTable:
@@ -94,11 +98,26 @@ def predictions(design: efm.Design) -> tuple[pd.DataFrame, dict[str, float]]:
     return frame, metrics
 
 
+@pytest.mark.validates(
+    "stack_rows",
+    "build_design",
+    "loso_folds",
+    "cross_fit_regression",
+    "regression_metrics",
+    "subject_level_r",
+    kind="decoding",
+    claim="Sleep depth 0 to 3 is recovered across subjects by leave-one-subject-out ridge",
+    criterion="subject-level r above 0.7 with interval above 0.5; R squared above 0.5",
+)
 def test_sleep_depth_is_recovered_across_subjects(
-    predictions: tuple[pd.DataFrame, dict[str, float]],
+    predictions: tuple[pd.DataFrame, dict[str, float]], record: Callable[[str], None]
 ) -> None:
     frame, metrics = predictions
     summary = efm.subject_level_r(frame)
+    record(
+        f"subject-level r {summary.r:.2f} (interval {summary.ci_low:.2f} to "
+        f"{summary.ci_high:.2f}), R squared {metrics['r2']:.2f}, {len(frame)} epochs"
+    )
     assert summary.r > 0.7, summary
     assert summary.ci_low > 0.5, summary
     assert all(r > 0.7 for _, r in summary.per_subject), summary.per_subject
@@ -106,8 +125,16 @@ def test_sleep_depth_is_recovered_across_subjects(
     assert metrics["subject_level_r"] == pytest.approx(summary.r)
 
 
+@pytest.mark.validates(
+    "permutation_test",
+    kind="decoding",
+    claim="Refitting under within-subject permuted targets puts the null at zero",
+    criterion="null within 0.2 of zero; p below 0.05; observed statistic recomputed identically",
+)
 def test_permutation_null_sits_at_zero(
-    design: efm.Design, predictions: tuple[pd.DataFrame, dict[str, float]]
+    design: efm.Design,
+    predictions: tuple[pd.DataFrame, dict[str, float]],
+    record: Callable[[str], None],
 ) -> None:
     _, metrics = predictions
     null = efm.permutation_test(
@@ -122,6 +149,10 @@ def test_permutation_null_sits_at_zero(
         config=efm.NullConfig(scheme="within_subject", n_permutations=50),
         inner=INNER,
         seed=SEED,
+    )
+    record(
+        f"null within {np.abs(null.null).max():.2f} of zero over {null.null.size} permutations, "
+        f"p = {null.p_value:.2f}"
     )
     assert null.observed == pytest.approx(metrics["subject_level_r"])
     assert null.n_incomplete == 0

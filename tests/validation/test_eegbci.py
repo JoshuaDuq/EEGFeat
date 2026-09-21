@@ -16,6 +16,7 @@ subjects shows the effect. A test below records the skew that motivated the defa
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import mne
@@ -41,6 +42,8 @@ HAND = {
 }
 
 WELCH = {"fmin": 1.0, "fmax": 40.0, "tmin": 0.5, "tmax": 3.5, "n_fft": 320, "n_per_seg": 320}
+
+DATASET = "eegbci"
 
 
 @pytest.fixture(scope="module")
@@ -88,6 +91,14 @@ def _per_subject(frame: pd.DataFrame, band: ef.Band, column: str) -> np.ndarray:
 # --- agreement with direct computation on the same real data -----------------------------
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    "mean_psd",
+    "Spectra.from_spectrum",
+    kind="formula",
+    claim="Band power is the trapezoid integral of the Welch PSD; mean PSD is that per Hz",
+    criterion="relative error below 1e-12",
+)
 def test_band_power_is_the_trapezoid_integral_of_the_psd(
     welch: tuple[ef.Spectra, np.ndarray, np.ndarray],
 ) -> None:
@@ -102,6 +113,12 @@ def test_band_power_is_the_trapezoid_integral_of_the_psd(
     np.testing.assert_allclose(mean.values, reference / (MU.fmax - MU.fmin), rtol=1e-12)
 
 
+@pytest.mark.validates(
+    "peak_frequency",
+    kind="formula",
+    claim="With every correction off, the peak is the argmax bin",
+    criterion="exact equality",
+)
 def test_uncorrected_peak_frequency_is_the_argmax(
     welch: tuple[ef.Spectra, np.ndarray, np.ndarray],
 ) -> None:
@@ -121,6 +138,13 @@ def test_uncorrected_peak_frequency_is_the_argmax(
     np.testing.assert_array_equal(peak.values, reference)
 
 
+@pytest.mark.validates(
+    "variance",
+    "Signal.from_epochs",
+    kind="formula",
+    claim="Variance is NumPy's over the window",
+    criterion="relative error below 1e-12",
+)
 def test_variance_matches_numpy(first: Recording) -> None:
     signal = ef.Signal.from_epochs(first.epochs, recording=first.name)
     table = ef.variance([signal], windows=[MOVEMENT], include_global=False)
@@ -131,11 +155,19 @@ def test_variance_matches_numpy(first: Recording) -> None:
     np.testing.assert_allclose(table.values, reference, rtol=1e-12)
 
 
+@pytest.mark.validates(
+    "erds_mean",
+    "BandSignal.from_epochs",
+    kind="estimator",
+    claim="Hilbert ERDS ranks channels and trials like MNE's multitaper time-frequency ERDS",
+    criterion="correlation above 0.75 by channel and by trial-channel cell, every subject",
+)
 def test_hilbert_erds_agrees_with_multitaper_tfr(
-    eegbci_recordings: list[Recording],
+    eegbci_recordings: list[Recording], record: Callable[[str], None]
 ) -> None:
     """Two estimators of the same quantity should rank channels and trials alike."""
     freqs = np.arange(MU.fmin, MU.fmax + 0.5, 1.0)
+    correlations: list[tuple[float, float]] = []
     for recording in eegbci_recordings:
         signal = ef.BandSignal.from_epochs(recording.epochs, MU, recording=recording.name)
         # Percent, to match MNE's apply_baseline(mode="percent") below.
@@ -163,27 +195,51 @@ def test_hilbert_erds_agrees_with_multitaper_tfr(
 
         by_channel = np.corrcoef(own.mean(axis=0), reference.mean(axis=0))[0, 1]
         by_cell = np.corrcoef(own.ravel(), reference.ravel())[0, 1]
+        correlations.append((by_channel, by_cell))
         assert by_channel > 0.75, (recording.name, by_channel)
         assert by_cell > 0.75, (recording.name, by_cell)
+    lowest = np.min(correlations, axis=0)
+    highest = np.max(correlations, axis=0)
+    record(
+        f"r by channel {lowest[0]:.2f} to {highest[0]:.2f}; by cell {lowest[1]:.2f} to "
+        f"{highest[1]:.2f} over {len(correlations)} subjects"
+    )
 
 
 # --- known physiology ------------------------------------------------------------------
 
 
+@pytest.mark.validates(
+    "erds_mean",
+    kind="physiology",
+    claim="Hand movement desynchronizes mu and beta over the hand areas",
+    criterion="per-subject mean dB below zero; one-sided t-test p below 0.05 across 20 subjects",
+)
 @pytest.mark.parametrize("band", [MU, BETA], ids=lambda band: band.name)
 def test_movement_desynchronizes_sensorimotor_rhythms(
-    hand_erds: pd.DataFrame, band: ef.Band
+    hand_erds: pd.DataFrame, band: ef.Band, record: Callable[[str], None]
 ) -> None:
     per_trial = hand_erds.assign(hand=hand_erds[list(HAND)].mean(axis=1))
     per_subject = _per_subject(per_trial, band, "hand")
 
     result = ttest_1samp(per_subject, 0.0, alternative="less")
+    record(
+        f"{band.name}: mean {per_subject.mean():.1f} dB, range {per_subject.min():.1f} to "
+        f"{per_subject.max():.1f}, negative in {int((per_subject < 0).sum())} of "
+        f"{per_subject.size}, p = {result.pvalue:.0e}"
+    )
     assert per_subject.mean() < 0.0, per_subject.round(1)
     assert result.pvalue < 0.05, (per_subject.round(1), result.pvalue)
 
 
+@pytest.mark.validates(
+    "erds_mean",
+    kind="behaviour",
+    claim="Single-trial percent ERDS is right-skewed, which is why dB is the default",
+    criterion="trial mean above trial median in at least 75 percent of subjects",
+)
 def test_percent_change_is_right_skewed_on_single_trials(
-    eegbci_recordings: list[Recording],
+    eegbci_recordings: list[Recording], record: Callable[[str], None]
 ) -> None:
     """Why the checks above read decibels: the trial mean of percent change sits above
     its median in most subjects, pulled up by trials with a quiet baseline."""
@@ -200,6 +256,7 @@ def test_percent_change_is_right_skewed_on_single_trials(
             normalize="percent",
         ).values[moving]
         above += int(np.mean(percent) > np.median(percent))
+    record(f"mean above median in {above} of {len(eegbci_recordings)} subjects")
     assert above >= 0.75 * len(eegbci_recordings), above
 
 
@@ -236,6 +293,14 @@ spatial = ["channels"]
 """
 
 
+@pytest.mark.validates(
+    "runner",
+    "erds_mean",
+    "integrated_band_power",
+    kind="formula",
+    claim="The runner's TSV bundle holds the API's numbers",
+    criterion="relative error below 1e-9",
+)
 def test_runner_reproduces_the_api_on_real_recordings(
     eegbci_recordings: list[Recording], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -283,6 +348,12 @@ def test_runner_reproduces_the_api_on_real_recordings(
         )
 
 
+@pytest.mark.validates(
+    "BandSignal.from_epochs",
+    kind="behaviour",
+    claim="The loaded epochs match the published recording",
+    criterion="160 Hz, 64 channels, 45 movement trials",
+)
 def test_epochs_are_what_the_tutorials_describe(first: Recording) -> None:
     assert first.epochs.info["sfreq"] == 160.0
     assert len(first.epochs.ch_names) == 64

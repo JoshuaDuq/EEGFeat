@@ -4,9 +4,8 @@ Installation
 .. raw:: html
 
    <p class="hero-lede">
-     Install <code>eegfeat</code> from source or package manager into a Python 3.11+
-     virtual environment. Core dependencies are kept strictly minimal, with optional
-     extras for specialized estimators.
+     Python 3.11 or newer. Install from source. Core dependencies are
+     <code>numpy</code>, <code>scipy</code>, <code>pandas</code>, and <code>mne</code>.
    </p>
 
 Prerequisites
@@ -20,7 +19,7 @@ Prerequisites
       :link: https://www.python.org/downloads/
       :link-type: url
 
-      Required runtime for modern typing and performance.
+      Python 3.11 or newer.
 
    .. grid-item-card:: Core Scientific Stack
       :link: https://mne.tools/stable/
@@ -58,7 +57,7 @@ Windows PowerShell
 Optional Dependencies
 ---------------------
 
-Install optional components as needed depending on your analysis scope:
+Optional extras.
 
 .. list-table::
    :header-rows: 1
@@ -75,18 +74,18 @@ Install optional components as needed depending on your analysis scope:
      - GFP peak clustering and microstate segmentation (:mod:`eegfeat.microstates`).
    * - ``[model]``
      - ``scikit-learn>=1.3``
-     - Design matrices, leakage-safe cross-fitting, metrics, nulls, uncertainty, and model
-       selection (:mod:`eegfeat.model`).
+     - Design matrices, grouped cross-fitting, metrics, nulls, uncertainty, and
+       model selection (:mod:`eegfeat.model`).
    * - ``[importance]``
      - ``scikit-learn>=1.3``, ``shap>=0.45``
-     - Held-out permutation importance and SHAP explanations
-       (:mod:`eegfeat.model.importance`).
+     - SHAP explanations (:mod:`eegfeat.model.importance`). Permutation importance
+       is in the ``model`` extra.
    * - ``[dev]``
      - ``pytest``, ``ruff``, ``black``, ``mypy``, type stubs
-     - Test suite execution, type checking, and linting.
+     - Tests, type checking, and linting.
    * - ``[docs]``
      - ``furo``, ``myst-parser``, ``sphinx-copybutton``, ``sphinx-design``, ``scikit-learn``
-     - Building the Sphinx documentation locally, including the modeling API reference.
+     - This documentation, including the modeling API pages.
 
 To install with all extras:
 
@@ -94,13 +93,13 @@ To install with all extras:
 
    pip install -e ".[connectivity,microstates,model,importance,dev,docs]"
 
-For predictive modeling specifically, install ``.[model]``. Add ``.[importance]`` when SHAP explanations
-are needed; permutation importance itself is available with the model extra.
+Modeling needs the ``model`` extra. SHAP needs the ``importance`` extra.
+Permutation importance is included in ``model``.
 
 Verification
 ------------
 
-Verify your installation by running the test suite:
+Run the tests with
 
 .. code-block:: bash
 

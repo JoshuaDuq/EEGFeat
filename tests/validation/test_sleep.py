@@ -13,6 +13,8 @@ That is a property of the recordings, and the reason the checks name a channel.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -28,6 +30,8 @@ TOTAL = ef.Band("total", 0.5, 30.0)
 WHOLE = ef.Window("epoch", 0.0, 30.0)
 NREM = ("N1", "N2", "N3")
 OCCIPITAL = "Pz-Oz"
+
+DATASET = "sleep"
 
 
 @pytest.fixture(scope="module")
@@ -71,19 +75,40 @@ def _relative_power(spectra: ef.Spectra, band: ef.Band) -> ef.FeatureTable:
     return ef.band_ratio(power, band.name, TOTAL.name)
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    "band_ratio",
+    kind="physiology",
+    claim="Relative delta rises and relative alpha and beta fall from wake to N3 at Pz-Oz",
+    criterion="wake-vs-N3 AUC above 0.8 (delta), below 0.2 (alpha), below 0.1 (beta)",
+)
 def test_deep_sleep_moves_power_into_slow_waves(
-    sleep_recordings: list[Recording], spectra: list[ef.Spectra]
+    sleep_recordings: list[Recording], spectra: list[ef.Spectra], record: Callable[[str], None]
 ) -> None:
+    aucs: list[str] = []
     for recording, spectrum in zip(sleep_recordings, spectra, strict=True):
         delta = _by_stage(_relative_power(spectrum, DELTA), recording)
         alpha = _by_stage(_relative_power(spectrum, ALPHA), recording)
         beta = _by_stage(_relative_power(spectrum, BETA), recording)
 
+        aucs.append(
+            f"{recording.name}: delta {_wake_vs_deep_auc(delta, OCCIPITAL):.2f}, alpha "
+            f"{_wake_vs_deep_auc(alpha, OCCIPITAL):.2f}, beta "
+            f"{_wake_vs_deep_auc(beta, OCCIPITAL):.2f}"
+        )
         assert _wake_vs_deep_auc(delta, OCCIPITAL) > 0.8, recording.name
         assert _wake_vs_deep_auc(alpha, OCCIPITAL) < 0.2, recording.name
         assert _wake_vs_deep_auc(beta, OCCIPITAL) < 0.1, recording.name
+    record("AUC " + "; ".join(aucs))
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    "band_ratio",
+    kind="physiology",
+    claim="The slow-wave fraction increases monotonically N1, N2, N3",
+    criterion="median ordering holds on both derivations, both subjects",
+)
 def test_slow_wave_fraction_grows_with_nrem_depth(
     sleep_recordings: list[Recording], spectra: list[ef.Spectra]
 ) -> None:
@@ -94,6 +119,15 @@ def test_slow_wave_fraction_grows_with_nrem_depth(
             assert medians[channel].is_monotonic_increasing, (recording.name, channel, medians)
 
 
+@pytest.mark.validates(
+    "spectral_edge",
+    "spectral_centroid",
+    "spectral_entropy",
+    "spectral_bandwidth",
+    kind="physiology",
+    claim="Edge, centroid, entropy and bandwidth are lower in N3 than in wake at Pz-Oz",
+    criterion="medians ordered; wake-vs-N3 AUC below 0.25",
+)
 def test_spectral_descriptors_fall_in_deep_sleep(
     sleep_recordings: list[Recording], spectra: list[ef.Spectra]
 ) -> None:
@@ -102,6 +136,7 @@ def test_spectral_descriptors_fall_in_deep_sleep(
             "edge": ef.spectral_edge(spectrum, band=TOTAL, include_global=False),
             "centroid": ef.spectral_centroid(spectrum, band=TOTAL, include_global=False),
             "entropy": ef.spectral_entropy(spectrum, band=TOTAL, include_global=False),
+            "bandwidth": ef.spectral_bandwidth(spectrum, band=TOTAL, include_global=False),
         }
         for name, table in descriptors.items():
             frame = _by_stage(table, recording)
@@ -110,6 +145,12 @@ def test_spectral_descriptors_fall_in_deep_sleep(
             assert _wake_vs_deep_auc(frame, OCCIPITAL) < 0.25, (recording.name, name)
 
 
+@pytest.mark.validates(
+    "hjorth_mobility",
+    kind="physiology",
+    claim="Mobility falls wake, N2, N3 at Pz-Oz",
+    criterion="median ordering holds; wake-vs-N3 AUC below 0.1",
+)
 def test_hjorth_mobility_tracks_the_dominant_frequency(
     sleep_recordings: list[Recording],
 ) -> None:
@@ -123,6 +164,12 @@ def test_hjorth_mobility_tracks_the_dominant_frequency(
         assert _wake_vs_deep_auc(mobility, OCCIPITAL) < 0.1, recording.name
 
 
+@pytest.mark.validates(
+    "hjorth_complexity",
+    kind="physiology",
+    claim="Complexity is higher in N3 than in wake at Pz-Oz",
+    criterion="wake-vs-N3 AUC above 0.8, both subjects",
+)
 def test_hjorth_complexity_rises_in_deep_sleep(sleep_recordings: list[Recording]) -> None:
     """Slow waves are far from a pure sine, so complexity, the ratio of the derivative's
     mobility to the signal's, is higher in N3 than in the mixed-frequency wake EEG."""
@@ -134,6 +181,12 @@ def test_hjorth_complexity_rises_in_deep_sleep(sleep_recordings: list[Recording]
         assert _wake_vs_deep_auc(complexity, OCCIPITAL) > 0.8, recording.name
 
 
+@pytest.mark.validates(
+    "hjorth_mobility",
+    kind="formula",
+    claim="Mobility is the documented formula in hertz",
+    criterion="relative error below 1e-9",
+)
 def test_hjorth_mobility_is_the_documented_formula(sleep_recordings: list[Recording]) -> None:
     """Hertz, not radians per sample: the derivative is per second and divided by 2*pi."""
     recording = sleep_recordings[0]
@@ -146,6 +199,12 @@ def test_hjorth_mobility_is_the_documented_formula(sleep_recordings: list[Record
     np.testing.assert_allclose(table.values, reference, rtol=1e-9)
 
 
+@pytest.mark.validates(
+    "Signal.from_epochs",
+    kind="behaviour",
+    claim="The loaded epochs match the published recording",
+    criterion="100 Hz, Fpz-Cz and Pz-Oz, at least 50 wake and 50 N3 epochs",
+)
 def test_epochs_are_what_the_tutorial_describes(sleep_recordings: list[Recording]) -> None:
     for recording in sleep_recordings:
         assert recording.epochs.info["sfreq"] == 100.0

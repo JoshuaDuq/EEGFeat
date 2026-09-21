@@ -4,13 +4,12 @@ API Reference
 .. raw:: html
 
    <p class="hero-lede">
-     Signatures, parameters, and return types for every public class and function.
+     Signatures, parameters, and return types.
    </p>
 
-Everything documented here is exported from the top-level ``eegfeat`` namespace,
-except the modeling API (``eegfeat.model``) and microstates
-(``eegfeat.microstates``). Each feature page faces a page in :doc:`/methods/index`
-that gives the definition and the assumptions.
+These names are exported from ``eegfeat``, except ``eegfeat.model`` and
+``eegfeat.microstates``, which live in their submodules. Definitions are in
+:doc:`/methods/index`.
 
 .. grid:: 2
    :gutter: 3

@@ -8,6 +8,8 @@ refused because it is not a density.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 from scipy.integrate import trapezoid
@@ -18,6 +20,8 @@ from validation.loaders import Recording
 MU = ef.Band("mu", 8.0, 13.0)
 BETA = ef.Band("beta", 13.0, 30.0)
 ESTIMATE = {"fmin": 1.0, "fmax": 40.0, "tmin": 0.5, "tmax": 3.5}
+
+DATASET = "eegbci"
 
 
 @pytest.fixture(scope="module")
@@ -42,6 +46,13 @@ def welch(first: Recording) -> ef.Spectra:
     return ef.Spectra.from_spectrum(spectrum, recording=first.name, estimator_parameters=parameters)
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    "Spectra.from_spectrum",
+    kind="formula",
+    claim="Multitaper band power integrates edge to edge on a grid that misses the band edges",
+    criterion="relative error below 1e-9 against an edge-interpolated trapezoid",
+)
 def test_multitaper_band_power_integrates_to_the_exact_band_edges(
     multitaper: tuple[ef.Spectra, np.ndarray, np.ndarray],
 ) -> None:
@@ -61,17 +72,36 @@ def test_multitaper_band_power_integrates_to_the_exact_band_edges(
     np.testing.assert_allclose(power.values, reference, rtol=1e-9)
 
 
+@pytest.mark.validates(
+    "integrated_band_power",
+    kind="estimator",
+    claim="Multitaper and Welch band power agree",
+    criterion="median ratio within 0.9 to 1.1; log correlation above 0.9",
+)
 @pytest.mark.parametrize("band", [MU, BETA], ids=lambda band: band.name)
 def test_multitaper_agrees_with_welch(
-    multitaper: tuple[ef.Spectra, np.ndarray, np.ndarray], welch: ef.Spectra, band: ef.Band
+    multitaper: tuple[ef.Spectra, np.ndarray, np.ndarray],
+    welch: ef.Spectra,
+    band: ef.Band,
+    record: Callable[[str], None],
 ) -> None:
     spectra, _, _ = multitaper
     mt = ef.integrated_band_power(spectra, bands=[band], include_global=False).values
     wl = ef.integrated_band_power(welch, bands=[band], include_global=False).values
+    record(
+        f"{band.name}: median ratio {np.median(mt / wl):.2f}, log correlation "
+        f"{np.corrcoef(np.log(mt.ravel()), np.log(wl.ravel()))[0, 1]:.2f}"
+    )
     assert 0.9 < np.median(mt / wl) < 1.1, np.median(mt / wl)
     assert np.corrcoef(np.log(mt.ravel()), np.log(wl.ravel()))[0, 1] > 0.9
 
 
+@pytest.mark.validates(
+    "Spectra.from_spectrum",
+    kind="behaviour",
+    claim="A multitaper spectrum without full normalization is refused",
+    criterion="ValueError naming the normalization",
+)
 def test_length_normalized_multitaper_is_refused(first: Recording) -> None:
     spectrum = first.epochs.compute_psd(method="multitaper", **ESTIMATE)
     with pytest.raises(ValueError, match='normalization="full"'):
@@ -80,6 +110,13 @@ def test_length_normalized_multitaper_is_refused(first: Recording) -> None:
         )
 
 
+@pytest.mark.validates(
+    "passband_fraction",
+    "check_passband",
+    kind="behaviour",
+    claim="The passband helpers read the recording's filter edges",
+    criterion="fraction 1 inside and 0.5 straddling; refusal below the high-pass edge",
+)
 def test_passband_helpers_read_the_recording_filters(ssvep_recording: Recording) -> None:
     """The SSVEP recording was high-passed at 0.1 Hz; a band below that is refused."""
     info = ssvep_recording.epochs.info

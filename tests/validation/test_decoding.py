@@ -9,6 +9,8 @@ contrast, and the group-level lateralization tests already cover its direction.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -41,6 +43,8 @@ SLEEP_BANDS = [
     ef.Band("sigma", 12.0, 15.0),
     ef.Band("beta", 15.0, 30.0),
 ]
+
+DATASET = "eegbci"
 
 
 def _targets(table: ef.FeatureTable, metadata: pd.DataFrame) -> pd.DataFrame:
@@ -92,6 +96,15 @@ def _classify(
     return metrics, binomtest(correct, len(y_true), 0.5, alternative="greater").pvalue
 
 
+def _describe(metrics: efm.ClassificationResult, p_value: float) -> str:
+    per_subject = [m["balanced_accuracy"] for m in metrics.per_subject.values()]
+    return (
+        f"balanced accuracy {metrics.balanced_accuracy:.2f}, per subject "
+        f"{min(per_subject):.2f} to {max(per_subject):.2f}, {len(metrics.y_true)} epochs, "
+        f"p = {p_value:.0e}"
+    )
+
+
 @pytest.fixture(scope="module")
 def motor_design(eegbci_recordings: list[Recording]) -> efm.Design:
     tables, targets = [], []
@@ -108,20 +121,42 @@ def motor_design(eegbci_recordings: list[Recording]) -> efm.Design:
     )
 
 
+@pytest.mark.validates(
+    "stack_rows",
+    "build_design",
+    "within_subject_folds",
+    "cross_fit_classification",
+    "classification_metrics",
+    kind="decoding",
+    claim="Movement against rest decodes within subject from sensorimotor power",
+    criterion="balanced accuracy above 0.65 (chance 0.5); binomial p below 1e-6",
+)
 def test_movement_is_decodable_from_sensorimotor_power_within_subject(
-    motor_design: efm.Design,
+    motor_design: efm.Design, record: Callable[[str], None]
 ) -> None:
     folds = efm.within_subject_folds(motor_design.groups, motor_design.runs, inner_splits=3)
     metrics, p_value = _classify(motor_design, folds, efm.InnerSplit(grouping="run", n_splits=2))
+    record(_describe(metrics, p_value))
     assert metrics.balanced_accuracy > 0.65, metrics.balanced_accuracy
     assert p_value < 1e-6, p_value
 
 
-def test_movement_decoding_transfers_across_subjects(motor_design: efm.Design) -> None:
+@pytest.mark.validates(
+    "loso_folds",
+    "cross_fit_classification",
+    "classification_metrics",
+    kind="decoding",
+    claim="Movement against rest decodes across subjects, leave-one-subject-out",
+    criterion="balanced accuracy above 0.55 (chance 0.5); binomial p below 1e-3",
+)
+def test_movement_decoding_transfers_across_subjects(
+    motor_design: efm.Design, record: Callable[[str], None]
+) -> None:
     folds = efm.loso_folds(motor_design.groups)
     metrics, p_value = _classify(
         motor_design, folds, efm.InnerSplit(grouping="subject", n_splits=3)
     )
+    record(_describe(metrics, p_value))
     assert metrics.balanced_accuracy > 0.55, metrics.balanced_accuracy
     assert p_value < 1e-3, p_value
 
@@ -146,10 +181,21 @@ def sleep_design() -> efm.Design:
     )
 
 
-def test_deep_sleep_is_decodable_across_subjects(sleep_design: efm.Design) -> None:
+@pytest.mark.validates(
+    "loso_folds",
+    "cross_fit_classification",
+    "classification_metrics",
+    kind="decoding",
+    claim="Deep sleep against wake decodes across subjects",
+    criterion="balanced accuracy above 0.9 (chance 0.5)",
+)
+def test_deep_sleep_is_decodable_across_subjects(
+    sleep_design: efm.Design, record: Callable[[str], None]
+) -> None:
     folds = efm.loso_folds(sleep_design.groups)
     metrics, p_value = _classify(
         sleep_design, folds, efm.InnerSplit(grouping="subject", n_splits=2)
     )
+    record(_describe(metrics, p_value))
     assert metrics.balanced_accuracy > 0.9, metrics.balanced_accuracy
     assert p_value < 1e-10, p_value
