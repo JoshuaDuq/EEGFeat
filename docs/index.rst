@@ -35,20 +35,26 @@ eegfeat
       :link: examples
       :link-type: doc
 
-      Real files from a simulated five-subject cohort.
+      Files from a simulated five-subject cohort.
+
+   .. grid-item-card:: API Reference
+      :link: api/index
+      :link-type: doc
+
+      Signatures, parameters, and return types.
 
    .. grid-item-card:: Validation
       :link: guides/validation
       :link-type: doc
 
-      Every function checked on four public datasets; the scorecard the tests write.
+      Public-dataset checks, and the scorecard those tests write.
 
 ----
 
 What It Computes
 ----------------
 
-.. grid:: 3
+.. grid:: 1 1 2 2
    :gutter: 3
    :class-container: stage-grid
 
@@ -126,7 +132,7 @@ Definitions are in :doc:`methods/index`. Signatures are in :doc:`api/index`.
    install
    quickstart
    concepts
-   guides/validation
+   Validation <guides/validation>
 
 .. toctree::
    :hidden:

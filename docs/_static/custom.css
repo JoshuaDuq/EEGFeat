@@ -742,17 +742,18 @@ button.copybtn.success {
   border-color: var(--color-foreground-primary) !important;
 }
 
-/* Inline code — refined chip, not a heavy badge */
+/* Inline code — monospace only. A border on every name turns a paragraph
+   into a row of badges. */
 code.literal,
 p code,
 li code,
 td code,
 dd code {
-  background: var(--color-background-hover) !important;
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-sm) !important;
-  padding: 0.08em 0.36em !important;
-  font-size: 0.875em !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-size: 0.9em !important;
   color: var(--color-foreground-primary) !important;
   font-family: var(--font-stack--monospace);
   font-feature-settings: "calt", "ss03";
@@ -790,6 +791,8 @@ a:hover {
 .table-wrapper {
   padding-left: 0 !important;
   padding-right: 0 !important;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 table.docutils {
@@ -866,11 +869,24 @@ hr.docutils {
 
 /* Disable the default sphinx-design hover lift on landing grids —
    minimalist surfaces shouldn't move under the cursor. */
+.nav-cards .sd-row,
+.stage-grid .sd-row {
+  align-items: stretch;
+}
+
+.nav-cards .sd-col,
+.stage-grid .sd-col {
+  display: flex;
+  min-width: 0;
+}
+
 .nav-cards .sd-card,
 .stage-grid .sd-card,
 .docs-nav .sd-card {
   transform: none !important;
   box-shadow: none !important;
+  width: 100%;
+  height: 100%;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
@@ -978,7 +994,9 @@ img.hero-screenshot {
   padding: 0.85rem 1rem 0.95rem !important;
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 0.55rem;
+  min-width: 0;
 }
 
 .stage-grid .sd-card-title {
@@ -1050,14 +1068,15 @@ img.hero-screenshot {
   margin: 0 !important;
 }
 
-/* Quiet status aside — replaces a heavy admonition on the landing page */
+/* Quiet status line under the landing grids. */
 .dev-status {
   font-size: var(--fs-ui-sm);
   color: var(--color-foreground-muted);
-  border-left: 1px solid var(--color-foreground-border);
-  padding: 0.1rem 0.85rem;
+  border-left: none;
+  border-top: var(--hairline-quiet);
+  padding: 0.85rem 0 0;
   margin: var(--space-6) 0 0;
-  max-width: 70ch;
+  max-width: none;
   line-height: 1.6;
 }
 
@@ -1494,6 +1513,41 @@ dl.glossary dd {
    --------------------------------------------------------- */
 /* Narrow viewports step the whole ladder down at once rather than patching
    rule by rule, so the proportions that hold on a desktop still hold here. */
+/* Furo sets `.content { width: 100%; padding: 0 1em }` below ~48em with
+   content-box sizing, so the padding is added on top of the viewport and the
+   right edge of every line is clipped. */
+@media (max-width: 800px) {
+  .content {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .main,
+  .page,
+  article {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .sd-container-fluid {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .sd-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .sd-card-text,
+  .hero-lede {
+    overflow-wrap: break-word;
+  }
+}
+
 @media (max-width: 700px) {
   :root {
     --fs-display: 1.875rem;
@@ -1696,8 +1750,8 @@ dl.glossary dd {
 .sig:not(.sig-inline) {
   border: var(--hairline-quiet) !important;
   border-radius: var(--radius-md) !important;
-  padding: 0.5rem 0.85rem 0.5rem 3em !important;
-  text-indent: -2.25em !important;
+  padding: 0.7rem 0.95rem !important;
+  text-indent: 0 !important;
   /* Furo bleeds signatures 0.25rem past the column; once they carry a
      border that reads as a misalignment against the h1 rule. */
   margin-left: 0 !important;
@@ -1706,7 +1760,22 @@ dl.glossary dd {
   color: var(--color-api-overall) !important;
   margin-top: var(--space-5) !important;
   margin-bottom: var(--space-3) !important;
+  line-height: 1.55;
+  overflow-x: auto;
   transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+/* Multiline signatures are a nested dl. Keep each parameter on its own
+   line, indented under the opening parenthesis. */
+.sig:not(.sig-inline) dl {
+  margin: 0.15rem 0 0.15rem 0 !important;
+  padding: 0;
+}
+
+.sig:not(.sig-inline) dl dd {
+  margin: 0 0 0 1.35rem !important;
+  padding: 0 !important;
+  line-height: 1.5;
 }
 
 .sig:not(.sig-inline):hover {

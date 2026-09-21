@@ -54,6 +54,11 @@ napoleon_preprocess_types = True
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 autodoc_mock_imports = ["mne_connectivity", "shap"]
+# Keep the name written in the source (`BANDS_STANDARD`) instead of its repr.
+autodoc_preserve_defaults = True
+# One parameter per line once a signature no longer fits the content column.
+maximum_signature_line_length = 68
+python_trailing_comma_in_multi_line_signatures = True
 
 # ---------------------------------------------------------------------------
 # MyST (Markdown support)
