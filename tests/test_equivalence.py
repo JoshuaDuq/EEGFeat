@@ -197,8 +197,14 @@ def test_erds_matches_the_reference(
     # on every trial. eegfeat now requires the excursion to persist by default; the
     # equivalence holds for the persistence-free setting, a deliberate divergence.
     kwargs = {"min_duration_ms": 0.0} if measure == "onset_latency" else {}
+    # The reference pipeline reports percent; eegfeat's default is now decibels.
     table = _ERDS_FUNCTIONS[measure](
-        [signal], baseline=base, windows=[stim], include_global=False, **kwargs
+        [signal],
+        baseline=base,
+        windows=[stim],
+        include_global=False,
+        normalize="percent",
+        **kwargs,
     )
     got = table.values
     expected = reference[f"erds_{measure}__{band_name}"]

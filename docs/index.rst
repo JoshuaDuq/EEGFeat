@@ -133,6 +133,7 @@ Every measure above is defined, with its assumptions and failure modes, in
    guides/tables
    guides/runner
    guides/modeling
+   guides/validation
    examples
 
 .. toctree::

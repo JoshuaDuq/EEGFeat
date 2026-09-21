@@ -1,0 +1,40 @@
+name: validation
+
+# Checks eegfeat against public MNE datasets: known physiology has to come out of
+# real recordings. Downloads about 350 MB from PhysioNet and the MNE servers, so
+# it runs on demand and weekly rather than on every push. Runs once on the oldest
+# supported MNE and once on the newest, so API drift shows up as a failure here.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+env:
+  MNE_DONTWRITE_HOME: "true"
+  MNE_DATA: ${{ github.workspace }}/mne_data
+  EEGFEAT_DATASETS: "1"
+
+jobs:
+  datasets:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mne: "mne==1.8.*"
+            # MNE 1.8 imports a SciPy function removed in 1.15.
+            pins: "scipy<1.15 numpy<2.3"
+          - mne: "mne"
+            pins: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: mne_data
+          key: mne-datasets-${{ hashFiles('tests/validation/loaders.py') }}
+      - run: pip install -e ".[dev,model,connectivity,microstates]" ${{ matrix.mne }} ${{ matrix.pins }}
+      - run: python -c "import mne; print(mne.__version__)"
+      - run: pytest tests/validation -ra --durations=10

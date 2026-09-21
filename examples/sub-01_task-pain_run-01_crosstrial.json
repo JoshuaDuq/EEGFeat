@@ -12,7 +12,7 @@
   "coverage": "sub-01_task-pain_run-01_crosstrial_coverage.tsv",
   "columns": [
     {
-      "name": "eeg_itpc_theta_central_baseline_raw_p3a0eb7b0e993",
+      "name": "eeg_itpc_theta_central_baseline_raw_p082795f6407b",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -44,12 +44,12 @@
                 "fmin": 4.0,
                 "name": "theta"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -78,10 +78,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "3a0eb7b0e9937d212574f2ca70626c199cb9e649a91105bd999fd9ee91a662f1"
+      "parameter_hash": "082795f6407b26ff35f0867040eca15f2cd7127322b2b4de7bf8572966cb8fc3"
     },
     {
-      "name": "eeg_itpc_theta_central_stimulus_raw_pa01e6b93f529",
+      "name": "eeg_itpc_theta_central_stimulus_raw_pb167797a676b",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -113,12 +113,12 @@
                 "fmin": 4.0,
                 "name": "theta"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -147,10 +147,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "a01e6b93f529d2e3fe5e6833b7ab5e20d298567d132578d829bbe3bcc85dd781"
+      "parameter_hash": "b167797a676bfc55a0b73bb66213d1f335ee1c82c0d50e2d1c7db42e0efb4fab"
     },
     {
-      "name": "eeg_itpc_theta_parietal_baseline_raw_pcb7ee1e490f1",
+      "name": "eeg_itpc_theta_parietal_baseline_raw_pc03630e19492",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -182,12 +182,12 @@
                 "fmin": 4.0,
                 "name": "theta"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -216,10 +216,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "cb7ee1e490f1fecb7a1e6cc6828ad0e8e1ade8f43fda65e0da617fe00c9fa26a"
+      "parameter_hash": "c03630e19492c68c2569e6ea73a0316dd1da90ff781c482a44b786dbe73bbb99"
     },
     {
-      "name": "eeg_itpc_theta_parietal_stimulus_raw_pa6d583ea567a",
+      "name": "eeg_itpc_theta_parietal_stimulus_raw_p83e61a384b2a",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -251,12 +251,12 @@
                 "fmin": 4.0,
                 "name": "theta"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -285,10 +285,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "a6d583ea567ab51768e8d281fcc03836e905af782bea6d5b099d07a8cb5cbfc4"
+      "parameter_hash": "83e61a384b2a046131507ce16f6135778f9aeb45a5afed502e47fb352b83cd88"
     },
     {
-      "name": "eeg_itpc_alpha_central_baseline_raw_p771a657f5494",
+      "name": "eeg_itpc_alpha_central_baseline_raw_p73c45d0e495d",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -320,12 +320,12 @@
                 "fmin": 8.0,
                 "name": "alpha"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -354,10 +354,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "771a657f54949bf94a3d4ebbe7d11375153f7dcf12aa0ca59b4ebbb449ba856f"
+      "parameter_hash": "73c45d0e495d0b549d5cc4dc2f892bf94df9a1b19478f6e3d14af753a602c737"
     },
     {
-      "name": "eeg_itpc_alpha_central_stimulus_raw_pb06f0c0c60a3",
+      "name": "eeg_itpc_alpha_central_stimulus_raw_p48a2762a64ff",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -389,12 +389,12 @@
                 "fmin": 8.0,
                 "name": "alpha"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -423,10 +423,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "b06f0c0c60a3aedcddc41cef09846c55532ac7802b6aecca2bd63ce55602e228"
+      "parameter_hash": "48a2762a64ffc444df5306df071929192f1949e6b3b8b8efa27a6252e4177aa1"
     },
     {
-      "name": "eeg_itpc_alpha_parietal_baseline_raw_pa5929842df50",
+      "name": "eeg_itpc_alpha_parietal_baseline_raw_p196a2c304ff4",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -458,12 +458,12 @@
                 "fmin": 8.0,
                 "name": "alpha"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -492,10 +492,10 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "a5929842df507f9cb8cf5a18b12da7567974c39d60b960087cfb32bbcde43e79"
+      "parameter_hash": "196a2c304ff449f68894ada1caf073f84550e9ebe2d98ceef97f855705f19169"
     },
     {
-      "name": "eeg_itpc_alpha_parietal_stimulus_raw_p2c17fc28f79e",
+      "name": "eeg_itpc_alpha_parietal_stimulus_raw_pea8d0d786609",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -527,12 +527,12 @@
                 "fmin": 8.0,
                 "name": "alpha"
               },
-              "exclude": "bads",
+              "exclude": [],
               "filter_length": 331,
               "n_jobs": 1,
               "pad_cycles": 3.0,
               "pad_sec": 0.5,
-              "picks": "eeg"
+              "picks": "all"
             }
           },
           "input_source": "hilbert",
@@ -561,7 +561,7 @@
           "spatial_aggregation": "arithmetic_mean_of_channel_features"
         }
       },
-      "parameter_hash": "2c17fc28f79ecd138be9478392a9528240067ab5ce6ad9f5c2494f6218a07236"
+      "parameter_hash": "ea8d0d7866098b9ece417f3a140a1b9f145cc73694824561c4fdcf854465ea8e"
     }
   ],
   "flags": {
@@ -584,6 +584,6 @@
     "n_epochs": 16,
     "sfreq": 200.0,
     "mne_version": "1.13.2",
-    "created": "2026-09-20T17:27:46+00:00"
+    "created": "2026-09-21T18:58:13+00:00"
   }
 }

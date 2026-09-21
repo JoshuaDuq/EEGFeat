@@ -12,8 +12,8 @@ band, window, spatial unit, normalization, coverage, and computation parameters.
 carry the same information, so a table reads on its own months later:
 
 ```text
-eeg_erds-mean_alpha_central_stimulus_percent_pc5ab132dc1e2
-│   │         │     │       │        │       └─ parameter hash (first 12 hex)
+eeg_erds-mean_alpha_central_stimulus_db_pd6572187a139
+│   │         │     │       │        │  └─ parameter hash (first 12 hex)
 │   │         │     │       │        └─ normalization: raw, log10, log_ratio, db, percent
 │   │         │     │       └─ time window, or "all"
 │   │         │     └─ channel, ROI, or "global"
@@ -343,6 +343,7 @@ All of these are exported from `eegfeat` and documented in the
 - [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html) — definitions and assumptions
 - [API reference](https://joshuaduq.github.io/EEGFeat/api/index.html) — public signatures
 - [Example output](https://joshuaduq.github.io/EEGFeat/examples.html) — real files from a simulated cohort
+- [Validation](https://joshuaduq.github.io/EEGFeat/guides/validation.html) — known effects recovered from public MNE datasets
 
 ## Development
 
@@ -351,6 +352,15 @@ python -m pytest
 python -m ruff check src tests
 python -m black --check src tests
 python -m mypy
+```
+
+The validation suite checks the library against public MNE datasets (PhysioNet motor
+movement, SSVEP, ERP CORE, Sleep-EDF): known physiology has to come out of real
+recordings, and the formulas have to agree with direct computation on them. It downloads
+about 350 MB on first use and is skipped unless asked for:
+
+```bash
+EEGFEAT_DATASETS=1 python -m pytest tests/validation -ra
 ```
 
 ## License

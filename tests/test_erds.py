@@ -71,6 +71,7 @@ def test_a_halved_power_gives_minus_fifty_percent() -> None:
         baseline=BASE,
         windows=[STIM],
         include_global=False,
+        normalize="percent",
     )
     assert table.select(measure="erds_mean").values.item() == pytest.approx(-50.0)
 
@@ -114,6 +115,7 @@ def test_a_wholly_negative_trace_has_full_erd_duration_and_no_ers() -> None:
         baseline=BASE,
         windows=[STIM],
         include_global=False,
+        normalize="percent",
     )
     assert table.select(measure="erd_magnitude").values.item() == pytest.approx(50.0)
     assert table.select(measure="erd_duration").values.item() == pytest.approx(101 / SFREQ)
@@ -126,7 +128,13 @@ def test_slope_recovers_a_known_linear_ramp() -> None:
     envelope = np.ones((1, 1, n))
     # power ramps from 1.0 to 2.0 across the 1 s active window -> +100%/s in percent
     envelope[:, :, n // 2 :] = np.sqrt(np.linspace(1.0, 2.0, n - n // 2))
-    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    table = erds(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        normalize="percent",
+    )
     assert table.select(measure="erds_slope").values.item() == pytest.approx(100.0, rel=0.02)
 
 
@@ -161,8 +169,14 @@ def test_onset_latency_is_the_first_crossing_of_the_baseline_variability() -> No
     envelope = np.ones((1, 1, n))
     envelope[:, :, :100] += rng.normal(0.0, 0.01, (1, 1, 100))
     envelope[:, :, 130:] = np.sqrt(2.0)  # steps at t = +0.3 s
-    table = erds([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
-    assert table.select(measure="erds_onset_latency").values.item() == pytest.approx(0.3, abs=0.02)
+    table = erds_onset_latency(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        min_duration_ms=100.0,
+    )
+    assert table.values.item() == pytest.approx(0.3, abs=0.02)
 
 
 def test_onset_is_independent_of_the_reported_normalization_scale() -> None:
@@ -182,8 +196,14 @@ def test_onset_is_independent_of_the_reported_normalization_scale() -> None:
 
 
 def test_a_trace_that_never_crosses_has_no_onset() -> None:
-    table = erds([_step(1.0, 1.0)], baseline=BASE, windows=[STIM], include_global=False)
-    assert np.isnan(table.select(measure="erds_onset_latency").values).all()
+    table = erds_onset_latency(
+        [_step(1.0, 1.0)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        min_duration_ms=100.0,
+    )
+    assert np.isnan(table.values).all()
 
 
 def test_rebound_is_the_largest_value_after_the_peak() -> None:
@@ -210,7 +230,13 @@ def test_an_enormous_response_is_reported_but_flagged() -> None:
     n = 201
     envelope = np.full((1, 1, n), 1e-7)
     envelope[:, :, n // 2 :] = 1e-4
-    table = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    table = erds_mean(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        normalize="percent",
+    )
     assert table.values.item() == pytest.approx(1e6 * 100.0 - 100.0)
     assert table.flags["baseline_extreme_ratio"].all()
     assert not table.flags["baseline_degenerate"].any()
@@ -220,7 +246,13 @@ def test_a_healthy_channel_is_not_withheld_by_the_guard() -> None:
     n = 201
     envelope = np.full((1, 1, n), 1e-5)
     envelope[:, :, n // 2 :] = 1e-5 * np.sqrt(0.5)
-    table = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    table = erds_mean(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        normalize="percent",
+    )
     assert table.values.item() == pytest.approx(-50.0)
     assert not table.flags["baseline_extreme_ratio"].any()
     assert not table.flags["baseline_degenerate"].any()
@@ -233,9 +265,19 @@ def test_a_low_amplitude_band_is_not_withheld_for_being_small() -> None:
     n = 201
     envelope = np.full((1, 1, n), 5e-7)  # 0.5 uV: power 2.5e-13, under the old floor
     envelope[:, :, n // 2 :] = 5e-7 * np.sqrt(0.5)
-    volts = erds_mean([_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False)
+    volts = erds_mean(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        normalize="percent",
+    )
     micro = erds_mean(
-        [_signal(envelope * 1e6)], baseline=BASE, windows=[STIM], include_global=False
+        [_signal(envelope * 1e6)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        normalize="percent",
     )
     assert volts.values.item() == pytest.approx(-50.0)
     assert volts.values.item() == pytest.approx(micro.values.item())
@@ -324,7 +366,11 @@ def test_a_single_sample_excursion_is_not_an_onset() -> None:
     envelope[:, :, 120] = np.sqrt(2.0)  # a lone spike at t = +0.2 s
     envelope[:, :, 150:] = np.sqrt(2.0)  # the sustained step at t = +0.5 s
     table = erds_onset_latency(
-        [_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        min_duration_ms=100.0,
     )
     assert table.values.item() == pytest.approx(0.5, abs=0.02)
     single = erds_onset_latency(
@@ -342,6 +388,59 @@ def test_an_excursion_shorter_than_min_duration_gives_no_onset() -> None:
     envelope = np.ones((1, 1, n))
     envelope[:, :, 120:125] = np.sqrt(2.0)  # 50 ms at 100 Hz
     table = erds_onset_latency(
-        [_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        min_duration_ms=100.0,
     )
     assert np.isnan(table.values).all()
+
+
+def test_the_default_scale_is_decibels() -> None:
+    table = erds([_step(1.0, np.sqrt(0.5))], baseline=BASE, windows=[STIM], include_global=False)
+    assert table.select(measure="erds_mean").values.item() == pytest.approx(10.0 * np.log10(0.5))
+    assert all(meta.normalization == "db" for meta in table.meta)
+
+
+def test_onset_persistence_defaults_to_six_cycles_of_the_band_edge() -> None:
+    # ALPHA starts at 8 Hz, so six cycles is 0.75 s: a step lasting 0.8 s is an onset and one
+    # lasting 0.7 s is not, on the same one-second window.
+    n = 201
+    long_step = np.ones((1, 1, n))
+    long_step[:, :, 120:] = np.sqrt(2.0)  # from +0.2 s to the end: 0.8 s
+    short_step = np.ones((1, 1, n))
+    short_step[:, :, 130:] = np.sqrt(2.0)  # from +0.3 s to the end: 0.7 s
+    found = erds_onset_latency(
+        [_signal(long_step)], baseline=BASE, windows=[STIM], include_global=False
+    )
+    missing = erds_onset_latency(
+        [_signal(short_step)], baseline=BASE, windows=[STIM], include_global=False
+    )
+    assert found.values.item() == pytest.approx(0.2, abs=0.02)
+    assert np.isnan(missing.values).all()
+    # Milliseconds, when given, replace the cycle rule.
+    forced = erds_onset_latency(
+        [_signal(short_step)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        min_duration_ms=100.0,
+    )
+    assert forced.values.item() == pytest.approx(0.3, abs=0.02)
+    recorded = found.meta[0].computation.record()["parameters"]["parameters"]
+    assert recorded["onset_min_duration_cycles"] == 6.0
+    assert recorded["onset_min_duration_ms"] is None
+
+
+def test_a_band_from_zero_hertz_needs_an_explicit_persistence() -> None:
+    signal = _step(1.0, np.sqrt(2.0))
+    from dataclasses import replace
+
+    from_zero = replace(signal, band=Band("dc", 0.0, 4.0))
+    with pytest.raises(ValueError, match="min_duration_ms"):
+        erds_onset_latency([from_zero], baseline=BASE, windows=[STIM], include_global=False)
+    table = erds_onset_latency(
+        [from_zero], baseline=BASE, windows=[STIM], include_global=False, min_duration_ms=100.0
+    )
+    assert np.isfinite(table.values).all()

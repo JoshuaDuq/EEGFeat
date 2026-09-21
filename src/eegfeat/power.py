@@ -141,6 +141,11 @@ def mean_tfr_power(
     every sampling rate. It is not integrated over the band, since a wavelet
     already averages power over its own bandwidth and integrating it again would
     count the same spectral mass more than once.
+
+    With a ``baseline`` and ``normalize="db"`` this is the decibel of the
+    **window-mean** power. :func:`~eegfeat.erds_mean` averages a per-sample dB
+    trace instead, which for near-exponential instantaneous power sits about
+    2.5 dB lower. The two are both ERDS in decibels and are not interchangeable.
     """
     _require_representation(spectra, "time_frequency_power", "mean_tfr_power")
     return expand(

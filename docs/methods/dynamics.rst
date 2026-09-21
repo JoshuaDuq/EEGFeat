@@ -50,8 +50,9 @@ Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}
 - **ers_magnitude**: Mean magnitude of positive excursions: :math:`\frac{1}{|K_+|} \sum_{t_k \in K_+} \text{ERDS}(t_k)`, where :math:`K_+ = \{t_k : \text{ERDS}(t_k) > 0\}` (returns :math:`0.0` if :math:`K_+ = \emptyset`).
 - **ers_duration**: Cumulative synchronization duration: :math:`|K_+| / f_s` in seconds.
 - **peak_latency**: Latency of the maximum absolute excursion: :math:`t^* = \arg\max_{t_k} |\text{ERDS}(t_k)|`.
-- **onset_latency**: Start of the first run of at least ``min_duration_ms``
-  (default 100 ms) consecutive samples whose absolute raw-power departure from
+- **onset_latency**: Start of the first run of consecutive samples, lasting at
+  least ``min_duration_cycles`` cycles of the band's low edge (default 6, or
+  ``min_duration_ms`` when given), whose absolute raw-power departure from
   baseline exceeds one baseline standard deviation:
   :math:`\min \{t_k : |P(t_j)-B| > \sigma_B \ \forall\, j \in [k, k + n_{\min})\}`.
   A non-finite sample breaks the run. The criterion is evaluated before percent
@@ -89,18 +90,38 @@ Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}
         - NaN when nothing happens
 
    ``erds_onset_latency`` is the sharpest case. A single sample clears a
-   one-standard-deviation criterion about 14% of the time by chance, and before
-   the persistence requirement existed it fired on 100% of real trials with no
-   effect, roughly 200 ms into the window. Requiring ``min_duration_ms`` of
-   consecutive crossings is what makes it an onset detector at all, but the
-   null rate it leaves is band-dependent: a narrow band's envelope changes
-   slowly, so its consecutive samples are far from independent and 100 ms is a
-   weaker requirement at 4 Hz than at 15 Hz. The arithmetic is exact in every
-   case; what is wrong is reading zero, or half the window, as the reference.
-   Build a null from shuffled or pre-stimulus windows, compare against that, and
-   choose ``min_duration_ms`` so the null rarely fires. Because the durations
-   depend on window length and the magnitudes on the shape of the power distribution,
-   neither is comparable across windows of different length without one.
+   one-standard-deviation criterion about 14% of the time by chance. On rest
+   epochs of a public motor dataset a fixed 100 ms persistence still produced an
+   onset on essentially every trial in theta, mu and beta, because a narrow
+   band's envelope changes slowly and its consecutive samples are far from
+   independent. About six cycles of the band's low edge brought the false-onset
+   rate to roughly 5% in every band, which is why the persistence is in cycles
+   by default. Even so, on that dataset the onset fired on movement trials at
+   the same rate as on rest trials, so the single-trial onset is a weak detector.
+   The arithmetic is exact in every case; what is wrong is reading zero, or half
+   the window, as the reference. Build a null from shuffled or pre-stimulus
+   windows and compare against that. Because the durations depend on window
+   length and the magnitudes on the shape of the power distribution, neither is
+   comparable across windows of different length without one.
+
+Scale
+^^^^^
+
+Every ``erds_*`` function reports decibels by default. Percent change is
+right-skewed on a single trial: a quiet baseline turns an ordinary response into
+several hundred percent, and a few such trials pull a mean over dozens of trials
+the wrong way. On twenty subjects of a public motor dataset the trial-mean percent
+ERDS showed mu desynchronization in about half of them and the decibel mean in all
+twenty. Percent remains available with ``normalize="percent"`` for display and for
+comparison with the classic literature.
+
+Two decibel quantities exist in the library and differ by construction. The
+``erds_*`` functions average the per-sample dB trace over the window;
+:func:`~eegfeat.mean_tfr_power` with a baseline takes the dB of the window-mean
+power. Because instantaneous band power is close to exponentially distributed,
+the per-sample mean sits about 2.5 dB below the dB of the mean, and on real data
+the two correlate only moderately across single trials. Both are ERDS in
+decibels; report which one you used.
 
 The ERD/ERS terminology and baseline-referenced power interpretation follow
 the synthesis by `Gert Pfurtscheller and F. H. Lopes da Silva (1999)

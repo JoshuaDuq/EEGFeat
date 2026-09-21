@@ -42,6 +42,11 @@ def peak_frequency(
     - ``smoothing_hz`` averages over a centred window of that width before the
       search, so a single noisy bin cannot win. The average ignores non-finite
       bins and renormalizes rather than closing the gap and averaging across it.
+      The 1 Hz default suits broad endogenous peaks. A steady-state or otherwise
+      entrained response is a line a few bins wide, and 1 Hz of smoothing blurs
+      it into a neighbouring rhythm: on a public SSVEP recording the defaults
+      reported the alpha peak instead of the 12 Hz flicker. For narrow lines set
+      ``smoothing_hz=0.0`` and choose a band that excludes the neighbours.
     - ``min_prominence`` guards against reporting noise as a peak. When the
       maximum stands less than this far, in log10 units, above the band median,
       the centre of gravity is reported instead and ``"cog_fallback"`` is set. A

@@ -74,7 +74,7 @@ def erds_mean(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Mean of the ERDS trace over the window.
 
@@ -83,6 +83,21 @@ def erds_mean(
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
     pre-stimulus power and no cross-trial leakage arises.
+
+    **Decibels are the default because these are single-trial values.** Percent
+    change is right-skewed on a single trial: a trial whose baseline happens to be
+    quiet reports several hundred percent, and a handful of those dominate a mean
+    over forty-five trials. On twenty subjects of a public motor dataset the
+    trial-mean percent ERDS showed mu desynchronization in about half of them; the
+    decibel mean, a symmetric log ratio, showed it in every one. Percent remains
+    available for display and for comparison with the classic literature.
+
+    **Two ways to average decibels.** This function averages the per-sample dB
+    trace over the window. :func:`~eegfeat.mean_tfr_power` with a baseline and
+    ``normalize="db"`` takes the dB of the window-mean power instead. They are not
+    the same number: for the near-exponential distribution of instantaneous power
+    the per-sample mean sits about 2.5 dB lower (the mean of a log is below the log
+    of a mean). Report which one you used.
 
     Parameters
     ----------
@@ -97,8 +112,9 @@ def erds_mean(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -123,7 +139,7 @@ def erds_slope(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Least-squares slope of the ERDS trace against time.
 
@@ -147,8 +163,9 @@ def erds_slope(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -173,7 +190,7 @@ def erd_magnitude(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Mean depth of the desynchronized part of the trace.
 
@@ -210,8 +227,9 @@ def erd_magnitude(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -236,7 +254,7 @@ def erd_duration(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Time spent desynchronized.
 
@@ -271,8 +289,9 @@ def erd_duration(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -297,7 +316,7 @@ def ers_magnitude(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Mean height of the synchronized part of the trace.
 
@@ -333,8 +352,9 @@ def ers_magnitude(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -359,7 +379,7 @@ def ers_duration(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Time spent synchronized.
 
@@ -394,8 +414,9 @@ def ers_duration(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -420,7 +441,7 @@ def erds_peak_latency(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Time of the largest excursion from baseline, in either direction.
 
@@ -444,8 +465,9 @@ def erds_peak_latency(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -470,29 +492,34 @@ def erds_onset_latency(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
-    min_duration_ms: float = 100.0,
+    normalize: ErdsScale = "db",
+    min_duration_ms: float | None = None,
+    min_duration_cycles: float = 6.0,
 ) -> FeatureTable:
     """Time the trace first leaves the baseline's own variability and stays out.
 
-    The start of the first run of at least ``min_duration_ms`` consecutive samples
-    whose absolute raw-power departure from the baseline mean exceeds one baseline
-    standard deviation. The criterion is independent of percent versus decibel
-    output. NaN when no run lasts that long.
+    The start of the first run of consecutive samples whose absolute raw-power
+    departure from the baseline mean exceeds one baseline standard deviation and
+    persists for the required duration. The criterion is independent of percent
+    versus decibel output. NaN when no run lasts that long.
+
+    **The persistence is in cycles of the band's low edge by default**, because
+    the null rate of this detector depends on the band. A narrow band's envelope
+    changes slowly, so consecutive samples are far from independent and a fixed
+    number of milliseconds is a much weaker requirement at 4 Hz than at 30 Hz.
+    Measured on rest epochs of a public motor dataset, where nothing happens, a
+    100 ms requirement produced an onset on essentially every trial in theta, mu
+    and beta; about six cycles of the low edge brought the false-onset rate to
+    roughly 5 percent in every band (1.5 s at 4 Hz, 0.75 s at 8 Hz, 0.46 s at
+    13 Hz, 0.2 s at 30 Hz). That is what the default encodes.
 
     .. warning::
 
-       **The persistence requirement is what makes this an onset.** Instantaneous
-       band power is close to exponentially distributed, so a single sample clears
-       a one-standard-deviation criterion roughly 14% of the time by chance; without
-       a duration requirement the criterion was met on 100% of real trials with no
-       effect, about 200 ms into the window. Requiring the excursion to last lowers
-       that rate, but the false-onset rate under no effect still depends on the
-       band: the envelope of a narrow band changes slowly, so consecutive samples
-       are far from independent and 100 ms is a weaker requirement for a 4 Hz band
-       than for a 15 Hz one. Compare against a null you construct -- a shuffled or
-       pre-stimulus window -- and set ``min_duration_ms`` so that the null rarely
-       fires, rather than reading any onset as evidence that a response occurred.
+       On the same dataset the onset fired on movement trials at the same rate as
+       on rest trials at every persistence, so a single-trial onset is a weak
+       detector even when the group-level desynchronization is unmistakable. Read
+       an onset rate against a null you construct from pre-stimulus or shuffled
+       windows, not as evidence that a response occurred on that trial.
 
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
@@ -511,19 +538,35 @@ def erds_onset_latency(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
-    min_duration_ms : float, default 100.0
-        Shortest excursion that counts as an onset, in milliseconds. Zero
-        restores the first single-sample crossing, which fires on every trial.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean`.
+    min_duration_ms : float, optional
+        Shortest excursion that counts as an onset, in milliseconds. When given it
+        replaces ``min_duration_cycles`` for every band. Zero restores the first
+        single-sample crossing, which fires on every trial.
+    min_duration_cycles : float, default 6.0
+        Shortest excursion in cycles of each band's ``fmin``, used when
+        ``min_duration_ms`` is None. A band with ``fmin`` of zero has no cycle
+        length and must be given ``min_duration_ms``.
 
     Returns
     -------
     FeatureTable
         One column per band, spatial unit and window.
     """
-    if not np.isfinite(min_duration_ms) or min_duration_ms < 0.0:
+    if min_duration_ms is not None and (not np.isfinite(min_duration_ms) or min_duration_ms < 0.0):
         raise ValueError(f"min_duration_ms must be finite and non-negative, got {min_duration_ms}.")
+    if not np.isfinite(min_duration_cycles) or min_duration_cycles < 0.0:
+        raise ValueError(
+            f"min_duration_cycles must be finite and non-negative, got {min_duration_cycles}."
+        )
+    if min_duration_ms is None:
+        for signal in signals:
+            if signal.band.fmin <= 0.0:
+                raise ValueError(
+                    f"band {signal.band.name!r} starts at 0 Hz, so a persistence in cycles is "
+                    "undefined; pass min_duration_ms."
+                )
     return _erds_measure(
         signals,
         "erds_onset_latency",
@@ -532,7 +575,7 @@ def erds_onset_latency(
         groups=groups,
         include_global=include_global,
         normalize=normalize,
-        onset_min_duration_ms=min_duration_ms,
+        onset_persistence=(min_duration_ms, min_duration_cycles),
     )
 
 
@@ -543,7 +586,7 @@ def erds_rebound_latency(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
-    normalize: ErdsScale = "percent",
+    normalize: ErdsScale = "db",
 ) -> FeatureTable:
     """Latency of the largest ERDS excursion after the peak.
 
@@ -566,8 +609,9 @@ def erds_rebound_latency(
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
         Also emit the mean across all channels.
-    normalize : {"percent", "db"}, default "percent"
-        Percent change from baseline, or decibels.
+    normalize : {"percent", "db"}, default "db"
+        Decibels, or percent change from baseline. See :func:`erds_mean` for why
+        decibels are the default.
 
     Returns
     -------
@@ -594,10 +638,16 @@ def _erds_measure(
     groups: Mapping[str, Sequence[str]] | None,
     include_global: bool,
     normalize: ErdsScale,
-    onset_min_duration_ms: float = 100.0,
+    onset_persistence: tuple[float | None, float] = (None, 6.0),
 ) -> FeatureTable:
     if normalize not in ("percent", "db"):
         raise ValueError(f"normalize must be 'percent' or 'db', got {normalize!r}.")
+    min_duration_ms, min_duration_cycles = onset_persistence
+
+    def onset_seconds(signal: BandSignal) -> float:
+        if min_duration_ms is not None:
+            return min_duration_ms / 1000.0
+        return min_duration_cycles / signal.band.fmin
 
     def trace_of(signal: BandSignal) -> npt.NDArray[np.float64]:
         return _trace(signal, baseline, normalize)
@@ -616,7 +666,7 @@ def _erds_measure(
             & np.isfinite(reference[:, :, np.newaxis])
             & (np.abs(power - reference[:, :, np.newaxis]) > deviation[:, :, np.newaxis])
         )
-        onset_samples = max(1, int(round(onset_min_duration_ms * signal.sfreq / 1000.0)))
+        onset_samples = max(1, int(round(onset_seconds(signal) * signal.sfreq)))
         # Every measure derives from the same trace, so computing the set and
         # taking one is cheaper than it looks and keeps the definitions together.
         return {measure: _measures(signal, trace, times, onset_crossing, onset_samples)[measure]}
@@ -644,8 +694,18 @@ def _erds_measure(
         mode=normalize,
         parameters={
             "baseline": {"name": baseline.name, "tmin": baseline.tmin, "tmax": baseline.tmax},
-            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd_sustained",
-            "onset_min_duration_ms": onset_min_duration_ms,
+            # Only the onset is defined by the persistence, so only its columns carry it.
+            **(
+                {
+                    "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd_sustained",
+                    "onset_min_duration_ms": min_duration_ms,
+                    "onset_min_duration_cycles": (
+                        None if min_duration_ms is not None else min_duration_cycles
+                    ),
+                }
+                if measure == "erds_onset_latency"
+                else {}
+            ),
         },
     )
 

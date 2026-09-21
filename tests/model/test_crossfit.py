@@ -229,9 +229,9 @@ def test_target_residualization_is_refitted_inside_inner_cv(
     outer_training_size = len(folds[0].train)
 
     assert training_sizes
-    assert any(size < outer_training_size for size in training_sizes), (
-        "Nuisance fitting never occurred inside the inner CV folds."
-    )
+    assert any(
+        size < outer_training_size for size in training_sizes
+    ), "Nuisance fitting never occurred inside the inner CV folds."
 
 
 def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
