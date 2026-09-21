@@ -39,13 +39,16 @@ def test_regression_metrics_report_subject_level_r() -> None:
 
 
 def test_classification_primary_precision_recall_f1_are_subject_level() -> None:
-    y_true = np.array([0, 1, 0, 1], dtype=np.intp)
-    y_pred = np.array([0, 1, 0, 0], dtype=np.intp)
-    groups = np.array(["s1", "s1", "s2", "s2"], dtype=object)
+    # s1 is perfect; s2 has one hit, one false alarm and two misses. Every subject
+    # predicts at least one positive, so each metric is defined for both, and the
+    # subject means (0.75, 2/3, 0.7) differ from the pooled values (2/3, 0.5, 4/7).
+    y_true = np.array([0, 1, 0, 1, 1, 1], dtype=np.intp)
+    y_pred = np.array([0, 1, 1, 0, 0, 1], dtype=np.intp)
+    groups = np.array(["s1", "s1", "s2", "s2", "s2", "s2"], dtype=object)
     result = classification_metrics(y_true, y_pred, groups=groups)
-    assert result.precision == pytest.approx(0.5)
-    assert result.recall == pytest.approx(0.5)
-    assert result.f1 == pytest.approx(0.5)
+    assert result.precision == pytest.approx(0.75)
+    assert result.recall == pytest.approx(2.0 / 3.0)
+    assert result.f1 == pytest.approx(0.7)
 
 
 def test_group_classification_permutations_do_not_fallback_to_pooled_auc() -> None:
@@ -201,3 +204,18 @@ def test_centered_r2_rejects_constant_targets_despite_roundoff() -> None:
     assert np.isnan(result["within_subject_centered_full_r2"])
     result = within_condition_metrics(y, y, np.zeros(3), groups, np.full(3, "c"))
     assert np.isnan(result["within_condition_centered_full_r2"])
+
+
+def test_a_subject_without_positives_has_undefined_rather_than_zero_recall() -> None:
+    # s2 holds no positive trials and predicts none: 0/0. It must drop out of the
+    # subject mean the way balanced accuracy and AUC already do, not enter as zero
+    # and halve a perfect recall.
+    y_true = np.array([0, 1, 0, 1, 0, 0, 0], dtype=np.intp)
+    y_pred = y_true.copy()
+    groups = np.array(["s1"] * 4 + ["s2"] * 3, dtype=object)
+    result = classification_metrics(y_true, y_pred, groups=groups)
+    assert result.recall == pytest.approx(1.0)
+    assert result.precision == pytest.approx(1.0)
+    assert result.f1 == pytest.approx(1.0)
+    assert result.accuracy == pytest.approx(1.0)
+    assert np.isnan(result.per_subject["s2"]["recall"])

@@ -44,9 +44,9 @@ def test_an_alpha_peak_does_not_tilt_the_fit() -> None:
     assert abs(robust - (-1.7)) < abs(biased - (-1.7))
 
 
-def test_both_measures_are_returned_as_columns_of_one_table() -> None:
+def test_every_measure_is_returned_as_a_column_of_one_table() -> None:
     table = aperiodic(_spectra(10.0 * FREQS**-1.7), include_global=False)
-    assert sorted(m.measure for m in table.meta) == ["offset", "slope"]
+    assert sorted(m.measure for m in table.meta) == ["offset", "r_squared", "slope"]
     assert all(m.band is None for m in table.meta)
 
 
@@ -126,3 +126,29 @@ def test_a_cell_that_cannot_be_fitted_is_withheld() -> None:
     ratio = aperiodic_ratio(spectra)
     assert np.isnan(ratio.data).all()
     assert ratio.flags["aperiodic_fit_failed"].all()
+
+
+def test_a_clean_power_law_reports_a_near_perfect_fit() -> None:
+    table = aperiodic(_spectra(10.0 * FREQS**-1.7), include_global=False)
+    assert table.select(measure="r_squared").values.item() == pytest.approx(1.0, abs=1e-6)
+
+
+def test_a_knee_is_visible_in_the_fit_quality() -> None:
+    # A single line through a spectrum with a bend is a poor model, and the slope
+    # alone cannot say so. Most real EEG has a knee inside the default (2, 40) Hz
+    # range, so reporting an exponent without a fit statistic hides the failure.
+    knee = 10.0 / (5.0**2 + FREQS**2)
+    assert (
+        aperiodic(_spectra(knee), include_global=False).select(measure="r_squared").values.item()
+        < 0.99
+    )
+
+
+def test_the_fit_quality_is_dimensionless_and_named() -> None:
+    meta = (
+        aperiodic(_spectra(10.0 * FREQS**-1.7), include_global=False)
+        .select(measure="r_squared")
+        .meta[0]
+    )
+    assert meta.unit == "a.u."
+    assert meta.band is None

@@ -189,7 +189,10 @@ def test_matches_antropy_where_it_is_available() -> None:
     from antropy import sample_entropy as antropy_sampen
 
     rng = np.random.RandomState(6)
-    for values in (rng.randn(300), np.sin(np.linspace(0, 30 * np.pi, 300)), np.full(200, 1.0)):
+    # A constant signal is left out on purpose: its tolerance is 0.2 * 0, and
+    # antropy returns NaN there while the definition gives -log(A/B) = 0 for a
+    # perfectly regular series. test_a_constant_signal_has_zero_entropy pins ours.
+    for values in (rng.randn(300), np.sin(np.linspace(0, 30 * np.pi, 300))):
         tolerance = 0.2 * float(np.std(values))
         expected = antropy_sampen(values, order=2, tolerance=tolerance, metric="chebyshev")
         assert _sample_entropy(values, 2, 0.2) == pytest.approx(expected, rel=1e-12, abs=1e-12)

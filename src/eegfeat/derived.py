@@ -21,6 +21,27 @@ ratio: the factor of ten is still in there.
 
 _LOGARITHMIC = tuple(_LOG_UNITS)
 
+_SIGNED_CHANGE: tuple[Normalization, ...] = ("percent",)
+"""Scales whose values cross zero, so neither a quotient nor a normalized difference holds.
+
+A percent change is a signed deviation from a baseline, not an amount of power.
+Dividing two of them gives a negative "ratio" wherever one band went down, and
+``(right - left) / (right + left)`` leaves its own ``[-1, 1]`` bound wherever the
+two nearly cancel. Both read as measurements and are neither, so they are refused
+rather than emitted with a caveat.
+"""
+
+
+def _check_combinable(table: FeatureTable, index: int, operation: str) -> None:
+    normalization = table.meta[index].normalization
+    if normalization in _SIGNED_CHANGE:
+        raise ValueError(
+            f"{operation} is not defined on {normalization!r} values: they are signed "
+            "changes from a baseline, so a quotient can come out negative and a "
+            "normalized difference can leave [-1, 1]. Derive from 'raw' power, or from "
+            "a logarithmic scale where the operation becomes a difference."
+        )
+
 
 def band_ratio(table: FeatureTable, numerator: str, denominator: str) -> FeatureTable:
     """Ratio between two bands, computed per spatial unit and window.
@@ -43,6 +64,8 @@ def band_ratio(table: FeatureTable, numerator: str, denominator: str) -> Feature
     """
     top = _index_by_position(table, numerator)
     bottom = _index_by_position(table, denominator)
+    for index in (*top.values(), *bottom.values()):
+        _check_combinable(table, index, "band_ratio")
     missing = set(top) ^ set(bottom)
     if missing:
         raise ValueError(
@@ -108,6 +131,8 @@ def asymmetry(table: FeatureTable, pairs: Sequence[tuple[str, str]]) -> FeatureT
 
         for key, on_left in left_index.items():
             on_right = right_index[key]
+            _check_combinable(table, on_left, "asymmetry")
+            _check_combinable(table, on_right, "asymmetry")
             operands.append((on_right, on_left))
             meta.append(
                 replace(

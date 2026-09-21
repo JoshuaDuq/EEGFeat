@@ -18,6 +18,9 @@ connectivity = ["mne-connectivity>=0.7"]
 microstates = ["scikit-learn>=1.3"]
 model = ["scikit-learn>=1.3"]
 importance = ["scikit-learn>=1.3", "shap>=0.45"]
+# Third-party implementations the test suite checks our own numbers against.
+# Not needed to use eegfeat; needed to prove the formulas agree with a reference.
+references = ["antropy>=0.1.6"]
 docs = [
     "furo>=2024.1.29",
     "myst-parser>=3.0",

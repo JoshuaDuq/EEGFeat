@@ -143,16 +143,21 @@ Spectra
    each window. The default segment is 2 s, capped by the shortest window any spectral
    entry uses, so every window shares one frequency grid.
 ``multitaper``
-   Computed in each window, with an optional ``bandwidth``. The grid follows the window
-   length, so windows measured together must be equally long. Uses MNE's
-   ``normalization="full"`` so the output is density in V²/Hz, independent of
-   sampling rate.
+   Computed in each window with a frequency-smoothing ``bandwidth`` in Hz, 2.0 by
+   default. The default is fixed in hertz on purpose: MNE's own default is
+   ``8 / window_length`` Hz, which on a 1 s window smooths over ±4 Hz, wider than the
+   delta or theta band. A bandwidth below ``1 / window_length`` cannot be realised and
+   is refused. The grid follows the window length, so windows measured together must
+   be equally long. Uses MNE's ``normalization="full"`` so the output is density in
+   V²/Hz, independent of sampling rate.
 ``morlet``
    One time-frequency decomposition per recording on ``n_freqs`` = 40 frequencies
    (``spacing`` = ``"log"``), with ``n_cycles = clip(f / n_cycles_factor, min_cycles,
    max_cycles)`` (2.0, 3.0, 15.0) and ``decim`` = 4, matching the reference pipeline.
    Each window keeps only the coefficients its wavelets can account for. The lowest
-   wavelet must fit inside the epoch.
+   wavelet must fit inside the epoch. Power is divided by the recording's sampling
+   rate, so ``mean_tfr_power`` is a smoothed density in V²/Hz rather than MNE's
+   rate-dependent raw wavelet power.
 
 Outputs
 -------

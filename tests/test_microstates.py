@@ -259,3 +259,49 @@ def test_transition_rows_sum_to_one_where_defined() -> None:
     matrix = _transitions(rng.randint(0, 3, size=200), 3)
     rows = np.nansum(matrix, axis=1)
     assert np.allclose(rows[np.isfinite(matrix).any(axis=1)], 1.0)
+
+
+def _ambiguous_polarity(n_epochs: int = 4, n_times: int = 400) -> Signal:
+    """Two states, one of them a dipole whose two extrema are equal in magnitude.
+
+    Which extremum is largest is then decided by noise, so a rule that orients a
+    map by the sign of its strongest channel sends otherwise identical maps of
+    that state in opposite directions.
+    """
+    rng = np.random.RandomState(1)
+    ambiguous = np.zeros(N_CHANNELS)
+    ambiguous[0], ambiguous[1] = 1.0, -1.0
+    distinct = np.array([1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0])
+    states = [m - m.mean() for m in (ambiguous, distinct)]
+    states = [m / np.linalg.norm(m) for m in states]
+
+    data = np.zeros((n_epochs, N_CHANNELS, n_times))
+    shape = 1.0 + 0.5 * np.sin(np.linspace(0, np.pi, 25))
+    for epoch in range(n_epochs):
+        for block in range(n_times // 25):
+            which = states[(block + epoch) % 2]
+            data[epoch, :, block * 25 : (block + 1) * 25] = which[:, None] * shape[None, :]
+    data += rng.randn(n_epochs, N_CHANNELS, n_times) * 0.02
+    return Signal.from_arrays(
+        data=data,
+        times=np.arange(n_times) / SFREQ,
+        ch_names=tuple(f"E{i}" for i in range(N_CHANNELS)),
+        sfreq=SFREQ,
+        row_ids=tuple(("test", index, "event") for index in range(n_epochs)),
+    )
+
+
+@requires_sklearn
+def test_no_two_templates_are_the_same_topography_inverted() -> None:
+    # A map and its inversion are one state, so spending two of the four classes
+    # on one topography means the clustering is not polarity invariant.
+    seg = segment(_ambiguous_polarity(), n_states=2, random_state=0)
+    similarity = np.abs(seg.templates @ seg.templates.T)
+    off_diagonal = similarity[~np.eye(2, dtype=bool)]
+    assert off_diagonal.max() < 0.9
+
+
+@requires_sklearn
+def test_an_ambiguous_dipole_does_not_cost_explained_variance() -> None:
+    seg = segment(_ambiguous_polarity(), n_states=2, random_state=0)
+    assert seg.global_explained_variance > 0.95

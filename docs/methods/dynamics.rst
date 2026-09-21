@@ -50,11 +50,57 @@ Summary measures are evaluated over discrete finite sample points :math:`\{t_k\}
 - **ers_magnitude**: Mean magnitude of positive excursions: :math:`\frac{1}{|K_+|} \sum_{t_k \in K_+} \text{ERDS}(t_k)`, where :math:`K_+ = \{t_k : \text{ERDS}(t_k) > 0\}` (returns :math:`0.0` if :math:`K_+ = \emptyset`).
 - **ers_duration**: Cumulative synchronization duration: :math:`|K_+| / f_s` in seconds.
 - **peak_latency**: Latency of the maximum absolute excursion: :math:`t^* = \arg\max_{t_k} |\text{ERDS}(t_k)|`.
-- **onset_latency**: Earliest latency where the absolute raw-power departure from
+- **onset_latency**: Start of the first run of at least ``min_duration_ms``
+  (default 100 ms) consecutive samples whose absolute raw-power departure from
   baseline exceeds one baseline standard deviation:
-  :math:`\min \{t_k : |P(t_k)-B| > \sigma_B\}`. The criterion is evaluated before
-  percent or decibel reporting, so normalization choice cannot move the onset.
+  :math:`\min \{t_k : |P(t_j)-B| > \sigma_B \ \forall\, j \in [k, k + n_{\min})\}`.
+  A non-finite sample breaks the run. The criterion is evaluated before percent
+  or decibel reporting, so normalization choice cannot move the onset.
 - **rebound_latency**: Latency of the maximal excursion occurring strictly after the peak latency: :math:`\arg\max_{t_k > t^*} \text{ERDS}(t_k)`.
+
+.. warning::
+
+   **These summaries do not have zero as their null.** Instantaneous band power
+   is close to exponentially distributed, so on a window containing no task
+   effect the trace sits below its own baseline mean a fraction :math:`1 - e^{-1}`
+   of the time. The thresholded summaries inherit that asymmetry directly:
+
+   .. list-table::
+      :header-rows: 1
+      :widths: 30 35 35
+
+      * - Measure
+        - Value with no effect
+        - Naive expectation
+      * - ``erd_duration``
+        - :math:`\approx 63\%` of the window
+        - half the window
+      * - ``ers_duration``
+        - :math:`\approx 37\%` of the window
+        - half the window
+      * - ``erd_magnitude``
+        - :math:`\approx 55\text{-}60\%`
+        - :math:`0\%`
+      * - ``ers_magnitude``
+        - :math:`\approx 90\text{-}120\%`
+        - :math:`0\%`
+      * - ``erds_onset_latency``
+        - fires on some trials; the rate depends on band width
+        - NaN when nothing happens
+
+   ``erds_onset_latency`` is the sharpest case. A single sample clears a
+   one-standard-deviation criterion about 14% of the time by chance, and before
+   the persistence requirement existed it fired on 100% of real trials with no
+   effect, roughly 200 ms into the window. Requiring ``min_duration_ms`` of
+   consecutive crossings is what makes it an onset detector at all, but the
+   null rate it leaves is band-dependent: a narrow band's envelope changes
+   slowly, so its consecutive samples are far from independent and 100 ms is a
+   weaker requirement at 4 Hz than at 15 Hz. The arithmetic is exact in every
+   case; what is wrong is reading zero, or half the window, as the reference.
+   Build a null from shuffled or pre-stimulus windows, compare against that, and
+   choose ``min_duration_ms`` so the null rarely fires. Because the durations
+   depend on window length and the magnitudes on the shape of the power distribution,
+   neither is comparable across windows of different length without one.
 
 The ERD/ERS terminology and baseline-referenced power interpretation follow
 the synthesis by `Gert Pfurtscheller and F. H. Lopes da Silva (1999)

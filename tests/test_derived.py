@@ -130,7 +130,7 @@ def test_ratios_of_different_denominators_do_not_share_a_hash() -> None:
 
 @pytest.mark.parametrize(
     ("norm", "unit"),
-    [("raw", "ratio"), ("percent", "ratio"), ("log10", "log10 ratio"), ("db", "dB")],
+    [("raw", "ratio"), ("log10", "log10 ratio"), ("db", "dB")],
 )
 def test_the_ratio_unit_names_the_scale_it_is_on(norm: Normalization, unit: str) -> None:
     # A difference of two dB values is a dB difference, not a bare log ratio.
@@ -250,3 +250,21 @@ def test_band_ratio_rejects_ambiguous_features() -> None:
     )
     with pytest.raises(ValueError, match="Ambiguous"):
         band_ratio(table, "theta", "beta")
+
+
+@pytest.mark.parametrize("norm", ["percent"])
+def test_band_ratio_refuses_signed_change_scales(norm: Normalization) -> None:
+    # A percent change crosses zero, so a quotient of two of them is not a band
+    # ratio: it is unbounded and can be negative, which no power ratio can be.
+    table = _table(np.array([[30.0, -20.0]]), [THETA, BETA], ["C3", "C3"], norm=norm)
+    with pytest.raises(ValueError, match="percent"):
+        band_ratio(table, "theta", "beta")
+
+
+@pytest.mark.parametrize("norm", ["percent"])
+def test_asymmetry_refuses_signed_change_scales(norm: Normalization) -> None:
+    # (right - left) / (right + left) is bounded to [-1, 1] only for non-negative
+    # inputs; on percent changes it diverges wherever the two nearly cancel.
+    table = _table(np.array([[30.0, -20.0]]), [THETA, THETA], ["C3", "C4"], norm=norm)
+    with pytest.raises(ValueError, match="percent"):
+        asymmetry(table, [("C3", "C4")])

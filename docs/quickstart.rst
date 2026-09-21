@@ -103,6 +103,7 @@ with support restriction:
        windows=windows,
        recording="sub-01_task-test",
        n_cycles=n_cycles,
+       sfreq=epochs.info["sfreq"],  # the rate before any decim, for V²/Hz scaling
    )
 
    # 4. Extract baseline-normalized power (log ratio relative to reference window)

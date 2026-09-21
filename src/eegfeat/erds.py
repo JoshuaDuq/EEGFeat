@@ -180,6 +180,19 @@ def erd_magnitude(
     The mean of ``abs(trace)`` over samples below zero. Exactly ``0.0`` when no sample is
     negative: no desynchronization is a measurement, not a missing value.
 
+    .. warning::
+
+       **Zero is not this measure's null.** Instantaneous band power is close to
+       exponentially distributed, so on a window with no task effect at all the
+       trace is below its own baseline mean about ``1 - 1/e`` of the time. Because this
+       averages only the samples that fall below zero, it is a conditional mean and
+       lands near **55-60%** with no effect present; ``0.0`` is reachable only when no
+       sample is negative at all.
+       Measured on stationary noise and on a real recording referenced to its own
+       pre-stimulus baseline, the two agree to within a few tenths of a percent.
+       Compare against a null you construct -- a shuffled or pre-stimulus window
+       -- rather than against zero or against half the window.
+
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
     pre-stimulus power and no cross-trial leakage arises.
@@ -228,6 +241,18 @@ def erd_duration(
     """Time spent desynchronized.
 
     Count of samples below zero divided by the sampling rate. Exactly ``0.0`` when none are.
+
+    .. warning::
+
+       **Zero is not this measure's null.** Instantaneous band power is close to
+       exponentially distributed, so on a window with no task effect at all the
+       trace is below its own baseline mean about ``1 - 1/e`` of the time. That puts
+       this measure at roughly **63% of the window**, not half, and ``ers_duration`` at
+       the remaining 37%.
+       Measured on stationary noise and on a real recording referenced to its own
+       pre-stimulus baseline, the two agree to within a few tenths of a percent.
+       Compare against a null you construct -- a shuffled or pre-stimulus window
+       -- rather than against zero or against half the window.
 
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
@@ -278,6 +303,19 @@ def ers_magnitude(
 
     The mean of the trace over samples above zero, and ``0.0`` when none are.
 
+    .. warning::
+
+       **Zero is not this measure's null.** Instantaneous band power is close to
+       exponentially distributed, so on a window with no task effect at all the
+       trace is below its own baseline mean about ``1 - 1/e`` of the time. Because this
+       averages only the samples above zero, it is a conditional mean and lands near
+       **90-120%** with no effect present; the long right tail of a power ratio makes it
+       larger than its ERD counterpart.
+       Measured on stationary noise and on a real recording referenced to its own
+       pre-stimulus baseline, the two agree to within a few tenths of a percent.
+       Compare against a null you construct -- a shuffled or pre-stimulus window
+       -- rather than against zero or against half the window.
+
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
     pre-stimulus power and no cross-trial leakage arises.
@@ -326,6 +364,18 @@ def ers_duration(
     """Time spent synchronized.
 
     Count of samples above zero divided by the sampling rate, and ``0.0`` when none are.
+
+    .. warning::
+
+       **Zero is not this measure's null.** Instantaneous band power is close to
+       exponentially distributed, so on a window with no task effect at all the
+       trace is below its own baseline mean about ``1 - 1/e`` of the time. That puts
+       this measure at roughly **37% of the window**, not half, and ``erd_duration`` at
+       the remaining 63%.
+       Measured on stationary noise and on a real recording referenced to its own
+       pre-stimulus baseline, the two agree to within a few tenths of a percent.
+       Compare against a null you construct -- a shuffled or pre-stimulus window
+       -- rather than against zero or against half the window.
 
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
@@ -421,13 +471,28 @@ def erds_onset_latency(
     groups: Mapping[str, Sequence[str]] | None = None,
     include_global: bool = True,
     normalize: ErdsScale = "percent",
+    min_duration_ms: float = 100.0,
 ) -> FeatureTable:
-    """Time the trace first leaves the baseline's own variability.
+    """Time the trace first leaves the baseline's own variability and stays out.
 
-    The first sample where absolute raw-power departure from the baseline mean
-    exceeds one baseline standard deviation. The criterion is independent of
-    percent versus decibel output. This is a first crossing, not a sustained one;
-    NaN when the trace never crosses.
+    The start of the first run of at least ``min_duration_ms`` consecutive samples
+    whose absolute raw-power departure from the baseline mean exceeds one baseline
+    standard deviation. The criterion is independent of percent versus decibel
+    output. NaN when no run lasts that long.
+
+    .. warning::
+
+       **The persistence requirement is what makes this an onset.** Instantaneous
+       band power is close to exponentially distributed, so a single sample clears
+       a one-standard-deviation criterion roughly 14% of the time by chance; without
+       a duration requirement the criterion was met on 100% of real trials with no
+       effect, about 200 ms into the window. Requiring the excursion to last lowers
+       that rate, but the false-onset rate under no effect still depends on the
+       band: the envelope of a narrow band changes slowly, so consecutive samples
+       are far from independent and 100 ms is a weaker requirement for a 4 Hz band
+       than for a 15 Hz one. Compare against a null you construct -- a shuffled or
+       pre-stimulus window -- and set ``min_duration_ms`` so that the null rarely
+       fires, rather than reading any onset as evidence that a response occurred.
 
     Band power in each analysis window is expressed relative to ``baseline``,
     per epoch and per channel, so every trial is referenced to its own
@@ -448,12 +513,17 @@ def erds_onset_latency(
         Also emit the mean across all channels.
     normalize : {"percent", "db"}, default "percent"
         Percent change from baseline, or decibels.
+    min_duration_ms : float, default 100.0
+        Shortest excursion that counts as an onset, in milliseconds. Zero
+        restores the first single-sample crossing, which fires on every trial.
 
     Returns
     -------
     FeatureTable
         One column per band, spatial unit and window.
     """
+    if not np.isfinite(min_duration_ms) or min_duration_ms < 0.0:
+        raise ValueError(f"min_duration_ms must be finite and non-negative, got {min_duration_ms}.")
     return _erds_measure(
         signals,
         "erds_onset_latency",
@@ -462,6 +532,7 @@ def erds_onset_latency(
         groups=groups,
         include_global=include_global,
         normalize=normalize,
+        onset_min_duration_ms=min_duration_ms,
     )
 
 
@@ -523,6 +594,7 @@ def _erds_measure(
     groups: Mapping[str, Sequence[str]] | None,
     include_global: bool,
     normalize: ErdsScale,
+    onset_min_duration_ms: float = 100.0,
 ) -> FeatureTable:
     if normalize not in ("percent", "db"):
         raise ValueError(f"normalize must be 'percent' or 'db', got {normalize!r}.")
@@ -544,9 +616,10 @@ def _erds_measure(
             & np.isfinite(reference[:, :, np.newaxis])
             & (np.abs(power - reference[:, :, np.newaxis]) > deviation[:, :, np.newaxis])
         )
+        onset_samples = max(1, int(round(onset_min_duration_ms * signal.sfreq / 1000.0)))
         # Every measure derives from the same trace, so computing the set and
         # taking one is cheaper than it looks and keeps the definitions together.
-        return {measure: _measures(signal, trace, times, onset_crossing)[measure]}
+        return {measure: _measures(signal, trace, times, onset_crossing, onset_samples)[measure]}
 
     def flags_of(signal: BandSignal) -> dict[str, npt.NDArray[np.bool_]]:
         reference, _, degenerate = _baseline_reference(signal, baseline)
@@ -571,7 +644,8 @@ def _erds_measure(
         mode=normalize,
         parameters={
             "baseline": {"name": baseline.name, "tmin": baseline.tmin, "tmax": baseline.tmax},
-            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd",
+            "onset_criterion": "absolute_power_deviation_exceeds_baseline_sd_sustained",
+            "onset_min_duration_ms": onset_min_duration_ms,
         },
     )
 
@@ -630,6 +704,7 @@ def _measures(
     trace: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
     onset_crossing: npt.NDArray[np.bool_],
+    onset_samples: int = 1,
 ) -> dict[str, npt.NDArray[np.float64]]:
     finite = np.isfinite(trace)
     usable: npt.NDArray[np.bool_] = np.asarray(finite.any(axis=2), dtype=np.bool_)
@@ -645,7 +720,7 @@ def _measures(
         "ers_magnitude": _signed_magnitude(trace, finite, usable, negative=False),
         "ers_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=False),
         "erds_peak_latency": np.where(usable, times[peak_index], np.nan),
-        "erds_onset_latency": _onset(times, usable, onset_crossing),
+        "erds_onset_latency": _onset(times, usable, onset_crossing, onset_samples),
         "erds_rebound_latency": _rebound(trace, times, finite, usable, peak_index),
     }
 
@@ -660,10 +735,23 @@ def _onset(
     times: npt.NDArray[np.float64],
     usable: npt.NDArray[np.bool_],
     crossed: npt.NDArray[np.bool_],
+    min_samples: int,
 ) -> npt.NDArray[np.float64]:
-    any_crossing: npt.NDArray[np.bool_] = np.asarray(crossed.any(axis=2), dtype=np.bool_)
-    index = np.argmax(crossed, axis=2)
-    return np.where(usable & any_crossing, times[index], np.nan)
+    """Start of the first run of at least ``min_samples`` consecutive crossings.
+
+    A single sample beyond one baseline SD is met by chance on essentially every
+    trial, so a crossing only counts once it has persisted. A non-finite sample
+    breaks a run: missing data is not evidence that the excursion continued.
+    """
+    n_times = crossed.shape[2]
+    run = np.zeros(crossed.shape[:2], dtype=int)
+    start = np.full(crossed.shape[:2], -1, dtype=int)
+    for index in range(n_times):
+        run = np.where(crossed[:, :, index], run + 1, 0)
+        qualifies = (run >= min_samples) & (start < 0)
+        start = np.where(qualifies, index - min_samples + 1, start)
+    found = start >= 0
+    return np.where(usable & found, times[np.maximum(start, 0)], np.nan)
 
 
 def _rebound(

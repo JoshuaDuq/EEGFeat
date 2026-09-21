@@ -26,9 +26,11 @@ _PSD_INTEGRAL_UNITS: dict[str, str] = {
     "percent": "%",
 }
 
+# Morlet power arrives as a density: Spectra.from_tfr divides MNE's unit-energy
+# wavelet power by the sampling rate, so these are the same units as mean_psd.
 _TFR_MEAN_UNITS: dict[str, str] = {
-    "raw": "V^2",
-    "log10": "log10(V^2)",
+    "raw": "V^2/Hz",
+    "log10": "log10(V^2/Hz)",
     "log_ratio": "log10 ratio",
     "db": "dB",
     "percent": "%",
@@ -131,7 +133,15 @@ def mean_tfr_power(
     baseline: str | None = None,
     normalize: Normalization = "raw",
 ) -> FeatureTable:
-    """Frequency-weighted mean of wavelet time-frequency power in each band."""
+    """Frequency-weighted mean of wavelet time-frequency power in each band.
+
+    The value is a smoothed spectral density in V²/Hz, because
+    :meth:`~eegfeat.Spectra.from_tfr` divides MNE's Morlet power by the sampling
+    rate; without that step the same recording reports a different number at
+    every sampling rate. It is not integrated over the band, since a wavelet
+    already averages power over its own bandwidth and integrating it again would
+    count the same spectral mass more than once.
+    """
     _require_representation(spectra, "time_frequency_power", "mean_tfr_power")
     return expand(
         spectra,

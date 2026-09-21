@@ -61,6 +61,16 @@ def _validate_and_resolve_inner_groups(
     if inner.grouping == "subject" and any(f.subject is not None for f in folds):
         msg = "within-subject folds cannot be grouped by subject (inner.grouping == 'subject')."
         raise ValueError(msg)
+    if inner.grouping == "run" and any(f.subject is None for f in folds):
+        # Run labels are shared across subjects, so a run-grouped inner split of a
+        # cross-subject training set puts every subject on both sides: it selects
+        # hyperparameters for within-subject generalization while the outer fold
+        # scores cross-subject generalization. Not leakage, but the wrong target.
+        msg = (
+            "cross-subject folds cannot be grouped by run (inner.grouping == 'run'): the "
+            "inner split would no longer be subject-disjoint. Use inner.grouping == 'subject'."
+        )
+        raise ValueError(msg)
     inner_groups = runs if inner.grouping == "run" else groups
     if inner_groups is None:
         msg = "Inner grouping array is missing."
@@ -182,14 +192,12 @@ def _select_fold_local_params(
                 score = float(scorer(fitted, X_valid, y_valid))
             except Exception as exc:
                 raise FoldFitError(
-                    f"Outer fold {f.index}: inner fold failed for "
-                    f"parameters {parameters}: {exc}"
+                    f"Outer fold {f.index}: inner fold failed for parameters {parameters}: {exc}"
                 ) from exc
 
             if not np.isfinite(score):
                 raise FoldFitError(
-                    f"Outer fold {f.index}: non-finite inner CV "
-                    f"score for parameters {parameters}."
+                    f"Outer fold {f.index}: non-finite inner CV score for parameters {parameters}."
                 )
 
             fold_scores.append(score)
@@ -392,12 +400,10 @@ def _validate_outer_folds(
             expected = {fold.subject}
             if {str(v) for v in train_subjects} != expected:
                 raise ValueError(
-                    f"Fold {fold.index}: training subjects do not match " f"{fold.subject!r}."
+                    f"Fold {fold.index}: training subjects do not match {fold.subject!r}."
                 )
             if {str(v) for v in test_subjects} != expected:
-                raise ValueError(
-                    f"Fold {fold.index}: test subjects do not match " f"{fold.subject!r}."
-                )
+                raise ValueError(f"Fold {fold.index}: test subjects do not match {fold.subject!r}.")
             if runs is None:
                 raise ValueError(f"Fold {fold.index}: within-subject folds require runs.")
             if set(runs[tr]) & set(runs[te]):

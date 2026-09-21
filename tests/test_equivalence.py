@@ -193,7 +193,13 @@ def test_erds_matches_the_reference(
     signal = _band_signal(spectra_npz, reference, manifest, band_name)
     base = ef.Window("base", manifest["windows"]["base"][0], manifest["windows"]["base"][1])
     stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
-    table = _ERDS_FUNCTIONS[measure]([signal], baseline=base, windows=[stim], include_global=False)
+    # The reference pipeline's onset is the first single-sample crossing, which fires
+    # on every trial. eegfeat now requires the excursion to persist by default; the
+    # equivalence holds for the persistence-free setting, a deliberate divergence.
+    kwargs = {"min_duration_ms": 0.0} if measure == "onset_latency" else {}
+    table = _ERDS_FUNCTIONS[measure](
+        [signal], baseline=base, windows=[stim], include_global=False, **kwargs
+    )
     got = table.values
     expected = reference[f"erds_{measure}__{band_name}"]
     np.testing.assert_allclose(got, expected, rtol=1e-6, atol=1e-10)

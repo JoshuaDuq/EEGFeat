@@ -657,3 +657,54 @@ def test_permute_refuses_a_subject_with_a_single_trial() -> None:
             rng=np.random.default_rng(0),
             trial_indices=np.r_[np.arange(8), 0],
         )
+
+
+def _mse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    return float(np.mean((np.asarray(y_true) - np.asarray(y_pred)) ** 2))
+
+
+def _predictive_design() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(0)
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 8).astype(object)
+    features = rng.standard_normal((groups.size, 3))
+    target = 3.0 * features[:, 0] + rng.standard_normal(groups.size) * 0.1
+    return features, target, groups
+
+
+def _run(metric_fn, greater_is_better: bool):
+    features, target, groups = _predictive_design()
+    folds = loso_folds(groups)
+    pipeline = Pipeline([("regressor", LinearRegression())])
+    grid: dict[str, list[object]] = {"regressor__fit_intercept": [True]}
+    predictions = cross_fit_regression(
+        folds, features, target, groups, pipeline, grid, inner=BY_SUBJECT, seed=0
+    )
+    observed = _prediction_statistic(predictions, groups, _DEFAULT_AGGREGATION, metric_fn)
+    return permutation_test(
+        folds,
+        features,
+        target,
+        groups,
+        None,
+        pipeline,
+        grid,
+        observed,
+        config=NullConfig(n_permutations=19, scheme="within_subject"),
+        inner=BY_SUBJECT,
+        seed=0,
+        metric_fn=metric_fn,
+        greater_is_better=greater_is_better,
+    )
+
+
+def test_an_error_metric_finds_a_real_effect_when_told_smaller_is_better() -> None:
+    # The upper tail is the wrong one for an error: a model that predicts well has
+    # a LOWER statistic than the null, so counting null >= observed returns p = 1.
+    result = _run(_mse, greater_is_better=False)
+    assert result.p_value <= 0.05
+
+
+def test_the_same_effect_is_missed_when_the_metric_direction_is_wrong() -> None:
+    # Pins the failure this parameter exists to prevent, so the default can never
+    # silently go back to treating every metric as higher-is-better.
+    assert _run(_mse, greater_is_better=True).p_value > 0.5

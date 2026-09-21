@@ -23,8 +23,18 @@ represented interval. For EEG PSD in V²/Hz the result is V².
 
 ``mean_psd`` divides that integral by band width and retains V²/Hz units.
 ``mean_tfr_power`` is the corresponding frequency-weighted mean for Morlet
-time-frequency power. :class:`~eegfeat.Spectra` records which representation it
-contains, and these operations reject the wrong one instead of conflating units.
+time-frequency power, and is also in V²/Hz: MNE's wavelets are normalized to
+unit energy, so the power they return for a stationary signal is the one-sided
+density at the wavelet's frequency, smoothed over its bandwidth, multiplied by
+the sampling rate. :meth:`~eegfeat.Spectra.from_tfr` divides that factor out,
+which is why it requires the rate the TFR was computed from (a decimated TFR
+reports only the decimated rate). Without the division the same recording
+resampled from 250 to 500 Hz reports twice the raw power, and the aperiodic
+offset fitted on it shifts by :math:`\log_{10}` of the rate. The TFR is still a
+distinct representation, because a wavelet already averages power over its own
+bandwidth and integrating it over a band again would count that spectral mass
+more than once; :class:`~eegfeat.Spectra` records which representation it
+contains, and these operations reject the wrong one instead of conflating them.
 
 The three functions are summaries of an already estimated spectral
 representation; they do not introduce a new PSD estimator. When the input was
@@ -303,6 +313,16 @@ The aperiodic (1/f) background is modeled in log-log space:
    \log_{10} P(f) = \text{offset} + \text{slope} \cdot \log_{10} f
 
 Fitting uses iterative peak rejection: an initial least-squares line is fit over ``fit_range``, residuals :math:`r(f) = \log_{10} P(f) - (\text{offset} + \text{slope} \log_{10} f)` are computed, and points with positive residuals exceeding :math:`z \cdot \text{MAD}(r)` (default :math:`z = 2.5`) are rejected before refitting, repeated up to ``max_iterations`` times. Only positive residuals are excluded because oscillatory peaks project above the aperiodic component and would otherwise artificially flatten the estimated slope.
+
+Alongside ``slope`` and ``offset``, the fit reports ``r_squared``: the coefficient
+of determination of the line over the points that survived peak rejection. The
+rejected peaks are deliberately excluded from it, since an alpha peak is not a
+failure of the aperiodic model and scoring against it would read low for every
+healthy spectrum. What it does detect is a bend the line cannot follow — a
+spectral knee inside ``fit_range``, which most EEG has somewhere in the default
+2–40 Hz window — and that is the case which silently biases the exponent.
+`Donoghue et al. (2020) <https://doi.org/10.1038/s41593-020-00744-x>`_ report a
+fit statistic for the same reason; an exponent should not be reported without one.
 
 If the fit cannot be estimated, ``aperiodic_ratio`` returns NaNs for that cell
 and marks ``aperiodic_fit_failed``. It never labels an unchanged raw spectrum as

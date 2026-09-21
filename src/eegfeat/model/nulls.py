@@ -286,9 +286,25 @@ def permutation_test(
     scoring: object = None,
     refit: str | bool | None = None,
     metric_fn: Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], float] | None = None,
+    greater_is_better: bool = True,
     trial_indices: npt.NDArray[np.intp] | None = None,
     aggregation: AggregationConfig = _DEFAULT_AGGREGATION,
 ) -> NullResult:
+    """Refit the whole pipeline under permuted targets and compare the observed statistic.
+
+    ``greater_is_better`` picks the tail, and it is not cosmetic. The default suits
+    a correlation or an R^2, where a good model scores high. An error metric --
+    ``mean_squared_error``, ``mean_absolute_error`` -- scores *low* when the model
+    is good, so leaving the default in place counts the wrong tail and returns
+    ``p`` near 1 for a strong effect and a small ``p`` for a worthless one. Pass
+    ``greater_is_better=False`` for any metric where smaller is better. There is no
+    way to infer the direction from an arbitrary callable, so it has to be declared.
+
+    ``observed`` must come from the same folds, model, seed, aggregation and metric
+    as this call; it is recomputed and a mismatch is an error rather than a silently
+    invalid p-value. ``residualize_on`` is refused: permuting raw targets and
+    refitting the nuisance model does not give a nuisance-preserving conditional null.
+    """
     if residualize_on:
         raise ValueError(
             "Nuisance-adjusted permutation inference requires a nuisance-preserving "
@@ -379,7 +395,9 @@ def permutation_test(
         null_scores.append(score)
 
     null_arr = np.asarray(null_scores, dtype=np.float64)
-    count_extreme = int(np.sum(null_arr >= observed))
+    # "At least as extreme" means the tail the metric improves into.
+    extreme = null_arr >= observed if greater_is_better else null_arr <= observed
+    count_extreme = int(np.sum(extreme))
     p_value = float((count_extreme + 1) / (len(null_arr) + 1))
 
     return NullResult(

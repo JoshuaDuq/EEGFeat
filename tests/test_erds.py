@@ -312,3 +312,36 @@ def test_erds_labels_do_not_collide_with_other_measures() -> None:
     }
 
     assert not erds_labels & other_labels
+
+
+def test_a_single_sample_excursion_is_not_an_onset() -> None:
+    # One sample beyond a baseline SD is met by chance on essentially every trial;
+    # only an excursion that persists for min_duration_ms counts.
+    n = 201
+    rng = np.random.RandomState(3)
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, :100] += rng.normal(0.0, 0.01, (1, 1, 100))
+    envelope[:, :, 120] = np.sqrt(2.0)  # a lone spike at t = +0.2 s
+    envelope[:, :, 150:] = np.sqrt(2.0)  # the sustained step at t = +0.5 s
+    table = erds_onset_latency(
+        [_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False
+    )
+    assert table.values.item() == pytest.approx(0.5, abs=0.02)
+    single = erds_onset_latency(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        min_duration_ms=0.0,
+    )
+    assert single.values.item() == pytest.approx(0.2, abs=0.02)
+
+
+def test_an_excursion_shorter_than_min_duration_gives_no_onset() -> None:
+    n = 201
+    envelope = np.ones((1, 1, n))
+    envelope[:, :, 120:125] = np.sqrt(2.0)  # 50 ms at 100 Hz
+    table = erds_onset_latency(
+        [_signal(envelope)], baseline=BASE, windows=[STIM], include_global=False
+    )
+    assert np.isnan(table.values).all()

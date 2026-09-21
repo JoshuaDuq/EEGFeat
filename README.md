@@ -95,15 +95,22 @@ features = ef.concat([power, peak, erds, bursts])
 print(features.to_dataframe())
 ```
 
-`estimator_parameters` is not bookkeeping: it goes into each column's parameter hash, so two
-tables computed differently never silently merge.
+`estimator_parameters` is not bookkeeping: it goes into each column's parameter hash, along
+with the frequency axis and sampling rate read off the object itself. Two tables whose grids,
+ranges or rates differ therefore cannot land on the same column name.
+
+The declared half of that is on you. MNE keeps none of the estimator's own keyword arguments
+on a `Spectrum` — there is no `n_per_seg`, `n_overlap` or `window` to recover — so a setting
+you vary without recording it here is a setting the hash cannot see. Two subjects computed
+with different Welch segment lengths but the same declaration will stack into one variable,
+with the processing difference left inside it. Record every parameter you varied.
 
 ### Choosing a container
 
 | Container | Use for |
 | :--- | :--- |
 | `Spectra.from_spectrum` | PSD-based power and spectral descriptors |
-| `Spectra.from_tfr` | An uncorrected MNE `EpochsTFR`; pass the original `n_cycles` so wavelet support can be checked |
+| `Spectra.from_tfr` | An uncorrected MNE `EpochsTFR`; pass the original `n_cycles` so wavelet support can be checked, and the original `sfreq` so Morlet power is scaled to a V²/Hz density independent of sampling rate |
 | `Signal.from_epochs` | Broadband time-domain measures |
 | `BandSignal.from_epochs` | Band envelopes, phase, power, bursts, ERDS, and band-limited time-domain measures |
 

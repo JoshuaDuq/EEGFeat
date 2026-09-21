@@ -229,9 +229,9 @@ def test_target_residualization_is_refitted_inside_inner_cv(
     outer_training_size = len(folds[0].train)
 
     assert training_sizes
-    assert any(
-        size < outer_training_size for size in training_sizes
-    ), "Nuisance fitting never occurred inside the inner CV folds."
+    assert any(size < outer_training_size for size in training_sizes), (
+        "Nuisance fitting never occurred inside the inner CV folds."
+    )
 
 
 def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
@@ -326,4 +326,13 @@ def test_covariates_that_still_carry_rejected_epochs_are_refused() -> None:
             seed=0,
             covariates=rng.normal(size=(60, 1)),
             residualize_on=["age"],
+        )
+
+
+def test_run_grouping_under_cross_subject_folds_is_refused() -> None:
+    # Run labels are shared across subjects, so a run-grouped inner split of a LOSO
+    # training set keeps every subject on both sides and tunes for the wrong task.
+    with pytest.raises(ValueError, match="cross-subject folds cannot be grouped by run"):
+        cross_fit_regression(
+            loso_folds(GROUPS), X, Y, GROUPS, PIPE, GRID, inner=BY_RUN, seed=0, runs=RUNS
         )

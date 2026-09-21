@@ -86,7 +86,9 @@ class SpectraSettings:
     fmax: float = 45.0
     n_fft: int | None = None
     n_overlap: int | None = None
-    bandwidth: float | None = None
+    # Fixed in hertz rather than left to MNE, whose default of 8 / window_length Hz
+    # smooths a 1 s window over +/-4 Hz, wider than the delta or theta band.
+    bandwidth: float = 2.0
     n_freqs: int = 40
     spacing: Literal["log", "linear"] = "log"
     n_cycles_factor: float = 2.0
@@ -323,7 +325,7 @@ class _Parser:
             fmax=fmax,
             n_fft=self.integer("spectra", table, "n_fft", None, minimum=1),
             n_overlap=self.integer("spectra", table, "n_overlap", None, minimum=0),
-            bandwidth=self.optional_number("spectra", table, "bandwidth", above=0.0),
+            bandwidth=self.number("spectra", table, "bandwidth", defaults.bandwidth, above=0.0),
             n_freqs=self.integer("spectra", table, "n_freqs", defaults.n_freqs, minimum=2)
             or defaults.n_freqs,
             spacing=spacing,

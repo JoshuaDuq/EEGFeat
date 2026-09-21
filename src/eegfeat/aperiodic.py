@@ -15,6 +15,12 @@ from eegfeat.table import ComputationSpec, FeatureTable, concat
 
 _MIN_FIT_POINTS = 5
 
+_UNITS: dict[str, str] = {
+    "slope": "log10 power per log10 Hz",
+    "offset": "log10 power",
+    "r_squared": "a.u.",
+}
+
 
 def aperiodic(
     spectra: Spectra,
@@ -59,7 +65,7 @@ def aperiodic(
     _validate_fit_settings(peak_rejection_z, max_iterations)
     band = Band("fit", *fit_range)
     tables: list[FeatureTable] = []
-    for which in ("slope", "offset"):
+    for which in ("slope", "offset", "r_squared"):
 
         def make_kernel(w: str) -> Kernel:
             def kernel(
@@ -77,7 +83,7 @@ def aperiodic(
             spectra,
             make_kernel(which),
             measure=which,
-            unit="log10 power per log10 Hz" if which == "slope" else "log10 power",
+            unit=_UNITS[which],
             bands=(band,),
             groups=groups,
             include_global=include_global,
@@ -161,7 +167,9 @@ def aperiodic_ratio(
     out = np.full(data.shape, np.nan)
     failed = np.ones(data.shape[:3], dtype=bool)
     for index in np.ndindex(data.shape[:3]):
-        slope, offset = _fit_one(log_f[mask], data[index][mask], peak_rejection_z, max_iterations)
+        slope, offset, _ = _fit_one(
+            log_f[mask], data[index][mask], peak_rejection_z, max_iterations
+        )
         if not (np.isfinite(slope) and np.isfinite(offset)):
             continue
         curve = 10.0 ** (offset + slope * log_f)
@@ -216,8 +224,8 @@ def _fit_kernel(
     for e in range(n_epochs):
         for c in range(n_channels):
             for w in range(n_windows):
-                slope, offset = _fit_one(log_f, data[e, c, w, :], z, iterations)
-                out[e, c, w] = slope if which == "slope" else offset
+                slope, offset, r_squared = _fit_one(log_f, data[e, c, w, :], z, iterations)
+                out[e, c, w] = {"slope": slope, "offset": offset, "r_squared": r_squared}[which]
     return out, {}
 
 
@@ -226,10 +234,10 @@ def _fit_one(
     power: npt.NDArray[np.float64],
     z: float,
     iterations: int,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     usable = np.isfinite(power) & (power > 0.0)
     if int(usable.sum()) < _MIN_FIT_POINTS:
-        return np.nan, np.nan
+        return np.nan, np.nan, np.nan
     log_p = np.full(power.shape, np.nan)
     log_p[usable] = np.log10(power[usable])
 
@@ -249,4 +257,29 @@ def _fit_one(
         if int(tightened.sum()) < _MIN_FIT_POINTS or np.array_equal(tightened, keep):
             break
         keep = tightened
-    return float(slope), float(offset)
+    return float(slope), float(offset), _r_squared(log_f, log_p, keep, slope, offset)
+
+
+def _r_squared(
+    log_f: npt.NDArray[np.float64],
+    log_p: npt.NDArray[np.float64],
+    keep: npt.NDArray[np.bool_],
+    slope: float,
+    offset: float,
+) -> float:
+    """Fit quality over the points the line was actually fitted to.
+
+    Rejected peaks are excluded on purpose: an alpha peak is not a failure of the
+    aperiodic model, so scoring against it would read low for every healthy
+    spectrum. What this does catch is a bend the line cannot follow -- a knee
+    inside the fit range -- which is the failure that silently biases the exponent.
+    """
+    picks = np.flatnonzero(keep)
+    if picks.size < _MIN_FIT_POINTS or not np.isfinite(slope) or not np.isfinite(offset):
+        return float("nan")
+    observed = log_p[picks]
+    residual = float(np.sum((observed - (offset + slope * log_f[picks])) ** 2))
+    total = float(np.sum((observed - observed.mean()) ** 2))
+    if total <= 0.0:
+        return float("nan")
+    return float(1.0 - residual / total)

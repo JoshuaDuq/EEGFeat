@@ -237,7 +237,7 @@ def _toy_tfr(n_epochs: int = 4):
 
 def test_from_tfr_produces_one_spectrum_per_window() -> None:
     windows = (Window("base", -2.0, -1.0), Window("stim", 0.0, 1.0))
-    spectra = Spectra.from_tfr(_toy_tfr(), windows, recording="test", n_cycles=3.0)
+    spectra = Spectra.from_tfr(_toy_tfr(), windows, recording="test", n_cycles=3.0, sfreq=200.0)
     assert spectra.data.shape == (4, 2, 2, 3)
     assert tuple(w.name for w in spectra.windows) == ("base", "stim")
     assert spectra.source == "morlet"
@@ -246,10 +246,11 @@ def test_from_tfr_produces_one_spectrum_per_window() -> None:
 def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
     tfr = _toy_tfr()
     window = Window("stim", 0.0, 1.0)
-    spectra = Spectra.from_tfr(tfr, (window,), recording="test", n_cycles=3.0)
+    spectra = Spectra.from_tfr(tfr, (window,), recording="test", n_cycles=3.0, sfreq=200.0)
     times = np.asarray(tfr.times)
     mask = support_restricted_mask(times, np.asarray(tfr.freqs), window, 3.0)
-    data = np.asarray(tfr.get_data())
+    # Divided by the sampling rate: MNE's power is sfreq times the density.
+    data = np.asarray(tfr.get_data()) / 200.0
     expected = np.stack(
         [data[:, :, index, row].mean(axis=2) for index, row in enumerate(mask)], axis=2
     )
@@ -259,17 +260,21 @@ def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
 def test_from_tfr_refuses_an_already_baselined_tfr() -> None:
     tfr = _toy_tfr().apply_baseline((-2.0, -1.0), mode="logratio", verbose="ERROR")
     with pytest.raises(ValueError, match="already baseline"):
-        Spectra.from_tfr(tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0)
+        Spectra.from_tfr(
+            tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0, sfreq=200.0
+        )
 
 
 def test_from_tfr_rejects_a_window_outside_the_time_axis() -> None:
     with pytest.raises(ValueError, match="no samples"):
-        Spectra.from_tfr(_toy_tfr(), (Window("late", 30.0, 40.0),), recording="test", n_cycles=3.0)
+        Spectra.from_tfr(
+            _toy_tfr(), (Window("late", 30.0, 40.0),), recording="test", n_cycles=3.0, sfreq=200.0
+        )
 
 
 def test_from_tfr_requires_at_least_one_window() -> None:
     with pytest.raises(ValueError, match="at least one window"):
-        Spectra.from_tfr(_toy_tfr(), (), recording="test", n_cycles=3.0)
+        Spectra.from_tfr(_toy_tfr(), (), recording="test", n_cycles=3.0, sfreq=200.0)
 
 
 def test_from_tfr_rejects_complex_output() -> None:
@@ -292,6 +297,7 @@ def test_from_tfr_rejects_complex_output() -> None:
             (Window("stim", 0.0, 1.0),),
             recording="test",
             n_cycles=3.0,
+            sfreq=200.0,
         )
 
 
@@ -321,7 +327,9 @@ def test_frequencies_drop_out_of_a_window_individually() -> None:
     # MNE's five-sigma half supports are approximately 0.298 / 0.239 / 0.199 s.
     # A window of half-width 0.22 s therefore holds only 12 Hz.
     tfr = _toy_tfr()
-    spectra = Spectra.from_tfr(tfr, (Window("narrow", 0.0, 0.44),), recording="test", n_cycles=3.0)
+    spectra = Spectra.from_tfr(
+        tfr, (Window("narrow", 0.0, 0.44),), recording="test", n_cycles=3.0, sfreq=200.0
+    )
     assert np.isnan(spectra.data[:, :, 0, 0]).all()
     assert np.isnan(spectra.data[:, :, 0, 1]).all()
     assert np.isfinite(spectra.data[:, :, 0, 2]).all()
@@ -334,17 +342,53 @@ def test_a_window_narrower_than_every_wavelet_raises() -> None:
     # That is a specification error, not a data condition: the message says so.
     tfr = _toy_tfr()
     with pytest.raises(ValueError, match="retains no coefficients"):
-        Spectra.from_tfr(tfr, (Window("tiny", 0.0, 0.1),), recording="test", n_cycles=3.0)
+        Spectra.from_tfr(
+            tfr, (Window("tiny", 0.0, 0.1),), recording="test", n_cycles=3.0, sfreq=200.0
+        )
 
 
 def test_from_tfr_requires_the_morlet_cycle_count() -> None:
     with pytest.raises(TypeError, match="n_cycles"):
-        Spectra.from_tfr(_toy_tfr(), (Window("stim", 0.0, 1.0),), recording="test")
+        Spectra.from_tfr(_toy_tfr(), (Window("stim", 0.0, 1.0),), recording="test", sfreq=200.0)
+
+
+def test_from_tfr_requires_the_original_sampling_rate() -> None:
+    # MNE reports the decimated rate as the TFR's own and keeps no record of the
+    # original, so reading it off the object would scale a decimated TFR wrongly.
+    with pytest.raises(TypeError, match="sfreq"):
+        Spectra.from_tfr(_toy_tfr(), (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0)
+
+
+def test_from_tfr_expresses_morlet_power_as_a_density_independent_of_sampling_rate() -> None:
+    # MNE's unit-energy wavelets return sfreq times the one-sided PSD, so the same
+    # sine resampled to twice the rate reports twice the raw power. Dividing by the
+    # rate makes both agree with each other and with a Welch density.
+    mne = pytest.importorskip("mne")
+    amplitude = 2e-6
+    densities = []
+    for sfreq in (200.0, 400.0):
+        times = np.arange(0.0, 8.0, 1.0 / sfreq)
+        data = (amplitude * np.sin(2.0 * np.pi * 10.0 * times))[np.newaxis, np.newaxis, :]
+        info = mne.create_info(["C3"], sfreq, "eeg")
+        epochs = mne.EpochsArray(data, info, tmin=0.0, verbose="ERROR")
+        tfr = epochs.compute_tfr(
+            "morlet", freqs=np.array([10.0]), n_cycles=7.0, return_itc=False, verbose="ERROR"
+        )
+        spectra = Spectra.from_tfr(
+            tfr, (Window("mid", 2.0, 6.0),), recording="test", n_cycles=7.0, sfreq=sfreq
+        )
+        densities.append(spectra.data.item())
+    np.testing.assert_allclose(densities[0], densities[1], rtol=1e-3)
+    # A line of power A^2/2 seen through a wavelet of bandwidth sigma_f = f / n_cycles
+    # spreads over roughly that many hertz, so the density is of order A^2 / 2 / sigma_f.
+    assert 0.1 * amplitude**2 < densities[0] < amplitude**2
 
 
 def test_support_fraction_is_distinct_from_finite_coverage() -> None:
     tfr = _toy_tfr()
-    spectra = Spectra.from_tfr(tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0)
+    spectra = Spectra.from_tfr(
+        tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0, sfreq=200.0
+    )
 
     assert (spectra.coverage == 1.0).all()
     assert (spectra.support < 1.0).all()
@@ -367,7 +411,9 @@ def test_event_immediately_outside_window_cannot_affect_retained_coefficients() 
         verbose="ERROR",
     )
 
-    spectra = Spectra.from_tfr(tfr, (Window("target", 0.0, 0.6),), recording="test", n_cycles=3.0)
+    spectra = Spectra.from_tfr(
+        tfr, (Window("target", 0.0, 0.6),), recording="test", n_cycles=3.0, sfreq=200.0
+    )
 
     np.testing.assert_allclose(spectra.data[1], spectra.data[0], atol=1e-14)
 
@@ -386,3 +432,45 @@ def test_from_spectrum_accepts_method_in_estimator_parameters() -> None:
     )
     assert spectra.source == "welch"
     assert spectra.computation.method == "welch"
+
+
+def _epochs_for_hashing(sfreq: float = 500.0):
+    mne = pytest.importorskip("mne")
+    rng = np.random.default_rng(0)
+    info = mne.create_info(["C3", "C4"], sfreq, "eeg")
+    return mne.EpochsArray(
+        rng.standard_normal((4, 2, int(4 * sfreq))) * 1e-5, info, tmin=0.0, verbose=False
+    )
+
+
+def _declared(spectrum) -> Spectra:
+    # The same declaration in both arms: what varies is the data, not the dict.
+    return Spectra.from_spectrum(
+        spectrum,
+        recording="r",
+        estimator_parameters={"method": "welch", "fmin": 1.0, "fmax": 45.0},
+    )
+
+
+def test_a_different_frequency_axis_is_a_different_computation() -> None:
+    epochs = _epochs_for_hashing()
+    coarse = _declared(epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0, verbose=False))
+    narrow = _declared(epochs.compute_psd(method="welch", fmin=1.0, fmax=30.0, verbose=False))
+    assert coarse.computation.parameter_hash != narrow.computation.parameter_hash
+
+
+def test_a_different_sampling_rate_is_a_different_computation() -> None:
+    slow = _declared(
+        _epochs_for_hashing(250.0).compute_psd(method="welch", fmin=1.0, fmax=45.0, verbose=False)
+    )
+    fast = _declared(
+        _epochs_for_hashing(500.0).compute_psd(method="welch", fmin=1.0, fmax=45.0, verbose=False)
+    )
+    assert slow.computation.parameter_hash != fast.computation.parameter_hash
+
+
+def test_the_same_computation_still_hashes_the_same() -> None:
+    epochs = _epochs_for_hashing()
+    first = _declared(epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0, verbose=False))
+    again = _declared(epochs.compute_psd(method="welch", fmin=1.0, fmax=45.0, verbose=False))
+    assert first.computation.parameter_hash == again.computation.parameter_hash

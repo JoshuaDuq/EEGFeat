@@ -147,15 +147,27 @@ The corresponding implementation is:
    demeaned = epoch - np.mean(epoch, axis=0, keepdims=True)
    gfp = np.std(demeaned, axis=0)
    maps = normalize_rows(demeaned.T)
-   model = KMeans(n_clusters=K, n_init=20, random_state=random_state)
-   model.fit(maps[gfp_peaks])
-   templates = normalize_rows(model.cluster_centers_)
+   seeds = KMeans(n_clusters=K, n_init=20, random_state=random_state).fit(maps[gfp_peaks])
+   templates = unit_rows(seeds.cluster_centers_)
+   while labels change:
+       labels = np.argmax(np.abs(maps[gfp_peaks] @ templates.T), axis=1)
+       for k in range(K):
+           members = maps[gfp_peaks][labels == k]
+           templates[k] = principal_eigenvector(members.T @ members)
+   templates = normalize_rows(templates)
    states = np.argmax(np.abs(templates @ maps.T), axis=0)
 
 The row normalization subtracts the channel mean, divides by the Euclidean
 norm, and flips the sign so the largest-magnitude channel is positive. The
-fitted templates therefore use ordinary k-means on sign-normalized maps; they
-are not the polarity-invariant modified k-means objective used by Pycrostates.
+sign flip is only a canonical orientation for reporting: the clustering itself
+is the polarity-invariant modified k-means of Pascual-Marqui et al. (1995).
+Maps are assigned by absolute correlation, and each template is the principal
+eigenvector of its members' scatter matrix, which is unchanged when any member
+is negated. Ordinary k-means on sign-normalized maps is not equivalent, because
+orienting a map by its strongest channel is discontinuous: where a topography
+has two extrema of similar magnitude, noise decides the orientation and one
+state's maps are canonicalized in opposite directions and split across
+clusters. The scikit-learn k-means only supplies the k-means++ starting point.
 
 **Template fitting pools across trials; the measures do not.** ``fit_on`` names which trials may contribute topographies, as a cross-validation fold requires. The default uses every trial, which is right for description and leaks for prediction. Assignment and every measure derived from it are per epoch, so the returned feature tables have one row per epoch.
 
@@ -166,9 +178,10 @@ templates and global explained variance. Feature identities include the fitted
 templates, channel order, contributing rows, and segmentation settings, so
 independently fitted ``state1`` columns cannot silently represent the same
 feature. Segmentation rejects non-finite or spatially constant maps rather
-than assigning them to an arbitrary state. This implementation uses ordinary
-k-means on sign-normalized maps, not the polarity-invariant modified k-means
-objective used by Pycrostates; these estimators are not interchangeable.
+than assigning them to an arbitrary state. The objective is the same modified
+k-means that Pycrostates fits, but the two are not bit-for-bit interchangeable:
+the initialisation, the GFP-peak selection and the short-segment smoothing are
+this package's own choices, and the templates carry them in their provenance.
 From the resulting sequence :math:`s(t)`,
 four temporal statistics are derived:
 
@@ -208,12 +221,11 @@ by `Christoph M. Michel and Thomas Koenig (2018)
 topographic correlation, polarity handling, and temporal descriptors are
 separate methodological choices.
 
-This package intentionally differs from the classical polarity-invariant
-modified k-means objective: it sign-normalizes the selected maps and then uses
-ordinary k-means. Consequently, ``state1``--``stateK`` are estimator-local
-cluster labels, not automatically the canonical A--D maps, and the temporal
-features should not be compared across independently fitted segmentations
-without a topographic matching step.
+The templates are fitted with the classical polarity-invariant modified
+k-means objective, refined from a k-means++ start. Even so, ``state1``--``stateK``
+are estimator-local cluster labels, not automatically the canonical A--D maps,
+and the temporal features should not be compared across independently fitted
+segmentations without a topographic matching step.
 
 References
 ----------

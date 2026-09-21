@@ -223,6 +223,14 @@ finite integer trial indices that are unique within each subject/run.
 Incomplete fits abort the procedure with an error instead of dropping failed draws,
 preventing distortion of the null distribution.
 
+The tail is chosen by ``greater_is_better``, which defaults to ``True`` and must be
+set to ``False`` for any metric where a smaller value is better. A correlation or an
+:math:`R^2` improves upward, so the default is right for the example below; an error
+metric such as ``mean_squared_error`` improves *downward*, and leaving the default in
+place counts the wrong tail — a strong effect then returns :math:`p \approx 1` and a
+worthless model returns a small one. The direction cannot be inferred from an arbitrary
+``metric_fn``, so it has to be declared.
+
 ``permutation_test`` rejects ``residualize_on``. Permuting raw targets and then
 refitting nuisance regression destroys the nuisance–target association; this
 does not implement a nuisance-preserving conditional null. Such inference needs

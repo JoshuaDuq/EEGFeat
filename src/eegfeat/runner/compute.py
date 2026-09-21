@@ -170,7 +170,10 @@ class RecordingInputs:
         finite = self.windows(windows)
         if self.recipe.spectra.method == "morlet":
             tfr, n_cycles = self._morlet()
-            return Spectra.from_tfr(tfr, finite, recording=self.recording, n_cycles=n_cycles)
+            # The recording's own rate, not the TFR's: decim has already lowered that one.
+            return Spectra.from_tfr(
+                tfr, finite, recording=self.recording, n_cycles=n_cycles, sfreq=self.sfreq
+            )
 
         estimates = [self._window_psd(window) for window in finite]
         freqs = estimates[0][1]
@@ -266,6 +269,15 @@ class RecordingInputs:
             )
         else:
             resolution = self.sfreq / data.shape[-1]
+            # MNE needs a time-halfbandwidth product of at least 0.5, i.e. a
+            # bandwidth of at least one Rayleigh resolution; say which window fails.
+            if settings.bandwidth < resolution:
+                raise ValueError(
+                    f"spectra.bandwidth = {settings.bandwidth} Hz is below the "
+                    f"{resolution:.3f} Hz resolution of window {window.name!r} "
+                    f"({data.shape[-1]} samples); a multitaper cannot smooth over less than "
+                    "one frequency bin. Raise the bandwidth or widen the window."
+                )
             psd, freqs = psd_array_multitaper(
                 data,
                 self.sfreq,

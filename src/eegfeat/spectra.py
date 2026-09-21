@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -285,7 +286,17 @@ class Spectra:
             representation="psd",
             support=np.ones(data.shape, dtype=float),
             row_ids=epoch_row_ids(spectrum, recording, data.shape[0]),
-            computation=ComputationSpec.create(method, **params),
+            computation=ComputationSpec.create(
+                method,
+                **params,
+                # MNE keeps none of the estimator's own keyword arguments on the
+                # Spectrum (no n_per_seg, n_overlap or window as of 1.13), so
+                # anything the caller leaves out of estimator_parameters is lost.
+                # The grid and the sampling rate are on the object, and recording
+                # them means two runs that differ in resolution, range or rate
+                # cannot land on the same column even if the declaration matches.
+                **_axis_identity(np.asarray(spectrum.freqs, dtype=float), spectrum),
+            ),
             passband=_passband(spectrum),
         )
 
@@ -297,8 +308,18 @@ class Spectra:
         *,
         recording: str,
         n_cycles: float | npt.NDArray[np.float64],
+        sfreq: float,
     ) -> Spectra:
         """Build from an MNE ``EpochsTFR`` by averaging over time windows.
+
+        MNE's Morlet wavelets are normalized to unit energy, so the power they
+        return for a stationary signal is the one-sided spectral density at the
+        wavelet's frequency, smoothed over its bandwidth, **times the sampling
+        rate**. The same recording resampled from 250 to 500 Hz reports twice
+        the raw Morlet power. The power is therefore divided by the sampling
+        rate here, so the container holds a smoothed density in V²/Hz that is
+        comparable across recordings and, up to the wavelet's smoothing, with a
+        Welch or multitaper PSD of the same data.
 
         Parameters
         ----------
@@ -310,11 +331,16 @@ class Spectra:
             Morlet cycle count used to compute the TFR. Required because MNE
             does not store it on the TFR object and safe temporal attribution
             cannot be inferred without it.
+        sfreq : float
+            Sampling rate of the data the TFR was computed from, in Hz. Required
+            for the same reason: a TFR computed with ``decim`` reports the
+            decimated rate as its own, and MNE keeps no record of the original,
+            so reading it off the object would scale a decimated TFR wrongly.
 
         Returns
         -------
         Spectra
-            One spectrum per window.
+            One spectrum per window, in V²/Hz.
         """
         if getattr(tfr, "baseline", None) is not None:
             raise ValueError(
@@ -335,6 +361,12 @@ class Spectra:
                 f"got shape {data.shape}."
             )
 
+        if not np.isfinite(sfreq) or sfreq <= 0.0:
+            raise ValueError(f"sfreq must be finite and positive, got {sfreq}.")
+        # Unit-energy wavelets: E|coefficient|^2 = sfreq * one-sided PSD, so this
+        # is what turns MNE's rate-dependent number into a density.
+        data = data / float(sfreq)
+
         times = np.asarray(tfr.times, dtype=float)
         freqs = np.asarray(tfr.freqs, dtype=float)
         per_window = [_reduce_window(data, times, freqs, window, n_cycles) for window in windows]
@@ -352,9 +384,33 @@ class Spectra:
                 "morlet",
                 n_cycles=np.asarray(n_cycles, dtype=float),
                 frequencies_hz=freqs,
+                # Recorded because it changes every value: a table built before
+                # this scaling existed must not land on the same column.
+                scaling="power_divided_by_sfreq",
+                sfreq_hz=float(sfreq),
             ),
             passband=_passband(tfr),
         )
+
+
+def _axis_identity(freqs: npt.NDArray[np.float64], spectrum: Any) -> dict[str, object]:
+    """Exact identity of a frequency axis, in four fields rather than the whole grid.
+
+    The axis itself can be a thousand numbers and would be repeated in every
+    column's provenance and in the sidecar. The digest is the same identity at
+    constant size; the three readable fields beside it are so a human reading the
+    provenance can still see what grid was used.
+    """
+    sfreq = getattr(spectrum, "sfreq", None)
+    return {
+        "n_frequencies": int(freqs.size),
+        "frequency_first_hz": float(freqs[0]) if freqs.size else None,
+        "frequency_last_hz": float(freqs[-1]) if freqs.size else None,
+        "frequency_axis_sha256": hashlib.sha256(
+            np.ascontiguousarray(freqs, dtype=np.float64).tobytes()
+        ).hexdigest()[:16],
+        "sfreq_hz": float(sfreq) if sfreq is not None else None,
+    }
 
 
 def _passband(source: Any) -> tuple[float | None, float | None] | None:

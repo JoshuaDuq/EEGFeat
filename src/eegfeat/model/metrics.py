@@ -62,9 +62,16 @@ def _subset_classification_metrics(
     y_prob: npt.NDArray[np.float64] | None = None,
 ) -> dict[str, float]:
     acc = float(accuracy_score(y_true, y_pred)) if len(y_true) > 0 else np.nan
-    f1 = float(f1_score(y_true, y_pred, zero_division=0)) if len(y_true) > 0 else np.nan
-    prec = float(precision_score(y_true, y_pred, zero_division=0)) if len(y_true) > 0 else np.nan
-    rec = float(recall_score(y_true, y_pred, zero_division=0)) if len(y_true) > 0 else np.nan
+    # 0/0 is undefined, not zero: a held-out subject with no positive trials has no
+    # recall, and one with no positive predictions has no precision. NaN lets the
+    # subject mean drop them, as it already does for balanced accuracy and AUC;
+    # zero would pull every subject-level mean toward zero by the share of such
+    # subjects, and F1 would then move against balanced accuracy.
+    f1 = float(f1_score(y_true, y_pred, zero_division=np.nan)) if len(y_true) > 0 else np.nan
+    prec = (
+        float(precision_score(y_true, y_pred, zero_division=np.nan)) if len(y_true) > 0 else np.nan
+    )
+    rec = float(recall_score(y_true, y_pred, zero_division=np.nan)) if len(y_true) > 0 else np.nan
     b_acc = (
         float(balanced_accuracy_score(y_true, y_pred)) if len(np.unique(y_true)) >= 2 else np.nan
     )

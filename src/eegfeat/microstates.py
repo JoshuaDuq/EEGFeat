@@ -142,7 +142,7 @@ def segment(
 
     model = kmeans(n_clusters=n_states, n_init=20, random_state=random_state)
     model.fit(stacked)
-    templates = _normalize_rows(np.asarray(model.cluster_centers_, dtype=float))
+    templates = _modified_kmeans(stacked, np.asarray(model.cluster_centers_, dtype=float))
 
     min_samples = max(1, int(round(min_duration_ms * signal.sfreq / 1000.0)))
     states = np.stack(
@@ -158,7 +158,7 @@ def segment(
         row_ids=signal.row_ids,
         global_explained_variance=_global_explained_variance(data, templates, states),
         computation=ComputationSpec.create(
-            "sign_normalized_kmeans",
+            "modified_kmeans",
             input_computation=signal.computation.record(),
             channels=signal.ch_names,
             templates=templates.tolist(),
@@ -338,6 +338,54 @@ def _normalize_rows(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
             vector = -vector
         out[index] = vector
     return out
+
+
+def _modified_kmeans(
+    maps: npt.NDArray[np.float64],
+    seeds: npt.NDArray[np.float64],
+    *,
+    max_iterations: int = 300,
+) -> npt.NDArray[np.float64]:
+    """Polarity-invariant clustering, after Pascual-Marqui et al. (1995).
+
+    Assignment is by absolute correlation and each template is the principal
+    eigenvector of its cluster's scatter matrix, which is unchanged when any
+    member map is negated. Euclidean k-means over sign-normalized maps is not
+    equivalent: orienting a map by the sign of its strongest channel is
+    discontinuous, so where a topography has two extrema of similar magnitude,
+    noise decides the orientation and one state's maps are canonicalized in
+    opposite directions and split across clusters.
+
+    The k-means centres are kept as the starting point, which is what the
+    scikit-learn dependency now buys: a k-means++ initialization rather than a
+    random draw. The refinement below is what decides the templates.
+    """
+    templates = _unit_rows(seeds)
+    previous: npt.NDArray[np.int_] | None = None
+    for _ in range(max_iterations):
+        labels = np.asarray(np.argmax(np.abs(maps @ templates.T), axis=1), dtype=int)
+        if previous is not None and np.array_equal(labels, previous):
+            break
+        previous = labels
+        for state in range(templates.shape[0]):
+            members = maps[labels == state]
+            if members.shape[0] == 0:
+                # Keep the orphaned template rather than moving it to an arbitrary
+                # map: an empty cluster means n_states is too high, and inventing a
+                # centre would hide that behind a plausible-looking topography.
+                continue
+            # Largest eigenvector of the scatter matrix: the direction the cluster's
+            # maps lie along, irrespective of which way round each one points.
+            _, vectors = np.linalg.eigh(members.T @ members)
+            templates[state] = vectors[:, -1]
+    return _normalize_rows(templates)
+
+
+def _unit_rows(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """Demeaned unit rows, without the orientation rule that _normalize_rows applies."""
+    centred = matrix - np.nanmean(matrix, axis=1, keepdims=True)
+    norms = np.linalg.norm(centred, axis=1, keepdims=True)
+    return np.asarray(np.divide(centred, norms, out=np.zeros_like(centred), where=norms > 0.0))
 
 
 def _gfp(epoch: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:

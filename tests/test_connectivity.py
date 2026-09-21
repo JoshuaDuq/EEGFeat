@@ -13,7 +13,7 @@ from eegfeat.connectivity import (
     envelope_correlation,
     global_efficiency,
 )
-from eegfeat.signal import BandSignal
+from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Window
 
 SFREQ = 100.0
@@ -737,3 +737,54 @@ def test_the_method_and_mode_are_recorded_and_separate_the_columns(monkeypatch) 
     assert coh.names[0] != pli.names[0]
     joined = ef.concat([coh, pli])
     assert len(set(joined.names)) == len(joined.names)
+
+
+@pytest.mark.skipif(not _HAS_MNE_CONNECTIVITY, reason="mne-connectivity is not installed")
+@pytest.mark.parametrize(("orthogonalize", "absolute"), [("pairwise", True), (None, False)])
+def test_the_per_trial_matrix_is_the_one_mne_connectivity_computes(
+    orthogonalize: str | None, absolute: bool
+) -> None:
+    # envelope_correlation is the one connectivity measure eegfeat computes itself
+    # rather than delegating, and its docstring claims Hipp et al. (2012) as
+    # mne-connectivity implements it. Nothing else pins that claim.
+    from mne_connectivity import envelope_correlation as mne_envelope_correlation
+
+    from eegfeat.connectivity import _trial_correlation
+
+    rng = np.random.RandomState(3)
+    trial = rng.randn(5, 800) + 1j * rng.randn(5, 800)
+    mine = _trial_correlation(trial, orthogonalize=orthogonalize, absolute=absolute)
+    theirs = np.squeeze(
+        np.asarray(
+            mne_envelope_correlation(
+                trial[np.newaxis], orthogonalize=orthogonalize or False
+            ).get_data("dense")
+        )
+    )
+    upper = np.triu_indices(5, 1)
+    np.testing.assert_allclose(mine[upper], theirs[upper], atol=1e-12)
+
+
+def test_multitaper_bandwidth_is_fixed_in_hertz_and_recorded() -> None:
+    pytest.importorskip("mne_connectivity")
+    from eegfeat.connectivity import spectral_connectivity
+
+    rng = np.random.RandomState(0)
+    times = np.arange(0.0, 2.0, 1.0 / 200.0)
+    data = rng.normal(size=(4, 2, times.size)) * 1e-6
+    signal = Signal.from_arrays(
+        data=data,
+        times=times,
+        ch_names=("C3", "C4"),
+        sfreq=200.0,
+        row_ids=tuple(("test", index, "event") for index in range(4)),
+    )
+    window = Window("all", 0.0, 1.995)
+    table = spectral_connectivity(
+        signal, method="coh", bands=[ALPHA], windows=[window], bandwidth=3.0
+    )
+    recorded = table.meta[0].computation.parameters["estimator_parameters"]
+    assert recorded["bandwidth_hz"] == 3.0
+    # Below one frequency bin the tapers cannot be built; the window is named.
+    with pytest.raises(ValueError, match="resolution of window 'all'"):
+        spectral_connectivity(signal, method="coh", bands=[ALPHA], windows=[window], bandwidth=0.1)

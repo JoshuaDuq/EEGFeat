@@ -26,6 +26,11 @@ class Band:
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Band name must be a non-empty string.")
+        # Canonical JSON writes 8 and 8.0 as different tokens, so an int-bounded
+        # band would hash differently from the identical float-bounded one and
+        # their columns would never match across tables.
+        object.__setattr__(self, "fmin", float(self.fmin))
+        object.__setattr__(self, "fmax", float(self.fmax))
         if not np.isfinite((self.fmin, self.fmax)).all():
             raise ValueError(f"Band {self.name!r} bounds must be finite.")
         if self.fmin < 0.0:

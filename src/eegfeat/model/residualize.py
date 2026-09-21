@@ -164,6 +164,19 @@ def fit_nuisance_model(
     *,
     columns: Sequence[str],
 ) -> FoldNuisanceFit:
+    """Regress a nuisance model out of the target, fitting it on ``train`` alone.
+
+    The coefficients come from ``train`` and are only applied to ``test``, which
+    is what keeps confound control out of the cross-validation's way: fitting the
+    nuisance model on all rows lets the held-out target inform its own adjustment
+    (Snoek, Miletic & Scholte 2019, NeuroImage 184, 741-760).
+
+    Both residuals are returned because they are different objects: the training
+    residual is what a model should be fitted on, the test residual is what it
+    should be scored against. Residualizing the target also changes the estimand
+    -- performance is now on the part of the target the confound does not explain
+    -- so it is not a free correction.
+    """
     column_names = tuple(str(c).strip() for c in columns if str(c).strip())
     if not column_names:
         msg = "Target residualization requires at least one nuisance column."
@@ -230,6 +243,12 @@ def residualize_targets(
     *,
     columns: Sequence[str],
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """``(train_residual, test_residual)`` from :func:`fit_nuisance_model`.
+
+    The pair :func:`~eegfeat.model.cross_fit_regression` uses internally when it
+    is given ``residualize_on``; call that rather than this unless you are
+    building your own fold loop.
+    """
     fit = fit_nuisance_model(y, covariates, train, test, columns=columns)
     return fit.train_residual, fit.test_residual
 
@@ -322,6 +341,22 @@ def fit_staged_residual_preprocessor(
     columns: Sequence[str],
     config: PreprocessingConfig | None = None,
 ) -> StagedResidualPreprocessor:
+    """Fit every data-dependent preprocessing step for one fold, on ``rows`` alone.
+
+    ``rows`` must be the **training** rows of the fold being fitted, never all
+    rows. Everything this learns is learned from them: which features clear the
+    missingness threshold, the medians that fill the rest, the nuisance
+    coefficients for the features, the nuisance coefficients for the target, and
+    the Yeo-Johnson transform of the residualized target. Passing every row
+    instead is accepted silently -- the signature cannot tell the two apart --
+    and makes the held-out rows contribute to their own preprocessing.
+
+    Use it when a fold needs the feature-side and target-side adjustments kept in
+    step, as the staged permutation null does. For ordinary cross-fitting, pass
+    ``covariates`` and ``residualize_on`` to
+    :func:`~eegfeat.model.cross_fit_regression`, which does the same thing per
+    fold without the caller holding the contract.
+    """
     from sklearn.preprocessing import PowerTransformer
 
     cov = covariates if covariates is not None else meta
@@ -407,6 +442,19 @@ def reconstruct_staged_permutation_target_for_fold(
     columns: Sequence[str],
     permutation_indices: npt.NDArray[np.intp],
 ) -> npt.NDArray[np.float64]:
+    """Rebuild a permuted target that keeps the nuisance relationship intact.
+
+    The nuisance model is fitted on ``train``, and the target is rebuilt within
+    the fold as its nuisance prediction plus a permuted residual, so shuffling
+    breaks the feature-target link while leaving the confound-target link where
+    it was. This is the Freedman-Lane scheme (Freedman & Lane 1983, J. Bus. Econ.
+    Stat. 1(4), 292-298; Winkler et al. 2014, NeuroImage 92, 381-397), and it is
+    the conditional null that :func:`~eegfeat.model.permutation_test` refuses to
+    approximate by permuting raw targets.
+
+    ``permutation_indices`` must be a permutation of every row index that maps
+    each fold row to another row of the same fold; both are checked.
+    """
     cov = covariates if covariates is not None else meta
     if cov is None:
         msg = "reconstruct_staged_permutation_target_for_fold requires 'covariates' or 'meta'."

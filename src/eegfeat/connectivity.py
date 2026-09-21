@@ -156,6 +156,7 @@ def spectral_connectivity(
     groups: Mapping[str, Sequence[str]] | None = None,
     trials: Sequence[str] | npt.NDArray[np.str_] | None = None,
     mode: Literal["multitaper", "fourier"] = "multitaper",
+    bandwidth: float = 2.0,
 ) -> FeatureTable:
     """Spectral connectivity between every pair of nodes.
 
@@ -198,6 +199,12 @@ def spectral_connectivity(
         A label per epoch. One row per distinct label.
     mode : {"multitaper", "fourier"}, default "multitaper"
         Spectral estimator passed to mne-connectivity.
+    bandwidth : float, default 2.0
+        Frequency smoothing of the multitaper estimate, in Hz; ignored by
+        ``"fourier"``. Fixed in hertz on purpose: mne-connectivity's own default
+        is ``8 / window_length`` Hz, which on a 1 s window smooths over ±4 Hz,
+        wider than the delta or theta band, and changes with every window
+        length. Must be at least one frequency bin, ``sfreq / n_samples``.
 
     Returns
     -------
@@ -208,10 +215,12 @@ def spectral_connectivity(
         raise ValueError(f"{method!r} is not available here. {_DIRECTED[method]}")
     if method not in _METHOD_UNITS:
         raise ValueError(
-            f"unknown connectivity method {method!r}; expected one of " f"{sorted(_METHOD_UNITS)}."
+            f"unknown connectivity method {method!r}; expected one of {sorted(_METHOD_UNITS)}."
         )
     if mode not in ("multitaper", "fourier"):
         raise ValueError(f"mode must be 'multitaper' or 'fourier', got {mode!r}.")
+    if not np.isfinite(bandwidth) or bandwidth <= 0.0:
+        raise ValueError(f"bandwidth must be finite and positive, got {bandwidth}.")
 
     row_groups, labels = _resolve_rows(trials, signal.data.shape[0])
     if np.any(np.bincount(row_groups, minlength=len(labels)) < 2):
@@ -228,6 +237,14 @@ def spectral_connectivity(
             check_passband(band, *signal.passband, source=method)
         for window in windows:
             mask = window_mask(signal.times, window)
+            resolution = signal.sfreq / int(mask.sum())
+            if mode == "multitaper" and bandwidth < resolution:
+                raise ValueError(
+                    f"bandwidth = {bandwidth} Hz is below the {resolution:.3f} Hz resolution of "
+                    f"window {window.name!r} ({int(mask.sum())} samples); a multitaper cannot "
+                    "smooth over less than one frequency bin. Raise the bandwidth or widen the "
+                    "window."
+                )
             matrices = []
             for row in range(len(labels)):
                 data = signal.data[row_groups == row][:, :, mask]
@@ -238,6 +255,7 @@ def spectral_connectivity(
                     fmin=band.fmin,
                     fmax=band.fmax,
                     mode=mode,
+                    mt_bandwidth=bandwidth if mode == "multitaper" else None,
                     faverage=False,
                     verbose=False,
                 )
@@ -253,6 +271,7 @@ def spectral_connectivity(
                     signal,
                     {
                         "mode": mode,
+                        "bandwidth_hz": bandwidth if mode == "multitaper" else None,
                         "band_edges": "half_open",
                         "frequency_reduction": "mean",
                         "rectified": method in _RECTIFIED,
@@ -269,6 +288,7 @@ def wpli(
     windows: Sequence[Window],
     groups: Mapping[str, Sequence[str]] | None = None,
     trials: Sequence[str] | npt.NDArray[np.str_] | None = None,
+    bandwidth: float = 2.0,
 ) -> FeatureTable:
     """Weighted phase lag index between every pair of nodes.
 
@@ -289,6 +309,8 @@ def wpli(
         ROI name to member channels.
     trials : sequence of str, optional
         A label per epoch. One row per distinct label.
+    bandwidth : float, default 2.0
+        Multitaper frequency smoothing in Hz; see :func:`spectral_connectivity`.
 
     Returns
     -------
@@ -302,6 +324,7 @@ def wpli(
         windows=windows,
         groups=groups,
         trials=trials,
+        bandwidth=bandwidth,
     )
 
 
