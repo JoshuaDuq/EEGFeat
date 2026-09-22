@@ -9,11 +9,10 @@ Preprocessing
      does not call this package.
    </p>
 
-Install the ``preprocessing`` extra. PyPREP, autoreject, ICLabel, and the
-picard ICA solver need ``preprocessing-auto``. The MNE viewers used by ``review`` and ``inspect`` need
-``preprocessing-gui``. Accepted inputs are the suffixes
-``mne.io.read_raw`` reads here: ``.fif``, ``.fif.gz``, ``.edf``, ``.bdf``,
-``.vhdr``, and ``.set``.
+Install the ``preprocessing`` extra. PyPREP, autoreject, ICLabel, and Picard
+need ``preprocessing-auto``. ``review`` and ``inspect`` open MNE viewers when
+``preprocessing-gui`` is installed. Accepted suffixes are ``.fif``,
+``.fif.gz``, ``.edf``, ``.bdf``, ``.vhdr``, and ``.set``.
 
 A stage runs when its setting is present. ``null``, an empty list, or a
 disabled review leaves that stage out. Amplitudes are volts, times are seconds,
@@ -35,7 +34,8 @@ an event block. ``init`` will not replace an existing file.
 Edit the recipe before ``check``. ``init`` writes placeholders.
 
 - ``input.path`` is ``recording_raw.fif``. Point it at the recording, or
-  replace it with ``input.root`` and ``input.pattern`` to select a cohort.
+  replace it with ``input.root`` and ``input.pattern`` to select a cohort and
+  delete ``output.name``.
 - ``epochs.events`` is ``source: annotations`` and ``event_id: {stimulus: 1}``.
   The names and codes have to be annotations on the recordings. Use
   ``source: stim`` or ``source: file`` when they are not.
@@ -85,14 +85,17 @@ pattern. :file:`examples/preprocessing.yaml` is a cohort recipe with ICA and
 both gates set to ``suggested``, so it runs to export unattended.
 
 When every recording is exported, ``run`` prints the ``eegfeat init`` command
-and the ``inputs.root`` to set. ``status`` prints one line per recording,
-``exported``, ``awaiting <stage>``, ``stale at <stage>``, or how many stages
-are done, followed by the next command to run. ``--recording LABEL`` narrows any command to one recording, and is
-required for ``step``, ``next``, ``inspect``, and ``reset`` on a cohort.
+and the ``inputs.root`` to set. On a cohort, ``status`` prints one line per
+recording (``exported``, ``awaiting <stage>``, ``stale at <stage>``, or how many
+stages are done) and the next command to run. For one recording it prints every
+stage with its state. ``--recording LABEL`` limits a command
+to one recording. On a cohort it is required for ``step``, ``next``,
+``inspect``, and ``reset``.
 
 A later ``run`` reuses a checkpoint whose recipe and parents still match,
 checking only its identity; a payload is read and hashed when a stage
-consumes it, and ``status --verify`` re-reads every completed checkpoint.
+consumes it, and ``status --verify`` re-reads every completed checkpoint of one recording
+(``--recording``), or of every recording with ``--json``.
 The source recording is read and hashed once per ``run``. A pending review
 file the run already wrote is kept, with any edits in it.
 ``next`` runs one pending stage. ``step STAGE`` runs that stage and requires
@@ -104,11 +107,11 @@ depends on it. Payloads stay on disk.
    eegfeat preprocess init CONFIG [--mode events|resting]
    eegfeat preprocess check CONFIG [--recording LABEL]
    eegfeat preprocess steps CONFIG
-   eegfeat preprocess status CONFIG [--recording LABEL] [--verify]
+   eegfeat preprocess status CONFIG [--recording LABEL] [--verify] [--json]
    eegfeat preprocess step CONFIG STAGE --recording LABEL [--n-jobs N] [--overwrite]
    eegfeat preprocess next CONFIG --recording LABEL [--n-jobs N] [--overwrite]
    eegfeat preprocess run CONFIG [--until STAGE] [--recording LABEL] [--n-jobs N] [--overwrite] [--progress-json]
-   eegfeat preprocess inspect CONFIG STAGE --recording LABEL [--report]
+   eegfeat preprocess inspect CONFIG STAGE --recording LABEL [--report | --json]
    eegfeat preprocess review CONFIG raw|artifact|epochs [--recording LABEL] [--decisions FILE | --suggested]
    eegfeat preprocess reset CONFIG --from STAGE --recording LABEL
 
@@ -219,8 +222,8 @@ instead of the event block. A filled study file is
        ``BAD``), ``amplitude``, ``breaks``, ``muscle``. A null detector is skipped.
    * - ``bad_channels``
      - PyPREP. ``method: pyprep``. ``methods`` among ``flat``, ``deviation``,
-       ``correlation``, ``high_frequency``, ``snr``. ``snr`` requires the last
-       two. ``ransac``, ``random_state``, ``repeats`` (RANSAC draws that vote;
+       ``correlation``, ``high_frequency``, ``snr``. ``snr`` requires
+       ``correlation`` and ``high_frequency``. ``ransac``, ``random_state``, ``repeats`` (RANSAC draws that vote;
        a channel is a candidate when a strict majority flags it), and
        ``notch_freqs`` (a notch on the diagnostic copy only, as PREP does
        before its deviation test).
@@ -322,7 +325,9 @@ previous enabled parent. ``apply-artifact`` waits for both ``epoch`` and
      - Zero-phase Hamming FIR (``firwin``) on physiology channels. BAD and edge
        annotations are skipped. A clean segment shorter than the filter is an error.
    * - ``artifact-reference``
-     - Reference used for the artifact fit.
+     - Re-reference the continuous data for the artifact fit. Epochs are cut
+       from this re-referenced data, so it carries through unless the final
+       ``reference`` stage changes it.
    * - ``fit-artifact``, ``review-artifact``
      - Fit ICA, EEG SSP, or EOG regression. Review stores the components to
        exclude, the projectors to apply, or whether to apply the regression.
@@ -347,7 +352,8 @@ previous enabled parent. ``apply-artifact`` waits for both ``epoch`` and
      - Remove padding, then optional SciPy detrending of EEG, then an optional
        baseline on the final grid.
    * - ``report``, ``export``
-     - HTML report and the files below.
+     - ``report`` validates the final epochs and ledger. ``export`` writes the
+       HTML report and the files below.
 
 Event samples stay on the acquisition grid. The events table has the original
 sample, the delay-corrected sample, and ``event_sample_sfreq``.
@@ -403,34 +409,33 @@ A decision is kept. Replacing it requires ``reset --from`` that review stage.
 A new fit requires a new decision. ``parent_id`` has to match the checkpoint
 the decision was written for.
 
-``inspect STAGE`` opens that checkpoint in the browser. ``--report`` writes an
-HTML file beside the workspace and opens it: the continuous data before
+``inspect STAGE`` opens that checkpoint in the browser. ``--report`` writes
+``<stage>-<checkpoint id>-inspection.html`` inside the workspace and opens it: the continuous data before
 epoching, the fitted operator at ``fit-artifact`` and ``review-artifact``, the
 epochs after.
 
 Terminal Front End
 ~~~~~~~~~~~~~~~~~~
 
-``tui/`` holds an optional Go program that drives the same commands from one
-screen: every recording and where it stands, a live ``run`` with its log kept
-below the stage list, and each review gate as a checklist that opens pre-ticked with the detectors' verdict and
-their reasons (PyPREP tests per channel, ICLabel class and confidence per
-component, peak-to-peak amplitude per epoch). It writes decisions through
-``review --decisions`` and reads state through ``status --json`` and
-``inspect STAGE --json``, so nothing it does bypasses the checks above, and
-the Python package does not depend on it. ``v`` opens the reviewed checkpoint
-in the MNE viewer when ``preprocessing-gui`` is installed.
+``tui/`` is an optional Go program for the same commands. It lists every
+recording, runs ``run`` with the log under the stage list, and opens each gate
+as a checklist. The list starts ticked with the detectors' verdict. PyPREP
+tests, ICLabel class and confidence, and peak-to-peak amplitude per epoch.
+Decisions go through ``review --decisions``. State comes from
+``status --json`` and ``inspect STAGE --json``. The Python package does not
+import it. ``v`` opens the checkpoint in the MNE viewer when
+``preprocessing-gui`` is installed.
 
-Lists scroll to keep the selected row visible. ``Home`` / ``End`` jump to the
-first / last recording, stage, or review row; ``Page Up`` / ``Page Down`` page
-through review rows (and scroll the run log on the home screen). Sorting a
-review with ``o`` keeps the same item selected. While loading, starting,
-saving, or resetting, the header shows the operation and further actions
-wait for it to finish.
+``Tab`` moves between recordings and stages. ``Enter`` runs the selected
+action. ``?`` lists the keys. ``l`` opens the log. ``PgUp`` and ``PgDn``
+scroll. ``End`` jumps to the latest log line. ``Esc`` closes the log.
+``Home`` and ``End`` also jump to the first and last row of a list.
+``o`` sorts a review and keeps the same row selected. While a command is
+running, the header names it and other actions wait.
 
 .. code-block:: bash
 
-   cd tui && go build -o eegfeat-tui .     # Go 1.23+
+   cd tui && go build -o eegfeat-tui .     # Go 1.24+
    ./eegfeat-tui preprocessing.yaml        # finds eegfeat on PATH, or set EEGFEAT
 
 ``--json`` on ``status`` and ``inspect`` is a documented contract for any
@@ -461,7 +466,11 @@ directory without ``<name>_preprocessing.json`` has no finished export.
    * - ``<name>_report.html``
      - MNE report.
    * - ``<name>_preprocessing.json``
-     - Provenance, package versions, stage order, settings, and file hashes.
+     - Provenance, stage order, settings, review decisions, and file hashes.
+       Package versions enter the stage identities but are not listed.
+
+``run`` also keeps ``preprocess-run-<timestamp>.log`` at the common output
+root when MNE or a stage printed anything, and prints its path.
 
 Checkpoints live in ``<bundle directory>/.preprocessing/<name>/``, where the
 bundle directory is ``output.directory`` plus the recording's path below

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from scipy import stats
 
 from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.spectra import Spectra, Window
@@ -152,3 +153,26 @@ def test_the_fit_quality_is_dimensionless_and_named() -> None:
     )
     assert meta.unit == "a.u."
     assert meta.band is None
+
+
+def test_one_refit_round_rejects_the_peak_and_scores_the_line_it_fitted() -> None:
+    # max_iterations counts refit rounds: fit, reject what sits above z * MAD, refit,
+    # and score r_squared on the points of that last fit. A rejection that is not
+    # followed by a refit would leave the slope blind to it and score the line on
+    # points it never saw.
+    clean = 10.0 * FREQS**-1.7
+    peaked = clean + 3.0 * clean.max() * np.exp(-0.5 * ((FREQS - 10.0) / 1.0) ** 2)
+    log_f, log_p = np.log10(FREQS), np.log10(peaked)
+    slope, offset = np.polyfit(log_f, log_p, 1)
+    residuals = log_p - (offset + slope * log_f)
+    mad = stats.median_abs_deviation(residuals, scale="normal")
+    keep = residuals <= 2.5 * mad
+    slope, offset = np.polyfit(log_f[keep], log_p[keep], 1)
+    fitted = offset + slope * log_f[keep]
+    observed = log_p[keep]
+    r_squared = 1.0 - np.sum((observed - fitted) ** 2) / np.sum((observed - observed.mean()) ** 2)
+
+    table = aperiodic(_spectra(peaked), include_global=False, max_iterations=1)
+    assert table.select(measure="slope").values.item() == pytest.approx(slope)
+    assert table.select(measure="offset").values.item() == pytest.approx(offset)
+    assert table.select(measure="r_squared").values.item() == pytest.approx(r_squared)

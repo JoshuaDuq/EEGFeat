@@ -312,7 +312,7 @@ class Spectra:
     ) -> Spectra:
         """Build from an MNE ``EpochsTFR`` by averaging over time windows.
 
-        MNE's Morlet wavelets are normalized to unit energy, so the power they
+        MNE's Morlet wavelets are scaled to energy 2 (norm sqrt(2)), so the power they
         return for a stationary signal is the one-sided spectral density at the
         wavelet's frequency, smoothed over its bandwidth, **times the sampling
         rate**. The same recording resampled from 250 to 500 Hz reports twice
@@ -363,7 +363,7 @@ class Spectra:
 
         if not np.isfinite(sfreq) or sfreq <= 0.0:
             raise ValueError(f"sfreq must be finite and positive, got {sfreq}.")
-        # Unit-energy wavelets: E|coefficient|^2 = sfreq * one-sided PSD, so this
+        # Energy-2 wavelets: E|coefficient|^2 = sfreq * one-sided PSD, so this
         # is what turns MNE's rate-dependent number into a density.
         data = data / float(sfreq)
 

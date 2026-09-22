@@ -9,8 +9,9 @@ in the recipe needs it.
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -26,7 +27,7 @@ from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.identity import epoch_row_ids
 from eegfeat.microstates import MicrostateSegmentation, segment
 from eegfeat.runner.measures import GRAPH, MEASURES, Measure
-from eegfeat.runner.recipe import WHOLE_EPOCH, FeatureSpec, Recipe
+from eegfeat.runner.recipe import WHOLE_EPOCH, FeatureSpec, Recipe, RoiPattern
 from eegfeat.signal import BandSignal, Signal, _passband
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec, FeatureTable, concat
@@ -38,6 +39,16 @@ _WELCH_SEGMENT_SEC = 2.0
 """Default Welch segment length, capped by the shortest window it must fit."""
 
 _WELCH_TAPER = "hann"
+
+
+@dataclass(frozen=True)
+class EntryTiming:
+    """How long one measure took. Shared inputs (spectra, band signals) are built on
+    first use, so their cost falls on the first measure that needs them."""
+
+    entry: int
+    measure: str
+    seconds: float
 
 
 @dataclass(frozen=True, eq=False)
@@ -54,6 +65,7 @@ class RecordingFeatures:
 
     epochs: FeatureTable | None
     crosstrial: FeatureTable | None
+    timings: tuple[EntryTiming, ...] = field(default=())
 
 
 def compute_features(
@@ -84,20 +96,24 @@ def compute_features(
     inputs = RecordingInputs(epochs, recipe, recording=recording, n_jobs=n_jobs)
     per_epoch: list[FeatureTable] = []
     crosstrial: list[FeatureTable] = []
+    timings: list[EntryTiming] = []
     for position, spec in enumerate(recipe.features, start=1):
         if on_step is not None:
             on_step(spec.measure, position, len(recipe.features))
+        clock = time.perf_counter()
         try:
             table = _compute(spec, inputs)
         except Exception as exc:
             # Keep the exception's type for callers; the note names the entry the way
             # recipe problems do, so it can be found in the file.
-            exc.add_note(f"features[{position - 1}] ({spec.measure})")
+            exc.add_note(f"features[{spec.entry}] ({spec.measure})")
             raise
+        timings.append(EntryTiming(spec.entry, spec.measure, time.perf_counter() - clock))
         (per_epoch if table.row_labels is None else crosstrial).append(table)
     return RecordingFeatures(
         epochs=concat(per_epoch) if per_epoch else None,
         crosstrial=concat(crosstrial) if crosstrial else None,
+        timings=tuple(timings),
     )
 
 
@@ -123,6 +139,25 @@ class RecordingInputs:
         self._psd: dict[Window, tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = {}
         self._tfr: tuple[Any, npt.NDArray[np.float64]] | None = None
         self._segmentation: MicrostateSegmentation | None = None
+        self._rois: dict[str, tuple[str, ...]] | None = None
+
+    def rois(self) -> dict[str, tuple[str, ...]]:
+        """The recipe's ROIs as this recording's channel names."""
+        if self._rois is None:
+            resolved = {}
+            for name, roi in self.recipe.rois.items():
+                if isinstance(roi, RoiPattern):
+                    members = roi.resolve(self.epochs.ch_names)
+                    if not members:
+                        raise ValueError(
+                            f"ROI {name!r} matches none of this recording's channels "
+                            f"with {list(roi.patterns)}."
+                        )
+                    resolved[name] = members
+                else:
+                    resolved[name] = roi
+            self._rois = resolved
+        return self._rois
 
     def window(self, window: Window) -> Window:
         """The window as this recording measures it: finite and inside its epochs."""
@@ -342,7 +377,7 @@ def _compute(spec: FeatureSpec, inputs: RecordingInputs) -> FeatureTable:
     function = measure.function
     params: dict[str, Any] = dict(spec.params)
     windows = inputs.windows(spec.windows)
-    rois = dict(inputs.recipe.rois)
+    rois = inputs.rois()
     has_global = measure.takes("include_global")
 
     if measure.kind == "spectra":

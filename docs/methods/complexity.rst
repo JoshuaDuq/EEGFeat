@@ -15,10 +15,14 @@ Moorman, 2000).
 
 .. math::
 
-   H(x, m, r) = -\log \frac{C(m + 1, r)}{C(m, r)}
+   H(x, m, r) = -\log \frac{A}{B}
 
+:math:`B` and :math:`A` count the pairs of templates, among the first
+:math:`N - m`, that match over :math:`m` and over :math:`m + 1` samples.
 Two templates match when their Chebyshev distance is strictly below
-:math:`r \sigma_x`. Each unordered pair is counted once. No match at length
+:math:`r \sigma_x`, where :math:`\sigma_x` is the population standard deviation
+of the finite samples. Each unordered pair is counted once and self-matches are
+excluded. The log is natural. No match at length
 :math:`m` returns NaN. Matches at length :math:`m` and none at length
 :math:`m + 1` return infinity. Zero is the value for a perfectly regular
 series, so those two outcomes are not replaced by zero.
@@ -36,7 +40,8 @@ neighbours.
 If :math:`r` times the standard deviation of the finite samples is non-finite
 or non-positive, the tolerance falls back to
 :math:`\max(\epsilon, r \cdot \operatorname{nanstd})` of those samples, where
-:math:`\epsilon` is the smallest positive float. The log is not evaluated when
+:math:`\epsilon` is double-precision machine epsilon
+(``np.finfo(float).eps``, about :math:`2.2 \times 10^{-16}`). The log is not evaluated when
 the match count in the denominator or the numerator is zero.
 
 Cost grows with the square of the window length.
@@ -64,12 +69,14 @@ For :math:`N` samples and stride :math:`k`,
 
 .. math::
 
-   L_m(k) = \frac{\sum_q |x_{m+(q+1)k} - x_{m+qk}|}{q_{\max} k^2}(N-1),
+   L_m(k) = \frac{N-1}{q_{\max} k^2} \sum_{q=0}^{q_{\max}-1} |x_{m+(q+1)k} - x_{m+qk}|,
    \qquad L(k) = \frac{1}{k}\sum_{m=0}^{k-1} L_m(k),
 
-with :math:`q_{\max} = \lfloor (N - m - 1) / k \rfloor`. The slope is
-``np.polyfit(-log(k), log(L), 1)``. A window with any non-finite sample, or
-with fewer samples than ``k_max``, returns NaN.
+with :math:`x` indexed from 0 and :math:`q_{\max} = \lfloor (N - m - 1) / k \rfloor`.
+The slope is ``np.polyfit(-log(k), log(L), 1)`` over the strides with a
+positive :math:`L(k)`. A window with any non-finite sample, with ``k_max`` or
+fewer samples, or with fewer than two strides giving a positive :math:`L(k)`
+(a flat window, for example) returns NaN.
 
 Microstates
 -----------
@@ -91,9 +98,13 @@ Assignment uses absolute spatial correlation.
 
    s(t) = \arg\max_k \frac{|V(t)^T \mu_k|}{\|V(t)\| \|\mu_k\|}
 
+:math:`V(t)` is the average-referenced map, so the ratio is the spatial
+correlation.
+
 Each template is the principal eigenvector of its members' scatter matrix, so
-negating a member does not change the template. scikit-learn :math:`k`-means
-supplies only the k-means++ start (``n_init=20``). Ordinary :math:`k`-means on
+negating a member does not change the template. The start is scikit-learn
+:math:`k`-means run to convergence on the sign-normalized peak maps (k-means++
+initialisation, best of ``n_init=20`` restarts by inertia). Ordinary :math:`k`-means on
 sign-normalized maps is a different procedure. Orientation by the strongest
 channel jumps when two extrema have similar magnitude, and noise can then split
 one state's maps across clusters.
@@ -118,7 +129,9 @@ neighbouring state, or split between the two neighbours on a tie.
 
 Row normalization subtracts the channel mean, divides by the Euclidean norm,
 and flips the sign so the largest-magnitude channel is positive. The sign flip
-is a reporting convention. The clustering objective does not use it.
+is a reporting convention. The modified :math:`k`-means objective does not use
+it, but the Euclidean :math:`k`-means start is computed on sign-flipped maps and
+so depends on it.
 
 ``fit_on`` names the trials whose maps may enter the fit, as a
 cross-validation fold would require. The default uses every trial. That pool
@@ -133,18 +146,23 @@ features from two fits are comparable after that topographic match, and not
 before. The segmentation returns its templates and the global explained
 variance. Column identity includes the templates, the channel order, the rows
 that contributed, and the segmentation settings, so ``state1`` from two fits
-is two features. Non-finite maps and spatially constant maps are rejected.
+is two features. If any sample is non-finite or spatially constant,
+``segment`` raises ``ValueError`` for the whole input, so reject such data
+first.
 
-The objective is the modified :math:`k`-means that Pycrostates fits.
-Initialisation, GFP-peak selection, and short-segment smoothing are the choices
-above, and they are stored with the templates. Michel and Koenig (2018) review
+The objective matches the modified :math:`k`-means in Pycrostates. The
+template update (the exact principal eigenvector rather than one power-iteration
+step), the stopping rule (labels unchanged, at most 300 iterations),
+initialisation, GFP-peak selection, and short-segment smoothing are the choices
+above, so templates need not match a Pycrostates fit. They are stored with the
+templates. Michel and Koenig (2018) review
 why GFP peaks, topographic correlation, polarity, and the temporal summaries
 are separate choices.
 
 From the sequence :math:`s(t)`,
 
-- **coverage** is occupancy, :math:`T^{-1} \sum_t \mathbb{I}[s(t) = k]`. Across
-  states the values sum to 1.
+- **coverage** is occupancy, :math:`n_T^{-1} \sum_t \mathbb{I}[s(t) = k]` over
+  the :math:`n_T` samples in the window. Across states the values sum to 1.
 - **duration** is the mean dwell of a visit, in milliseconds. A state that is
   never entered is NaN.
 - **occurrence** is the number of visits per second. A state that is never
@@ -153,12 +171,15 @@ From the sequence :math:`s(t)`,
 
 .. math::
 
-   T_{i \to j} = \frac{N_{i \to j}}{\sum_{m \ne i} N_{i \to m}} \quad (i \ne j)
+   P_{i \to j} = \frac{N_{i \to j}}{\sum_{l \ne i} N_{i \to l}} \quad (i \ne j)
 
-Self-transitions are omitted.
+Self-transitions are omitted. Each row sums to 1, or is NaN when the source
+state is never left inside the window.
 
-Global explained variance is the GFP-weighted squared correlation of the
-assigned template.
+Global explained variance is the GFP-weighted squared correlation with the
+assigned template after smoothing, pooled over every epoch, including those
+outside ``fit_on``. After smoothing, the assigned template is not always the
+best-correlated one.
 
 .. code-block:: python
 
@@ -168,7 +189,8 @@ assigned template.
    gev = np.sum(gfp ** 2 * assigned ** 2) / np.sum(gfp ** 2)
 
 Coverage, duration, occurrence, and transitions are then ``mean(state == k)``,
-mean run length divided by the sampling rate, run count divided by the window
+mean run length divided by the sampling rate and times 1000 (a run cut by the
+window edge counts as a visit), run count divided by the window
 length in seconds, and row-normalized counts of successive runs.
 
 Segmentation requires scikit-learn (``pip install eegfeat[microstates]``).

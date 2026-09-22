@@ -367,3 +367,55 @@ def test_time_domain_features_preserve_runner_channel_selection(tmp_path, measur
 
     assert {meta.space for meta in result.epochs.meta} == set(epochs.ch_names)
     assert epochs.info["bads"] == (["Fz"] if channel_kind == "bad_eeg" else [])
+
+
+def test_an_roi_pattern_is_resolved_against_the_recordings_channels(tmp_path) -> None:
+    listed = features(
+        tmp_path,
+        '[rois]\nfront = ["Fz", "F3", "F4"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n',
+    )
+    matched = features(
+        tmp_path,
+        '[rois]\nfront = { match = ["^F[z34]$"] }\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n',
+    )
+
+    assert listed.epochs is not None and matched.epochs is not None
+    np.testing.assert_array_equal(matched.epochs.values, listed.epochs.values)
+
+
+def test_an_roi_pattern_matching_no_channel_is_an_error(tmp_path) -> None:
+    with pytest.raises(ValueError, match="'temporal'.*T7"):
+        features(
+            tmp_path,
+            '[rois]\ntemporal = { match = ["^T7$"] }\n\n'
+            '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n',
+        )
+
+
+def test_an_error_names_the_file_entry_even_after_a_multi_measure_entry(tmp_path) -> None:
+    with pytest.raises(ValueError) as caught:
+        features(
+            tmp_path,
+            "[windows]\nlate = [1.0, 3.0]\n\n"
+            '[[features]]\nmeasures = ["variance", "kurtosis"]\nwindows = ["all"]\n\n'
+            '[[features]]\nmeasure = "variance"\nwindows = ["late"]\n',
+        )
+
+    assert caught.value.__notes__ == ["features[1] (variance)"]
+
+
+def test_each_entry_is_timed(tmp_path) -> None:
+    result = features(
+        tmp_path,
+        '[[features]]\nmeasures = ["integrated_band_power", "variance"]\n\n'
+        '[[features]]\nmeasure = "kurtosis"\n',
+    )
+
+    assert [(t.entry, t.measure) for t in result.timings] == [
+        (0, "integrated_band_power"),
+        (0, "variance"),
+        (1, "kurtosis"),
+    ]
+    assert all(t.seconds >= 0.0 for t in result.timings)

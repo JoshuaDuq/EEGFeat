@@ -204,6 +204,18 @@ def test_cohort_status_suggests_the_next_command(raw, tmp_path, capsys):
     assert f"Next: eegfeat preprocess review {config} raw" in capsys.readouterr().out
 
 
+def test_cohort_status_verify_rereads_every_recording(raw, tmp_path, capsys):
+    config = _write_cohort(raw, tmp_path, "disabled", "sub-01", "sub-02")
+    assert main(["preprocess", "run", str(config), "--until", "load"]) == 0
+    assert main(["preprocess", "status", str(config), "--verify"]) == 0
+    capsys.readouterr()
+    (payload,) = (tmp_path / "preprocessed" / "sub-02").rglob("data_raw.fif")
+    with payload.open("ab") as stream:
+        stream.write(b"corrupt")
+    assert main(["preprocess", "status", str(config), "--verify"]) == 2
+    assert "hash mismatch" in capsys.readouterr().err
+
+
 def test_stage_arguments_are_checked_before_any_recording_runs(raw, tmp_path, capsys):
     config = _write_cohort(raw, tmp_path, "disabled", "sub-01", "sub-02")
     assert main(["preprocess", "run", str(config), "--until", "nope"]) == 2

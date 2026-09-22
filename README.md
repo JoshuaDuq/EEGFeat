@@ -51,8 +51,9 @@ Core dependencies are `numpy`, `scipy`, `pandas`, and `mne`.
 | `microstates` | scikit-learn microstate segmentation |
 | `importance` | SHAP. Permutation importance is included in `model` |
 | `preprocessing` | raw-to-epochs workflow for one recording or a cohort: PyYAML, scikit-learn, h5io, h5py, filelock |
-| `preprocessing-auto` | PyPREP bad-channel candidates and autoreject epoch repair |
+| `preprocessing-auto` | PyPREP, ICLabel, Picard, and autoreject |
 | `preprocessing-gui` | MNE Qt viewers for interactive review |
+| `bids` | This study's raw-to-BIDS script only. Not used by `eegfeat` |
 | `docs` | This documentation, built with Sphinx |
 | `dev` | tests, typing, lint, format |
 
@@ -147,7 +148,7 @@ eegfeat preprocess init preprocessing.yaml --mode events
 
 - `input.path` names one recording. `input.root` and `input.pattern` select a cohort instead; the tree below `root` is mirrored under `output.directory` and each recording is named after its file.
 - `epochs.events` must match the recordings. `init` writes annotation events `{stimulus: 1}`.
-- `workflow` sets the review policy per gate. `required` stops the run until a decision is saved. `suggested` saves the detectors' own verdict and continues. `disabled` skips the gate.
+- `workflow` sets the review policy per gate. `required` stops the run until a decision is saved. `suggested` saves the detectors' own verdict and continues. `raw_review: disabled` skips the raw gate, `epoch_review` is skipped unless `required`, and an artifact gate runs whenever `artifact` is set.
 - A FIF with inactive projectors fails while `channels.projections` is `error`. Set `apply` or `discard-inactive`.
 
 ```bash
@@ -171,15 +172,9 @@ eegfeat preprocess review preprocessing.yaml raw
 eegfeat preprocess run preprocessing.yaml
 ```
 
-[`paradigm_specific/thermal_pain/eeg_raw_to_bids.py`](paradigm_specific/thermal_pain/eeg_raw_to_bids.py) is the study's raw-to-BIDS conversion (needs the `bids` extra). It exists here because the first conversion lost every marker name — mne-bids rewrites BrainVision through pybv, which writes each event as `Stimulus/S n` — and dropped the recording's own `Bad Interval` markers; this copy restores the names after writing and always keeps BAD spans. `repair_markers.py` beside it put the names back into the already-converted BIDS, decomb and bcgnet marker files and the exported eegfeat bundles in place, from a fresh conversion whose positions had to match.
+That second `run` exports. The init recipe has no artifact block, so there is no second gate. An `artifact` block adds `review-artifact`, governed by `artifact_review`. [`examples/preprocessing.yaml`](examples/preprocessing.yaml) is a cohort recipe with ICA. Both of its gates are `suggested`, so that recipe runs to export without a stop.
 
-An optional terminal front end in [`tui/`](tui) (Go 1.23+, `cd tui && go build -o eegfeat-tui .`) shows every recording, runs the pipeline, and presents each gate as a checklist pre-ticked with the detectors' verdict and reasons. It drives the same commands through `status --json`, `inspect STAGE --json` and `review --decisions`; the Python package never depends on it.
-
-In the TUI, `Tab` switches between recordings and stages, `Enter` performs the selected action, and `?` shows the available shortcuts. Press `l` on the home screen to open the full log at any supported terminal size; `PgUp`/`PgDn` scroll, `End` returns to the latest output, and `Esc` returns to the workflow.
-
-That second `run` exports. The init recipe has no artifact block, so there is no second gate. An `artifact` block adds `review-artifact`, governed by `artifact_review`. [`examples/preprocessing.yaml`](examples/preprocessing.yaml) is a cohort recipe with ICA and both gates set to `suggested`.
-
-Each bundle is `<name>_epo.fif`, `<name>_events.tsv`, `<name>_report.html`, and `<name>_preprocessing.json`. When every recording is exported, `run` prints the `eegfeat init` command and the `inputs.root` to set. `status` shows one line per recording and the next command to run; `--recording LABEL` narrows any command to one.
+Each bundle is `<name>_epo.fif`, `<name>_events.tsv`, `<name>_report.html`, `<name>_preprocessing.json`, and, when autoreject ran, `<name>_repairs.tsv`. When every recording is exported, `run` prints the `eegfeat init` command and the `inputs.root` to set. `status` shows one line per recording and the next command to run. `--recording LABEL` limits a command to one recording.
 
 | Exit code | Meaning |
 | :--- | :--- |
@@ -188,6 +183,10 @@ Each bundle is `<name>_epo.fif`, `<name>_events.tsv`, `<name>_report.html`, and 
 | `2` | The recipe or a prerequisite is wrong |
 | `3` | No recording failed and at least one awaits a review |
 
+[`tui/`](tui) is an optional terminal front end (Go 1.24+). Build it with `cd tui && go build -o eegfeat-tui .`. It lists recordings, starts `run`, and shows each gate as a checklist. `Tab` moves between recordings and stages, `Enter` runs the selected action, and `?` lists the keys. `l` opens the log. The Python package does not import it. Keys and the JSON commands it calls are in the [preprocessing guide](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html).
+
+[`paradigm_specific/thermal_pain/eeg_raw_to_bids.py`](paradigm_specific/thermal_pain/eeg_raw_to_bids.py) converts this study's BrainVision or cleaned FIF to BIDS. It needs the `bids` extra. The command and the marker rules are in the script. `repair_markers.py` beside it writes those marker names back into files converted before this script.
+
 The schema, the other review fields, and the stage order are in the [preprocessing guide](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html).
 
 ## Batch runner
@@ -195,9 +194,10 @@ The schema, the other review fields, and the stage order are in the [preprocessi
 The runner reads FIF epochs files recursively and mirrors that tree under the output root. `python -m eegfeat` is the same entry point. Run `check` before a long job. It writes nothing.
 
 ```bash
-eegfeat init recipe.toml   # commented recipe
+eegfeat init recipe.toml   # commented recipe; --template task or resting for every measure family
 eegfeat check recipe.toml  # load the recipe and run the first recording
 eegfeat run recipe.toml    # every recording
+eegfeat status recipe.toml # done, missing, failed, stale or partial, and what to run next
 ```
 
 <details>
@@ -250,7 +250,7 @@ spatial = ["rois"]
 
 </details>
 
-Each `[[features]]` entry sets `measure` to one function name. The other keys are that function's parameters.
+Each `[[features]]` entry sets `measure` to one function name, or `measures` to a list of them sharing the entry's other keys. The other keys are that function's parameters. A `[defaults]` section sets `bands`, `windows`, `spatial`, or `series` for every entry that takes them.
 
 | Item | Rule |
 | :--- | :--- |
@@ -268,12 +268,17 @@ Each `[[features]]` entry sets `measure` to one function name. The other keys ar
 
 ```bash
 eegfeat run recipe.toml --overwrite --n-jobs 4
+eegfeat run recipe.toml --resume
+eegfeat run recipe.toml --workers 6
 eegfeat run recipe.toml --progress-json
+eegfeat status recipe.toml --json
 ```
 
 | Flag | Effect |
 | :--- | :--- |
 | `--overwrite` | Replace an existing result bundle. Without it, an existing result stops the run. |
+| `--resume` | Compute only the recordings `status` does not call `done`. Stale or partial results still need `--overwrite`. |
+| `--workers` | Recordings computed at once, each in its own process. Default 1. |
 | `--n-jobs` | Passed to MNE filtering and spectral estimation. Default 1. |
 | `--progress-json` | One JSON object per line. |
 
@@ -281,7 +286,7 @@ eegfeat run recipe.toml --progress-json
 | :--- | :--- |
 | `0` | Every recording succeeded |
 | `1` | The run finished, and at least one recording failed |
-| `2` | The recipe or the inputs stopped the run before computation |
+| `2` | The recipe, the inputs, or earlier results in the way stopped the run before computation |
 
 Per-epoch measures are written to `*_features.tsv`. Cross-trial measures are written to `*_crosstrial.tsv`. Each bundle has a coverage TSV and a JSON sidecar. One `eegfeat_run.json` summarizes the run. Only FIF epochs files are read.
 

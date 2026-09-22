@@ -22,8 +22,8 @@ For an EEG PSD in V²/Hz the integral is in V².
 
 ``mean_psd`` divides that integral by the bandwidth and stays in V²/Hz.
 ``mean_tfr_power`` is the same frequency-weighted mean of Morlet power, also in
-V²/Hz. MNE normalizes its Morlet wavelets to unit energy, so the power it
-returns for a stationary signal is the one-sided density at the wavelet
+V²/Hz. MNE scales its Morlet wavelets to energy 2 (norm :math:`\sqrt{2}`, unit
+norm for the real part), so the power it returns for a stationary signal is the one-sided density at the wavelet
 frequency, smoothed over the wavelet bandwidth, times the sampling rate.
 :meth:`~eegfeat.Spectra.from_tfr` divides that factor out and therefore needs
 the sampling rate the TFR was computed at. A decimated TFR reports only the
@@ -31,9 +31,10 @@ decimated rate. Without the division, resampling a recording from 250 Hz to
 500 Hz doubles the raw power, and an aperiodic offset fitted to it shifts by
 :math:`\log_{10}` of the rate ratio.
 
-A wavelet already averages power over its own bandwidth. Integrating that
-representation over a band again counts the same spectral mass more than once,
-so ``mean_tfr_power`` averages within the band and does not integrate it.
+After that division each value is a density in V²/Hz, smoothed over the
+wavelet bandwidth. ``mean_tfr_power`` averages within the band rather than
+integrating, so the result is comparable to ``mean_psd``. Integrating it would
+give wavelet-smoothed band power in V².
 :class:`~eegfeat.Spectra` records which representation it holds. Each function
 rejects the other representation.
 
@@ -41,8 +42,9 @@ These functions summarize an estimate MNE has already computed. Welch input is
 the short-segment modified periodogram of Welch (1967). Multitaper input is
 Thomson (1982). Morlet input follows Morlet, Arens, Fourgeau, and Giard (1982).
 
-Integration weights are the piecewise-linear weights on
-:math:`[f_{\min}, f_{\max})`. ``mean_psd`` and ``mean_tfr_power`` average over
+Integration weights are the piecewise-linear weights on the closed interval
+:math:`[f_{\min}, f_{\max}]`. The grid points on either side of each bound carry
+interpolated weight. ``mean_psd`` and ``mean_tfr_power`` average over
 the finite bins. ``integrated_band_power`` returns NaN if any weighted bin is
 non-finite.
 
@@ -57,13 +59,14 @@ value is the mean of the per-channel normalized values.
 - **db**: :math:`10 \log_{10}\left(\frac{\max(P, \epsilon)}{\max(B, \epsilon)}\right)`
 - **percent**: :math:`\frac{P - \max(B, \epsilon)}{\max(B, \epsilon)} \cdot 100`
 
-:math:`B` is mean power in the named baseline window and
+:math:`B` is the same measure computed in the named baseline window, and
 :math:`\epsilon = 10^{-20}`. Logarithmic forms floor the numerator and the
 denominator. Percent floors the denominator only, so zero power is an exact
 :math:`-100\%` change.
 
-The baseline forms are relative power, in the sense of Pfurtscheller and Lopes
-da Silva (1999). The sign and the units are the ones written above.
+**percent** is ERD/ERS% in the sense of Pfurtscheller and Lopes da Silva
+(1999), where a negative value is desynchronization. ``log_ratio`` and ``db``
+are logarithmic forms of the same baseline ratio.
 
 For baseline-normalized power, coverage is the minimum of the analysis-window
 and baseline coverage on that channel. Flags from either window are copied to
@@ -90,7 +93,8 @@ The coefficient at time :math:`t` uses samples in
 
 Coefficients outside this interval are excluded before the window mean. If
 :math:`\tau(f) > (t_{\max} - t_{\min}) / 2`, the frequency has no usable
-coefficient in the window and the result is NaN.
+coefficient in the window and the result is NaN. If no frequency in the band
+retains a coefficient, construction raises ``ValueError``.
 
 Peak Frequency
 --------------
@@ -111,13 +115,17 @@ et al. (2020). The fit itself is the robust log-log line in
 `Aperiodic Fit`_. It is a straight line. FOOOF also estimates a knee and uses
 a different peak model.
 
-**Smoothing.** Each frequency is replaced by the mean of bins within
-``smoothing_hz``. Distances are in hertz on both linear and logarithmic grids.
+**Smoothing.** Each frequency is replaced by the piecewise-linear mean over a
+centred window of total width ``smoothing_hz`` (:math:`\pm` ``smoothing_hz``/2),
+truncated at the band edges. Bands of three bins or fewer are not smoothed.
+Distances are in hertz on both linear and logarithmic grids.
 Non-finite bins are left out of the mean. The gap is not filled.
 
 **Prominence guard.** If the maximum is less than ``min_prominence`` above the
 band median, in :math:`\log_{10}` units, the reported frequency is the centre
 of gravity :math:`\sum f P(f) / \sum P(f)` and ``cog_fallback`` is set.
+:math:`P` here is the smoothed (and, if enabled, aperiodic-adjusted) power,
+not weighted by bin width.
 
 The retained maximum is refined by parabolic interpolation through the peak bin
 and its two neighbours.
@@ -131,12 +139,13 @@ and its two neighbours.
 
 :math:`k` is the discrete argmax. Interpolation needs at least three bins,
 which is also the requirement for an interior maximum. Narrower bands raise.
-``interpolate=False`` returns the bin frequency.
+``interpolate=False`` returns the bin frequency. The vertex is exact on a
+uniform grid. On a non-uniform grid the half-spacing step is an approximation.
 
 A zero denominator, or a non-finite :math:`\delta`, is treated as
 :math:`\delta = 0`. :math:`\delta` is clipped to :math:`[-0.5, 0.5]`. A maximum
 on the first or last bin of the band is not interpolated, and ``edge_hit`` is
-set. Every column also stores ``freq_resolution_hz``, the median in-band bin
+set unless the centre-of-gravity fallback applies. Every column also stores ``freq_resolution_hz``, the median in-band bin
 spacing.
 
 Spectral Centroid and Bandwidth
@@ -154,10 +163,12 @@ Bandwidth is the mass-weighted standard deviation about that centroid.
 
    \text{BW} = \sqrt{\frac{\sum_i (f_i - f_c)^2 P(f_i) \Delta f_i}{\sum_i P(f_i) \Delta f_i}}
 
-:math:`\Delta f_i` is the central difference from :func:`numpy.gradient`.
+:math:`\Delta f_i` is from :func:`numpy.gradient`: a central difference in the
+interior and one-sided at the band edges.
 Weighting by :math:`\Delta f_i` integrates a density. Unequal bins are not
-treated as equally probable samples. The two quantities are the first spectral
-moments in Peeters (2004), adapted here to a PSD.
+treated as equally probable samples. The two quantities are the spectral centroid
+and spread (the first moment and the square root of the second central moment)
+in Peeters (2004), adapted here to a PSD.
 
 Spectral Edge Frequency
 -----------------------
@@ -211,17 +222,17 @@ Points with :math:`r(f) > z \cdot \mathrm{MAD}(r)` are removed and the line is
 refit, up to ``max_iterations`` times. The default is :math:`z = 2.5`. Only
 positive residuals are removed. Oscillatory peaks sit above the aperiodic
 component, and leaving them in flattens the slope. The threshold is
-:math:`z \cdot \mathrm{MAD}`. The residual median is not subtracted. The loop
+:math:`z \cdot 1.4826\,\mathrm{MAD}(r)`, the normal-consistent MAD. The residual
+median enters the MAD but is not subtracted from :math:`r` in the comparison. The loop
 stops when MAD is non-finite or below :math:`10^{-12}`, fewer than 5 points
 remain, or the mask stops changing. Only positive finite power enters the fit.
 
 The column ``r_squared`` is the coefficient of determination on the points that
 survived rejection. Rejected peaks are left out of it. An alpha peak is not a
 failure of the line, and scoring the line against that peak is low on ordinary
-spectra. The statistic does respond to a knee inside ``fit_range``. Most EEG
-spectra have a knee somewhere in the default 2–40 Hz window, and a straight
-line through a knee biases the exponent. Donoghue et al. (2020) report a fit
-statistic for the same reason.
+spectra. The statistic does respond to a knee inside ``fit_range``, and a straight
+line through a knee biases the exponent. Donoghue et al. (2020) also report
+goodness of fit, though for their full model including peaks.
 
 On :math:`f > 0` the fitted power is
 :math:`10^{\text{offset} + \text{slope} \log_{10} f}`, and aperiodic-adjusted
@@ -246,8 +257,9 @@ For raw power the ratio of band :math:`A` to band :math:`B` is
 
    R_{A/B} = \frac{P_A}{P_B}
 
-Raw and percent input are divided as stored. Only raw input is the power ratio
-:math:`P_A / P_B`. Percent input is a ratio of percentage changes. For
+Raw input is divided as stored. Percent input is refused, because a percent
+change is a signed deviation and a quotient of two of them is not a power
+ratio. For
 ``log10``, ``log_ratio``, and ``db`` the stored values are subtracted.
 
 .. math::
@@ -264,8 +276,7 @@ For a homologous pair :math:`(L, R)`, raw asymmetry is
 
    A_{L, R} = \frac{P_R - P_L}{P_R + P_L}
 
-Percent input uses the same expression on the stored percentages. Logarithmic
-input subtracts the stored values.
+Percent input is refused. Logarithmic input subtracts the stored values.
 
 .. math::
 
@@ -286,21 +297,18 @@ The output unit names the scale of that result.
    * - ``"raw"``
      - ``ratio``
      - ``a.u.``
-   * - ``"percent"``
-     - ``ratio``
-     - ``a.u.``
    * - ``"log10"``
      - ``log10 ratio``
      - ``log10 ratio``
    * - ``"log_ratio"``
-     - ``log10 difference of baseline ratios``
-     - ``log10 difference of baseline ratios``
+     - ``log10 ratio``
+     - ``log10 ratio``
    * - ``"db"``
      - ``dB``
      - ``dB``
 
-The left-minus-right form follows the power-asymmetry index of Davidson,
-Chapman, Chapman, and Henriques (1990). Log-ratio asymmetry is reported in the
+Right-minus-left asymmetry follows the frontal-asymmetry convention of
+Davidson, Chapman, Chapman, and Henriques (1990). Log-ratio asymmetry is reported in the
 unit of its input, from the table above.
 
 References
@@ -316,7 +324,7 @@ References
   `doi:10.1109/PROC.1982.12433 <https://doi.org/10.1109/PROC.1982.12433>`__.
 * Morlet, J., Arens, G., Fourgeau, E., & Giard, D. (1982). *Wave propagation
   and sampling theory; Part I, Complex signal and scattering in multilayered
-  media*. Geophysics, 47(2). `doi:10.1190/1.1441328
+  media*. Geophysics, 47(2), 203--221. `doi:10.1190/1.1441328
   <https://doi.org/10.1190/1.1441328>`__.
 * Donoghue, T., Haller, M., Peterson, E. J., Varma, P., Sebastian, P., Gao, R.,
   Noto, T., Lara, A. H., Wallis, J. D., Knight, R. T., Shestyuk, A., & Voytek,

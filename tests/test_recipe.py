@@ -369,3 +369,151 @@ def test_a_time_frequency_measure_needs_morlet(tmp_path) -> None:
 
     assert "mean_tfr_power reads time-frequency power" in problems
     assert "welch" in problems
+
+
+# --- the whole epoch, shared defaults and multi-measure entries ---------------
+
+
+def test_the_whole_epoch_can_be_named_beside_defined_windows(tmp_path) -> None:
+    recipe = _load(
+        tmp_path,
+        '[windows]\nstim = [0.0, 1.0]\n\n[[features]]\nmeasure = "variance"\n'
+        'windows = ["all", "stim"]\n',
+    )
+
+    whole, stim = recipe.features[0].windows
+    assert whole.name == "all" and math.isinf(whole.tmin) and math.isinf(whole.tmax)
+    assert stim == Window("stim", 0.0, 1.0)
+
+
+def test_the_whole_epoch_can_be_named_when_no_windows_are_defined(tmp_path) -> None:
+    recipe = _load(tmp_path, '[[features]]\nmeasure = "variance"\nwindows = ["all"]\n')
+
+    (window,) = recipe.features[0].windows
+    assert window.name == "all" and math.isinf(window.tmin)
+
+
+def test_defaults_fill_the_keys_an_entry_leaves_out(tmp_path) -> None:
+    recipe = _load(
+        tmp_path,
+        '[rois]\nfront = ["Fz"]\n\n[defaults]\nspatial = ["rois", "global"]\nbands = ["alpha"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n\n'
+        '[[features]]\nmeasure = "spectral_entropy"\nspatial = ["channels"]\n',
+    )
+
+    power, entropy = recipe.features
+    assert power.spatial == ("rois", "global")
+    assert power.bands == (Band("alpha", 8.0, 13.0),)
+    assert entropy.spatial == ("channels",)
+
+
+def test_defaults_skip_the_measures_that_do_not_take_them(tmp_path) -> None:
+    # Microstate measures have no spatial level and no bands; a shared default must
+    # not turn every such entry into an error.
+    recipe = _load(
+        tmp_path,
+        '[defaults]\nspatial = ["global"]\nbands = ["alpha"]\n\n'
+        '[[features]]\nmeasure = "microstate_coverage"\n\n'
+        '[[features]]\nmeasure = "aperiodic"\n',
+    )
+
+    coverage, aperiodic = recipe.features
+    assert coverage.spatial == () and coverage.bands == ()
+    assert aperiodic.spatial == ("global",)
+
+
+def test_default_windows_leave_out_the_baseline_of_an_entry_that_has_one(tmp_path) -> None:
+    # Spelling out windows = ["base", "stim"] beside baseline = "base" is refused for
+    # power, so an inherited default must set the baseline aside the way the implicit
+    # default does.
+    recipe = _load(
+        tmp_path,
+        "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
+        '[defaults]\nwindows = ["base", "stim"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nnormalize = "db"\nbaseline = "base"\n\n'
+        '[[features]]\nmeasure = "variance"\n',
+    )
+
+    power, variance = recipe.features
+    assert [w.name for w in power.windows] == ["stim"]
+    assert [w.name for w in variance.windows] == ["base", "stim"]
+
+
+def test_defaults_are_checked_against_the_recipe(tmp_path) -> None:
+    problems = _problems(
+        tmp_path,
+        '[defaults]\nwindows = ["late"]\nnormalize = "db"\n\n[[features]]\nmeasure = "variance"\n',
+    )
+
+    assert "'late'" in problems
+    assert "defaults: unknown key 'normalize'" in problems
+
+
+def test_one_entry_can_name_several_measures(tmp_path) -> None:
+    recipe = _load(
+        tmp_path,
+        "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
+        '[[features]]\nmeasures = ["erds_mean", "erd_magnitude"]\nbands = ["alpha"]\n'
+        'baseline = "base"\nnormalize = "percent"\n',
+    )
+
+    assert [spec.measure for spec in recipe.features] == ["erds_mean", "erd_magnitude"]
+    for spec in recipe.features:
+        assert spec.baseline == Window("base", -0.5, 0.0)
+        assert spec.params == {"normalize": "percent"}
+
+
+def test_a_key_one_of_several_measures_does_not_take_names_that_measure(tmp_path) -> None:
+    problems = _problems(
+        tmp_path, '[[features]]\nmeasures = ["variance", "burst_rate"]\nthreshold = 0.9\n'
+    )
+
+    assert "features[0] (variance): variance does not take 'threshold'" in problems
+    assert "burst_rate" not in problems
+
+
+def test_an_entry_names_measure_or_measures_not_both(tmp_path) -> None:
+    problems = _problems(tmp_path, '[[features]]\nmeasure = "variance"\nmeasures = ["kurtosis"]\n')
+
+    assert "features[0]" in problems and "not both" in problems
+
+
+def test_measures_must_be_a_list_of_distinct_names(tmp_path) -> None:
+    problems = _problems(tmp_path, '[[features]]\nmeasures = ["variance", "variance"]\n')
+
+    assert "features[0]" in problems and "distinct" in problems
+
+
+# --- ROI patterns --------------------------------------------------------------
+
+
+def test_an_roi_can_be_given_as_patterns(tmp_path) -> None:
+    recipe = _load(
+        tmp_path,
+        '[rois]\nfront = { match = ["^F[z34]$"] }\nback = ["Pz"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nspatial = ["rois"]\n',
+    )
+
+    assert recipe.rois["back"] == ("Pz",)
+    assert recipe.rois["front"].patterns == ("^F[z34]$",)
+    assert recipe.rois["front"].resolve(["Fz", "F3", "F4", "Fp1", "Cz"]) == ("Fz", "F3", "F4")
+
+
+def test_an_invalid_roi_pattern_is_rejected(tmp_path) -> None:
+    problems = _problems(
+        tmp_path,
+        '[rois]\nfront = { match = ["^(F"] }\n\n[[features]]\nmeasure = "integrated_band_power"\n',
+    )
+
+    assert "rois: front" in problems and "^(F" in problems
+
+
+def test_a_bad_default_is_reported_once_not_per_entry(tmp_path) -> None:
+    problems = _problems(
+        tmp_path,
+        '[defaults]\nbands = ["mu"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n\n'
+        '[[features]]\nmeasure = "spectral_entropy"\n',
+    )
+
+    assert problems.count("'mu'") == 1

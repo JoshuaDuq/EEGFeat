@@ -11,9 +11,10 @@ from __future__ import annotations
 import importlib.util
 import math
 import os
+import re
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, TypeVar
 
@@ -47,8 +48,12 @@ _SECTIONS = (
     "band_signal",
     "trials",
     "microstates",
+    "defaults",
     "features",
 )
+# Entry keys a [defaults] section can set for every entry that takes them.
+_DEFAULT_KEYS = ("bands", "windows", "spatial", "series")
+_SPATIAL_LEVELS = ("channels", "rois", "global")
 _SPECTRA_KEYS: dict[str, tuple[str, ...]] = {
     "welch": ("n_fft", "n_overlap"),
     "multitaper": ("bandwidth",),
@@ -114,6 +119,21 @@ class TrialGrouping:
 
 
 @dataclass(frozen=True)
+class RoiPattern:
+    """An ROI given as regular expressions, resolved against each recording's channels."""
+
+    patterns: tuple[str, ...]
+
+    def resolve(self, ch_names: Sequence[str]) -> tuple[str, ...]:
+        """The channels any pattern matches, in the recording's order."""
+        compiled = [re.compile(pattern) for pattern in self.patterns]
+        return tuple(name for name in ch_names if any(c.search(name) for c in compiled))
+
+
+Roi = tuple[str, ...] | RoiPattern
+
+
+@dataclass(frozen=True)
 class FeatureSpec:
     """One ``[[features]]`` entry, resolved against the rest of the recipe."""
 
@@ -129,6 +149,9 @@ class FeatureSpec:
     graph: tuple[str, ...] = ()
     clustering_threshold: float | None = None
     params: Mapping[str, object] = field(default_factory=dict)
+    # Position of the [[features]] entry in the file; entries naming several
+    # measures expand into one spec each, all sharing it.
+    entry: int = 0
 
 
 @dataclass(frozen=True)
@@ -141,7 +164,7 @@ class Recipe:
     output: Output
     bands: tuple[Band, ...]
     windows: tuple[Window, ...]
-    rois: Mapping[str, tuple[str, ...]]
+    rois: Mapping[str, Roi]
     spectra: SpectraSettings
     band_signal: BandSignalSettings
     trials: TrialGrouping
@@ -208,7 +231,15 @@ class _Parser:
         band_signal = self.band_signal(self.table(data, "band_signal"))
         trials = self.trials(self.table(data, "trials"))
         microstates = self.microstates(self.table(data, "microstates"))
-        features = self.features(data.get("features"), bands, windows, rois, spectra.method)
+        context = _EntryContext(
+            bands={b.name: b for b in bands},
+            windows={w.name: w for w in windows},
+            rois=rois,
+            method=spectra.method,
+            defaults={},
+        )
+        context = replace(context, defaults=self.defaults(self.table(data, "defaults"), context))
+        features = self.features(data.get("features"), context)
 
         if self.problems:
             raise RecipeError(self.path, self.problems)
@@ -276,16 +307,37 @@ class _Parser:
             and (window := self.bounded("windows", name, bounds, Window)) is not None
         )
 
-    def rois(self, table: dict[str, Any]) -> dict[str, tuple[str, ...]]:
-        rois: dict[str, tuple[str, ...]] = {}
+    def rois(self, table: dict[str, Any]) -> dict[str, Roi]:
+        rois: dict[str, Roi] = {}
         for name, members in table.items():
             if name == "global":
                 self.problem("rois: 'global' is reserved for the mean over all channels")
+            elif isinstance(members, dict):
+                pattern = self.roi_pattern(name, members)
+                if pattern is not None:
+                    rois[name] = pattern
             elif not _is_string_list(members) or not members:
-                self.problem(f"rois: {name} must be a non-empty list of channel names")
+                self.problem(
+                    f"rois: {name} must be a non-empty list of channel names, "
+                    "or { match = [patterns] }"
+                )
             else:
                 rois[name] = tuple(members)
         return rois
+
+    def roi_pattern(self, name: str, table: dict[str, Any]) -> RoiPattern | None:
+        patterns = table.get("match")
+        if set(table) != {"match"} or not _is_string_list(patterns) or not patterns:
+            self.problem(f"rois: {name} must be {{ match = [patterns] }} with at least one pattern")
+            return None
+        valid = True
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                self.problem(f"rois: {name} has an invalid pattern {pattern!r}: {exc}")
+                valid = False
+        return RoiPattern(tuple(patterns)) if valid else None
 
     def spectra(self, table: dict[str, Any], bands: tuple[Band, ...]) -> SpectraSettings:
         method = self.value("spectra", table, "method", str, "a string", default="welch")
@@ -364,29 +416,66 @@ class _Parser:
     def microstates(self, table: dict[str, Any]) -> dict[str, object]:
         return self.parameters("microstates", table, SEGMENTATION.settable)
 
-    def features(
-        self,
-        entries: object,
-        bands: tuple[Band, ...],
-        windows: tuple[Window, ...],
-        rois: Mapping[str, tuple[str, ...]],
-        method: SpectralMethod,
-    ) -> tuple[FeatureSpec, ...]:
+    def defaults(self, table: dict[str, Any], context: _EntryContext) -> dict[str, Any]:
+        self.only("defaults", table, _DEFAULT_KEYS)
+        known = {key: value for key, value in table.items() if key in _DEFAULT_KEYS}
+        # A default that fails here is dropped, so it is not reported again by every
+        # entry that would have inherited it.
+        for key, defined in (("bands", context.bands), ("windows", context.whole_and_windows)):
+            if key in known:
+                before = len(self.problems)
+                self.names("defaults", known, key, defined, default=())
+                if len(self.problems) > before:
+                    known.pop(key)
+        if "spatial" in known:
+            raw = known["spatial"]
+            if not _is_string_list(raw) or not raw or len(set(raw)) != len(raw):
+                self.problem(
+                    "defaults: spatial must be a list of distinct levels from "
+                    f"{list(_SPATIAL_LEVELS)}"
+                )
+                known.pop("spatial")
+            elif unknown := [level for level in raw if level not in _SPATIAL_LEVELS]:
+                self.problem(
+                    f"defaults: spatial levels {unknown} are not among {list(_SPATIAL_LEVELS)}"
+                )
+                known.pop("spatial")
+        if "series" in known:
+            series = known["series"]
+            allowed = {_BROADBAND, *context.bands}
+            if not _is_string_list(series) or not series:
+                self.problem("defaults: series must be a list of 'broadband' and band names")
+                known.pop("series")
+            elif undefined := [item for item in series if item not in allowed]:
+                self.problem(f"defaults: series names undefined {', '.join(map(repr, undefined))}")
+                known.pop("series")
+        return known
+
+    def features(self, entries: object, context: _EntryContext) -> tuple[FeatureSpec, ...]:
         if not isinstance(entries, list) or not entries:
             self.problem("the recipe needs at least one [[features]] entry")
             return ()
-        context = _EntryContext(
-            bands={b.name: b for b in bands},
-            windows={w.name: w for w in windows},
-            rois=rois,
-            method=method,
-        )
         specs = []
         for index, entry in enumerate(entries):
-            spec = self.feature(index, entry, context)
-            if spec is not None:
-                specs.append(spec)
+            for expanded in self.expand(index, entry):
+                spec = self.feature(index, expanded, context)
+                if spec is not None:
+                    specs.append(spec)
         return tuple(specs)
+
+    def expand(self, index: int, entry: object) -> list[object]:
+        """One entry per measure an entry names with ``measures``."""
+        if not isinstance(entry, dict) or "measures" not in entry:
+            return [entry]
+        if "measure" in entry:
+            self.problem(f"features[{index}]: name one measure or a list of measures, not both")
+            return []
+        names = entry["measures"]
+        if not _is_string_list(names) or not names or len(set(names)) != len(names):
+            self.problem(f"features[{index}]: measures must be a non-empty list of distinct names")
+            return []
+        shared = {key: value for key, value in entry.items() if key != "measures"}
+        return [{"measure": name, **shared} for name in names]
 
     def feature(self, index: int, entry: object, context: _EntryContext) -> FeatureSpec | None:
         if not isinstance(entry, dict):
@@ -415,10 +504,17 @@ class _Parser:
             )
 
         settable = measure.settable
-        allowed = _entry_keys(measure) | set(settable)
+        accepted = _entry_keys(measure)
+        allowed = accepted | set(settable)
         for key in entry:
             if key not in allowed:
                 self.problem(f"{where}: {name} does not take {key!r}")
+        inherited = {
+            key: value
+            for key, value in context.defaults.items()
+            if key in accepted and key not in entry
+        }
+        entry = {**entry, **self.inherit(measure, inherited)}
 
         bands = self.names(
             where, entry, "bands", context.bands, default=tuple(context.bands.values())
@@ -426,10 +522,16 @@ class _Parser:
         baseline = self.baseline(where, entry, measure, context)
         spatial = self.spatial(where, entry, measure, context)
         graph, threshold = self.graph(where, entry, spatial)
+        if "windows" in inherited and baseline is not None:
+            # An inherited list sets the baseline aside, as leaving windows out does.
+            others = [window for window in entry["windows"] if window != baseline.name]
+            entry["windows"] = others or entry["windows"]
+        windows = self.entry_windows(where, entry, measure, baseline, context)
         return FeatureSpec(
             measure=name,
-            bands=bands if "bands" in _entry_keys(measure) else (),
-            windows=self.entry_windows(where, entry, measure, baseline, context),
+            entry=index,
+            bands=bands if "bands" in accepted else (),
+            windows=windows,
             baseline=baseline,
             spatial=spatial,
             series=self.series(where, entry, measure, context),
@@ -442,6 +544,18 @@ class _Parser:
         )
 
     # --- entry keys ---------------------------------------------------------
+
+    def inherit(self, measure: Measure, inherited: dict[str, Any]) -> dict[str, Any]:
+        # A shared spatial default keeps only the levels this measure has, so one
+        # [defaults] line serves power and connectivity alike.
+        if "spatial" in inherited:
+            levels = _spatial_levels(measure)[0]
+            kept = [level for level in inherited["spatial"] if level in levels]
+            if kept:
+                inherited["spatial"] = kept
+            else:
+                del inherited["spatial"]
+        return inherited
 
     def baseline(
         self, where: str, entry: dict[str, Any], measure: Measure, context: _EntryContext
@@ -471,7 +585,7 @@ class _Parser:
             if not remaining:
                 self.problem(f"{where}: no windows remain once the baseline is set aside")
             return remaining
-        chosen = self.names(where, entry, "windows", context.windows, default=())
+        chosen = self.names(where, entry, "windows", context.whole_and_windows, default=())
         if measure.kind == "spectra" and baseline is not None and baseline in chosen:
             self.problem(
                 f"{where}: {measure.name} consumes its baseline window {baseline.name!r}, "
@@ -484,10 +598,7 @@ class _Parser:
     ) -> tuple[str, ...]:
         if not measure.takes("groups"):
             return ()
-        levels: tuple[str, ...] = ("channels", "rois")
-        default: tuple[str, ...] = ("channels",)
-        if measure.takes("include_global"):
-            levels, default = ("channels", "rois", "global"), ("channels", "global")
+        levels, default = _spatial_levels(measure)
         raw = entry.get("spatial", list(default))
         if not _is_string_list(raw) or not raw or len(set(raw)) != len(raw):
             self.problem(f"{where}: spatial must be a list of distinct levels from {list(levels)}")
@@ -738,8 +849,21 @@ class _Parser:
 class _EntryContext:
     bands: Mapping[str, Band]
     windows: Mapping[str, Window]
-    rois: Mapping[str, tuple[str, ...]]
+    rois: Mapping[str, Roi]
     method: SpectralMethod
+    defaults: dict[str, Any]
+
+    @property
+    def whole_and_windows(self) -> dict[str, Window]:
+        """The windows an entry may name: the defined ones and the whole epoch."""
+        return {WHOLE_EPOCH.name: WHOLE_EPOCH, **self.windows}
+
+
+def _spatial_levels(measure: Measure) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The spatial levels a measure has, and its default ones."""
+    if measure.takes("include_global"):
+        return _SPATIAL_LEVELS, ("channels", "global")
+    return ("channels", "rois"), ("channels",)
 
 
 def _entry_keys(measure: Measure) -> set[str]:

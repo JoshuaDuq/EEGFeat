@@ -203,8 +203,8 @@ def erd_magnitude(
        exponentially distributed, so on a window with no task effect at all the
        trace is below its own baseline mean about ``1 - 1/e`` of the time. Because this
        averages only the samples that fall below zero, it is a conditional mean and
-       lands near **55-60%** with no effect present; ``0.0`` is reachable only when no
-       sample is negative at all.
+       lands near **55-60%** in percent (about 5.5 dB in decibels) with no effect present;
+       ``0.0`` is reachable only when no sample is negative at all.
        Measured on stationary noise and on a real recording referenced to its own
        pre-stimulus baseline, the two agree to within a few tenths of a percent.
        Compare against a null you construct -- a shuffled or pre-stimulus window
@@ -328,8 +328,9 @@ def ers_magnitude(
        exponentially distributed, so on a window with no task effect at all the
        trace is below its own baseline mean about ``1 - 1/e`` of the time. Because this
        averages only the samples above zero, it is a conditional mean and lands near
-       **90-120%** with no effect present; the long right tail of a power ratio makes it
-       larger than its ERD counterpart.
+       **90-120%** in percent with no effect present; in percent the long right tail of
+       a power ratio makes it larger than its ERD counterpart, while in decibels it is
+       smaller (about 2.6 dB against 5.5 dB).
        Measured on stationary noise and on a real recording referenced to its own
        pre-stimulus baseline, the two agree to within a few tenths of a percent.
        Compare against a null you construct -- a shuffled or pre-stimulus window
@@ -588,7 +589,7 @@ def erds_rebound_latency(
     include_global: bool = True,
     normalize: ErdsScale = "db",
 ) -> FeatureTable:
-    """Latency of the largest ERDS excursion after the peak.
+    """Latency of the maximum of the ERDS trace strictly after the peak latency.
 
     Evaluates to NaN when no sample follows the peak latency within the analysis window.
 

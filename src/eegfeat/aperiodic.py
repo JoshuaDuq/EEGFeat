@@ -242,13 +242,8 @@ def _fit_one(
     log_p[usable] = np.log10(power[usable])
 
     keep = usable.copy()
-    slope, offset = np.nan, np.nan
+    slope, offset = np.polyfit(log_f[keep], log_p[keep], 1)
     for _ in range(iterations):
-        picks = np.flatnonzero(keep)
-        if picks.size < _MIN_FIT_POINTS:
-            break
-        poly = np.polyfit(log_f[picks], log_p[picks], 1)
-        slope, offset = poly[0], poly[1]
         residuals = log_p - (offset + slope * log_f)
         mad = stats.median_abs_deviation(residuals[keep], scale="normal", nan_policy="omit")
         if not np.isfinite(mad) or mad < 1e-12:
@@ -256,7 +251,9 @@ def _fit_one(
         tightened = keep & (residuals <= z * mad)
         if int(tightened.sum()) < _MIN_FIT_POINTS or np.array_equal(tightened, keep):
             break
+        # Refit on every tightened mask, so the line and r_squared share one point set.
         keep = tightened
+        slope, offset = np.polyfit(log_f[keep], log_p[keep], 1)
     return float(slope), float(offset), _r_squared(log_f, log_p, keep, slope, offset)
 
 

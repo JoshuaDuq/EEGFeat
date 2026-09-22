@@ -44,13 +44,13 @@ def burst_count(
     windows : sequence of Window
         Analysis windows.
     baseline : Window, optional
-        Window the percentile threshold is calibrated on. Strongly preferred for
+        Window the quantile threshold is calibrated on. Strongly preferred for
         task data: calibrating on the analysis window instead lets the stimulus
         response raise the very threshold used to detect it. When omitted the
         threshold is calibrated on the analysis windows, which is right only for
         resting state. Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        A float in ``(0, 1)`` is a quantile of the envelope within each epoch
         and channel, carrying no cross-trial leakage. An array broadcastable to
         ``(n_epochs, n_channels)`` is used as absolute envelope values.
     min_duration_ms : float, default 100.0
@@ -100,13 +100,13 @@ def burst_rate(
     windows : sequence of Window
         Analysis windows.
     baseline : Window, optional
-        Window the percentile threshold is calibrated on. Strongly preferred for
+        Window the quantile threshold is calibrated on. Strongly preferred for
         task data: calibrating on the analysis window instead lets the stimulus
         response raise the very threshold used to detect it. When omitted the
         threshold is calibrated on the analysis windows, which is right only for
         resting state. Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        A float in ``(0, 1)`` is a quantile of the envelope within each epoch
         and channel, carrying no cross-trial leakage. An array broadcastable to
         ``(n_epochs, n_channels)`` is used as absolute envelope values.
     min_duration_ms : float, default 100.0
@@ -156,13 +156,13 @@ def burst_duration(
     windows : sequence of Window
         Analysis windows.
     baseline : Window, optional
-        Window the percentile threshold is calibrated on. Strongly preferred for
+        Window the quantile threshold is calibrated on. Strongly preferred for
         task data: calibrating on the analysis window instead lets the stimulus
         response raise the very threshold used to detect it. When omitted the
         threshold is calibrated on the analysis windows, which is right only for
         resting state. Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        A float in ``(0, 1)`` is a quantile of the envelope within each epoch
         and channel, carrying no cross-trial leakage. An array broadcastable to
         ``(n_epochs, n_channels)`` is used as absolute envelope values.
     min_duration_ms : float, default 100.0
@@ -212,13 +212,13 @@ def burst_amplitude(
     windows : sequence of Window
         Analysis windows.
     baseline : Window, optional
-        Window the percentile threshold is calibrated on. Strongly preferred for
+        Window the quantile threshold is calibrated on. Strongly preferred for
         task data: calibrating on the analysis window instead lets the stimulus
         response raise the very threshold used to detect it. When omitted the
         threshold is calibrated on the analysis windows, which is right only for
         resting state. Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        A float in ``(0, 1)`` is a quantile of the envelope within each epoch
         and channel, carrying no cross-trial leakage. An array broadcastable to
         ``(n_epochs, n_channels)`` is used as absolute envelope values.
     min_duration_ms : float, default 100.0
@@ -269,13 +269,13 @@ def fraction_above_threshold(
     windows : sequence of Window
         Analysis windows.
     baseline : Window, optional
-        Window the percentile threshold is calibrated on. Strongly preferred for
+        Window the quantile threshold is calibrated on. Strongly preferred for
         task data: calibrating on the analysis window instead lets the stimulus
         response raise the very threshold used to detect it. When omitted the
         threshold is calibrated on the analysis windows, which is right only for
         resting state. Ignored when ``threshold`` is an array.
     threshold : float or ndarray, default 0.75
-        A float in ``(0, 1)`` is a percentile of the envelope within each epoch
+        A float in ``(0, 1)`` is a quantile of the envelope within each epoch
         and channel, carrying no cross-trial leakage. An array broadcastable to
         ``(n_epochs, n_channels)`` is used as absolute envelope values.
     min_duration_ms : float, default 100.0

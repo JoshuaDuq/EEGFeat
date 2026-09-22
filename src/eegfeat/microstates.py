@@ -356,9 +356,9 @@ def _modified_kmeans(
     noise decides the orientation and one state's maps are canonicalized in
     opposite directions and split across clusters.
 
-    The k-means centres are kept as the starting point, which is what the
-    scikit-learn dependency now buys: a k-means++ initialization rather than a
-    random draw. The refinement below is what decides the templates.
+    The converged k-means centres (k-means++ initialization, best of the
+    restarts) are the starting point, rather than a random draw. The
+    refinement below is what decides the templates.
     """
     templates = _unit_rows(seeds)
     previous: npt.NDArray[np.int_] | None = None

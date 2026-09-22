@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from io import StringIO
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import pandas as pd
 import pytest
 
 from eegfeat.io import read_dataset, read_table
-from eegfeat.runner import RunError, check, load_recipe, run
+from eegfeat.runner import RunError, check, load_recipe, run, status
 from eegfeat.runner.progress import JsonReporter
 from synthetic import save_epochs
 
@@ -367,3 +368,401 @@ def test_check_lists_results_already_on_disk(tmp_path) -> None:
     report = check(_recipe(tmp_path, POWER))
 
     assert _features_path(tmp_path, "sub-01") in report.existing
+
+
+# --- status -------------------------------------------------------------------
+
+
+def _states(recipe) -> dict[str, str]:
+    return {entry.label: entry.state for entry in status(recipe)}
+
+
+def test_status_before_any_run_is_missing_for_every_recording(tmp_path) -> None:
+    _two_recordings(tmp_path)
+
+    assert _states(_recipe(tmp_path, POWER)) == {
+        "sub-01_task-rest": "missing",
+        "sub-02_task-rest": "missing",
+    }
+
+
+def test_status_after_a_run_is_done_and_lists_the_results(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    recipe = _recipe(tmp_path, POWER)
+    run(recipe)
+
+    entries = status(recipe)
+
+    assert [entry.state for entry in entries] == ["done", "done"]
+    assert _features_path(tmp_path, "sub-01") in entries[0].outputs
+
+
+def test_status_names_the_error_of_a_recording_that_failed(tmp_path) -> None:
+    save_epochs(tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif")
+    save_epochs(
+        tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif", channels=["Fz", "F4", "Cz", "Pz"]
+    )
+    recipe = _recipe(
+        tmp_path,
+        '[rois]\nfront = ["Fz", "F3"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n',
+    )
+    run(recipe)
+
+    first, second = status(recipe)
+
+    assert first.state == "done"
+    assert second.state == "failed" and "F3" in second.reason
+
+
+def test_a_changed_computation_makes_results_stale(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    run(_recipe(tmp_path, POWER))
+
+    entries = status(_recipe(tmp_path, POWER.replace("alpha", "beta")))
+
+    assert [entry.state for entry in entries] == ["stale", "stale"]
+    assert "recipe" in entries[0].reason
+
+
+def test_comments_and_repointed_inputs_do_not_make_results_stale(tmp_path) -> None:
+    # Moving the data to another drive and repointing inputs.root changes the recipe's
+    # text, not what it computes.
+    _two_recordings(tmp_path)
+    run(_recipe(tmp_path, POWER))
+    (tmp_path / "data").rename(tmp_path / "moved")
+    path = tmp_path / "recipe.toml"
+    path.write_text(
+        '# repointed after the move\n[inputs]\nroot = "moved"\npattern = "**/*_epo.fif"\n\n'
+        '[output]\nroot = "out"\n\n' + POWER
+    )
+
+    assert set(_states(load_recipe(path)).values()) == {"done"}
+
+
+def test_an_input_rewritten_after_its_results_makes_them_stale(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    recipe = _recipe(tmp_path, POWER)
+    run(recipe)
+    source = tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif"
+    later = _features_path(tmp_path, "sub-02").stat().st_mtime + 60
+    os.utime(source, (later, later))
+
+    first, second = status(recipe)
+
+    assert first.state == "done"
+    assert second.state == "stale" and "input" in second.reason
+
+
+def test_a_missing_file_of_a_table_makes_results_partial(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    recipe = _recipe(tmp_path, POWER)
+    run(recipe)
+    values = _features_path(tmp_path, "sub-01")
+    values.with_name(f"{values.stem}_coverage.tsv").unlink()
+
+    first, second = status(recipe)
+
+    assert first.state == "partial" and "coverage" in first.reason
+    assert second.state == "done"
+
+
+def test_a_missing_table_makes_results_partial(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    recipe = _recipe(tmp_path, POWER + "\n" + ITPC)
+    run(recipe)
+    crosstrial = tmp_path / "out/sub-01/eeg/sub-01_task-rest_crosstrial.tsv"
+    for path in (
+        crosstrial,
+        crosstrial.with_suffix(".json"),
+        crosstrial.with_name(f"{crosstrial.stem}_coverage.tsv"),
+    ):
+        path.unlink()
+
+    first, _ = status(recipe)
+
+    assert first.state == "partial" and "crosstrial" in first.reason
+
+
+# --- resume -------------------------------------------------------------------
+
+
+def test_resume_computes_only_the_recordings_without_results(tmp_path) -> None:
+    save_epochs(tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif")
+    recipe = _recipe(tmp_path, POWER)
+    run(recipe)
+    before = _features_path(tmp_path, "sub-01").read_bytes()
+    save_epochs(tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif")
+
+    result = run(recipe, resume=True)
+
+    assert result.ok
+    assert [r.label for r in result.recordings] == ["sub-02_task-rest"]
+    assert _features_path(tmp_path, "sub-01").read_bytes() == before
+    assert set(_states(recipe).values()) == {"done"}
+    log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+    assert log["skipped"] == ["sub-01_task-rest"]
+
+
+def test_resume_retries_a_recording_that_failed(tmp_path) -> None:
+    save_epochs(tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif")
+    broken = tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif"
+    save_epochs(broken, channels=["Fz", "F4", "Cz", "Pz"])
+    recipe = _recipe(
+        tmp_path,
+        '[rois]\nfront = ["Fz", "F3"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n',
+    )
+    run(recipe)
+    save_epochs(broken)
+
+    result = run(recipe, resume=True)
+
+    assert [(r.label, r.success) for r in result.recordings] == [("sub-02_task-rest", True)]
+
+
+def test_resume_will_not_replace_stale_results_without_overwrite(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    run(_recipe(tmp_path, POWER))
+    changed = _recipe(tmp_path, POWER.replace("alpha", "beta"))
+
+    with pytest.raises(RunError, match="overwrite"):
+        run(changed, resume=True)
+
+    result = run(changed, resume=True, overwrite=True)
+    assert result.ok and len(result.recordings) == 2
+    assert set(_states(changed).values()) == {"done"}
+
+
+def test_resume_with_everything_done_computes_nothing(tmp_path) -> None:
+    _two_recordings(tmp_path)
+    recipe = _recipe(tmp_path, POWER)
+    run(recipe)
+    before = _features_path(tmp_path, "sub-01").stat().st_mtime_ns
+
+    result = run(recipe, resume=True)
+
+    assert result.ok and result.recordings == ()
+    assert _features_path(tmp_path, "sub-01").stat().st_mtime_ns == before
+
+
+# --- parallel workers -----------------------------------------------------------
+
+
+def _three_recordings(tmp_path: Path) -> None:
+    for subject in ("sub-01", "sub-02", "sub-03"):
+        save_epochs(tmp_path / f"data/{subject}/eeg/{subject}_task-rest_epo.fif")
+
+
+def test_workers_compute_the_same_tables_as_one_process(tmp_path) -> None:
+    _three_recordings(tmp_path)
+    serial = run(_recipe(tmp_path, POWER + "\n" + ITPC, output="serial"))
+    parallel = run(_recipe(tmp_path, POWER + "\n" + ITPC, output="parallel"), workers=2)
+
+    assert serial.ok and parallel.ok
+    assert [r.label for r in parallel.recordings] == [r.label for r in serial.recordings]
+    for subject in ("sub-01", "sub-02", "sub-03"):
+        for table in ("features", "crosstrial"):
+            name = f"{subject}/eeg/{subject}_task-rest_{table}.tsv"
+            np.testing.assert_array_equal(
+                read_table(tmp_path / "parallel" / name).values,
+                read_table(tmp_path / "serial" / name).values,
+            )
+    log = json.loads((tmp_path / "parallel/eegfeat_run.json").read_text())
+    assert [r["label"] for r in log["recordings"]] == [r.label for r in serial.recordings]
+
+
+def test_workers_forward_every_recordings_progress(tmp_path) -> None:
+    _three_recordings(tmp_path)
+    stream = StringIO()
+
+    run(_recipe(tmp_path, POWER), workers=2, reporter=JsonReporter(stream))
+
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    labels = {f"{s}_task-rest" for s in ("sub-01", "sub-02", "sub-03")}
+    for kind in ("subject_start", "subject_done"):
+        assert {e["subject"] for e in events if e["event"] == kind} == labels
+    steps = {(e["subject"], e["step"]) for e in events if e["event"] == "progress"}
+    assert steps == {
+        (label, step) for label in labels for step in ("read", "integrated_band_power", "write")
+    }
+    assert events[-1]["event"] == "complete" and events[-1]["success"] is True
+
+
+def test_a_failing_recording_does_not_stop_the_other_workers(tmp_path) -> None:
+    save_epochs(tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif")
+    save_epochs(
+        tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif", channels=["Fz", "F4", "Cz", "Pz"]
+    )
+    recipe = _recipe(
+        tmp_path,
+        '[rois]\nfront = ["Fz", "F3"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n',
+    )
+
+    first, second = run(recipe, workers=2).recordings
+
+    assert first.success and not second.success
+    assert second.error is not None and "F3" in second.error
+
+
+def test_a_worker_process_that_dies_fails_its_recording_and_not_the_run(tmp_path, monkeypatch):
+    # Fork, so the children inherit the patched function: a real crash (a segfault in a
+    # compiled dependency, the OOM killer) is what this stands in for.
+    import eegfeat.runner.batch as batch
+
+    _three_recordings(tmp_path)
+    original = batch._process
+
+    def crash_on_the_second(recording, *args, **kwargs):
+        if recording.label.startswith("sub-02"):
+            os._exit(1)
+        return original(recording, *args, **kwargs)
+
+    monkeypatch.setattr(batch, "_process", crash_on_the_second)
+    monkeypatch.setattr(batch, "_WORKER_CONTEXT", "fork")
+
+    result = run(_recipe(tmp_path, POWER), workers=2)
+
+    # sub-01 was computing beside sub-02 when it died; a broken pool fails every
+    # future in it, so only rerunning the suspects alone can say whose crash it was.
+    outcome = {r.label: r for r in result.recordings}
+    assert not outcome["sub-02_task-rest"].success
+    assert "worker process" in (outcome["sub-02_task-rest"].error or "")
+    assert outcome["sub-01_task-rest"].success and outcome["sub-03_task-rest"].success
+    assert _features_path(tmp_path, "sub-01").exists()
+
+
+def test_workers_must_be_at_least_one(tmp_path) -> None:
+    _two_recordings(tmp_path)
+
+    with pytest.raises(RunError, match="workers"):
+        run(_recipe(tmp_path, POWER), workers=0)
+
+
+# --- what a run leaves behind as it goes ----------------------------------------
+
+
+def test_the_run_log_is_written_after_every_recording(tmp_path) -> None:
+    # A run killed half way must still say what it finished.
+    _two_recordings(tmp_path)
+    seen: list[list[str]] = []
+
+    class Watcher(JsonReporter):
+        def recording_done(self, label, success, message):
+            log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+            seen.append([entry["label"] for entry in log["recordings"]])
+
+    run(_recipe(tmp_path, POWER), reporter=Watcher(StringIO()))
+
+    assert seen == [["sub-01_task-rest"], ["sub-01_task-rest", "sub-02_task-rest"]]
+    log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+    assert log["finished"] is True
+
+
+def _one_failing(tmp_path: Path):
+    save_epochs(tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif")
+    save_epochs(
+        tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif", channels=["Fz", "F4", "Cz", "Pz"]
+    )
+    return _recipe(
+        tmp_path,
+        '[rois]\nfront = ["Fz", "F3"]\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["rois"]\n',
+    )
+
+
+def test_a_failure_is_kept_beside_the_recordings_results(tmp_path) -> None:
+    # Another run into the same output root replaces the run log; the failure must
+    # survive it.
+    recipe = _one_failing(tmp_path)
+    run(recipe)
+    (tmp_path / "out/eegfeat_run.json").unlink()
+
+    failed = json.loads((tmp_path / "out/sub-02/eeg/sub-02_task-rest_failed.json").read_text())
+
+    assert "F3" in failed["error"] and failed["traceback"]
+    assert {e.label: e.state for e in status(recipe)}["sub-02_task-rest"] == "failed"
+
+
+def test_a_later_success_clears_the_recorded_failure(tmp_path) -> None:
+    recipe = _one_failing(tmp_path)
+    run(recipe)
+    save_epochs(tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif")
+
+    run(recipe, resume=True)
+
+    assert not (tmp_path / "out/sub-02/eeg/sub-02_task-rest_failed.json").exists()
+    assert {e.label: e.state for e in status(recipe)}["sub-02_task-rest"] == "done"
+
+
+# --- check timing -----------------------------------------------------------------
+
+
+def test_check_times_the_trial_recording_and_each_entry(tmp_path) -> None:
+    _two_recordings(tmp_path)
+
+    report = check(_recipe(tmp_path, POWER + "\n" + ITPC))
+
+    assert report.trial is not None
+    assert report.trial.seconds > 0.0
+    assert [t.measure for t in report.trial.features.timings] == ["integrated_band_power", "itpc"]
+    assert report.trial.epochs_total == 12
+
+
+def test_a_quick_check_computes_only_the_first_epochs(tmp_path) -> None:
+    _two_recordings(tmp_path)
+
+    report = check(_recipe(tmp_path, POWER + "\n" + ITPC), quick=True)
+
+    assert report.trial is not None
+    assert report.trial.n_epochs == 4 and report.trial.epochs_total == 12
+    assert report.trial.features.epochs is not None
+    assert report.trial.features.epochs.n_rows == 4
+
+
+def test_workers_share_the_cores_between_their_thread_pools() -> None:
+    # Each worker's BLAS and OpenMP pools would otherwise size themselves to the whole
+    # machine, and N workers would oversubscribe it N times over.
+    from eegfeat.runner.batch import _worker_threads
+
+    limits = _worker_threads(workers=4, cpu_count=10, environ={})
+
+    assert limits["OMP_NUM_THREADS"] == "2"
+    assert limits["OPENBLAS_NUM_THREADS"] == "2" and limits["VECLIB_MAXIMUM_THREADS"] == "2"
+
+
+def test_a_thread_limit_the_user_set_is_left_alone() -> None:
+    from eegfeat.runner.batch import _worker_threads
+
+    limits = _worker_threads(workers=4, cpu_count=10, environ={"OMP_NUM_THREADS": "3"})
+
+    assert "OMP_NUM_THREADS" not in limits and limits["MKL_NUM_THREADS"] == "2"
+
+
+def test_a_pool_that_breaks_before_a_submission_does_not_end_the_run(tmp_path, monkeypatch):
+    # A worker can die between two polls, so the next submission is the first to see
+    # the broken pool. Everything must still be computed.
+    from concurrent.futures.process import BrokenProcessPool
+
+    import eegfeat.runner.batch as batch
+
+    _three_recordings(tmp_path)
+    submissions = []
+
+    class BreaksOnce(batch.ProcessPoolExecutor):
+        def submit(self, *args, **kwargs):
+            submissions.append(args[1].label)
+            if len(submissions) == 2:
+                raise BrokenProcessPool("a worker died")
+            return super().submit(*args, **kwargs)
+
+    monkeypatch.setattr(batch, "ProcessPoolExecutor", BreaksOnce)
+
+    result = run(_recipe(tmp_path, POWER), workers=2)
+
+    assert [(r.label, r.success) for r in result.recordings] == [
+        ("sub-01_task-rest", True),
+        ("sub-02_task-rest", True),
+        ("sub-03_task-rest", True),
+    ]

@@ -1,0 +1,125 @@
+# eegfeat recipe for event-related epochs: a baseline before each event and a
+# response after it. Every measure family is here; delete what you do not need.
+#
+#   eegfeat check recipe.toml    validate it, time it on the first recording
+#   eegfeat run recipe.toml      compute features for every recording
+#
+# Relative paths resolve against this file's directory.
+
+[inputs]
+root = "derivatives/preprocessed"   # searched recursively
+pattern = "**/*_epo.fif"            # MNE epochs files
+picks = "eeg"                       # a channel type, or a list of channel names
+exclude_bads = true                 # drop the channels each file marks as bad
+
+[output]
+root = "derivatives/eegfeat"        # the input tree is mirrored here
+epoch_metadata = true               # copy each epoch's metadata into its row
+
+# Seconds from the event. Set them to your paradigm: the baseline must end before
+# the response can start, and both must lie inside the epochs. Spectra need windows
+# of about a second: a 0.5 s window resolves only 2 Hz, too coarse for delta.
+[windows]
+baseline = [-1.0, 0.0]
+response = [0.0, 1.0]
+
+# Frequency bands in Hz, as [low, high). Leaving the section out gives delta,
+# theta, alpha, beta and gamma (1-45 Hz).
+# [bands]
+# theta = [4.0, 8.0]
+# alpha = [8.0, 13.0]
+
+# Regions of interest, as channel names or as regular expressions matched against
+# each recording's channels. Add "rois" to spatial below to use them.
+# [rois]
+# frontal = ["Fz", "F3", "F4"]
+# parietal = { match = ["^P[z0-9]+$"] }
+
+[spectra]
+method = "welch"
+
+# Cross-trial measures (itpc, ppc, envelope_correlation, wpli) get one row per
+# event name. "all" pools every epoch; "metadata" groups by a metadata column.
+[trials]
+by = "event"
+
+# Keys every entry below inherits unless it sets its own. An entry with a baseline
+# leaves that window out of the inherited windows.
+[defaults]
+windows = ["baseline", "response"]
+spatial = ["channels", "global"]
+
+# --- power -----------------------------------------------------------------------
+
+[[features]]
+measure = "integrated_band_power"
+normalize = "log10"
+ratios = [["theta", "beta"], ["alpha", "beta"]]
+
+[[features]]
+measure = "integrated_band_power"   # the response relative to the baseline
+normalize = "log_ratio"
+baseline = "baseline"
+
+# --- spectral shape ----------------------------------------------------------------
+
+[[features]]
+measures = ["aperiodic", "spectral_entropy", "spectral_centroid"]
+
+[[features]]
+measure = "peak_frequency"
+bands = ["alpha"]
+
+# --- time domain and complexity ----------------------------------------------------
+
+[[features]]
+measures = [
+    "variance", "root_mean_square", "line_length", "kurtosis", "skewness",
+    "hjorth_mobility", "hjorth_complexity", "higuchi_fractal_dimension",
+]
+
+# Entropies are the slowest measures here; eegfeat check says how slow.
+[[features]]
+measure = "sample_entropy"
+
+# --- evoked --------------------------------------------------------------------
+
+[[features]]
+measures = ["mean_amplitude", "peak_amplitude", "peak_latency"]
+windows = ["response"]
+
+# --- event-related (de)synchronization and bursts, against the baseline -----------
+
+[[features]]
+measures = ["erds_mean", "erd_magnitude", "ers_magnitude", "erds_peak_latency"]
+bands = ["alpha", "beta"]
+baseline = "baseline"
+
+[[features]]
+measures = ["burst_rate", "burst_duration"]
+bands = ["beta"]
+baseline = "baseline"
+
+# --- across trials -------------------------------------------------------------
+
+[[features]]
+measures = ["itpc", "ppc"]
+bands = ["theta", "alpha"]
+
+[[features]]
+measure = "pac"
+pairs = [["theta", "gamma"]]
+
+[[features]]
+measure = "envelope_correlation"
+bands = ["alpha", "beta"]
+spatial = ["channels"]
+
+# Need pip install 'eegfeat[connectivity]' and 'eegfeat[microstates]':
+#
+# [[features]]
+# measure = "wpli"
+# bands = ["alpha", "beta"]
+#
+# [[features]]
+# measures = ["microstate_coverage", "microstate_duration", "microstate_occurrence"]

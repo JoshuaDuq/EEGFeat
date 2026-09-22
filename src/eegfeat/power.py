@@ -26,7 +26,7 @@ _PSD_INTEGRAL_UNITS: dict[str, str] = {
     "percent": "%",
 }
 
-# Morlet power arrives as a density: Spectra.from_tfr divides MNE's unit-energy
+# Morlet power arrives as a density: Spectra.from_tfr divides MNE's energy-2
 # wavelet power by the sampling rate, so these are the same units as mean_psd.
 _TFR_MEAN_UNITS: dict[str, str] = {
     "raw": "V^2/Hz",
@@ -138,9 +138,9 @@ def mean_tfr_power(
     The value is a smoothed spectral density in V²/Hz, because
     :meth:`~eegfeat.Spectra.from_tfr` divides MNE's Morlet power by the sampling
     rate; without that step the same recording reports a different number at
-    every sampling rate. It is not integrated over the band, since a wavelet
-    already averages power over its own bandwidth and integrating it again would
-    count the same spectral mass more than once.
+    every sampling rate. It is averaged over the band rather than integrated, so it stays a density
+    comparable to :func:`mean_psd`; integrating it would give wavelet-smoothed
+    band power in V².
 
     With a ``baseline`` and ``normalize="db"`` this is the decibel of the
     **window-mean** power. :func:`~eegfeat.erds_mean` averages a per-sample dB

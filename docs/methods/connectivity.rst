@@ -22,7 +22,8 @@ each time, and those values are then averaged over time. Averaging over time
 first is a different quantity. A phase that drifts within the trial but matches
 across trials is 1 in the order above and near 0 if time is averaged first.
 
-Under a uniform-phase null the expected ITPC is about :math:`1/\sqrt{N}`.
+Under a uniform-phase null, :math:`E[\mathrm{ITPC}^2] = 1/N` and
+:math:`E[\mathrm{ITPC}] \approx \sqrt{\pi/(4N)}`.
 Small :math:`N` is biased high, and values from different trial counts are not
 comparable. The default requires at least two valid trials. Cells below
 ``min_valid_trials`` are flagged, and time points with fewer finite phases than
@@ -51,31 +52,37 @@ inside groups such as experimental condition.
 Phase-Amplitude Coupling
 ------------------------
 
-Mean vector length is the amplitude-weighted resultant of the phase of the
-slower band (Canolty et al., 2006).
+Mean vector length (Canolty et al., 2006) is the modulus of the mean of
+:math:`A(t)e^{i\phi(t)}`, where :math:`\phi` is the phase of the slower band.
+That raw form is ``normalize=False``. The default divides by the summed
+amplitude instead of the sample count, which bounds the value in
+:math:`[0, 1]`.
 
 .. math::
 
    \mathrm{MVL} = \frac{\left| \sum_t A(t) e^{i \phi(t)} \right|}{\sum_t A(t)}
 
-Division by the summed amplitude removes the scale of the envelope.
-``normalize=True`` uses that denominator, and returns NaN when it is at most
-:math:`10^{-20}`. ``normalize=False`` divides the modulus of the weighted sum
+Division by the summed amplitude removes the scale of the envelope. Canolty
+et al. instead z-scored the raw value against surrogates. ``normalize=True``
+uses that denominator, and returns NaN when it is at most :math:`10^{-20}`. ``normalize=False`` divides the modulus of the weighted sum
 by the number of finite samples. It returns that real mean, not the unscaled
 complex sum.
 
 The measure is computed inside each trial, so the table has one row per epoch.
 No surrogate distribution is computed. Autocorrelation in amplitude and in
 phase biases the raw value upward. Tort, Komorowski, Eichenbaum, and Kopell
-(2010) compare coupling estimators and treat raw mean vector length as an
-effect size. A null for this value can be built from circular time shifts
+(2010) compare coupling estimators and note that raw mean vector length depends
+on the amplitude of the modulated band, so it should not be read as a coupling
+strength without normalization against surrogates. A null for this value can be built from circular time shifts
 inside the trial, which keep the single-trial spectrum.
 
 Connectivity
 ------------
 
-``envelope_correlation`` is the Pearson correlation of band envelopes between
-every pair of nodes. ``spectral_connectivity`` calls
+``envelope_correlation`` correlates band envelopes between every pair of
+nodes. By default each envelope is first orthogonalized against the other node
+(``orthogonalize="pairwise"``) and the magnitude is taken (``absolute=True``).
+``orthogonalize=None`` gives the plain Pearson correlation. ``spectral_connectivity`` calls
 ``mne_connectivity.spectral_connectivity_epochs`` for coherence, imaginary
 coherency, the phase-locking value, pairwise phase consistency, the
 phase-lag index, and wPLI. ``wpli`` is the weighted phase-lag index, which
@@ -85,18 +92,22 @@ conduction (Vinck et al., 2011).
 Spectral connectivity requires the ``connectivity`` extra
 (``pip install eegfeat[connectivity]``). At low trial counts,
 ``method="wpli2_debiased"`` applies the sample-size correction in Vinck et al.
-(2011). ``method="wpli"`` does not. Every wPLI group needs at least two epochs.
+(2011). ``method="wpli"`` does not. Every trial group needs at least two epochs, for
+every spectral connectivity method.
 Warnings raised by the MNE estimator are left visible.
 
-Nodes are channels, or ROIs when ``groups`` is given. With ROIs, the
-channel-level matrix is averaged inside each ROI block, and a node's own block
-excludes the diagonal. These measures have one row per trial group, as
+Nodes are channels, or ROIs when ``groups`` is given. For
+``spectral_connectivity`` and ``wpli``, the channel-level matrix is averaged
+inside each ROI block, and a node's own block excludes the diagonal. For
+``envelope_correlation``, a node's series is the mean complex analytic signal
+of its member channels, and envelopes are taken from that mean. These measures have one row per trial group, as
 :func:`~eegfeat.itpc` does.
 
 Envelope correlation of analytic amplitudes is the approach used by Brookes et
-al. (2011). Optional orthogonalization follows the leakage correction of
-Colclough, Brookes, Smith, and Woolrich (2015) and the pairwise projection of
-Hipp, Hawellek, Corbetta, Siegel, and Engel (2012). For analytic signals
+al. (2011). The default orthogonalization is the pairwise projection of
+Hipp, Hawellek, Corbetta, Siegel, and Engel (2012). It is not the symmetric
+multivariate leakage correction of Colclough, Brookes, Smith, and Woolrich
+(2015), which orthogonalizes all nodes jointly. For analytic signals
 :math:`z_i(t)`,
 
 .. math::
@@ -112,7 +123,7 @@ transform. Correlations are clipped to :math:`[-0.999999, 0.999999]` before
 
 .. code-block:: python
 
-   trial_r = np.corrcoef(np.abs(analytic_trial))
+   trial_r = np.stack([np.corrcoef(np.abs(trial)) for trial in analytic])
    bounded = np.clip(trial_r, -0.999999, 0.999999)
    envelope_correlation = np.tanh(np.nanmean(np.arctanh(bounded), axis=0))
 
@@ -121,7 +132,7 @@ then symmetrizes.
 
 The phase-locking value is Lachaux, Rodriguez, Martinerie, and Varela (1999).
 Imaginary coherency is Nolte et al. (2004). The corrected imaginary
-phase-locking value is Pereda, Bruña, and Maestú (2018). Parameter names and
+phase-locking value is Bruña, Maestú, and Pereda (2018). Parameter names and
 cross-spectral accumulation are those of
 `MNE-Connectivity <https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html>`__.
 
@@ -129,7 +140,7 @@ Spectral estimator formulas
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :math:`S_{xy}^{(e)}` is the epoch cross-spectrum and :math:`\langle\cdot\rangle_e`
-is the mean over valid epochs. Before pair symmetrization the delegated
+is the mean over the group's epochs. Before pair symmetrization the delegated
 estimators are
 
 .. math::
@@ -184,7 +195,7 @@ To use CSP as a predictor, fit it inside each training fold and transform the
 training rows and the test rows with that fit. Repeat the fit inside inner
 tuning. In a scikit-learn pipeline, put ``mne.decoding.CSP`` in the pipeline.
 The split that produced a column is stored in its computation metadata. Input
-must be band-limited. The number of components must be even. There must be two
+should be band-limited. The number of components must be even. There must be two
 classes.
 
 For class :math:`c`, each finite epoch is centered in time and its covariance
@@ -196,12 +207,18 @@ is normalized by the trace.
    \frac{(X_e-\bar X_e)(X_e-\bar X_e)^\mathsf{T}}
    {\operatorname{tr}\left((X_e-\bar X_e)(X_e-\bar X_e)^\mathsf{T}\right)}.
 
+With ``regularization`` :math:`\rho > 0`, :math:`C_c` is shrunk to
+:math:`(1-\rho)C_c + \rho\,\operatorname{tr}(C_c)I/n` for :math:`n` channels.
+
 The filters solve :math:`C_0 w = \lambda(C_0+C_1)w`. Components are taken
 alternately from the largest and the smallest eigenvalues. The feature is the
 log of relative projected variance. Trace normalization, component order, and
-the cross-fitting split are stored with the column. A compatible reference
-implementation is
-`mne.decoding.CSP <https://mne.tools/stable/generated/mne.decoding.CSP.html>`__.
+the cross-fitting split are stored with the column.
+`mne.decoding.CSP <https://mne.tools/stable/generated/mne.decoding.CSP.html>`__
+with ``cov_est="epoch"``, ``norm_trace=True``, and
+``component_order="alternate"`` should give the same filters up to sign and
+scale. Its features are log mean power, not the log relative variance used
+here.
 
 .. code-block:: python
 
@@ -227,8 +244,9 @@ contributes 0.
 
 :math:`N` is the number of nodes. The sum is over unordered pairs.
 
-A non-finite edge makes either summary NaN, with output coverage 0. A missing
-edge is left undefined. It is not entered as a zero-weight disconnection.
+A non-finite edge makes either summary NaN, with output coverage 0. It is not
+entered as a zero-weight disconnection. A pair absent from the table raises
+``ValueError``, because the edge set must be complete.
 
 The clustering coefficient binarizes at ``threshold`` :math:`\theta`
 (:math:`A_{ij} = 1` when :math:`|w_{ij}| > \theta`) and averages the local
@@ -245,7 +263,9 @@ clustering of Watts and Strogatz (1998) over nodes with degree
 :math:`(A^3)_{ii}` is twice the number of triangles at node :math:`i`, and
 :math:`k_i = \sum_j A_{ij}`. Nodes with :math:`k_i < 2` are omitted. The result
 is NaN when no node has two neighbours. An eligible node with no triangles
-contributes 0.
+contributes 0. networkx and the Brain Connectivity Toolbox instead average over
+all nodes and count those with :math:`k_i < 2` as 0, so the values are not
+directly comparable.
 
 References
 ----------
@@ -269,7 +289,7 @@ References
   coherency*. Clinical Neurophysiology, 115(10), 2292--2307.
   `doi:10.1016/j.clinph.2004.04.029
   <https://doi.org/10.1016/j.clinph.2004.04.029>`__.
-* Pereda, E., Bruña, R., & Maestú, F. (2018). *Phase locking value revisited:
+* Bruña, R., Maestú, F., & Pereda, E. (2018). *Phase locking value revisited:
   Teaching new tricks to an old dog*. Journal of Neural Engineering, 15(5),
   056011. `doi:10.1088/1741-2552/aacfe4
   <https://doi.org/10.1088/1741-2552/aacfe4>`__.
@@ -283,7 +303,7 @@ References
   gamma power is phase-locked to theta oscillations in human neocortex*.
   Science, 313(5793), 1626--1628.
   `doi:10.1126/science.1128115 <https://doi.org/10.1126/science.1128115>`__.
-* Tort, N., Komorowski, R., Eichenbaum, H., & Kopell, N. (2010). *Measuring
+* Tort, A. B. L., Komorowski, R., Eichenbaum, H., & Kopell, N. (2010). *Measuring
   phase-amplitude coupling between neuronal oscillations of different
   frequencies*. Journal of Neurophysiology, 104(2), 1195--1210.
   `doi:10.1152/jn.00106.2010 <https://doi.org/10.1152/jn.00106.2010>`__.

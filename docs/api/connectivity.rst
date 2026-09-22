@@ -2,7 +2,8 @@ Phase and Connectivity
 ======================
 
 Measures defined across trials or between sensor pairs. Their definitions are in
-:doc:`/methods/connectivity`. ``wpli`` requires the ``connectivity`` extra.
+:doc:`/methods/connectivity`. ``spectral_connectivity`` and ``wpli`` require the
+``connectivity`` extra.
 
 
 .. autofunction:: eegfeat.itpc

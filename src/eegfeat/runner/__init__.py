@@ -12,6 +12,7 @@ from eegfeat.runner.batch import (
     CheckReport,
     Recording,
     RecordingResult,
+    RecordingStatus,
     RunError,
     RunResult,
     Trial,
@@ -19,6 +20,7 @@ from eegfeat.runner.batch import (
     check,
     discover,
     run,
+    status,
 )
 from eegfeat.runner.recipe import Recipe, RecipeError, load_recipe
 
@@ -28,6 +30,7 @@ __all__ = [
     "RecipeError",
     "Recording",
     "RecordingResult",
+    "RecordingStatus",
     "RunError",
     "RunResult",
     "Trial",
@@ -36,4 +39,5 @@ __all__ = [
     "discover",
     "load_recipe",
     "run",
+    "status",
 ]

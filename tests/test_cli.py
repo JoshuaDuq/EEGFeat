@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from eegfeat.runner import load_recipe
 from eegfeat.runner.cli import main
 from synthetic import save_epochs
@@ -220,3 +222,152 @@ def test_check_reports_a_channel_the_first_recording_lacks_instead_of_computing_
     assert code == 1
     assert "sub-01_task-rest" in out and "F3" in out and "marked bad" in out
     assert "sub-02_task-rest" not in out
+
+
+def test_status_lists_each_recording_and_what_to_run_next(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    recipe = str(_recipe(tmp_path))
+    assert main(["run", recipe]) == 0
+    _recording(tmp_path, "sub-02")
+    capsys.readouterr()
+
+    code = main(["status", recipe])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "sub-01_task-rest" in out and "done" in out
+    assert "sub-02_task-rest" in out and "missing" in out
+    assert f"eegfeat run {recipe} --resume" in out
+
+
+def test_status_json_describes_every_recording_for_a_front_end(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    _recording(tmp_path, "sub-02", channels=["Fz", "Cz"])
+    recipe = str(_recipe(tmp_path, FRONTAL_ROI))
+    main(["run", recipe])
+    capsys.readouterr()
+
+    code = main(["status", recipe, "--json"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert report["counts"] == {"done": 1, "missing": 0, "failed": 1, "stale": 0, "partial": 0}
+    first, second = report["recordings"]
+    assert first["label"] == "sub-01_task-rest" and first["state"] == "done"
+    assert first["outputs"] and first["input"].endswith("sub-01_task-rest_epo.fif")
+    assert second["state"] == "failed" and "F3" in second["reason"]
+    assert report["next"] == ["run", recipe, "--resume"]
+
+
+def test_status_json_asks_for_overwrite_when_results_are_stale(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    main(["run", str(_recipe(tmp_path))])
+    recipe = str(_recipe(tmp_path, POWER.replace("alpha", "beta")))
+    capsys.readouterr()
+
+    main(["status", recipe, "--json"])
+
+    assert json.loads(capsys.readouterr().out)["next"] == ["run", recipe, "--resume", "--overwrite"]
+
+
+def test_status_json_has_nothing_next_when_everything_is_done(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    recipe = str(_recipe(tmp_path))
+    main(["run", recipe])
+    capsys.readouterr()
+
+    main(["status", recipe, "--json"])
+
+    assert json.loads(capsys.readouterr().out)["next"] is None
+
+
+def test_status_of_an_invalid_recipe_exits_two(tmp_path, capsys) -> None:
+    code = main(["status", str(_recipe(tmp_path, '[[features]]\nmeasure = "band_powr"\n'))])
+
+    assert code == 2
+    assert "band_powr" in capsys.readouterr().err
+
+
+def test_run_resume_skips_what_is_done(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    recipe = str(_recipe(tmp_path))
+    assert main(["run", recipe]) == 0
+    _recording(tmp_path, "sub-02")
+    capsys.readouterr()
+
+    code = main(["run", recipe, "--resume"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "sub-02_task-rest" in out
+    assert "1 up to date" in out
+
+
+def test_run_with_workers_computes_every_recording(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+    _recording(tmp_path, "sub-02")
+
+    code = main(["run", str(_recipe(tmp_path)), "--workers", "2"])
+
+    assert code == 0
+    for subject in ("sub-01", "sub-02"):
+        assert (tmp_path / f"out/{subject}/eeg/{subject}_task-rest_features.tsv").exists()
+
+
+def test_check_times_the_trial_and_projects_the_run(tmp_path, capsys) -> None:
+    for subject in ("sub-01", "sub-02", "sub-03"):
+        _recording(tmp_path, subject)
+
+    code = main(["check", str(_recipe(tmp_path)), "--workers", "3"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Slowest" in out and "integrated_band_power" in out
+    projected = next(line for line in out.splitlines() if "Projected" in line)
+    assert "3 recordings" in projected and "with --workers 3" in projected
+
+
+def test_a_quick_check_says_how_much_it_computed(tmp_path, capsys) -> None:
+    _recording(tmp_path, "sub-01")
+
+    code = main(["check", str(_recipe(tmp_path)), "--quick"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "first 4 of 12 epochs" in out
+    assert "scaled from 4 of 12 epochs" in out
+
+
+@pytest.mark.parametrize("template", ["task", "resting"])
+def test_each_init_template_checks_cleanly_on_real_epochs(tmp_path, capsys, template) -> None:
+    _recording(tmp_path, "sub-01", tmin=-1.0, seconds=2.5)
+    path = tmp_path / "recipe.toml"
+
+    assert main(["init", str(path), "--template", template]) == 0
+    text = path.read_text()
+    text = text.replace('root = "derivatives/preprocessed"', 'root = "data"', 1)
+    text = text.replace('root = "derivatives/eegfeat"', 'root = "out"', 1)
+    path.write_text(text)
+
+    assert main(["check", str(path)]) == 0, capsys.readouterr()
+
+
+def test_a_quick_check_scales_the_computing_but_not_the_reading(tmp_path) -> None:
+    # Reading the file costs the same however many epochs are then computed.
+    from eegfeat.runner.batch import CheckReport, Trial
+    from eegfeat.runner.cli import _timing_rows
+    from eegfeat.runner.compute import EntryTiming, RecordingFeatures
+
+    recordings = tuple(object() for _ in range(2))
+    trial = Trial(
+        recording=None,  # type: ignore[arg-type]
+        n_epochs=4,
+        channels=("Fz",),
+        features=RecordingFeatures(None, None, (EntryTiming(0, "variance", 6.0),)),
+        seconds=10.0,
+        epochs_total=12,
+        read_seconds=4.0,
+    )
+    rows = dict(_timing_rows(CheckReport(recordings, (), trial), workers=1))  # type: ignore[arg-type]
+
+    assert rows["Time"].startswith("22 s for this recording")

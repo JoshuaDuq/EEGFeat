@@ -125,7 +125,7 @@ What It Computes
       One TOML recipe applied to a folder of preprocessed epochs files. Each
       written table loads back as a ``FeatureTable``.
 
-      ``eegfeat run`` · ``eegfeat check``
+      ``eegfeat run`` · ``eegfeat check`` · ``eegfeat status``
 
 Definitions are in :doc:`methods/index`. Signatures are in :doc:`api/index`.
 

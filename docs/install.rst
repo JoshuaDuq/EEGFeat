@@ -84,8 +84,11 @@ Optional extras.
      - ``mne>=1.13.2``, ``PyYAML``, ``scikit-learn``, ``h5io``, ``h5py``, ``filelock``
      - Raw-to-epochs preprocessing workflow (:doc:`/guides/preprocessing`).
    * - ``[preprocessing-auto]``
-     - ``pyprep>=0.9.0``, ``autoreject>=0.4.3``
-     - PyPREP bad-channel candidates and autoreject epoch repair.
+     - ``pyprep``, ``autoreject``, ``mne-icalabel``, ``python-picard``, ``onnxruntime``
+     - PyPREP candidates, ICLabel, the Picard ICA solver, and autoreject.
+   * - ``[bids]``
+     - ``mne-bids``, ``pybv``
+     - The study conversion in ``paradigm_specific/thermal_pain``. Not used by ``eegfeat``.
    * - ``[preprocessing-gui]``
      - ``mne-qt-browser``, ``PyQt6``
      - MNE viewers for ``preprocess review`` and ``preprocess inspect``.
@@ -103,11 +106,11 @@ To install with all extras:
    pip install -e ".[connectivity,microstates,model,importance,preprocessing,preprocessing-auto,dev,docs]"
 
 Modeling needs the ``model`` extra. SHAP needs the ``importance`` extra.
-
-The terminal front end for preprocessing is a separate Go program, not a
-Python extra: ``cd tui && go build -o eegfeat-tui .`` with Go 1.23 or newer.
-Nothing else requires it (:doc:`/guides/preprocessing`).
 Permutation importance is included in ``model``.
+
+The preprocessing terminal front end is a Go program, not a Python extra.
+Build it with ``cd tui && go build -o eegfeat-tui .`` (Go 1.24 or newer).
+Keys are in :doc:`/guides/preprocessing`.
 
 Verification
 ------------
