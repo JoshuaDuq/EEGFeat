@@ -103,6 +103,10 @@ To install with all extras:
    pip install -e ".[connectivity,microstates,model,importance,preprocessing,preprocessing-auto,dev,docs]"
 
 Modeling needs the ``model`` extra. SHAP needs the ``importance`` extra.
+
+The terminal front end for preprocessing is a separate Go program, not a
+Python extra: ``cd tui && go build -o eegfeat-tui .`` with Go 1.23 or newer.
+Nothing else requires it (:doc:`/guides/preprocessing`).
 Permutation importance is included in ``model``.
 
 Verification

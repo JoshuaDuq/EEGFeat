@@ -1,10 +1,13 @@
 import io
 import json
+import webbrowser
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from eegfeat.preprocessing import load_config, open_workflow, read_checkpoint
+from eegfeat.preprocessing.config import read_yaml
 from eegfeat.runner import load_recipe, run
 from eegfeat.runner.cli import main
 
@@ -24,10 +27,10 @@ def test_cli_init_and_catalog(tmp_path, capsys):
     [
         ("run", ["--until", "--recording", "--n-jobs", "--overwrite", "--progress-json"]),
         ("check", ["--recording"]),
-        ("status", ["--recording", "--verify"]),
+        ("status", ["--recording", "--verify", "--json"]),
         ("step", ["--recording", "--n-jobs", "--overwrite"]),
         ("next", ["--recording", "--n-jobs", "--overwrite"]),
-        ("inspect", ["--recording", "--report"]),
+        ("inspect", ["--recording", "--report", "--json"]),
         ("review", ["--recording", "--decisions", "--suggested"]),
         ("reset", ["--from", "--recording"]),
         ("init", ["--mode"]),
@@ -260,3 +263,184 @@ def test_inspect_report_fits_the_checkpoint(raw, tmp_path, monkeypatch):
     assert main(["preprocess", "inspect", str(config), "load", "--report"]) == 0
     assert main(["preprocess", "inspect", str(config), "crop-epochs", "--report"]) == 0
     assert len(opened) == 2 and all(uri.endswith("-inspection.html") for uri in opened)
+
+
+def _write_recipe(raw, tmp_path, body):
+    raw.save(tmp_path / "recording_raw.fif", fmt="double", verbose=False)
+    config = tmp_path / "preprocessing.yaml"
+    config.write_text(
+        "input: {path: recording_raw.fif}\noutput: {directory: preprocessed, name: recording}\n"
+        + body
+    )
+    return config
+
+
+def _json_output(capsys):
+    return json.loads(capsys.readouterr().out)
+
+
+def _pending(tmp_path, stage):
+    decisions = tmp_path / "preprocessed" / ".preprocessing" / "recording" / "decisions"
+    return read_yaml(decisions / f"{stage}.pending.yaml")
+
+
+def test_status_json_reports_each_recording_and_its_next_action(raw, tmp_path, capsys):
+    config = _write_cohort(raw, tmp_path, "required", "sub-01", "sub-02")
+    assert main(["preprocess", "run", str(config)]) == 3
+    capsys.readouterr()
+    assert main(["preprocess", "status", str(config), "--json"]) == 0
+    report = _json_output(capsys)
+    assert [entry["label"] for entry in report["recordings"]] == ["sub-01", "sub-02"]
+    first = report["recordings"][0]
+    assert first["summary"] == "awaiting review-raw"
+    assert first["next"] == {"kind": "review", "stage": "review-raw", "target": "raw"}
+    states = {stage["stage"]: stage["state"] for stage in first["stages"]}
+    assert states["load"] == "completed"
+    assert states["review-raw"] == "needs-review"
+    assert states["export"] == "pending"
+
+
+def test_status_json_has_no_next_action_once_exported(raw, tmp_path, capsys):
+    config = _write_config(raw, tmp_path, "disabled")
+    assert main(["preprocess", "run", str(config)]) == 0
+    capsys.readouterr()
+    assert main(["preprocess", "status", str(config), "--json"]) == 0
+    (entry,) = _json_output(capsys)["recordings"]
+    assert entry["summary"] == "exported"
+    assert entry["next"] is None
+
+
+def test_status_json_points_a_stale_recording_at_reset(raw, tmp_path, capsys):
+    config = _write_config(raw, tmp_path, "disabled")
+    assert main(["preprocess", "run", str(config)]) == 0
+    config.write_text(config.read_text().replace("duration: 2.0", "duration: 1.0"))
+    capsys.readouterr()
+    assert main(["preprocess", "status", str(config), "--json"]) == 0
+    (entry,) = _json_output(capsys)["recordings"]
+    assert entry["summary"] == "stale at events"
+    assert entry["next"] == {"kind": "reset", "stage": "events"}
+
+
+def test_status_json_points_an_unstarted_recording_at_run(raw, tmp_path, capsys):
+    config = _write_config(raw, tmp_path, "disabled")
+    assert main(["preprocess", "status", str(config), "--json"]) == 0
+    (entry,) = _json_output(capsys)["recordings"]
+    assert entry["next"] == {"kind": "run", "stage": "load"}
+
+
+def test_inspect_json_describes_the_raw_gate(raw, tmp_path, capsys, monkeypatch):
+    import mne
+
+    data = raw.get_data()
+    data[0] *= 10.0
+    loud = mne.io.RawArray(data, raw.info.copy(), first_samp=raw.first_samp)
+    config = _write_recipe(
+        loud,
+        tmp_path,
+        "workflow: {raw_review: required}\nannotations: {amplitude: {peak: {eeg: 5.0e-5}}}\n"
+        "epochs: {kind: fixed, duration: 2.0}\n",
+    )
+    assert main(["preprocess", "run", str(config)]) == 3
+    capsys.readouterr()
+    assert main(["preprocess", "inspect", str(config), "review-raw", "--json"]) == 0
+    gate = _json_output(capsys)
+    assert gate["stage"] == "review-raw"
+    assert gate["parent_id"] == _pending(tmp_path, "review-raw")["parent_id"]
+    assert gate["field"] == "bads"
+    assert [item["id"] for item in gate["items"]] == loud.ch_names
+    # The gate has no checkpoint of its own; the viewer opens the checkpoint it reviews.
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda uri: opened.append(uri))
+    assert main(["preprocess", "inspect", str(config), gate["parent"], "--report"]) == 0
+    assert opened[0].endswith("-inspection.html")
+    by_name = {item["id"]: item for item in gate["items"]}
+    assert by_name["Fp1"]["suggested"] and not by_name["C3"]["suggested"]
+    assert by_name["Fp1"]["tags"] == ["eeg", "amplitude"]
+    assert by_name["VEOG"]["tags"][0] == "eog"
+    assert gate["duration"] == pytest.approx(loud.n_times / loud.info["sfreq"])
+    assert all(
+        set(span) == {"onset", "duration", "description", "suggested"} and span["suggested"]
+        for span in gate["spans"]
+    )
+
+
+def test_inspect_json_describes_the_ica_gate(mixture, tmp_path, capsys):
+    config = _write_recipe(
+        mixture,
+        tmp_path,
+        "workflow: {raw_review: disabled}\nepochs: {kind: fixed, duration: 2.0}\n"
+        "artifact: {method: ica, reference: average, "
+        "ica: {n_components: 4, eog_channels: [VEOG], ecg_channel: ECG}}\n",
+    )
+    assert main(["preprocess", "run", str(config)]) == 3
+    capsys.readouterr()
+    assert main(["preprocess", "inspect", str(config), "review-artifact", "--json"]) == 0
+    gate = _json_output(capsys)
+    template = _pending(tmp_path, "review-artifact")
+    assert (gate["parent_id"], gate["fit_id"]) == (template["parent_id"], template["fit_id"])
+    assert (gate["method"], gate["field"]) == ("ica", "exclude")
+    assert [item["id"] for item in gate["items"]] == [0, 1, 2, 3]
+    assert gate["items"][0]["label"] == "ICA000"
+    workflow = open_workflow(load_config(config))
+    evidence = read_checkpoint(workflow, "fit-artifact").state.artifact.evidence
+    suggested = [item["id"] for item in gate["items"] if item["suggested"]]
+    assert suggested == evidence["suggested_exclude"]
+    for item in gate["items"]:
+        assert bool(item["tags"]) == item["suggested"]
+        assert set(item["tags"]) <= {"VEOG", "ECG"}
+
+
+def test_inspect_json_describes_the_epoch_gate(raw, tmp_path, capsys):
+    config = _write_recipe(
+        raw,
+        tmp_path,
+        "workflow: {raw_review: disabled, epoch_review: required}\n"
+        "epochs: {kind: fixed, duration: 2.0}\n",
+    )
+    assert main(["preprocess", "run", str(config)]) == 3
+    capsys.readouterr()
+    assert main(["preprocess", "inspect", str(config), "review-epochs", "--json"]) == 0
+    gate = _json_output(capsys)
+    assert gate["stage"] == "review-epochs"
+    assert gate["parent_id"] == _pending(tmp_path, "review-epochs")["parent_id"]
+    assert gate["field"] == "exclude"
+    assert len(gate["items"]) == 15
+    first = gate["items"][0]
+    assert (first["id"], first["label"]) == (0, "epoch 0")
+    assert len(first["tags"]) == 1 and first["score"] > 0
+    assert not any(item["suggested"] for item in gate["items"])
+
+
+def test_inspect_json_is_only_for_review_gates(raw, tmp_path, capsys):
+    config = _write_config(raw, tmp_path, "required")
+    assert main(["preprocess", "run", str(config)]) == 3
+    assert main(["preprocess", "inspect", str(config), "load", "--json"]) == 2
+    assert "review" in capsys.readouterr().err
+    assert main(["preprocess", "inspect", str(config), "review-raw", "--json", "--report"]) == 2
+    assert "exclusive" in capsys.readouterr().err
+
+
+def test_review_accepts_a_json_decision_file(raw, tmp_path, capsys):
+    config = _write_config(raw, tmp_path, "required")
+    assert main(["preprocess", "run", str(config)]) == 3
+    capsys.readouterr()
+    assert main(["preprocess", "inspect", str(config), "review-raw", "--json"]) == 0
+    gate = _json_output(capsys)
+    decision = tmp_path / "decision.json"
+    decision.write_text(json.dumps({"parent_id": gate["parent_id"], "bads": ["C3"], "spans": []}))
+    assert main(["preprocess", "review", str(config), "raw", "--decisions", str(decision)]) == 0
+    assert main(["preprocess", "run", str(config)]) == 0
+
+
+def test_a_saved_decision_turns_the_gate_pending_until_run(raw, tmp_path, capsys):
+    config = _write_config(raw, tmp_path, "required")
+    assert main(["preprocess", "run", str(config)]) == 3
+    assert main(["preprocess", "review", str(config), "raw", "--suggested"]) == 0
+    capsys.readouterr()
+    assert main(["preprocess", "status", str(config), "--json"]) == 0
+    (entry,) = _json_output(capsys)["recordings"]
+    states = {stage["stage"]: stage["state"] for stage in entry["stages"]}
+    assert states["review-raw"] == "pending"
+    assert entry["next"] == {"kind": "run", "stage": "review-raw"}
+    assert main(["preprocess", "status", str(config)]) == 0
+    assert f"Next: eegfeat preprocess run {config}" in capsys.readouterr().out

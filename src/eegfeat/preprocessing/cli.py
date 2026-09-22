@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
 import time
 import traceback
 import webbrowser
-from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext, redirect_stdout
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from functools import partial
 from importlib import resources
@@ -64,6 +65,7 @@ def register(commands: Any) -> None:
     p = command("status", "where each recording stands, or one recording's stage list")
     recording(p)
     p.add_argument("--verify", action="store_true", help="re-read that recording's checkpoints")
+    p.add_argument("--json", action="store_true", help="one JSON object, for a program")
     p = command("step", "run one stage of one recording; its parents must be complete")
     p.add_argument("stage", help="a stage name from 'steps'")
     recording(p)
@@ -80,6 +82,7 @@ def register(commands: Any) -> None:
     p.add_argument("stage", help="the checkpoint to open")
     recording(p)
     p.add_argument("--report", action="store_true", help="build and open an HTML report instead")
+    p.add_argument("--json", action="store_true", help="describe a review gate as JSON instead")
     p = command(
         "review", "save a gate decision from its filled pending file, the viewer, or a file"
     )
@@ -167,8 +170,9 @@ def _execute(args: argparse.Namespace) -> int:
             f"{command}: the recipe selects {len(recordings)} recordings; add --recording"
         )
     selected = recordings if label is None else {label: recordings[label]}
-    # MNE's per-call narration would bury the one line per recording that matters.
-    with mne.use_log_level("warning"):
+    # MNE's per-call narration would bury the one line per recording that matters,
+    # except on the JSON path, where a front end has a pane to scroll it in.
+    with mne.use_log_level("info" if getattr(args, "progress_json", False) else "warning"):
         return COMMANDS[command](Context(args, recordings, selected))
 
 
@@ -230,6 +234,8 @@ def _status(ctx: Context) -> int:
     from .execution import list_steps, open_workflow, read_checkpoint
     from .stages import STAGES
 
+    if ctx.args.json:
+        return _status_json(ctx)
     if len(ctx.selected) > 1:
         return _status_all(ctx)
     label, config = ctx.one()
@@ -273,6 +279,38 @@ def _status_all(ctx: Context) -> int:
     return 0
 
 
+def _status_json(ctx: Context) -> int:
+    from .execution import list_steps, open_workflow, read_checkpoint
+
+    recordings = []
+    for label, config in ctx.selected.items():
+        workflow = open_workflow(config)
+        statuses = list_steps(workflow)
+        for status in statuses:
+            if ctx.args.verify and status.state == "completed":
+                read_checkpoint(workflow, status.stage)
+        summary, pending = _progress(statuses)
+        recordings.append(
+            {
+                "label": label,
+                "summary": summary,
+                "stages": [
+                    {"stage": s.stage, "state": s.state, "reason": s.reason} for s in statuses
+                ],
+                "next": None if pending is None else _next_action(pending),
+            }
+        )
+    print(json.dumps({"recordings": recordings}))
+    return 0
+
+
+def _next_action(pending: StepStatus) -> dict[str, str]:
+    if pending.state == "needs-review":
+        target = pending.stage.removeprefix("review-")
+        return {"kind": "review", "stage": pending.stage, "target": target}
+    return {"kind": "reset" if pending.state == "stale" else "run", "stage": pending.stage}
+
+
 def _progress(statuses: tuple[StepStatus, ...]) -> tuple[str, StepStatus | None]:
     enabled = [status for status in statuses if status.state != "disabled"]
     pending = next((status for status in enabled if status.state != "completed"), None)
@@ -289,17 +327,13 @@ def _progress(statuses: tuple[StepStatus, ...]) -> tuple[str, StepStatus | None]
 def _run(ctx: Context) -> int:
     args = ctx.args
     reporter: Reporter = JsonReporter(sys.stdout) if args.progress_json else StageReporter()
-    # Nothing but events may reach a front end's stdout.
-    quiet: AbstractContextManager[Any] = (
-        redirect_stdout(sys.stderr) if args.progress_json else nullcontext()
-    )
     root = Path(os.path.commonpath([c.output.directory for c in ctx.recordings.values()]))
     started = time.perf_counter()
     reporter.start(list(ctx.selected), root)
     failed: list[str] = []
     waiting: dict[str, str] = {}
     outputs: list[str] = []
-    with quiet:
+    with _narration(root, args.progress_json) as log:
         for position, (label, config) in enumerate(ctx.selected.items(), 1):
             reporter.recording_start(label, position, len(ctx.selected))
             _run_one(ctx, reporter, label, config, failed, waiting, outputs)
@@ -313,8 +347,48 @@ def _run(ctx: Context) -> int:
         message = f"{CHECK} {n} recording{'s' if n != 1 else ''} reached {args.until}"
         if args.until == "export":
             message += f'\nNext: eegfeat init recipe.toml  and set inputs.root = "{root}"'
+    # A quiet run leaves an empty file: worth neither keeping nor announcing.
+    if log.stat().st_size:
+        message += f"\nLog: {log}"
+    else:
+        log.unlink()
     reporter.complete(not failed, time.perf_counter() - started, message, outputs)
     return 1 if failed else 3 if waiting else 0
+
+
+class _Tee:
+    """Writes to a stream and to a file, so the log keeps what the pane drops."""
+
+    def __init__(self, stream: Any, handle: Any) -> None:
+        self._stream, self._handle = stream, handle
+
+    def write(self, text: str) -> int:
+        self._handle.write(text)
+        return int(self._stream.write(text))
+
+    def flush(self) -> None:
+        self._handle.flush()
+        self._stream.flush()
+
+    def __getattr__(self, name: str) -> Any:
+        # isatty, fileno, encoding: whatever MNE or a progress bar asks the stream.
+        return getattr(self._stream, name)
+
+
+@contextmanager
+def _narration(root: Path, progress_json: bool) -> Iterator[Path]:
+    """Keep the whole run's narration in a file beside the outputs.
+
+    A front end scrolls a bounded pane and a terminal scrolls back only so far;
+    the file is the run entire. Nothing but events may reach a front end's
+    stdout, so on the JSON path the narration is folded into stderr first.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"preprocess-run-{time.strftime('%Y%m%d-%H%M%S')}.log"
+    with path.open("w", encoding="utf-8") as handle:
+        narration = sys.stderr if progress_json else sys.stdout
+        with redirect_stdout(_Tee(narration, handle)), redirect_stderr(_Tee(sys.stderr, handle)):
+            yield path
 
 
 def _run_one(
@@ -374,6 +448,13 @@ def _inspect(ctx: Context) -> int:
 
     _, config = ctx.one()
     workflow = open_workflow(config)
+    if ctx.args.json:
+        if ctx.args.report:
+            raise ValueError("inspect: --json and --report are exclusive")
+        from .review import gate_view
+
+        print(json.dumps(gate_view(workflow, ctx.args.stage)))
+        return 0
     checkpoint = read_checkpoint(workflow, ctx.args.stage)
     if ctx.args.report:
         from .report import build_checkpoint_report
@@ -384,11 +465,9 @@ def _inspect(ctx: Context) -> int:
             build_checkpoint_report(checkpoint.state).save(path, open_browser=False)
         webbrowser.open(path.as_uri())
         return 0
-    from ._deps import require
+    from .review import open_viewer
 
-    require("mne_qt_browser", "preprocessing-gui")
-    state = checkpoint.state
-    (state.epochs if state.epochs is not None else state.raw).copy().plot(block=True)
+    open_viewer(checkpoint.state)
     return 0
 
 

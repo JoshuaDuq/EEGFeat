@@ -43,15 +43,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev,model,connectivity,microstates,importance,references,preprocessing,preprocessing-auto]"
+      - run: pip install -e ".[dev,model,connectivity,microstates,importance,references,preprocessing,preprocessing-auto,bids]"
       # The cross-checks against third-party implementations are all guarded by
       # find_spec, so a missing package skips them instead of failing. Importing
       # each one here turns that silent skip back into a red build.
-      - run: python -c "import antropy, shap, mne_connectivity, sklearn, yaml, autoreject, pyprep"
+      - run: python -c "import antropy, shap, mne_connectivity, sklearn, yaml, autoreject, pyprep, mne_bids"
       - run: >
           pytest tests/test_connectivity.py tests/test_microstates.py
           tests/test_runner_compute.py tests/test_complexity.py tests/test_higuchi.py
-          tests/model/test_importance.py -ra
+          tests/model/test_importance.py tests/paradigm_specific -ra
+
+  # The Go front end is optional for users; its own tests still run here.
+  tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+      - run: cd tui && test -z "$(gofmt -l .)" && go vet ./... && go test ./...
 
   package:
     runs-on: ubuntu-latest

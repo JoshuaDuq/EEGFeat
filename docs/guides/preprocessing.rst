@@ -408,6 +408,37 @@ HTML file beside the workspace and opens it: the continuous data before
 epoching, the fitted operator at ``fit-artifact`` and ``review-artifact``, the
 epochs after.
 
+Terminal Front End
+~~~~~~~~~~~~~~~~~~
+
+``tui/`` holds an optional Go program that drives the same commands from one
+screen: every recording and where it stands, a live ``run`` with its log kept
+below the stage list, and each review gate as a checklist that opens pre-ticked with the detectors' verdict and
+their reasons (PyPREP tests per channel, ICLabel class and confidence per
+component, peak-to-peak amplitude per epoch). It writes decisions through
+``review --decisions`` and reads state through ``status --json`` and
+``inspect STAGE --json``, so nothing it does bypasses the checks above, and
+the Python package does not depend on it. ``v`` opens the reviewed checkpoint
+in the MNE viewer when ``preprocessing-gui`` is installed.
+
+Lists scroll to keep the selected row visible. ``Home`` / ``End`` jump to the
+first / last recording, stage, or review row; ``Page Up`` / ``Page Down`` page
+through review rows (and scroll the run log on the home screen). Sorting a
+review with ``o`` keeps the same item selected. While loading, starting,
+saving, or resetting, the header shows the operation and further actions
+wait for it to finish.
+
+.. code-block:: bash
+
+   cd tui && go build -o eegfeat-tui .     # Go 1.23+
+   ./eegfeat-tui preprocessing.yaml        # finds eegfeat on PATH, or set EEGFEAT
+
+``--json`` on ``status`` and ``inspect`` is a documented contract for any
+front end: ``status --json`` lists each recording's stages and its ``next``
+action (``review``, ``run`` or ``reset``); ``inspect review-raw --json``
+returns the gate's ``items`` with ``suggested`` flags and ``tags``, its
+``parent`` checkpoint, and the ``parent_id`` a decision must echo.
+
 Outputs
 -------
 

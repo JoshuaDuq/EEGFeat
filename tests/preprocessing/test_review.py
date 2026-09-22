@@ -158,3 +158,72 @@ def test_viewer_raw_review_reports_only_new_spans_in_acquisition_time(raw):
     assert spans == [{"onset": 10.0, "duration": 0.5, "description": "BAD_blink"}]
     assert isinstance(spans[0]["onset"], float)
     assert isinstance(mne.Annotations([0], [1], ["x"]), mne.Annotations)
+
+
+class _Plottable:
+    def __init__(self):
+        self.calls = []
+
+    def copy(self):
+        return self
+
+    def plot(self, block):
+        self.calls.append(("plot", block))
+
+    def plot_components(self, **kwargs):
+        self.calls.append(("components", kwargs))
+
+    def plot_sources(self, raw, block):
+        self.calls.append(("sources", raw, block))
+
+
+@pytest.fixture
+def qt_stubbed(monkeypatch):
+    import contextlib
+
+    import mne
+
+    monkeypatch.setattr(review_module, "require", lambda package, extra: None)
+    monkeypatch.setattr(mne.viz, "use_browser_backend", lambda name: contextlib.nullcontext())
+
+
+def test_viewer_shows_ica_sources_for_a_fitted_checkpoint(qt_stubbed):
+    from types import SimpleNamespace
+
+    model = _Plottable()
+    model.n_components_ = 3
+    raw = _Plottable()
+    state = SimpleNamespace(
+        raw=raw, epochs=None, artifact=SimpleNamespace(method="ica", model=model)
+    )
+    review_module.open_viewer(state)
+    # No picks: MNE pages the topomaps 20 to a figure, and one figure holding every
+    # component is metres tall on a montage of any size, with nothing to scroll it.
+    assert model.calls == [("components", {}), ("sources", raw, True)]
+    assert raw.calls == []
+
+
+def test_interactive_ica_review_pages_the_topomaps(qt_stubbed, monkeypatch):
+    from types import SimpleNamespace
+
+    # Same reason as open_viewer: one figure per component count is unscrollable.
+    monkeypatch.setattr(review_module, "_confirm_choices", lambda title, labels: [1])
+    model = _Plottable()
+    model.n_components_ = 3
+    raw = _Plottable()
+    state = SimpleNamespace(
+        raw=raw, epochs=None, artifact=SimpleNamespace(method="ica", model=model, fit_id="fit")
+    )
+    decision = review_module.viewer_decision("review-artifact", state)
+    assert model.calls == [("components", {}), ("sources", raw, True)]
+    assert decision == {"fit_id": "fit", "exclude": [1]}
+
+
+def test_viewer_shows_epochs_before_raw_without_an_ica(qt_stubbed):
+    from types import SimpleNamespace
+
+    raw, epochs = _Plottable(), _Plottable()
+    review_module.open_viewer(SimpleNamespace(raw=raw, epochs=epochs, artifact=None))
+    assert epochs.calls == [("plot", True)] and raw.calls == []
+    review_module.open_viewer(SimpleNamespace(raw=raw, epochs=None, artifact=None))
+    assert raw.calls == [("plot", True)]

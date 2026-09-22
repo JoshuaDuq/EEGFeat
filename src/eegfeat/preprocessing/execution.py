@@ -208,7 +208,8 @@ def list_steps(workflow: Workflow) -> tuple[StepStatus, ...]:
             _pointer(workflow, parent) is not None
             for parent in enabled_parents(workflow, stage.name)
         ):
-            state = "needs-review"
+            # A saved decision leaves only the run to do; the gate no longer waits on anyone.
+            state = "pending" if _decided(workflow, stage.name, identities) else "needs-review"
         path = workflow.workspace / stage.name / pointer if pointer else None
         actions = {
             "needs-review": f'review CONFIG {stage.name.removeprefix("review-")}',
@@ -244,6 +245,12 @@ def _template(workflow: Workflow, stage: str, state: StageData, parents: dict[st
         for key, value in template.items()
     ]
     pending.write_text("".join(lines))
+
+
+def _decided(workflow: Workflow, stage: str, identities: dict[str, str]) -> bool:
+    path = decision_path(workflow, stage)
+    parents = {name: identities[name] for name in enabled_parents(workflow, stage)}
+    return path.exists() and read_yaml(path).get("parent_id") == identity(parents)
 
 
 def read_decision(workflow: Workflow, stage: str, parents: dict[str, str]) -> dict[str, Any] | None:

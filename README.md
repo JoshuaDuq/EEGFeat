@@ -171,6 +171,12 @@ eegfeat preprocess review preprocessing.yaml raw
 eegfeat preprocess run preprocessing.yaml
 ```
 
+[`paradigm_specific/thermal_pain/eeg_raw_to_bids.py`](paradigm_specific/thermal_pain/eeg_raw_to_bids.py) is the study's raw-to-BIDS conversion (needs the `bids` extra). It exists here because the first conversion lost every marker name — mne-bids rewrites BrainVision through pybv, which writes each event as `Stimulus/S n` — and dropped the recording's own `Bad Interval` markers; this copy restores the names after writing and always keeps BAD spans. `repair_markers.py` beside it put the names back into the already-converted BIDS, decomb and bcgnet marker files and the exported eegfeat bundles in place, from a fresh conversion whose positions had to match.
+
+An optional terminal front end in [`tui/`](tui) (Go 1.23+, `cd tui && go build -o eegfeat-tui .`) shows every recording, runs the pipeline, and presents each gate as a checklist pre-ticked with the detectors' verdict and reasons. It drives the same commands through `status --json`, `inspect STAGE --json` and `review --decisions`; the Python package never depends on it.
+
+In the TUI, `Tab` switches between recordings and stages, `Enter` performs the selected action, and `?` shows the available shortcuts. Press `l` on the home screen to open the full log at any supported terminal size; `PgUp`/`PgDn` scroll, `End` returns to the latest output, and `Esc` returns to the workflow.
+
 That second `run` exports. The init recipe has no artifact block, so there is no second gate. An `artifact` block adds `review-artifact`, governed by `artifact_review`. [`examples/preprocessing.yaml`](examples/preprocessing.yaml) is a cohort recipe with ICA and both gates set to `suggested`.
 
 Each bundle is `<name>_epo.fif`, `<name>_events.tsv`, `<name>_report.html`, and `<name>_preprocessing.json`. When every recording is exported, `run` prints the `eegfeat init` command and the `inputs.root` to set. `status` shows one line per recording and the next command to run; `--recording LABEL` narrows any command to one.
