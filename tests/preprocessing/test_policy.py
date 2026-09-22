@@ -1,0 +1,86 @@
+import json
+from dataclasses import replace
+
+import pytest
+
+from eegfeat.preprocessing import open_workflow, read_checkpoint, reset_from, run_until
+from eegfeat.preprocessing.config import (
+    AmplitudeSettings,
+    AnnotationSettings,
+    ArtifactSettings,
+    ICASettings,
+    WorkflowSettings,
+)
+from eegfeat.preprocessing.review import save_review
+
+from .test_execution import config_for
+
+
+def _loud(raw, tmp_path, **workflow):
+    # Fp1 is the only amplitude candidate; C3 is marked bad on the file itself.
+    import mne
+
+    data = raw.get_data()
+    data[0] *= 10.0
+    loud = mne.io.RawArray(data, raw.info.copy(), first_samp=raw.first_samp)
+    loud.info["bads"] = ["C3"]
+    base = config_for(loud, tmp_path)
+    return replace(
+        base,
+        workflow=WorkflowSettings(**workflow),
+        processing=replace(
+            base.processing,
+            annotations=AnnotationSettings(amplitude=AmplitudeSettings(peak={"eeg": 5e-5})),
+        ),
+    )
+
+
+def test_suggested_raw_policy_records_a_bound_decision_and_continues(raw, tmp_path):
+    workflow = open_workflow(_loud(raw, tmp_path, raw_review="suggested"))
+    assert run_until(workflow, "review-raw").state == "completed"
+    decision = json.loads((workflow.workspace / "decisions" / "review-raw.yaml").read_text())
+    assert decision["bads"] == ["C3", "Fp1"]
+    assert decision["spans"] == []
+    assert len(decision["parent_id"]) == 64
+    assert read_checkpoint(workflow, "review-raw").state.raw.info["bads"] == ["C3", "Fp1"]
+
+
+def test_suggested_decision_goes_stale_with_its_detector(raw, tmp_path):
+    config = _loud(raw, tmp_path, raw_review="suggested")
+    workflow = open_workflow(config)
+    run_until(workflow, "review-raw")
+    quiet = replace(
+        config.processing,
+        annotations=AnnotationSettings(amplitude=AmplitudeSettings(peak={"eeg": 5e-3})),
+    )
+    workflow = open_workflow(replace(config, processing=quiet))
+    with pytest.raises(ValueError, match="stale"):
+        run_until(workflow, "review-raw")
+    reset_from(workflow, "annotate")
+    assert run_until(workflow, "review-raw").state == "completed"
+    assert read_checkpoint(workflow, "review-raw").state.raw.info["bads"] == ["C3"]
+
+
+def test_review_suggested_keeps_marked_bads(raw, tmp_path):
+    workflow = open_workflow(_loud(raw, tmp_path, raw_review="required"))
+    assert run_until(workflow, "review-raw").state == "needs-review"
+    save_review(workflow, "raw", suggested=True)
+    assert run_until(workflow, "review-raw").state == "completed"
+    assert read_checkpoint(workflow, "review-raw").state.raw.info["bads"] == ["C3", "Fp1"]
+
+
+def test_suggested_artifact_policy_excludes_detected_components(mixture, tmp_path):
+    base = config_for(mixture, tmp_path)
+    artifact = ArtifactSettings(
+        "ica", ICASettings(n_components=4, eog_channels=("VEOG",), ecg_channel="ECG"), "average"
+    )
+    config = replace(
+        base,
+        processing=replace(base.processing, artifact=artifact),
+        workflow=WorkflowSettings(raw_review="disabled", artifact_review="suggested"),
+    )
+    workflow = open_workflow(config)
+    assert run_until(workflow, "review-artifact").state == "completed"
+    state = read_checkpoint(workflow, "review-artifact").state
+    assert state.reviewed.decision["exclude"] == state.artifact.evidence["suggested_exclude"]
+    assert state.provenance["artifact_review"] == "suggested"

@@ -1,0 +1,59 @@
+# Explicit study choices: volts, seconds, Hz. No automatic cleaning defaults.
+#
+#   eegfeat preprocess check preprocessing.yaml    validate it, writing nothing
+#   eegfeat preprocess run preprocessing.yaml      run every recording to export
+#
+# One recording (path), or a cohort (root and pattern). With root, the tree
+# below it is mirrored under output.directory and each recording is named
+# after its file, so leave output.name out.
+input:
+  path: recording_raw.fif
+  # root: sourcedata
+  # pattern: "**/*_eeg.vhdr"
+output:
+  directory: preprocessed
+  name: recording        # optional; the file name without _raw or _eeg when omitted
+channels:
+  rename: {}
+  types: {}
+  drop: []
+  bads: []
+  montage: null
+  interpolate_bads: false
+  bipolar: []
+  projections: error
+crop: null
+annotations:
+  bad_spans: []
+  amplitude: null
+  breaks: null
+  muscle: null
+bad_channels: null
+bridges: false
+stimulation: null
+# A required review stops the run until a decision is saved. suggested saves
+# the detectors' own verdict as the decision and continues.
+workflow:
+  raw_review: required        # required | suggested | disabled
+  artifact_review: required   # required | suggested
+  epoch_review: optional      # required | optional | disabled
+filter:
+  l_freq: null
+  h_freq: null
+  notch_freqs: []
+artifact: null
+rejection: null
+reference:
+  channels: null
+  add_channels: []
+sampling: null
+epochs:
+  kind: events
+  events:
+    source: annotations
+    event_id: {stimulus: 1}
+  tmin: -0.2
+  tmax: 0.8
+  padding: 0.0
+  baseline: null
+  detrend: null

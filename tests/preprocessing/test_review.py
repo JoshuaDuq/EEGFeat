@@ -1,0 +1,160 @@
+import json
+from dataclasses import replace
+
+import pytest
+
+from eegfeat.preprocessing import open_workflow, read_checkpoint, run_until
+from eegfeat.preprocessing import review as review_module
+from eegfeat.preprocessing.config import WorkflowSettings, read_yaml
+from eegfeat.preprocessing.review import ReviewCancelled, save_review
+
+from .test_execution import config_for
+
+
+def _pending_workflow(raw, tmp_path):
+    config = replace(config_for(raw, tmp_path), workflow=WorkflowSettings(raw_review="required"))
+    workflow = open_workflow(config)
+    assert run_until(workflow, "review-raw").state == "needs-review"
+    return workflow
+
+
+def test_viewer_decision_is_validated_and_applied(raw, tmp_path, monkeypatch):
+    workflow = _pending_workflow(raw, tmp_path)
+    spans = [{"onset": 5.0, "duration": 1.0, "description": "BAD_manual"}]
+    monkeypatch.setattr(
+        review_module, "viewer_decision", lambda stage, state: {"bads": ["C3"], "spans": spans}
+    )
+    save_review(workflow, "raw")
+    assert run_until(workflow, "review-raw").state == "completed"
+    reviewed = read_checkpoint(workflow, "review-raw").state.raw
+    assert reviewed.info["bads"] == ["C3"]
+    assert reviewed.annotations.onset[0] == 5.0 + reviewed.first_time
+    assert read_checkpoint(workflow, "detect-bads").state.raw.info["bads"] == []
+
+
+def test_cancelled_viewer_saves_nothing(raw, tmp_path, monkeypatch):
+    workflow = _pending_workflow(raw, tmp_path)
+
+    def cancel(stage, state):
+        raise ReviewCancelled("cancelled")
+
+    monkeypatch.setattr(review_module, "viewer_decision", cancel)
+    with pytest.raises(ReviewCancelled):
+        save_review(workflow, "raw")
+    assert not (workflow.workspace / "decisions" / "review-raw.yaml").exists()
+
+
+@pytest.mark.parametrize(
+    "edit,match",
+    [
+        (lambda d: d.update(parent_id="0" * 64), "parent_id"),
+        (lambda d: d.update(spans=[]), "pending"),
+        (lambda d: d.update(bads=["missing"], spans=[]), "missing"),
+    ],
+)
+def test_invalid_headless_decisions_are_rejected(raw, tmp_path, edit, match):
+    workflow = _pending_workflow(raw, tmp_path)
+    decision = read_yaml(workflow.workspace / "decisions" / "review-raw.pending.yaml")
+    edit(decision)
+    path = tmp_path / "decision.yaml"
+    path.write_text(json.dumps(decision))
+    with pytest.raises(ValueError, match=match):
+        save_review(workflow, "raw", path)
+
+
+def test_suggested_raw_review_applies_candidates(raw, tmp_path):
+    import mne
+
+    from eegfeat.preprocessing.config import AmplitudeSettings, AnnotationSettings
+
+    # One channel ten times larger than the rest is the only amplitude candidate.
+    data = raw.get_data()
+    data[0] *= 10.0
+    loud = mne.io.RawArray(data, raw.info.copy(), first_samp=raw.first_samp)
+    base = config_for(loud, tmp_path)
+    config = replace(
+        base,
+        workflow=WorkflowSettings(raw_review="required"),
+        processing=replace(
+            base.processing,
+            annotations=AnnotationSettings(amplitude=AmplitudeSettings(peak={"eeg": 5e-5})),
+        ),
+    )
+    workflow = open_workflow(config)
+    assert run_until(workflow, "review-raw").state == "needs-review"
+    candidates = read_checkpoint(workflow, "detect-bads").state.candidates
+    assert candidates["bads"] == ["Fp1"]
+    save_review(workflow, "raw", suggested=True)
+    assert run_until(workflow, "review-raw").state == "completed"
+    reviewed = read_checkpoint(workflow, "review-raw").state.raw
+    assert reviewed.info["bads"] == candidates["bads"]
+    assert read_checkpoint(workflow, "review-raw").state.provenance["raw_decision"]["bads"] == (
+        candidates["bads"]
+    )
+    with pytest.raises(ValueError, match="exclusive"):
+        save_review(workflow, "raw", tmp_path / "x.yaml", suggested=True)
+
+
+def test_suggested_artifact_review_takes_detector_union(mixture, tmp_path):
+    from eegfeat.preprocessing.config import ArtifactSettings, ICASettings
+
+    base = config_for(mixture, tmp_path)
+    artifact = ArtifactSettings(
+        "ica", ICASettings(n_components=4, eog_channels=("VEOG",), ecg_channel="ECG"), "average"
+    )
+    workflow = open_workflow(replace(base, processing=replace(base.processing, artifact=artifact)))
+    assert run_until(workflow, "review-artifact").state == "needs-review"
+    evidence = read_checkpoint(workflow, "fit-artifact").state.artifact.evidence
+    save_review(workflow, "artifact", suggested=True)
+    assert run_until(workflow, "review-artifact").state == "completed"
+    decision = read_checkpoint(workflow, "review-artifact").state.reviewed.decision
+    assert decision["exclude"] == evidence["suggested_exclude"]
+
+
+def test_pending_file_is_commented_yaml_that_flagless_review_reads(raw, tmp_path):
+    workflow = _pending_workflow(raw, tmp_path)
+    pending = workflow.workspace / "decisions" / "review-raw.pending.yaml"
+    text = pending.read_text()
+    assert text.startswith("#") and "bads: null" in text and "spans: null" in text
+    pending.write_text(text.replace("bads: null", "bads: [C3]").replace("spans: null", "spans: []"))
+    save_review(workflow, "raw")
+    assert run_until(workflow, "review-raw").state == "completed"
+    assert read_checkpoint(workflow, "review-raw").state.raw.info["bads"] == ["C3"]
+
+
+def test_flagless_review_without_viewer_names_the_pending_file(raw, tmp_path, monkeypatch):
+    workflow = _pending_workflow(raw, tmp_path)
+
+    def missing(stage, state):
+        raise ModuleNotFoundError("Install eegfeat[preprocessing-gui]")
+
+    monkeypatch.setattr(review_module, "viewer_decision", missing)
+    with pytest.raises(ModuleNotFoundError, match="preprocessing-gui.*review-raw.pending.yaml"):
+        save_review(workflow, "raw")
+
+
+def test_review_of_a_disabled_gate_is_refused(raw, tmp_path):
+    workflow = open_workflow(
+        replace(config_for(raw, tmp_path), workflow=WorkflowSettings(raw_review="disabled"))
+    )
+    run_until(workflow, "reject")
+    with pytest.raises(ValueError, match="review-epochs.*disabled"):
+        save_review(workflow, "epochs", suggested=True)
+
+
+def test_viewer_raw_review_reports_only_new_spans_in_acquisition_time(raw):
+    import mne
+
+    from eegfeat.preprocessing.review import new_bad_spans
+
+    # The viewer copy starts with the spans already on the record; only additions are the decision.
+    before = raw.copy()
+    before.annotations.append(5.0 + raw.first_time, 1.0, "BAD_manual")
+    after = before.copy()
+    after.annotations.append(9.0 + raw.first_time, 0.5, "BAD_blink")
+    after.annotations.append(1.0 + raw.first_time, 0.5, "stimulus")
+    original_first_samp = raw.first_samp - 250
+    spans = new_bad_spans(before, after, original_first_samp)
+    assert spans == [{"onset": 10.0, "duration": 0.5, "description": "BAD_blink"}]
+    assert isinstance(spans[0]["onset"], float)
+    assert isinstance(mne.Annotations([0], [1], ["x"]), mne.Annotations)

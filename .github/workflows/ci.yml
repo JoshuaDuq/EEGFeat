@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev,model]"
+      - run: pip install -e ".[dev,model,preprocessing,preprocessing-auto]"
       - run: ruff check src tests
       - run: black --check src tests
       - run: mypy
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[dev,model]"
+      - run: pip install -e ".[dev,model,preprocessing,preprocessing-auto]"
       - run: pytest
       # A green general run does not prove that the reference fixture was present
       # or that the complete modeling suite remained collectable.
@@ -43,11 +43,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev,model,connectivity,microstates,importance,references]"
+      - run: pip install -e ".[dev,model,connectivity,microstates,importance,references,preprocessing,preprocessing-auto]"
       # The cross-checks against third-party implementations are all guarded by
       # find_spec, so a missing package skips them instead of failing. Importing
       # each one here turns that silent skip back into a red build.
-      - run: python -c "import antropy, shap, mne_connectivity, sklearn"
+      - run: python -c "import antropy, shap, mne_connectivity, sklearn, yaml, autoreject, pyprep"
       - run: >
           pytest tests/test_connectivity.py tests/test_microstates.py
           tests/test_runner_compute.py tests/test_complexity.py tests/test_higuchi.py
@@ -66,3 +66,16 @@ jobs:
       - run: /tmp/eegfeat-wheel/bin/pip install dist/*.whl
       - run: /tmp/eegfeat-wheel/bin/python -c "import eegfeat"
       - run: /tmp/eegfeat-wheel/bin/eegfeat --version
+      - run: /tmp/eegfeat-wheel/bin/pip install "$(ls dist/*.whl)[preprocessing]"
+      - run: cd /tmp && /tmp/eegfeat-wheel/bin/eegfeat preprocess init preprocessing.yaml && /tmp/eegfeat-wheel/bin/eegfeat preprocess steps preprocessing.yaml
+
+  preprocessing-minimum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev,preprocessing,preprocessing-auto]" "mne==1.13.2" "pyprep==0.9.0" "autoreject==0.4.3"
+      - run: python -c "import yaml, sklearn, pyprep, autoreject"
+      - run: MPLBACKEND=Agg pytest tests/preprocessing -ra

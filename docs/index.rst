@@ -108,6 +108,16 @@ What It Computes
 
       ``build_design`` · ``cross_fit_regression`` · ``permutation_test``
 
+   .. grid-item-card:: Preprocessing
+      :link: guides/preprocessing
+      :link-type: doc
+
+      Optional raw-to-epochs cleaning: reviewed bad channels and spans, FIR
+      filtering, ICA/SSP/regression with explicit review, rejection, reference,
+      and resampling, each as a validated checkpoint.
+
+      ``eegfeat preprocess run`` · ``eegfeat preprocess review``
+
    .. grid-item-card:: Batch Runner
       :link: guides/runner
       :link-type: doc
@@ -139,6 +149,7 @@ Definitions are in :doc:`methods/index`. Signatures are in :doc:`api/index`.
    :caption: Guides
 
    guides/tables
+   guides/preprocessing
    guides/runner
    guides/modeling
    examples

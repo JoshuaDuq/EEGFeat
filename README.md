@@ -23,6 +23,7 @@ eeg_erds-mean_alpha_central_stimulus_db_pd6572187a139
 | Goal | Section |
 | :--- | :--- |
 | Call the library from Python | [Python API](#python-api) |
+| Clean raw EEG into epochs first | [Preprocessing](#preprocessing) |
 | Apply one recipe to many epochs files | [Batch runner](#batch-runner) |
 | Predict a target from per-epoch features | [Modeling](#modeling) |
 | Look up a measure | [Measures](#measures) |
@@ -30,7 +31,7 @@ eeg_erds-mean_alpha_central_stimulus_db_pd6572187a139
 
 ## Install
 
-Python 3.11 or newer. Input is preprocessed MNE `Epochs`. The package is not on PyPI.
+Python 3.11 or newer. Feature extraction reads preprocessed MNE `Epochs`. The package is not on PyPI.
 
 ```bash
 git clone https://github.com/JoshuaDuq/EEGFeat.git
@@ -49,13 +50,16 @@ Core dependencies are `numpy`, `scipy`, `pandas`, and `mne`.
 | `connectivity` | `mne-connectivity` for spectral connectivity and wPLI |
 | `microstates` | scikit-learn microstate segmentation |
 | `importance` | SHAP. Permutation importance is included in `model` |
+| `preprocessing` | raw-to-epochs workflow for one recording or a cohort: PyYAML, scikit-learn, h5io, h5py, filelock |
+| `preprocessing-auto` | PyPREP bad-channel candidates and autoreject epoch repair |
+| `preprocessing-gui` | MNE Qt viewers for interactive review |
 | `docs` | This documentation, built with Sphinx |
 | `dev` | tests, typing, lint, format |
 
 Development install:
 
 ```bash
-python -m pip install -e ".[dev,model,connectivity,microstates,importance,docs]"
+python -m pip install -e ".[dev,model,connectivity,microstates,importance,preprocessing,preprocessing-auto,docs]"
 ```
 
 ## Python API
@@ -129,6 +133,56 @@ dataset = read_dataset(["sub-01_features.tsv", "sub-02_features.tsv"])
 | `*_features.json` | Column metadata, flags, row identity, provenance |
 
 `read_dataset` returns per-epoch features in `dataset.table` and descriptor columns in `dataset.targets`. Put the target, subject, and run in `rows` when the tables will be modeled. For in-memory tables whose channel sets differ, use `stack_rows(..., columns="union")`.
+
+## Preprocessing
+
+Optional. One YAML recipe, one recording or a whole cohort. The feature runner reads the exported FIF and does not call this package.
+
+```bash
+python -m pip install -e ".[preprocessing]"
+eegfeat preprocess init preprocessing.yaml --mode events
+```
+
+`--mode resting` writes 2 s fixed-length epochs instead of an event block. `init` will not replace an existing file. Edit the recipe before `check`.
+
+- `input.path` names one recording. `input.root` and `input.pattern` select a cohort instead; the tree below `root` is mirrored under `output.directory` and each recording is named after its file.
+- `epochs.events` must match the recordings. `init` writes annotation events `{stimulus: 1}`.
+- `workflow` sets the review policy per gate. `required` stops the run until a decision is saved. `suggested` saves the detectors' own verdict and continues. `disabled` skips the gate.
+- A FIF with inactive projectors fails while `channels.projections` is `error`. Set `apply` or `discard-inactive`.
+
+```bash
+eegfeat preprocess check preprocessing.yaml   # every recording; writes nothing
+eegfeat preprocess run preprocessing.yaml     # every recording, up to export
+```
+
+With `raw_review: required`, `run` stops at the raw gate, prints the command to continue with, and exits 3:
+
+```text
+[1/2] sub-01
+      ✓ awaiting review-raw · eegfeat preprocess review preprocessing.yaml --recording sub-01 raw
+```
+
+With a display, `pip install -e ".[preprocessing-gui]"` and run that command. It opens the Qt browser and saves the decision when the dialog is accepted.
+
+Without a display, fill in the pending file the run wrote, `<bundle directory>/.preprocessing/<name>/decisions/review-raw.pending.yaml`. Every field is explained in a comment; replace each `null`. Then run the same `review` command, which reads the filled file. `eegfeat preprocess review preprocessing.yaml raw` with no `--recording` reviews each recording that awaits it.
+
+```bash
+eegfeat preprocess review preprocessing.yaml raw
+eegfeat preprocess run preprocessing.yaml
+```
+
+That second `run` exports. The init recipe has no artifact block, so there is no second gate. An `artifact` block adds `review-artifact`, governed by `artifact_review`. [`examples/preprocessing.yaml`](examples/preprocessing.yaml) is a cohort recipe with ICA and both gates set to `suggested`.
+
+Each bundle is `<name>_epo.fif`, `<name>_events.tsv`, `<name>_report.html`, and `<name>_preprocessing.json`. When every recording is exported, `run` prints the `eegfeat init` command and the `inputs.root` to set. `status` shows one line per recording and the next command to run; `--recording LABEL` narrows any command to one.
+
+| Exit code | Meaning |
+| :--- | :--- |
+| `0` | Every selected recording reached the requested stage |
+| `1` | At least one recording failed; the others still ran |
+| `2` | The recipe or a prerequisite is wrong |
+| `3` | No recording failed and at least one awaits a review |
+
+The schema, the other review fields, and the stage order are in the [preprocessing guide](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html).
 
 ## Batch runner
 
@@ -311,6 +365,7 @@ Exported from `eegfeat`. Definitions and signatures are in the [API reference](h
 | [Concepts](https://joshuaduq.github.io/EEGFeat/concepts.html) | Containers, table fields, column names, missing values |
 | [Quickstart](https://joshuaduq.github.io/EEGFeat/quickstart.html) | PSD, Morlet, and ERDS examples |
 | [Feature tables and files](https://joshuaduq.github.io/EEGFeat/guides/tables.html) | `select`, TSV and JSON, stacking |
+| [Preprocessing](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html) | YAML schema, review, and export |
 | [Runner](https://joshuaduq.github.io/EEGFeat/guides/runner.html) | TOML schema and CLI |
 | [Modeling](https://joshuaduq.github.io/EEGFeat/guides/modeling.html) | Designs, cross-fitting, metrics, nulls, importance |
 | [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html) | Definitions |

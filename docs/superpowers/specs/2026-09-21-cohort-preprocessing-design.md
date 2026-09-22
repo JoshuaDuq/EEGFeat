@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-21
 **Branch:** `feat/optional-preprocessing`
-**Status:** approved design, awaiting implementation plan
+**Status:** implemented on 2026-09-22
 
 ## 1. Goal
 
@@ -147,9 +147,10 @@ its `WorkflowSettings` from the decisions it is given and uses `required` for
 ## 5. Loading
 
 `config.py` gains `load_recipe(path) -> dict[str, PreprocessingConfig]`,
-label to configuration in processing order. It reads the YAML once, validates
-every study-level section once, then resolves `input`, `output`, and the two
-placeholder fields per recording. `load_config(path)` remains and returns the
+label to configuration in processing order. It reads the YAML once, then
+builds each recording's configuration with its own `input`, `output`, and
+placeholder substitutions, so a study-level error surfaces on the first
+recording. `load_config(path)` remains and returns the
 single configuration; when the recipe selects more than one recording it
 raises `ValueError` naming the count and `load_recipe`. `PreprocessingConfig`,
 `open_workflow`, `run_until`, `run_step`, `run_next`, `list_steps`,
@@ -205,11 +206,12 @@ Exit status:
 ### 6.4 Stop lines and next actions
 
 The engine keeps producing `next_action` strings with the `CONFIG`
-placeholder. The CLI renders each as a complete command: prefix
-`eegfeat preprocess `, replace `CONFIG` with the recipe path as given, and
-append ` --recording LABEL` when the recipe selects more than one recording.
-Rendering happens in one function used by every command that prints a next
-action.
+placeholder, and `run_until` gains an optional `on_step` callback so the CLI
+can report each stage as it completes. The CLI renders each `<verb> CONFIG`
+fragment, in next actions and in error messages alike, as
+`eegfeat preprocess <verb> <recipe path>`, inserting ` --recording LABEL`
+right after the path when the recipe selects more than one recording and the
+recording is known. One function does this for every command.
 
 `status` without `--recording` prints, per recording, the label and one of:
 `exported`, `awaiting <review-stage>`, `stale at <stage>`, or

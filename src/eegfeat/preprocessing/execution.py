@@ -1,0 +1,460 @@
+"""Explicit single-step, sequential and dependency-aware checkpoint execution."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from dataclasses import dataclass, replace
+from importlib.metadata import version
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+import mne  # type: ignore[import-untyped]
+import numpy as np
+
+from ._deps import require
+from .checkpoints import Checkpoint, load_checkpoint, publish_checkpoint, write_pointer
+from .checks import validate_source_destinations
+from .config import PreprocessingConfig, WorkflowSettings, read_yaml
+from .io import validate_bundle, write_result
+from .pipeline import StageData, execute_numeric, result_from_state
+from .provenance import fingerprint, identity
+from .stages import STAGES, enabled, get_stage, stage_settings
+
+POLICIES = {"review-raw": "raw_review", "review-artifact": "artifact_review"}
+HELP = {
+    "parent_id": "Identity of the reviewed checkpoint. Leave as written.",
+    "fit_id": "Identity of the fitted model. Leave as written.",
+    "bads": "Bad channels; replaces the recording's list. [] marks every channel good.",
+    "spans": "BAD intervals to append, each {onset: seconds from the start of the recording, "
+    "duration: seconds, description: BAD_...}. [] appends none.",
+    "exclude": "Indices to drop: ICA components, or original epoch numbers. [] drops none.",
+    "include": "SSP projector indices to apply. [] applies none.",
+    "apply": "true applies the reviewed EOG regression; false leaves the data uncorrected.",
+}
+
+
+@dataclass(frozen=True)
+class Workflow:
+    config: PreprocessingConfig
+    workspace: Path
+
+
+@dataclass(frozen=True)
+class StepStatus:
+    stage: str
+    state: str
+    reason: str
+    path: Path | None
+    next_action: str
+
+
+@dataclass(frozen=True)
+class StepResult:
+    stage: str
+    state: str
+    path: Path | None
+    next_action: str
+
+
+@dataclass(frozen=True)
+class RunOutcome:
+    state: str
+    steps: tuple[StepResult, ...]
+    next_action: str
+
+
+def open_workflow(config: PreprocessingConfig) -> Workflow:
+    return Workflow(config, config.output.directory / ".preprocessing" / config.output.name)
+
+
+def _enabled(workflow: Workflow, stage: str) -> bool:
+    return enabled(stage, workflow.config.processing, workflow.config.workflow)
+
+
+def data_source(workflow: Workflow, name: str) -> str:
+    # A disabled stage forwards its data parent, parents[0]; a side branch such as a fit
+    # ends with the stage that consumes it.
+    while not _enabled(workflow, name):
+        name = get_stage(name).parents[0]
+    return name
+
+
+def enabled_parents(workflow: Workflow, name: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(data_source(workflow, parent) for parent in get_stage(name).parents))
+
+
+def _pointer(workflow: Workflow, name: str) -> str | None:
+    path = workflow.workspace / f"{name}.json"
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text())
+    if data.get("schema") != 1:
+        raise ValueError(f"{path}: unsupported pointer schema")
+    artifact_id = data.get("artifact_id")
+    if (
+        not isinstance(artifact_id, str)
+        or len(artifact_id) != 64
+        or any(c not in "0123456789abcdef" for c in artifact_id)
+    ):
+        raise ValueError(f"{path}: invalid artifact identity")
+    return artifact_id
+
+
+def decision_path(workflow: Workflow, name: str) -> Path:
+    return workflow.workspace / "decisions" / f"{name}.yaml"
+
+
+def pending_path(workflow: Workflow, name: str) -> Path:
+    return decision_path(workflow, name).with_suffix(".pending.yaml")
+
+
+def source_identity(workflow: Workflow) -> str | None:
+    # The load checkpoint recorded the source fingerprint; reading it back spares the source.
+    pointer = _pointer(workflow, "load")
+    if pointer is None:
+        return None
+    state = json.loads((workflow.workspace / "load" / pointer / "state.json").read_text())
+    identity: str = state["provenance"]["input_hash"]
+    return identity
+
+
+def _reset_tokens(workflow: Workflow) -> dict[str, str]:
+    path = workflow.workspace / "resets.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def stage_identities(workflow: Workflow, source_id: str) -> dict[str, str]:
+    reset = _reset_tokens(workflow)
+    resolved: dict[str, str] = {}
+    versions = {name: version(name) for name in ("mne", "numpy", "scipy", "eegfeat")}
+    for stage in STAGES:
+        parents = {name: resolved[name] for name in stage.parents}
+        settings = stage_settings(stage, workflow.config.processing)
+        path = decision_path(workflow, stage.name)
+        decision = read_yaml(path) if stage.review and path.exists() else None
+        resolved[stage.name] = identity(
+            {
+                "implementation": 1,
+                "stage": stage.name,
+                "source": source_id if stage.name == "load" else None,
+                "parents": parents,
+                "enabled": _enabled(workflow, stage.name),
+                "settings": settings,
+                "decision": decision,
+                "reset": reset.get(stage.name),
+                "versions": versions,
+            }
+        )
+    return resolved
+
+
+def fold_calibration(raw: Any) -> Any:
+    # FIF stores the channel cal/range as float32 and applies them on write and read, so a
+    # non-FIF source calibration such as 1e-7 V/bit breaks the exact checkpoint round trip.
+    # Preloaded data is already calibrated: a unit calibration makes the round trip exact.
+    for channel in raw.info["chs"]:
+        channel["cal"] = 1.0
+        channel["range"] = 1.0
+    raw._cals = np.ones_like(raw._cals)
+    return raw
+
+
+def load_source(workflow: Workflow) -> Any:
+    raw = fold_calibration(mne.io.read_raw(workflow.config.input.path, preload=True))
+    validate_source_destinations(raw, workflow.config)
+    return raw
+
+
+def require_stage(workflow: Workflow, name: str, identities: dict[str, str]) -> Path:
+    # Metadata only: payloads are verified when a stage consumes them, or by status --verify.
+    actual = _pointer(workflow, name)
+    if actual is None:
+        raise ValueError(f"{name}: missing parent; run CONFIG --until {name}")
+    if actual != identities[name]:
+        raise ValueError(f"{name}: stale checkpoint; reset CONFIG --from {name} and run again")
+    path = workflow.workspace / name / actual
+    if not (path / "manifest.json").is_file():
+        raise ValueError(
+            f"{name}: checkpoint payload missing; reset CONFIG --from {name} and run again"
+        )
+    return path
+
+
+def read_stage(workflow: Workflow, name: str, identities: dict[str, str]) -> Checkpoint:
+    return load_checkpoint(require_stage(workflow, name, identities), identities[name])
+
+
+def read_checkpoint(workflow: Workflow, stage: str) -> Checkpoint:
+    get_stage(stage)
+    identities = stage_identities(workflow, source_identity(workflow) or "pending")
+    return read_stage(workflow, data_source(workflow, stage), identities)
+
+
+def list_steps(workflow: Workflow) -> tuple[StepStatus, ...]:
+    # Reads metadata only; payload hashes are verified when a checkpoint is consumed.
+    identities = stage_identities(workflow, source_identity(workflow) or "pending")
+    result = []
+    for stage in STAGES:
+        pointer = _pointer(workflow, stage.name)
+        state = "pending"
+        reason = ""
+        if not _enabled(workflow, stage.name):
+            state, reason = "disabled", "not selected in configuration"
+        elif pointer is not None:
+            state = "completed" if pointer == identities[stage.name] else "stale"
+        elif stage.review and all(
+            _pointer(workflow, parent) is not None
+            for parent in enabled_parents(workflow, stage.name)
+        ):
+            state = "needs-review"
+        path = workflow.workspace / stage.name / pointer if pointer else None
+        actions = {
+            "needs-review": f'review CONFIG {stage.name.removeprefix("review-")}',
+            "stale": f"reset CONFIG --from {stage.name}",
+        }
+        action = actions.get(state, f"run CONFIG --until {stage.name}")
+        result.append(StepStatus(stage.name, state, reason, path, action))
+    return tuple(result)
+
+
+def _template(workflow: Workflow, stage: str, state: StageData, parents: dict[str, str]) -> None:
+    path, pending = decision_path(workflow, stage), pending_path(workflow, stage)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    parent_id = identity(parents)
+    # A pending file for this very checkpoint may already hold the reviewer's edits.
+    if path.exists() or (pending.exists() and read_yaml(pending).get("parent_id") == parent_id):
+        return
+    template: dict[str, Any] = {"parent_id": parent_id}
+    if stage == "review-raw":
+        template.update(bads=None, spans=None)
+    elif stage == "review-epochs":
+        template["exclude"] = None
+    else:
+        assert state.artifact is not None
+        template["fit_id"] = state.artifact.fit_id
+        template[
+            {"ica": "exclude", "ssp": "include", "regression": "apply"}[state.artifact.method]
+        ] = None
+    import yaml
+
+    lines = [
+        f"# {HELP[key]}\n{yaml.safe_dump({key: value}, default_flow_style=False)}"
+        for key, value in template.items()
+    ]
+    pending.write_text("".join(lines))
+
+
+def read_decision(workflow: Workflow, stage: str, parents: dict[str, str]) -> dict[str, Any] | None:
+    path = decision_path(workflow, stage)
+    if not path.exists():
+        return None
+    decision = read_yaml(path)
+    if decision.pop("parent_id", None) != identity(parents):
+        raise ValueError(f"{path}: stale review parent identity; review the current checkpoint")
+    if any(value is None for value in decision.values()):
+        raise ValueError(f"{path}: review decision is still pending")
+    return decision
+
+
+def suggested_decision(stage: str, state: StageData) -> dict[str, Any]:
+    # The detectors' own verdicts, taken as-is; the saved decision records that choice.
+    if stage == "review-raw":
+        bads = [*state.raw.info["bads"], *state.candidates.get("bads", [])]
+        return {"bads": list(dict.fromkeys(bads)), "spans": list(state.candidates.get("spans", []))}
+    if stage == "review-epochs":
+        raise ValueError("review.epochs: no detector suggests epochs; pass --decisions")
+    artifact = state.artifact
+    assert artifact is not None
+    if artifact.method == "ica":
+        return {"fit_id": artifact.fit_id, "exclude": list(artifact.evidence["suggested_exclude"])}
+    if artifact.method == "ssp":
+        return {"fit_id": artifact.fit_id, "include": list(range(len(artifact.model)))}
+    return {"fit_id": artifact.fit_id, "apply": True}
+
+
+def _policy(workflow: Workflow, stage: str) -> str:
+    policy: str = getattr(workflow.config.workflow, POLICIES.get(stage, "epoch_review"))
+    return policy
+
+
+def _join_branches(epoch: StageData, review: StageData) -> StageData:
+    # The fit/review branch carries its own provenance; the epoch branch is the data.
+    stages = epoch.provenance["stages"]
+    provenance = {
+        **epoch.provenance,
+        "artifact": review.provenance["artifact"],
+        "artifact_decision": review.provenance["artifact_decision"],
+        "settings": {**epoch.provenance["settings"], **review.provenance["settings"]},
+        "stages": [*stages, *(name for name in review.provenance["stages"] if name not in stages)],
+    }
+    return replace(epoch, artifact=review.artifact, reviewed=review.reviewed, provenance=provenance)
+
+
+def _run_locked(
+    workflow: Workflow, stage: str, source: Any, source_id: str, n_jobs: int, overwrite: bool
+) -> StepResult:
+    # Decisions and resets may have changed on disk before the lock; the source cannot.
+    identities = stage_identities(workflow, source_id)
+    definition = get_stage(stage)
+    if not _enabled(workflow, stage):
+        raise ValueError(f"{stage}: disabled by configuration; no operation performed")
+    current = _pointer(workflow, stage)
+    if current is not None and current != identities[stage]:
+        raise ValueError(
+            f"{stage}: stale checkpoint; reset CONFIG --from {stage} before recomputing"
+        )
+    if current == identities[stage]:
+        path = require_stage(workflow, stage, identities)
+        if stage == "export":
+            output = workflow.config.output
+            manifest = output.directory / f"{output.name}_preprocessing.json"
+            # A deleted bundle is republished from the checkpoint; an intact one is verified.
+            if overwrite or not manifest.exists():
+                state = load_checkpoint(path, current).state
+                write_result(result_from_state(state), output, overwrite=overwrite)
+            else:
+                validate_bundle(manifest)
+        return StepResult(stage, "completed", path, "next CONFIG")
+    parents = {
+        name: read_stage(workflow, name, identities) for name in enabled_parents(workflow, stage)
+    }
+    parent_ids = {name: checkpoint.artifact_id for name, checkpoint in parents.items()}
+    state = (
+        next(iter(parents.values())).state
+        if parents
+        else StageData(source, provenance=_policies(workflow.config.workflow))
+    )
+    if stage == "apply-artifact":
+        state = _join_branches(parents["epoch"].state, parents["review-artifact"].state)
+    decision = None
+    if definition.review:
+        decision = read_decision(workflow, stage, parent_ids)
+        if decision is None and _policy(workflow, stage) == "suggested":
+            decision = suggested_decision(stage, state)
+            path = decision_path(workflow, stage)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write_pointer(path, {"parent_id": identity(parent_ids), **decision})
+            # The decision is part of this stage's identity, so it changes now.
+            identities = stage_identities(workflow, source_id)
+        if decision is None:
+            _template(workflow, stage, state, parent_ids)
+            return StepResult(
+                stage,
+                "needs-review",
+                pending_path(workflow, stage),
+                f'review CONFIG {stage.removeprefix("review-")}',
+            )
+    state = execute_numeric(stage, state, workflow.config.processing, decision, n_jobs=n_jobs)
+    if stage == "export":
+        write_result(result_from_state(state), workflow.config.output, overwrite=overwrite)
+    checkpoint = publish_checkpoint(
+        workflow.workspace,
+        stage,
+        identities[stage],
+        state,
+        parent_ids,
+        stage_settings(definition, workflow.config.processing),
+    )
+    return StepResult(
+        stage,
+        "completed",
+        checkpoint.path,
+        "next CONFIG" if stage != "export" else "Feature-ready epochs exported",
+    )
+
+
+def _policies(workflow: WorkflowSettings) -> dict[str, Any]:
+    return {"raw_review": workflow.raw_review, "artifact_review": workflow.artifact_review}
+
+
+def run_step(
+    workflow: Workflow, stage: str, *, n_jobs: int = 1, overwrite: bool = False
+) -> StepResult:
+    get_stage(stage)
+    if not _enabled(workflow, stage):
+        raise ValueError(f"{stage}: disabled by configuration")
+    source = load_source(workflow)
+    return _step(workflow, stage, source, fingerprint(source), n_jobs, overwrite)
+
+
+def _step(
+    workflow: Workflow, stage: str, source: Any, source_id: str, n_jobs: int, overwrite: bool
+) -> StepResult:
+    # Validate prerequisites before creating any output directories.
+    identities = stage_identities(workflow, source_id)
+    for parent in enabled_parents(workflow, stage):
+        require_stage(workflow, parent, identities)
+    workflow.workspace.mkdir(parents=True, exist_ok=True)
+    filelock = require("filelock", "preprocessing")
+    with filelock.FileLock(workflow.workspace / ".writer.lock", timeout=0):
+        return _run_locked(workflow, stage, source, source_id, n_jobs, overwrite)
+
+
+def run_next(workflow: Workflow, *, n_jobs: int = 1, overwrite: bool = False) -> StepResult:
+    pending = (
+        status.stage
+        for status in list_steps(workflow)
+        if status.state not in ("completed", "disabled")
+    )
+    source = load_source(workflow)
+    return _step(workflow, next(pending, "export"), source, fingerprint(source), n_jobs, overwrite)
+
+
+def run_until(
+    workflow: Workflow,
+    stage: str = "export",
+    *,
+    n_jobs: int = 1,
+    overwrite: bool = False,
+    on_step: Callable[[StepResult, int, int], None] | None = None,
+) -> RunOutcome:
+    get_stage(stage)
+    needed: set[str] = set()
+
+    def visit(name: str) -> None:
+        for parent in get_stage(name).parents:
+            visit(parent)
+        if _enabled(workflow, name):
+            needed.add(name)
+
+    visit(stage)
+    ordered = [definition.name for definition in STAGES if definition.name in needed]
+    # One read and one hash of the source serve every step; stages never mutate it.
+    source = load_source(workflow)
+    source_id = fingerprint(source)
+    results = []
+    for index, name in enumerate(ordered, 1):
+        result = _step(workflow, name, source, source_id, n_jobs, overwrite)
+        results.append(result)
+        if on_step is not None:
+            on_step(result, index, len(ordered))
+        if result.state == "needs-review":
+            return RunOutcome("needs-review", tuple(results), result.next_action)
+    return RunOutcome(
+        "completed", tuple(results), results[-1].next_action if results else "No enabled stages"
+    )
+
+
+def reset_from(workflow: Workflow, stage: str) -> tuple[str, ...]:
+    # Pointers and decisions are retired, never the immutable payloads.
+    get_stage(stage)
+    descendants = {stage}
+    for definition in STAGES:
+        if set(definition.parents) & descendants:
+            descendants.add(definition.name)
+    workflow.workspace.mkdir(parents=True, exist_ok=True)
+    filelock = require("filelock", "preprocessing")
+    with filelock.FileLock(workflow.workspace / ".writer.lock", timeout=0):
+        tokens = _reset_tokens(workflow)
+        tokens[stage] = uuid4().hex
+        write_pointer(workflow.workspace / "resets.json", tokens)
+        for name in descendants:
+            pointer = workflow.workspace / f"{name}.json"
+            if pointer.exists():
+                pointer.unlink()
+            decision = decision_path(workflow, name)
+            if decision.exists():
+                decision.rename(decision.with_name(f"{decision.stem}.{uuid4().hex}.yaml"))
+    return tuple(definition.name for definition in STAGES if definition.name in descendants)

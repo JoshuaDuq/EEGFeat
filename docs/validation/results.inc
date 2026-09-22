@@ -169,6 +169,10 @@ PhysioNet motor movement
      - fraction 1 inside and 0.5 straddling; refusal below the high-pass edge
      - –
      - pass
+   * - detect-bads, reject, and interpolate are PyPREP NoisyChannels, autoreject fit/transform, and interpolate_bads with the same seeds (``preprocessing``)
+     - identical candidate lists, retained epochs, repair labels, and samples
+     - –
+     - pass
 
 ERP CORE Flankers
 ^^^^^^^^^^^^^^^^^
@@ -199,6 +203,26 @@ ERP CORE Flankers
      - pass
    * - The loaded epochs match the published task (``Signal.from_epochs``)
      - 1024 Hz, 400 stimuli, more than 300 correct and 30 error trials
+     - –
+     - pass
+   * - reject, reference, resample, crop-epochs, baseline are drop_bad, set_eeg_reference, decimate, crop, apply_baseline (``preprocessing``)
+     - identical events and drop log; samples within 1e-15 V
+     - –
+     - pass
+   * - epoch is mne.Epochs on the acquisition grid with baseline, proj, and decim off (``preprocessing``)
+     - identical events, drop log, and samples; events past the crop dropped, not shifted
+     - –
+     - pass
+   * - notch and filter are Raw.notch_filter and Raw.filter on physiology channels only (``preprocessing``)
+     - samples within 1e-15 V; 60 Hz bin reduced, 20 Hz bin within 0.5%
+     - –
+     - pass
+   * - prepare and crop-raw are set_bipolar_reference and Raw.crop (``preprocessing``)
+     - identical samples, first_samp, and channel order
+     - –
+     - pass
+   * - apply-artifact is ICA.apply of the saved fit with the reviewed exclusion (``preprocessing``)
+     - samples within 1e-15 V; mean \|corr(FP1, VEOG)\| across epochs down by a quarter
      - –
      - pass
 

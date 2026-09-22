@@ -80,6 +80,15 @@ Optional extras.
      - ``scikit-learn>=1.3``, ``shap>=0.45``
      - SHAP explanations (:mod:`eegfeat.model.importance`). Permutation importance
        is in the ``model`` extra.
+   * - ``[preprocessing]``
+     - ``mne>=1.13.2``, ``PyYAML``, ``scikit-learn``, ``h5io``, ``h5py``, ``filelock``
+     - Raw-to-epochs preprocessing workflow (:doc:`/guides/preprocessing`).
+   * - ``[preprocessing-auto]``
+     - ``pyprep>=0.9.0``, ``autoreject>=0.4.3``
+     - PyPREP bad-channel candidates and autoreject epoch repair.
+   * - ``[preprocessing-gui]``
+     - ``mne-qt-browser``, ``PyQt6``
+     - MNE viewers for ``preprocess review`` and ``preprocess inspect``.
    * - ``[dev]``
      - ``pytest``, ``ruff``, ``black``, ``mypy``, type stubs
      - Tests, type checking, and linting.
@@ -91,7 +100,7 @@ To install with all extras:
 
 .. code-block:: bash
 
-   pip install -e ".[connectivity,microstates,model,importance,dev,docs]"
+   pip install -e ".[connectivity,microstates,model,importance,preprocessing,preprocessing-auto,dev,docs]"
 
 Modeling needs the ``model`` extra. SHAP needs the ``importance`` extra.
 Permutation importance is included in ``model``.

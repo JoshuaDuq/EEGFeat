@@ -33,8 +33,8 @@ def _parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="eegfeat",
-        description="Compute EEG features from preprocessed MNE epochs files, "
-        "as a recipe describes.",
+        description="Preprocess raw EEG into epochs, and compute features from epochs, "
+        "as recipes describe.",
     )
     parser.add_argument("--version", action="version", version=f"eegfeat {__version__}")
     commands = parser.add_subparsers(dest="command", required=True, metavar="command")
@@ -66,6 +66,9 @@ def _parser() -> argparse.ArgumentParser:
         "path", type=Path, nargs="?", default=Path("recipe.toml"), help="default: recipe.toml"
     )
     init_parser.set_defaults(handler=_init)
+    from eegfeat.preprocessing.cli import register
+
+    register(commands)
     return parser
 
 

@@ -1,0 +1,51 @@
+# Study-specific example, not default cleaning advice. Volts, seconds, Hz.
+# Point input.root at the raw tree, then: eegfeat preprocess check preprocessing.yaml
+input:
+  root: sourcedata
+  pattern: "sub-*/eeg/*_task-example_eeg.vhdr"
+output:
+  directory: preprocessed
+workflow:
+  raw_review: suggested
+  artifact_review: suggested
+  epoch_review: optional
+channels:
+  types: {VEOG: eog, ECG: ecg, STI: stim}
+  montage: standard_1020
+  interpolate_bads: true
+  projections: error
+annotations:
+  amplitude: {flat: {eeg: 1.0e-7}, bad_percent: 5.0, min_duration: 0.005}
+filter:
+  l_freq: 0.1
+  h_freq: 40.0
+  notch_freqs: [60.0]
+artifact:
+  method: ica
+  reference: null
+  ica:
+    l_freq: 1.0
+    n_components: null
+    random_state: 42
+    max_iter: 1000
+    reject: {eeg: 0.0003}
+    tstep: 2.0
+    eog_channels: [VEOG]
+    ecg_channel: ECG
+epochs:
+  kind: events
+  events:
+    source: annotations
+    event_id: {stimulus: 1}
+  tmin: -0.5
+  tmax: 1.5
+  padding: 0.0
+  baseline: [-0.5, 0.0]
+  metadata: "{parent}/{name}_trials.tsv"
+rejection:
+  method: thresholds
+  reject: {eeg: 0.00015}
+  tmin: -0.5
+  tmax: 1.5
+reference:
+  channels: average

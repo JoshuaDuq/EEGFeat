@@ -29,11 +29,17 @@ def test_ci_covers_supported_endpoints_optional_integrations_and_the_wheel() -> 
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
     assert 'python-version: ["3.11", "3.14"]' in workflow
-    assert ".[dev,model,connectivity,microstates,importance,references]" in workflow
+    assert (
+        ".[dev,model,connectivity,microstates,importance,references,preprocessing,preprocessing-auto]"
+        in workflow
+    )
     # Every cross-check against a third-party implementation is guarded by
     # find_spec, so an uninstalled reference skips silently. Importing them in CI
     # is what makes a missing one fail the build instead of quietly passing.
-    assert 'python -c "import antropy, shap, mne_connectivity, sklearn"' in workflow
+    assert (
+        'python -c "import antropy, shap, mne_connectivity, sklearn, yaml, autoreject, pyprep"'
+        in workflow
+    )
     for suite in (
         "tests/test_complexity.py",
         "tests/test_higuchi.py",
