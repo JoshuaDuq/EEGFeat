@@ -131,7 +131,11 @@ def test_spectral_edge_matches_the_reference(
 
 
 def test_aperiodic_matches_the_reference(reference: Any) -> None:
-    table = ef.aperiodic(_psd_spectra(reference), fit_range=(2.0, 40.0), include_global=False)
+    # The reference pipeline counts its first fit as an iteration and drops its last
+    # rejection without refitting, so its three iterations are two refit rounds here.
+    table = ef.aperiodic(
+        _psd_spectra(reference), fit_range=(2.0, 40.0), include_global=False, max_iterations=2
+    )
     np.testing.assert_allclose(
         table.select(measure="slope").values,
         reference["aperiodic_slope"],

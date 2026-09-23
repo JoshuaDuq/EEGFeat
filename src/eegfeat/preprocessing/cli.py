@@ -10,7 +10,7 @@ import sys
 import time
 import traceback
 import webbrowser
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from functools import partial
@@ -22,7 +22,7 @@ from eegfeat.runner.progress import CHECK, CROSS, JsonReporter, Reporter, TextRe
 
 if TYPE_CHECKING:
     from .config import PreprocessingConfig
-    from .execution import StepStatus
+    from .execution import StepStatus, Workflow
 
 PER_RECORDING = ("step", "next", "inspect", "reset")
 RECIPE_ERRORS = (ValueError, TypeError, ModuleNotFoundError)
@@ -231,7 +231,7 @@ def _steps(ctx: Context) -> int:
 
 
 def _status(ctx: Context) -> int:
-    from .execution import list_steps, open_workflow, read_checkpoint
+    from .execution import list_steps, open_workflow
     from .stages import STAGES
 
     if ctx.args.json:
@@ -241,9 +241,9 @@ def _status(ctx: Context) -> int:
     label, config = ctx.one()
     workflow = open_workflow(config)
     statuses = list_steps(workflow)
+    if ctx.args.verify:
+        _verify(workflow, statuses)
     for definition, status in zip(STAGES, statuses, strict=True):
-        if ctx.args.verify and status.state == "completed":
-            read_checkpoint(workflow, status.stage)
         print(
             f"{status.stage}: {status.state} | parents={definition.parents} | "
             f"config={definition.fields} | output={definition.output} | {status.reason}"
@@ -257,10 +257,13 @@ def _status(ctx: Context) -> int:
 def _status_all(ctx: Context) -> int:
     from .execution import list_steps, open_workflow
 
-    rows = {
-        label: _progress(list_steps(open_workflow(config)))
-        for label, config in ctx.selected.items()
-    }
+    rows = {}
+    for label, config in ctx.selected.items():
+        workflow = open_workflow(config)
+        statuses = list_steps(workflow)
+        if ctx.args.verify:
+            _verify(workflow, statuses)
+        rows[label] = _progress(statuses)
     width = max(map(len, rows))
     for label, (text, _) in rows.items():
         print(f"{label:<{width}}  {text}")
@@ -280,15 +283,14 @@ def _status_all(ctx: Context) -> int:
 
 
 def _status_json(ctx: Context) -> int:
-    from .execution import list_steps, open_workflow, read_checkpoint
+    from .execution import list_steps, open_workflow
 
     recordings = []
     for label, config in ctx.selected.items():
         workflow = open_workflow(config)
         statuses = list_steps(workflow)
-        for status in statuses:
-            if ctx.args.verify and status.state == "completed":
-                read_checkpoint(workflow, status.stage)
+        if ctx.args.verify:
+            _verify(workflow, statuses)
         summary, pending = _progress(statuses)
         recordings.append(
             {
@@ -302,6 +304,14 @@ def _status_json(ctx: Context) -> int:
         )
     print(json.dumps({"recordings": recordings}))
     return 0
+
+
+def _verify(workflow: Workflow, statuses: Sequence[StepStatus]) -> None:
+    from .execution import read_checkpoint
+
+    for status in statuses:
+        if status.state == "completed":
+            read_checkpoint(workflow, status.stage)
 
 
 def _next_action(pending: StepStatus) -> dict[str, str]:
