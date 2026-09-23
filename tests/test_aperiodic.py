@@ -6,7 +6,9 @@ from eegfeat.aperiodic import aperiodic, aperiodic_ratio
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec
 
-FREQS = np.logspace(np.log10(2.0), np.log10(40.0), 60)
+# geomspace, not logspace: logspace lands the top bin on 40 Hz or just under it depending
+# on the platform, which decides whether the half-open default fit_range keeps it.
+FREQS = np.geomspace(2.0, 40.0, 60)
 
 
 def _spectra(power: np.ndarray) -> Spectra:
@@ -162,7 +164,9 @@ def test_one_refit_round_rejects_the_peak_and_scores_the_line_it_fitted() -> Non
     # points it never saw.
     clean = 10.0 * FREQS**-1.7
     peaked = clean + 3.0 * clean.max() * np.exp(-0.5 * ((FREQS - 10.0) / 1.0) ** 2)
-    log_f, log_p = np.log10(FREQS), np.log10(peaked)
+    # fit_range is half-open like every band, so the 40 Hz bin is not fitted.
+    in_range = FREQS < 40.0
+    log_f, log_p = np.log10(FREQS[in_range]), np.log10(peaked[in_range])
     slope, offset = np.polyfit(log_f, log_p, 1)
     residuals = log_p - (offset + slope * log_f)
     mad = stats.median_abs_deviation(residuals, scale="normal")

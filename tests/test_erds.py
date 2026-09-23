@@ -321,7 +321,7 @@ def test_erds_labels_do_not_collide_with_other_measures() -> None:
     # Selection and aggregate_by identify a column by its measure label alone, so a
     # label ERDS shares with another measure silently mixes the two: the 1/f exponent
     # with an ERDS time-course slope, or a waveform peak latency with an ERDS one.
-    freqs = np.logspace(np.log10(2.0), np.log10(40.0), 60)
+    freqs = np.geomspace(2.0, 40.0, 60)
     power = (10.0 * freqs**-1.7).reshape(1, 1, 1, freqs.size)
     spectra = ef.Spectra(
         data=power,
