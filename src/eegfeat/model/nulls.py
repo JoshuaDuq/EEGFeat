@@ -250,6 +250,7 @@ def _prediction_statistic(
         frame = pd.DataFrame(
             {
                 "subject_id": np.concatenate([groups[p.rows] for p in predictions]),
+                "fold": np.concatenate([np.full(p.rows.size, p.fold) for p in predictions]),
                 "y_true": yt,
                 "y_pred": yp,
             }

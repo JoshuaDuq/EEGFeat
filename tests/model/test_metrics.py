@@ -219,3 +219,17 @@ def test_a_subject_without_positives_has_undefined_rather_than_zero_recall() -> 
     assert result.f1 == pytest.approx(1.0)
     assert result.accuracy == pytest.approx(1.0)
     assert np.isnan(result.per_subject["s2"]["recall"])
+
+
+def test_regression_metrics_centre_the_subject_correlation_within_folds() -> None:
+    # Two folds score s1 with offsets of opposite sign to its run means; without the fold
+    # labels those offsets alone would make the subject correlation negative.
+    y_true = np.array([1.0, 2.0, 3.0, 11.0, 12.0, 13.0, 1.0, 2.0, 4.0])
+    y_pred = np.array([10.0, 11.0, 12.0, 0.0, 1.0, 2.0, 1.0, 3.0, 2.0])
+    groups = np.array(["s1"] * 6 + ["s2"] * 3, dtype=object)
+    folds = np.array([1, 1, 1, 2, 2, 2, 3, 3, 3])
+    pooled, _ = regression_metrics(y_true, y_pred, groups)
+    centred, per_subject = regression_metrics(y_true, y_pred, groups, folds=folds)
+    assert pooled["subject_level_r"] < 0.0
+    assert per_subject[0] == {"subject": "s1", "r": pytest.approx(1.0)}
+    assert centred["subject_level_r"] > 0.9

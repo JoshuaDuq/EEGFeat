@@ -11,9 +11,10 @@ Validation on Public Datasets
 
 .. include:: ../validation/summary.inc
 
-Every number on this page is written by the validation suite itself when it runs; nothing
-here is typed in by hand. The tests declare what they establish, record what they observe,
-and the page is regenerated from that record, so it cannot drift from the code.
+The summary line, the scorecard, and the table of every check are written by the validation
+suite each time it runs. The tests declare what they establish and record what they observe,
+so those parts cannot drift from the code. The sections in between are written by hand from
+those results and from exploratory analyses the suite does not re-run.
 
 .. _validation-scorecard:
 
@@ -21,7 +22,8 @@ Scorecard
 ---------
 
 One row per public function, one column per kind of evidence. A check mark with a count
-means every check of that kind passed on real data; a dash means no check of that kind
+gives the number of claims of that kind, all of which passed on real data (a parametrized
+claim counts once); a dash means no check of that kind
 exists for that function.
 
 .. list-table::
@@ -74,7 +76,7 @@ every cross-estimator comparison agreed, and the following effects came out of t
 What the data changed
 ---------------------
 
-Three defaults were changed and one note added because real recordings showed the previous
+Two defaults were changed and two notes added because real recordings showed the previous
 behaviour would mislead a user who trusted it.
 
 - **ERDS reports decibels.** Single-trial percent change is right-skewed by quiet-baseline
@@ -82,8 +84,8 @@ behaviour would mislead a user who trusted it.
   in the trial mean, on the decibel scale all twenty did. Every ``erds_*`` function now
   defaults to ``normalize="db"``; percent remains available.
 - **Onset persistence is in cycles.** At a fixed 100 ms the onset latency fired on essentially
-  every rest trial, where nothing happened. Six cycles of the band's low edge brings that
-  false-onset rate to about 5 percent in every band, and is now the default.
+  every beta rest trial, where nothing happened. Six cycles of the band's low edge brings the
+  beta false-onset rate to about 5 percent, and is now the default.
 - **Two decibel definitions are named.** ``erds_mean`` averages a per-sample dB trace;
   ``mean_tfr_power`` with a baseline takes dB of the window-mean power, about 2.5 dB higher.
   Both docstrings and the methods page now say so.
@@ -105,12 +107,15 @@ What was not found, and is not asserted
 - **Single-trial ERDS onsets** fired on movement trials at the same rate as on rest trials at
   every persistence, so the onset is a weak single-trial detector even where the group effect
   is unmistakable.
-- **Prediction intervals** covered 88 to 91 percent of exchangeable epochs at 90 percent
-  nominal, but 72 to 99 percent when calibrated on two sleep subjects and applied to a third.
-  Group-disjoint fitting does not establish coverage for new subjects.
-- **The frontal sleep derivation** (Fpz-Cz) does not separate wake from N3, because eye and
-  movement activity in wake put as much power below 4 Hz as slow waves do. The sleep checks
-  read Pz-Oz.
+- **Prediction intervals** from split and CV+ calibration covered 89 and 91 percent of
+  exchangeable epochs at 90 percent nominal. Conformalized quantile intervals covered 99.8
+  percent, because the 0 to 3 depth target is discrete. Coverage for a subject outside the
+  calibration set is not tested, and group-disjoint fitting does not guarantee it.
+- **The frontal sleep derivation** (Fpz-Cz) does not separate wake from N3 on relative
+  slow-wave power, because eye and movement activity in wake put as much power below 4 Hz as
+  slow waves do. The band-power, spectral-descriptor, and Hjorth checks read Pz-Oz. Sample
+  entropy, Higuchi dimension, the aperiodic slope, and the NREM slow-wave ordering hold on
+  both derivations.
 
 Datasets
 --------
@@ -139,10 +144,13 @@ Datasets
      - Slow-wave power with depth, every spectral and complexity descriptor falling from wake
        to N3, the aperiodic slope steepening, N3 and sleep depth recoverable across subjects
 
+The motor data are from Schalk et al. (2004) through PhysioNet (Goldberger et al., 2000),
+the sleep data from Kemp et al. (2000), and the flanker data from Kappenman et al. (2021).
+
 Running it
 ----------
 
-The recordings are downloaded on first use, about 350 MB in total, into MNE's data
+The recordings are downloaded on first use, about 470 MB in total, into MNE's data
 directory (``MNE_DATA``, default ``~/mne_data``). The suite is skipped unless asked for:
 
 .. code-block:: bash
@@ -164,3 +172,23 @@ Each row is one test: the claim it makes, the criterion it applies, what it obse
 last run, and whether it passed. Rows are grouped by dataset.
 
 .. include:: ../validation/results.inc
+
+References
+----------
+
+* Schalk, G., McFarland, D. J., Hinterberger, T., Birbaumer, N., & Wolpaw, J. R.
+  (2004). *BCI2000: A general-purpose brain-computer interface (BCI) system*. IEEE
+  Transactions on Biomedical Engineering, 51(6), 1034--1043.
+  `doi:10.1109/TBME.2004.827072 <https://doi.org/10.1109/TBME.2004.827072>`__.
+* Goldberger, A. L., Amaral, L. A. N., Glass, L., Hausdorff, J. M., Ivanov, P. Ch.,
+  Mark, R. G., Mietus, J. E., Moody, G. B., Peng, C.-K., & Stanley, H. E. (2000).
+  *PhysioBank, PhysioToolkit, and PhysioNet*. Circulation, 101(23), e215--e220.
+  `doi:10.1161/01.CIR.101.23.e215 <https://doi.org/10.1161/01.CIR.101.23.e215>`__.
+* Kemp, B., Zwinderman, A. H., Tuk, B., Kamphuisen, H. A. C., & Oberyé, J. J. L.
+  (2000). *Analysis of a sleep-dependent neuronal feedback loop: The slow-wave
+  microcontinuity of the EEG*. IEEE Transactions on Biomedical Engineering, 47(9),
+  1185--1194. `doi:10.1109/10.867928 <https://doi.org/10.1109/10.867928>`__.
+* Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021).
+  *ERP CORE: An open resource for human event-related potential research*.
+  NeuroImage, 225, 117465. `doi:10.1016/j.neuroimage.2020.117465
+  <https://doi.org/10.1016/j.neuroimage.2020.117465>`__.

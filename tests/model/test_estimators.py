@@ -113,3 +113,18 @@ def test_logistic_pipeline_refuses_an_unknown_penalty(penalty: str) -> None:
     # unrecognised value used to fall past every branch and fit a default L2 model in silence.
     with pytest.raises(ValueError, match="penalty must be one of"):
         logistic_pipeline(_CONFIG, seed=0, penalty=penalty)
+
+
+def test_an_unpenalized_logistic_model_has_no_strength_to_tune() -> None:
+    # Tuning C would refit the unpenalized model as an L2 one under the same name.
+    assert "lr__C" not in logistic_grid(penalty="none")
+
+
+def test_unpenalized_logistic_regression_uses_none_before_scikit_learn_1_8(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # scikit-learn 1.4 removed the string "none"; from 1.2 the unpenalized model is None.
+    from eegfeat.model import estimators
+
+    monkeypatch.setattr(estimators.sklearn, "__version__", "1.7.2")
+    assert estimators._get_lr_kwargs("none") == {"penalty": None}

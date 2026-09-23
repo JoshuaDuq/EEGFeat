@@ -708,3 +708,26 @@ def test_the_same_effect_is_missed_when_the_metric_direction_is_wrong() -> None:
     # Pins the failure this parameter exists to prevent, so the default can never
     # silently go back to treating every metric as higher-is-better.
     assert _run(_mse, greater_is_better=True).p_value > 0.5
+
+
+def test_the_null_statistic_centres_each_fold_before_correlating() -> None:
+    # Within-subject folds score a subject with several models, and each model's offset is
+    # anti-correlated with the run it scores. The permutation statistic must drop those
+    # offsets exactly as the observed statistic does, or the two are not comparable.
+    groups = np.repeat(["s1", "s2", "s3"], 6).astype(object)
+    runs = np.tile(np.repeat(["r1", "r2", "r3"], 2), 3).astype(object)
+    y = np.tile([1.0, 2.0, 11.0, 12.0, 21.0, 23.0], 3)
+    folds = within_subject_folds(groups, runs, inner_splits=3)
+    preds = cross_fit_regression(
+        folds,
+        y.reshape(-1, 1),
+        y,
+        groups,
+        PIPE,
+        {},
+        inner=InnerSplit(grouping="run"),
+        seed=0,
+        runs=runs,
+    )
+    # DummyRegressor predicts a constant per fold, so no trial-level tracking exists at all.
+    assert _prediction_statistic(preds, groups, _DEFAULT_AGGREGATION, None) == 0.0

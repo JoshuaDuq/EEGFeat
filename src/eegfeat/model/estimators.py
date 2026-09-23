@@ -82,7 +82,8 @@ def _get_lr_kwargs(penalty: str, l1_ratio: float | None = None) -> dict[str, Any
         elif penalty == "none":
             kwargs["C"] = float("inf")
     else:
-        kwargs["penalty"] = penalty
+        # scikit-learn 1.4 removed the string "none"; None has meant no penalty since 1.2.
+        kwargs["penalty"] = None if penalty == "none" else penalty
         if penalty == "elasticnet":
             kwargs["l1_ratio"] = l1_ratio if l1_ratio is not None else 0.5
     return kwargs
@@ -365,6 +366,9 @@ def svm_grid() -> dict[str, list[object]]:
 
 
 def logistic_grid(*, penalty: str = "l2") -> dict[str, list[object]]:
+    if penalty == "none":
+        # C is the inverse penalty strength; searching it would refit this model as L2.
+        return {}
     grid: dict[str, list[object]] = {"lr__C": [0.01, 0.1, 1.0, 10.0]}
     if penalty == "elasticnet":
         grid["lr__l1_ratio"] = [0.1, 0.5, 0.9]

@@ -214,7 +214,10 @@ def subject_level_r(
     ----------
     predictions : DataFrame
         One row per trial, with a ``subject_id`` label and the ``y_true`` and
-        ``y_pred`` values of that trial.
+        ``y_pred`` values of that trial. An optional ``fold`` column names the
+        outer fold that scored the trial; targets and predictions are then
+        centred within each fold before correlating. Pass it whenever a subject
+        can be scored by more than one fold, as in within-subject CV.
     config : AggregationConfig
         Subject weighting, confidence-interval method and bootstrap settings.
     undefined : {"raise", "zero"}
@@ -225,6 +228,9 @@ def subject_level_r(
     _check_prediction_columns(predictions, "subject_level_r")
     if undefined not in ("raise", "zero"):
         raise ValueError(f"undefined must be 'raise' or 'zero', got {undefined!r}")
+    has_folds = "fold" in predictions.columns
+    if has_folds and predictions["fold"].isna().any():
+        raise ValueError("subject_level_r needs a fold label for every trial when 'fold' is given.")
     per_subject: list[tuple[str, float]] = []
     valid_entries: list[tuple[float, int]] = []
     invalid_subjects: list[str] = []
@@ -239,7 +245,19 @@ def subject_level_r(
             invalid_subjects.append(f"{subj}: fewer than 3 finite predictions (got {n_trials})")
             continue
 
-        r, _ = safe_pearsonr(yt[finite], yp[finite])
+        yt, yp = yt[finite], yp[finite]
+        if has_folds:
+            # A subject scored by several fold models (within-subject CV) carries each model's
+            # offset, and that offset -- the mean target of the other runs -- is
+            # anti-correlated with the run it scores, which biases r below zero with no signal
+            # at all. Centring within folds keeps only trial-level tracking; each extra fold
+            # mean removed costs one degree of freedom.
+            fold_labels = df_sub["fold"].to_numpy()[finite]
+            yt = _center_within(yt, fold_labels)
+            yp = _center_within(yp, fold_labels)
+            n_trials -= len(pd.unique(fold_labels)) - 1
+
+        r, _ = safe_pearsonr(yt, yp)
         if undefined == "zero" and not np.isfinite(r):
             # Nothing varies to correlate with, which is no linear association.
             r = 0.0
@@ -333,6 +351,16 @@ def subject_level_r(
         ci_low=ci_low,
         ci_high=ci_high,
     )
+
+
+def _center_within(
+    values: npt.NDArray[np.float64], labels: npt.NDArray[np.object_]
+) -> npt.NDArray[np.float64]:
+    centered = values.copy()
+    for label in pd.unique(labels):
+        cell = labels == label
+        centered[cell] -= centered[cell].mean()
+    return centered
 
 
 def _weighted_mean(values: npt.NDArray[np.float64], weights: npt.NDArray[np.float64]) -> float:

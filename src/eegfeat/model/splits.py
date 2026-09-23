@@ -88,8 +88,14 @@ def run_aware_cv(
     default_splits: int = 5,
 ) -> tuple[GroupKFold | None, int]:
     target_splits = default_splits if n_splits is None else n_splits
-    valid_blocks = blocks[~pd.isna(blocks)]
-    n_unique = len(np.unique(valid_blocks))
+    # Runs are paradigm-specific, so a trial without one has no run to be held out with.
+    n_unlabelled = int(np.sum(pd.isna(blocks)))
+    if n_unlabelled:
+        raise ValueError(
+            f"Run-aware CV needs a run label for every trial; {n_unlabelled} of "
+            f"{len(blocks)} have none."
+        )
+    n_unique = len(np.unique(blocks))
     if n_unique < 2:
         return None, 0
     effective_splits = min(target_splits, n_unique)
@@ -193,6 +199,20 @@ def within_subject_folds(
                 raise ValueError(
                     f"Subject {subject}: forward CV orders runs, but {unorderable[:3]} carry no "
                     "run number; rename them or pass ordered_runs=False."
+                )
+
+            # Parsing reads only trailing digits, so ses1-run1 and ses2-run1 are both run 1;
+            # merging them would put a later session's run before an earlier one's.
+            labels_by_number: dict[float, set[str]] = {}
+            for b, num in zip(subject_blocks, num_blocks, strict=True):
+                labels_by_number.setdefault(float(num), set()).add(str(b))
+            shared = sorted(
+                sorted(labels) for labels in labels_by_number.values() if len(labels) > 1
+            )
+            if shared:
+                raise ValueError(
+                    f"Subject {subject}: forward CV orders runs, but {shared[0]} share run "
+                    "number and cannot be ordered; relabel them with distinct run numbers."
                 )
 
             unique_nums = sorted(np.unique(num_blocks))

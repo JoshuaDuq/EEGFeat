@@ -107,7 +107,7 @@ class FeatureMeta:
         microstate class, which is a spatial mode rather than a location.
     window : str or None
         Time window name, or None when the spectrum spans the whole segment.
-    normalization : {"raw", "log10", "log_ratio", "db"}
+    normalization : {"raw", "log10", "log_ratio", "db", "percent"}
         Normalization applied to the value.
     unit : str
         Physical unit, or a description of the normalized scale.

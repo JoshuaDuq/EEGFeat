@@ -28,7 +28,7 @@ def feature_name(
     window : str or None
         Time window name, or None when the spectrum spans the whole segment.
     normalization : str
-        One of ``"raw"``, ``"log10"``, ``"log_ratio"``, ``"db"``.
+        One of ``"raw"``, ``"log10"``, ``"log_ratio"``, ``"db"``, ``"percent"``.
 
     Returns
     -------

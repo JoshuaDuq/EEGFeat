@@ -127,12 +127,8 @@ Workflow 3. Bursts and ERDS
        min_duration_ms=100.0,
    )
 
-   erds_table = ef.erds_mean(
-       [beta_signal],
-       baseline=base_win,
-       windows=[stim_win],
-       normalize="percent",
-   )
+   # Decibels by default. normalize="percent" is available but right-skewed per trial.
+   erds_table = ef.erds_mean([beta_signal], baseline=base_win, windows=[stim_win])
    peak_lat = ef.erds_peak_latency([beta_signal], baseline=base_win, windows=[stim_win])
 
 ----

@@ -12,6 +12,7 @@ from eegfeat.model.splits import (
     inner_cv_splits,
     loso_folds,
     parse_run_label_to_int,
+    run_aware_inner_cv,
     within_subject_folds,
 )
 
@@ -238,3 +239,21 @@ def test_run_labels_survive_a_mix_of_numbers_and_strings(
 def test_a_float_run_label_parses_as_its_value_not_its_last_digit() -> None:
     assert parse_run_label_to_int(1.0) == 1
     assert parse_run_label_to_int("sub-02_run-4") == 4
+
+
+def test_forward_cv_refuses_distinct_runs_that_share_a_run_number() -> None:
+    # Only trailing digits are read, so ses1-run1 and ses2-run1 both became run 1: the six
+    # runs collapsed to three and the second session was trained on to predict the first.
+    labels = ["ses1-run1", "ses1-run2", "ses1-run3", "ses2-run1", "ses2-run2", "ses2-run3"]
+    blocks = np.repeat(labels, 2).astype(object)
+    groups = np.array(["sub-0001"] * blocks.size, dtype=object)
+
+    with pytest.raises(ValueError, match="share run number"):
+        within_subject_folds(groups, blocks, inner_splits=5, ordered_runs=True)
+
+
+def test_run_aware_inner_cv_refuses_a_trial_without_a_run_label() -> None:
+    # Runs are paradigm-specific; a missing label is refused, not made into a run of its own.
+    blocks = np.array([1, 1, 2, 2, np.nan, np.nan, 3, 3], dtype=object)
+    with pytest.raises(ValueError, match="run label for every trial"):
+        run_aware_inner_cv(blocks, 3)

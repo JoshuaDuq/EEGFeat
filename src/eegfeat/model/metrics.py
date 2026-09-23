@@ -179,6 +179,7 @@ def regression_metrics(
     groups: npt.NDArray[np.object_] | None = None,
     *,
     config: AggregationConfig = _DEFAULT_AGGREGATION_CONFIG,
+    folds: npt.NDArray[np.intp] | None = None,
 ) -> tuple[dict[str, float], list[dict[str, object]]]:
     yt = np.asarray(y_true, dtype=float)
     yp = np.asarray(y_pred, dtype=float)
@@ -212,6 +213,10 @@ def regression_metrics(
     if groups is not None:
         groups_arr = np.asarray(groups)[finite]
         pred_df = pd.DataFrame({"subject_id": groups_arr, "y_true": yt_f, "y_pred": yp_f})
+        if folds is not None:
+            # fold_results returns these ids; without them a subject scored by several fold
+            # models (within-subject CV) has its r biased by the models' differing offsets.
+            pred_df["fold"] = np.asarray(folds)[finite]
         subj_r = subject_level_r(pred_df, config=config)
         # Two names for one number, kept because both are in use. subject_level_r is always the
         # Fisher-z mean, under equal and trial-count weighting alike, so they cannot diverge.

@@ -89,7 +89,9 @@ parts.
 
 ``meta``
    One :class:`~eegfeat.FeatureMeta` per column. Fields are the measure, band,
-   space, window, normalization, unit, source, and the
+   space and its kind (``space_kind``), window and its bounds, normalization,
+   unit, source, the frequency resolution, the phase and amplitude bands of a
+   coupling measure, the node pair of a pairwise measure, and the
    :class:`~eegfeat.ComputationSpec` that produced the column. Each field is
    constant across rows.
 
@@ -144,7 +146,9 @@ per-epoch tables.
 
 **Group-row tables** come from measures that are undefined on one trial.
 Those measures are inter-trial phase coherence, pairwise phase consistency,
-envelope correlation, wPLI, and their graph summaries. The value describes a
+envelope correlation (per-trial correlations averaged in Fisher :math:`z`),
+every ``spectral_connectivity`` method including wPLI, and their graph
+summaries. The value describes a
 set of trials. The table carries ``row_labels`` for those groups and cannot
 carry ``row_ids``.
 

@@ -15,7 +15,10 @@ Querying a table
 
 .. code-block:: python
 
-   alpha_rois = spectral_features.select(band=ef.Band("alpha", 8.0, 13.0), space_kind="roi")
+   # An empty table when nothing matches.
+   alpha_channels = spectral_features.select(
+       band=ef.Band("alpha", 8.0, 13.0), space_kind="channel"
+   )
 
    # Fraction of finite input behind each cell. Not an artifact score.
    valid_fractions = spectral_features.coverage

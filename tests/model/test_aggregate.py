@@ -347,3 +347,78 @@ def test_subject_level_aggregates_name_the_columns_they_need(function, missing: 
 
     with pytest.raises(ValueError, match=f"missing.*{missing}"):
         function(frame)
+
+
+def _within_subject_null_predictions(seed: int = 0) -> pd.DataFrame:
+    # Within-subject CV scores each run with a model trained on the other runs. With no
+    # signal in the features that model predicts about the mean target of those runs, so a
+    # run whose mean is high is predicted low.
+    rng = np.random.default_rng(seed)
+    frames = []
+    for s in range(12):
+        y = rng.normal(size=(4, 1)) + rng.normal(size=(4, 20))
+        for k in range(4):
+            prediction = np.delete(y, k, axis=0).mean() + 0.1 * rng.normal(size=20)
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "subject_id": f"s{s}",
+                        "fold": 4 * s + k + 1,
+                        "y_true": y[k],
+                        "y_pred": prediction,
+                    }
+                )
+            )
+    return pd.concat(frames, ignore_index=True)
+
+
+def test_offsets_between_fold_models_do_not_enter_the_subject_correlation() -> None:
+    # Pooled over folds, each fold model's offset is anti-correlated with the run it scores,
+    # so features with no signal at all report a clearly negative within-subject r.
+    frame = _within_subject_null_predictions()
+    assert subject_level_r(frame.drop(columns="fold")).r < -0.2
+    assert subject_level_r(frame).r == pytest.approx(0.0, abs=0.1)
+
+
+def test_a_subject_scored_by_one_fold_is_unaffected_by_the_fold_column() -> None:
+    # Leave-one-subject-out scores every subject with one model, and Pearson r already
+    # ignores that model's offset.
+    frame = _predictions(
+        {
+            "s1": ([1.0, 2.0, 3.0, 4.0], [1.5, 1.9, 3.2, 3.8]),
+            "s2": ([2.0, 1.0, 4.0], [1.0, 2.0, 3.0]),
+        }
+    )
+    frame["fold"] = frame["subject_id"].map({"s1": 1, "s2": 2})
+    assert subject_level_r(frame).r == pytest.approx(subject_level_r(frame.drop(columns="fold")).r)
+
+
+def test_a_trial_without_a_fold_label_is_refused() -> None:
+    frame = _within_subject_null_predictions()
+    frame.loc[0, "fold"] = np.nan
+    with pytest.raises(ValueError, match="fold label for every trial"):
+        subject_level_r(frame)
+
+
+def test_trial_count_weighting_charges_a_degree_of_freedom_per_extra_fold() -> None:
+    # Centring within k folds removes k - 1 more means, so a subject's Fisher-z variance is
+    # 1 / (n - (k - 1) - 3), and the weights are 7 and 3 for ten trials over one and five folds.
+    rng = np.random.default_rng(1)
+    one = pd.DataFrame(
+        {"subject_id": "a", "fold": 1, "y_true": rng.normal(size=10), "y_pred": rng.normal(size=10)}
+    )
+    five = pd.DataFrame(
+        {
+            "subject_id": "b",
+            "fold": np.repeat([2, 3, 4, 5, 6], 2),
+            "y_true": rng.normal(size=10),
+            "y_pred": rng.normal(size=10),
+        }
+    )
+    result = subject_level_r(
+        pd.concat([one, five], ignore_index=True),
+        config=AggregationConfig(subject_weighting="trial_count"),
+    )
+    r = dict(result.per_subject)
+    expected = np.tanh((7 * np.arctanh(r["a"]) + 3 * np.arctanh(r["b"])) / 10)
+    assert result.r == pytest.approx(expected)
