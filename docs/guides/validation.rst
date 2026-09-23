@@ -6,7 +6,7 @@ Validation on Public Datasets
    <p class="hero-lede">
      The unit tests prove each formula on synthetic signals. This page answers a
      different question: pointed at <strong>real recordings</strong> nobody tuned it on,
-     does eegfeat compute the right numbers and find what the literature says is there?
+     does EEGFeat compute the right numbers and find what the literature says is there?
    </p>
 
 .. include:: ../validation/summary.inc

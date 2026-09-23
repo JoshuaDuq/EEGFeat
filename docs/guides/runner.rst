@@ -309,7 +309,7 @@ each recording in one of five states:
 "This recipe" means what the recipe computes. Comments, formatting, and the three
 location keys (``inputs.root``, ``inputs.pattern``, ``output.root``) are left out, so
 moving the data and repointing ``inputs.root`` keeps results ``done``. Results written
-before eegfeat recorded this fingerprint count as current only while the recipe file is
+before EEGFeat recorded this fingerprint count as current only while the recipe file is
 unchanged byte for byte.
 
 ``eegfeat run --resume`` computes only the recordings that are not ``done``. Recordings

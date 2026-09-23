@@ -9,7 +9,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 # ---------------------------------------------------------------------------
 # Project metadata
 # ---------------------------------------------------------------------------
-project = "eegfeat"
+project = "EEGFeat"
 author = "Joshua Duquette"
 release = "0.1.0.dev0"
 copyright = "2026, Joshua Duquette"
@@ -81,7 +81,7 @@ intersphinx_mapping = {
 # HTML output — furo theme
 # ---------------------------------------------------------------------------
 html_theme = "furo"
-html_title = "eegfeat"
+html_title = "EEGFeat"
 html_static_path = ["_static"]
 html_css_files = [
     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
