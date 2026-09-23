@@ -9,7 +9,7 @@ Example Output
    </p>
 
 The files are in the `examples/ directory
-<https://github.com/JoshuaDuq/EEGFeatML/tree/main/examples>`_.
+<https://github.com/JoshuaDuq/EEGFeat/tree/main/examples>`_.
 Regenerate them with
 
 .. code-block:: bash
@@ -20,7 +20,7 @@ Regenerate them with
 What feature extraction writes
 ------------------------------
 
-`recipe.toml <https://github.com/JoshuaDuq/EEGFeatML/blob/main/examples/recipe.toml>`_
+`recipe.toml <https://github.com/JoshuaDuq/EEGFeat/blob/main/examples/recipe.toml>`_
 sets bands, windows, regions, and one entry per measure. ``eegfeat run`` applies
 it to every epochs file and writes, per recording,
 

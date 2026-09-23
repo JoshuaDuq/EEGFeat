@@ -35,8 +35,8 @@ macOS / Linux
 
 .. code-block:: bash
 
-   git clone https://github.com/JoshuaDuq/EEGFeatML.git
-   cd EEGFeatML
+   git clone https://github.com/JoshuaDuq/EEGFeat.git
+   cd EEGFeat
    python3 -m venv .venv
    source .venv/bin/activate
    pip install --upgrade pip
@@ -47,8 +47,8 @@ Windows PowerShell
 
 .. code-block:: powershell
 
-   git clone https://github.com/JoshuaDuq/EEGFeatML.git
-   cd EEGFeatML
+   git clone https://github.com/JoshuaDuq/EEGFeat.git
+   cd EEGFeat
    py -3.11 -m venv .venv
    .\.venv\Scripts\Activate.ps1
    python -m pip install --upgrade pip
