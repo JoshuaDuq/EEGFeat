@@ -82,12 +82,12 @@ from eegfeat.model.residualize import (
     residualize_targets,
     residualize_within_subjects,
 )
-from eegfeat.model.screen import univariate_screen
 from eegfeat.model.scoring import (
     pearsonr_scorer,
     safe_pearsonr,
     scoring_dict,
 )
+from eegfeat.model.screen import univariate_screen
 from eegfeat.model.splits import (
     Fold,
     InnerSplit,
