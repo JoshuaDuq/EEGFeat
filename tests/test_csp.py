@@ -157,6 +157,42 @@ def test_the_informative_components_agree_with_mne() -> None:
         assert abs(np.corrcoef(ours[:, component], reference[:, component])[0, 1]) > 0.99
 
 
+def _average_referenced(signal: ef.Signal) -> ef.Signal:
+    # Every epoch now sums to zero across channels: its covariance loses one rank.
+    return _signal(signal.data - signal.data.mean(axis=1, keepdims=True))
+
+
+def test_an_average_reference_does_not_prevent_fitting() -> None:
+    # The pooled covariance of average-referenced data is singular. Refusing it would make
+    # CSP unusable on the most common EEG reference, and on ICA-cleaned data, without
+    # shrinkage that invents variance the recording does not have.
+    signal, y = _lateralised()
+    referenced = _average_referenced(signal)
+    features = ef.CommonSpatialPattern.fit(referenced, y, n_components=4).transform(referenced)
+    assert features[y == 0, 0].mean() > features[y == 1, 0].mean() + 1.0
+    assert features[y == 1, 1].mean() > features[y == 0, 1].mean() + 1.0
+
+
+@pytest.mark.skipif(not _HAS_SKLEARN, reason="mne.decoding.CSP needs scikit-learn")
+def test_on_an_average_reference_the_informative_components_agree_with_mne() -> None:
+    from mne.decoding import CSP
+
+    signal, y = _lateralised(n_per_class=60)
+    referenced = _average_referenced(signal)
+    ours = ef.CommonSpatialPattern.fit(referenced, y, n_components=2).transform(referenced)
+    reference = CSP(
+        n_components=2, reg=None, log=True, norm_trace=True, cov_est="epoch"
+    ).fit_transform(referenced.data, y)
+    for component in range(2):
+        assert abs(np.corrcoef(ours[:, component], reference[:, component])[0, 1]) > 0.99
+
+
+def test_more_components_than_the_data_rank_raises() -> None:
+    signal, y = _lateralised(n_per_class=6)
+    with pytest.raises(ValueError, match="rank"):
+        ef.CommonSpatialPattern.fit(_average_referenced(signal), y, n_components=N_CHANNELS)
+
+
 # --- cross-fitting --------------------------------------------------------------------
 
 

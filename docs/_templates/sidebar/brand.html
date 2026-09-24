@@ -1,0 +1,10 @@
+<a class="sidebar-brand" href="{{ pathto(master_doc) }}">
+  <span class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="{{ pathto('_static/' + theme_light_logo, 1) }}" alt="" width="28" height="28">
+    <img class="sidebar-logo only-dark" src="{{ pathto('_static/' + theme_dark_logo, 1) }}" alt="" width="28" height="28">
+  </span>
+  <span class="sidebar-brand-lockup">
+    <span class="sidebar-brand-text">{{ docstitle if docstitle else project }}</span>
+    <span class="sidebar-brand-version">{{ release }}</span>
+  </span>
+</a>

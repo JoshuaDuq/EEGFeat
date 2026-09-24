@@ -222,6 +222,27 @@ def test_fold_results_labels_loso_predictions_from_the_groups_array() -> None:
     assert test_idx == [2, 3, 0, 1]
 
 
+def test_fold_results_name_their_fields_and_still_unpack_into_five() -> None:
+    predictions = [
+        FoldPrediction(
+            fold=1,
+            subject=None,
+            rows=np.array([1, 0], dtype=np.intp),
+            y_true=np.array([2.0, 1.0]),
+            y_pred=np.array([2.5, 1.5]),
+            best_params={},
+        )
+    ]
+    result = fold_results(predictions, groups=np.array(["s1", "s2"], dtype=object))
+    assert result.y_true.tolist() == [2.0, 1.0]
+    assert result.y_pred.tolist() == [2.5, 1.5]
+    assert result.groups == ["s2", "s1"]
+    assert result.rows == [1, 0]
+    assert result.folds == [1, 1]
+    y_true, _, groups, rows, folds = result
+    assert (groups, rows, folds) == (result.groups, result.rows, result.folds)
+
+
 def test_fold_results_refuses_to_mix_labelled_and_unlabelled_records() -> None:
     # A groups list shorter than y_true would misalign every subject after the first gap.
     predictions = [
@@ -272,11 +293,22 @@ def test_trial_count_weighting_refuses_subjects_with_an_undefined_fisher_z_varia
         )
 
 
+def test_no_interval_is_reported_unless_one_is_asked_for() -> None:
+    # An interval over subjects assumes their scores are independent. Leave-one-subject-out
+    # scores are not: every fold model is trained on the other subjects, and in a null
+    # simulation the t interval excluded 0 in 13-19% of cohorts at a nominal 5%.
+    result = subject_level_r(_noise_frame(12, 40, seed=2))
+    assert np.isfinite(result.r)
+    assert np.isnan(result.ci_low) and np.isnan(result.ci_high)
+    errors = subject_level_errors(_noise_frame(12, 40, seed=2))
+    assert np.isnan(errors["ci_low_mae"]) and np.isnan(errors["ci_high_rmse"])
+
+
 def test_equal_weighting_uses_student_t_for_the_estimated_between_subject_error() -> None:
     # The between-subject SD is estimated from the subjects, so a normal quantile makes the
     # interval too narrow: at 5 subjects a nominal 95% interval covered about 88%.
     frame = _noise_frame(5, 20, seed=1)
-    result = subject_level_r(frame)
+    result = subject_level_r(frame, config=AggregationConfig(ci_method="fixed_effects"))
 
     z_vals = np.arctanh(np.clip([r for _, r in result.per_subject], -0.999999, 0.999999))
     se = float(np.std(z_vals, ddof=1) / np.sqrt(len(z_vals)))

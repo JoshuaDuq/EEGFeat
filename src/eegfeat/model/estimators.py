@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+import numpy.typing as npt
 import sklearn
 from packaging.version import parse as parse_version
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, VotingClassifier
@@ -103,6 +105,22 @@ def _assemble_pipeline(steps: list[tuple[str, object]], resampler: str) -> Pipel
     return Pipeline(steps)
 
 
+class _UnitFreeElasticNet(ElasticNet):  # type: ignore[misc]
+    # ElasticNet's L1 penalty does not scale with the target, so one alpha shrinks a rating in
+    # points and the same rating in hundredths of a point differently. Fitting the training
+    # fold's target in units of its own SD, and scaling the solution back, makes the grid mean
+    # the same thing whatever the units.
+    def fit(self, X: Any, y: Any, sample_weight: Any = None, check_input: bool = True) -> Any:
+        target = np.asarray(y, dtype=np.float64)
+        scale = float(np.std(target)) or 1.0
+        fitted = super().fit(
+            X, target / scale, sample_weight=sample_weight, check_input=check_input
+        )
+        self.coef_ = np.asarray(fitted.coef_) * scale
+        self.intercept_ = fitted.intercept_ * scale
+        return self
+
+
 def elasticnet_pipeline(
     config: PreprocessingConfig,
     *,
@@ -121,7 +139,7 @@ def elasticnet_pipeline(
     steps.append(
         (
             "regressor",
-            ElasticNet(
+            _UnitFreeElasticNet(
                 random_state=seed,
                 max_iter=max_iter,
                 tol=tol,
@@ -346,8 +364,16 @@ def elasticnet_grid() -> dict[str, list[object]]:
     }
 
 
-def ridge_grid() -> dict[str, list[object]]:
-    return {"regressor__alpha": [0.01, 0.1, 1.0, 10.0, 100.0]}
+def ridge_grid(X: npt.ArrayLike) -> dict[str, list[object]]:
+    # scikit-learn's Ridge does not divide its penalty by the number of trials, and the
+    # eigenvalues of a standardized design's Gram matrix sum to n_trials * n_features. A fixed
+    # grid therefore stops shrinking as the cohort grows: at 1,200 trials and 12,600 features
+    # alpha = 100 barely touches any direction. Scaled by that sum, the grid runs from
+    # effectively unpenalized to at most a tenth of a degree of freedom for any design.
+    values = np.asarray(X, dtype=float)
+    n_features = max(int(np.isfinite(values).any(axis=0).sum()), 1)
+    scale = values.shape[0] * n_features
+    return {"regressor__alpha": [float(scale * 10.0**power) for power in range(-6, 2)]}
 
 
 def random_forest_grid() -> dict[str, list[object]]:

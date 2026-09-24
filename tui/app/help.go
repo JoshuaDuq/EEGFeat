@@ -3,7 +3,7 @@ package app
 import (
 	"strings"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/styles"
+	"github.com/JoshuaDuq/EEGFeat/tui/styles"
 )
 
 func (m Model) viewHelp() string {

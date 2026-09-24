@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeatML/tui/styles"
+	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGFeat/tui/styles"
 )
 
 // liveRun mirrors a running `eegfeat preprocess run` for display only: which

@@ -11,6 +11,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model import _deps as _deps
+from eegfeat.model.aggregate import _SubjectRScorer
 from eegfeat.model.execution import seeded
 from eegfeat.model.splits import InnerSplit, inner_cv
 
@@ -82,6 +83,12 @@ def tune(
 ) -> TunedFit:
     if refit is False:
         raise ValueError("refit=False cannot return a fitted outer-fold model.")
+    chosen = scoring[refit] if isinstance(scoring, Mapping) and isinstance(refit, str) else scoring
+    if isinstance(chosen, _SubjectRScorer):
+        raise ValueError(
+            "subject_r_scorer needs the subject of every validation row, which GridSearchCV "
+            "does not pass to a scorer; tune through cross_fit_regression instead."
+        )
 
     groups_arr = np.asarray(inner_groups_train)
     n_unique = len(np.unique(groups_arr))

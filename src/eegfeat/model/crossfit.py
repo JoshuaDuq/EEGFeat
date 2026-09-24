@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import numbers
+import warnings
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -12,9 +14,10 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.pipeline import Pipeline
 
 from eegfeat.model import _deps as _deps
+from eegfeat.model.aggregate import _SubjectRScorer, subject_r_scorer
 from eegfeat.model.design import harmonize_fold
 from eegfeat.model.execution import run_folds
-from eegfeat.model.residualize import residualize_targets
+from eegfeat.model.residualize import residualize_targets, residualize_within_subjects
 from eegfeat.model.splits import Fold, InnerSplit, inner_cv
 from eegfeat.model.transformers import _check_subject_missingness
 from eegfeat.model.tuning import FoldFitError, fit_untuned, tune
@@ -78,6 +81,23 @@ def _validate_and_resolve_inner_groups(
     return inner_groups
 
 
+def _chosen_scorer(scoring: object, refit: str | bool | None) -> object:
+    if isinstance(scoring, Mapping):
+        if not isinstance(refit, str) or refit not in scoring:
+            raise ValueError("Multi-metric scoring requires refit to name a scoring metric.")
+        return scoring[refit]
+    return scoring
+
+
+def _default_scoring(task: str, scoring: object) -> object:
+    # Regression is reported as subject-level r, so it is selected on that too. Pooled R^2
+    # would reward predicting each subject's offset, which the reported r ignores, and with
+    # no signal it always favours the most heavily shrunk model.
+    if scoring is None and task == "regression":
+        return subject_r_scorer()
+    return scoring
+
+
 @dataclass(frozen=True)
 class _FittedFold:
     model: Pipeline
@@ -102,6 +122,7 @@ def _select_fold_local_params(
     harmonization: str | None,
     covariates: npt.NDArray[np.float64] | None,
     residualize_on: Sequence[str],
+    residualize_within: Literal["subject"] | None,
     scoring: object,
     refit: str | bool | None,
 ) -> dict[str, object]:
@@ -109,11 +130,7 @@ def _select_fold_local_params(
     if refit is False:
         raise ValueError("refit=False cannot return a fitted outer-fold model.")
 
-    chosen_scoring = scoring
-    if isinstance(scoring, Mapping):
-        if not isinstance(refit, str) or refit not in scoring:
-            raise ValueError("Multi-metric scoring requires refit to name a scoring metric.")
-        chosen_scoring = scoring[refit]
+    chosen_scoring = _chosen_scorer(scoring, refit)
 
     outer_train = np.asarray(f.train, dtype=np.intp)
     train_groups = inner_groups[outer_train]
@@ -136,45 +153,45 @@ def _select_fold_local_params(
     if not local_splits:
         raise ValueError(f"Fold {f.index}: no inner CV splits.")
 
-    best_score = -np.inf
-    best_params: dict[str, object] | None = None
+    candidates = [dict(parameters) for parameters in ParameterGrid(dict(grid))]
+    scores = np.empty((len(candidates), len(local_splits)))
+    for split, (local_train, local_valid) in enumerate(local_splits):
+        train_idx = outer_train[local_train]
+        valid_idx = outer_train[local_valid]
 
-    for parameters in ParameterGrid(dict(grid)):
-        fold_scores: list[float] = []
+        # What is fitted to the split alone does not depend on the candidate, so each split
+        # is prepared once and every candidate is scored on it.
+        X_train = np.asarray(X[train_idx], dtype=np.float64)
+        X_valid = np.asarray(X[valid_idx], dtype=np.float64)
+        y_train = y[train_idx]
+        y_valid = y[valid_idx]
 
-        for local_train, local_valid in local_splits:
-            train_idx = outer_train[local_train]
-            valid_idx = outer_train[local_valid]
+        kept = None
+        if harmonization is not None:
+            X_train, X_valid, kept = harmonize_fold(
+                X_train,
+                X_valid,
+                groups[train_idx],
+                mode=harmonization,
+                n_covariates=0,
+            )
 
-            X_train = np.asarray(X[train_idx], dtype=np.float64)
-            X_valid = np.asarray(X[valid_idx], dtype=np.float64)
-            y_train = y[train_idx]
-            y_valid = y[valid_idx]
+        if residualize_on:
+            X_train, X_valid, y_train, y_valid = _residualize(
+                X,
+                kept,
+                X_train,
+                X_valid,
+                y,
+                groups,
+                train_idx,
+                valid_idx,
+                covariates=covariates,
+                residualize_on=residualize_on,
+                residualize_within=residualize_within,
+            )
 
-            if harmonization is not None:
-                X_train, X_valid, _ = harmonize_fold(
-                    X_train,
-                    X_valid,
-                    groups[train_idx],
-                    mode=harmonization,
-                    n_covariates=0,
-                )
-
-            if residualize_on:
-                if covariates is None:
-                    raise ValueError(
-                        "Target residualization requested via residualize_on, "
-                        "but covariates is None."
-                    )
-
-                y_train, y_valid = residualize_targets(
-                    np.asarray(y, dtype=np.float64),
-                    covariates,
-                    train_idx,
-                    valid_idx,
-                    columns=residualize_on,
-                )
-
+        for position, parameters in enumerate(candidates):
             candidate = clone(pipeline)
             candidate.set_params(**parameters)
 
@@ -188,8 +205,11 @@ def _select_fold_local_params(
                 )
                 _check_subject_missingness(fitted, X_train, groups[train_idx])
 
-                scorer = check_scoring(fitted, scoring=chosen_scoring)
-                score = float(scorer(fitted, X_valid, y_valid))
+                if isinstance(chosen_scoring, _SubjectRScorer):
+                    score = chosen_scoring(fitted, X_valid, y_valid, groups[valid_idx])
+                else:
+                    scorer = check_scoring(fitted, scoring=chosen_scoring)
+                    score = float(scorer(fitted, X_valid, y_valid))
             except Exception as exc:
                 raise FoldFitError(
                     f"Outer fold {f.index}: inner fold failed for parameters {parameters}: {exc}"
@@ -199,18 +219,54 @@ def _select_fold_local_params(
                 raise FoldFitError(
                     f"Outer fold {f.index}: non-finite inner CV score for parameters {parameters}."
                 )
+            scores[position, split] = score
 
-            fold_scores.append(score)
+    # The first of equally scored candidates wins, as in a grid search.
+    return candidates[int(np.argmax([np.mean(row) for row in scores]))]
 
-        mean_score = float(np.mean(fold_scores))
-        if mean_score > best_score:
-            best_score = mean_score
-            best_params = dict(parameters)
 
-    if best_params is None:
-        raise FoldFitError(f"Outer fold {f.index}: no valid hyperparameter candidate.")
-
-    return best_params
+def _residualize(
+    X: npt.NDArray[np.float64],
+    kept: npt.NDArray[np.bool_] | None,
+    X_train: npt.NDArray[np.float64],
+    X_test: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64] | npt.NDArray[np.intp],
+    groups: npt.NDArray[np.object_],
+    train_idx: npt.NDArray[np.intp],
+    test_idx: npt.NDArray[np.intp],
+    *,
+    covariates: npt.NDArray[np.float64] | None,
+    residualize_on: Sequence[str],
+    residualize_within: Literal["subject"] | None,
+) -> tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
+    if covariates is None:
+        msg = "Target residualization requested via residualize_on, but covariates is None."
+        raise ValueError(msg)
+    target = np.asarray(y, dtype=np.float64)
+    if residualize_within is None:
+        y_train, y_test = residualize_targets(
+            target, covariates, train_idx, test_idx, columns=residualize_on
+        )
+        return X_train, X_test, y_train, y_test
+    # The within-subject estimand needs the features stripped of each subject's own nuisance
+    # response as well, or it remains in them as variance the target no longer has.
+    X_train, X_test = residualize_within_subjects(
+        X if kept is None else X[:, kept],
+        covariates,
+        groups,
+        train_idx,
+        test_idx,
+        columns=residualize_on,
+    )
+    y_train, y_test = residualize_within_subjects(
+        target, covariates, groups, train_idx, test_idx, columns=residualize_on
+    )
+    return X_train, X_test, y_train, y_test
 
 
 def _fit_fold(
@@ -228,6 +284,7 @@ def _fit_fold(
     harmonization: str | None,
     covariates: npt.NDArray[np.float64] | None,
     residualize_on: Sequence[str],
+    residualize_within: Literal["subject"] | None,
     scoring: object,
     refit: str | bool | None,
 ) -> _FittedFold:
@@ -254,19 +311,24 @@ def _fit_fold(
         )
 
     if residualize_on:
-        if covariates is None:
-            msg = "Target residualization requested via residualize_on, but covariates is None."
-            raise ValueError(msg)
-        y_tr, y_te = residualize_targets(
-            np.asarray(y, dtype=np.float64),
-            covariates,
+        X_tr, X_te, y_tr, y_te = _residualize(
+            X,
+            None if harmonization is None else features,
+            X_tr,
+            X_te,
+            y,
+            groups,
             train_idx,
             test_idx,
-            columns=residualize_on,
+            covariates=covariates,
+            residualize_on=residualize_on,
+            residualize_within=residualize_within,
         )
 
     if grid:
-        if harmonization is not None or residualize_on:
+        # Only eegfeat's own loop can hand a scorer the subject of each validation row.
+        needs_groups = isinstance(_chosen_scorer(scoring, refit), _SubjectRScorer)
+        if harmonization is not None or residualize_on or needs_groups:
             best_params = _select_fold_local_params(
                 f,
                 X,
@@ -280,6 +342,7 @@ def _fit_fold(
                 harmonization=harmonization,
                 covariates=covariates,
                 residualize_on=residualize_on,
+                residualize_within=residualize_within,
                 scoring=scoring,
                 refit=refit,
             )
@@ -348,6 +411,17 @@ def _validate_row_aligned(
 
     if covariates is not None and len(covariates) != n_rows:
         raise ValueError(f"covariates has {len(covariates)} rows and X has {n_rows}.")
+
+
+def _validate_residualize_within(
+    residualize_within: Literal["subject"] | None, residualize_on: Sequence[str]
+) -> None:
+    if residualize_within not in (None, "subject"):
+        raise ValueError(
+            f"residualize_within must be None or 'subject', got {residualize_within!r}."
+        )
+    if residualize_within is not None and not residualize_on:
+        raise ValueError("residualize_within needs the nuisance columns in residualize_on.")
 
 
 def _validate_outer_folds(
@@ -426,20 +500,27 @@ def _cross_fit_engine(
     harmonization: str | None = None,
     covariates: npt.NDArray[np.float64] | None = None,
     residualize_on: Sequence[str] = (),
+    residualize_within: Literal["subject"] | None = None,
     scoring: object = None,
     refit: str | bool | None = None,
+    warn_at_grid_edges: bool = True,
+    fold_targets: Callable[[Fold], npt.NDArray[np.float64]] | None = None,
 ) -> list[FoldPrediction] | list[FoldClassification]:
     _validate_outer_folds(folds, len(X), groups, runs)
     _validate_row_aligned(len(X), y, covariates)
+    _validate_residualize_within(residualize_within, residualize_on)
 
     inner_groups_all = _validate_and_resolve_inner_groups(folds, inner, groups, runs)
+    scoring = _default_scoring(task, scoring)
 
     def _execute_fold(f: Fold) -> FoldPrediction | FoldClassification:
+        # A permutation null can give every fold its own target, rebuilt around that fold's
+        # nuisance fit.
         fitted = _fit_fold(
             task,
             f,
             X,
-            y,
+            y if fold_targets is None else fold_targets(f),
             groups,
             inner_groups_all,
             pipeline,
@@ -449,6 +530,7 @@ def _cross_fit_engine(
             harmonization=harmonization,
             covariates=covariates,
             residualize_on=residualize_on,
+            residualize_within=residualize_within,
             scoring=scoring,
             refit=refit,
         )
@@ -490,7 +572,34 @@ def _cross_fit_engine(
         )
 
     results = run_folds(folds, _execute_fold, outer_n_jobs=outer_n_jobs)
+    if warn_at_grid_edges:
+        _warn_at_grid_edges(grid, [result.best_params for result in results])
     return cast(list[FoldPrediction] | list[FoldClassification], results)
+
+
+def _warn_at_grid_edges(
+    grid: Mapping[str, Sequence[object]], chosen: Sequence[Mapping[str, object]]
+) -> None:
+    # Every fold settling on the same end of a numeric grid means the search was probably cut
+    # short there: a fixed ridge grid did so in 200 of 200 folds on one cohort. A few folds at
+    # an end are not reported, because an end can be a real limit (no penalty, or an empty
+    # model) that the best fits reach.
+    for name, candidates in grid.items():
+        values = list(candidates)
+        if len(values) < 3 or not all(
+            isinstance(v, numbers.Real) and not isinstance(v, bool) for v in values
+        ):
+            continue
+        picked = [params[name] for params in chosen if name in params]
+        for side, end in (("lower", min(values)), ("upper", max(values))):  # type: ignore[type-var]
+            if picked and all(value == end for value in picked):
+                warnings.warn(
+                    f"{name} was chosen at the {side} end of its grid ({end}) in all "
+                    f"{len(picked)} folds; the best value may lie beyond it, unless that end "
+                    "already means no penalty or an empty model.",
+                    UserWarning,
+                    stacklevel=4,
+                )
 
 
 def cross_fit_regression(
@@ -508,6 +617,7 @@ def cross_fit_regression(
     harmonization: str | None = None,
     covariates: npt.NDArray[np.float64] | None = None,
     residualize_on: Sequence[str] = (),
+    residualize_within: Literal["subject"] | None = None,
     scoring: object = None,
     refit: str | bool | None = None,
 ) -> tuple[FoldPrediction, ...]:
@@ -526,6 +636,7 @@ def cross_fit_regression(
         harmonization=harmonization,
         covariates=covariates,
         residualize_on=residualize_on,
+        residualize_within=residualize_within,
         scoring=scoring,
         refit=refit,
     )

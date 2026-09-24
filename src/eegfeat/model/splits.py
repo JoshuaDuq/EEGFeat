@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Literal
 
@@ -8,6 +9,29 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from sklearn.model_selection import GroupKFold, LeaveOneGroupOut, StratifiedGroupKFold
+
+
+class _GroupKFold(GroupKFold):  # type: ignore[misc]
+    # scikit-learn's assignment, pinned: groups go largest first, ties in descending label
+    # order, each to the fold with the fewest samples. Before 1.6 scikit-learn ordered ties
+    # with an unstable sort, so one cohort could be split differently on another machine.
+    def _iter_test_indices(
+        self, X: object, y: object, groups: npt.NDArray[np.object_]
+    ) -> Iterator[npt.NDArray[np.intp]]:
+        labels, index = np.unique(groups, return_inverse=True)
+        if self.n_splits > labels.size:
+            raise ValueError(
+                f"Cannot have number of splits n_splits={self.n_splits} greater than the "
+                f"number of groups: {labels.size}."
+            )
+        sizes = np.bincount(index)
+        load = np.zeros(self.n_splits)
+        fold_of = np.empty(labels.size, dtype=np.intp)
+        for group in sorted(range(labels.size), key=lambda g: (-sizes[g], -g)):
+            fold_of[group] = int(np.argmin(load))
+            load[fold_of[group]] += sizes[group]
+        for fold in range(self.n_splits):
+            yield np.flatnonzero(fold_of[index] == fold)
 
 
 @dataclass(frozen=True)
@@ -99,7 +123,7 @@ def run_aware_cv(
     if n_unique < 2:
         return None, 0
     effective_splits = min(target_splits, n_unique)
-    return GroupKFold(n_splits=effective_splits), effective_splits
+    return _GroupKFold(n_splits=effective_splits), effective_splits
 
 
 def run_aware_inner_cv(
@@ -108,9 +132,8 @@ def run_aware_inner_cv(
 ) -> list[tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]] | None:
     """Run-disjoint inner splits for one training fold.
 
-    Takes no seed: :class:`~sklearn.model_selection.GroupKFold` partitions groups
-    deterministically, so these splits are reproducible without one. It gained a
-    ``shuffle`` option in scikit-learn 1.6, which this package does not require.
+    Takes no seed: runs are assigned to folds deterministically, by size and then by
+    label, so these splits are reproducible without one.
     """
     block_cv, _ = run_aware_cv(blocks_train, n_splits=n_splits)
     if block_cv is None:
@@ -146,7 +169,7 @@ def within_subject_folds(
 ) -> tuple[Fold, ...]:
     """Per-subject, run-disjoint outer folds.
 
-    Takes no seed: both the forward-ordered and the GroupKFold path partition runs
+    Takes no seed: both the forward-ordered and the grouped path partition runs
     deterministically, so the folds are reproducible without one.
     """
     if blocks is None:
@@ -306,4 +329,4 @@ def inner_cv(
             shuffle=True,
             random_state=random_state,
         )
-    return GroupKFold(n_splits=effective_splits)
+    return _GroupKFold(n_splits=effective_splits)

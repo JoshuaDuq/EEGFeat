@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
 )
 
 func TestLongReviewKeepsEverySelectedRowVisible(t *testing.T) {

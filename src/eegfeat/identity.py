@@ -20,7 +20,11 @@ def epoch_row_ids(source: Any, recording: str, n_rows: int) -> tuple[RowId, ...]
     event_array = np.asarray(events)
     if event_array.shape != (n_rows, 3) or selection.shape != (n_rows,):
         raise ValueError("events and selection must identify every epoch row.")
-    names = {int(code): str(name) for name, code in source.event_id.items()}
+    # MNE's array containers leave event_id unset; name each code as mne.Epochs would.
+    event_id = getattr(source, "event_id", None) or {
+        str(code): code for code in np.unique(event_array[:, 2])
+    }
+    names = {int(code): str(name) for name, code in event_id.items()}
     return tuple(
         (recording, int(epoch), names[int(code)])
         for epoch, code in zip(selection, event_array[:, 2], strict=True)

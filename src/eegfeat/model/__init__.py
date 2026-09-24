@@ -4,12 +4,14 @@ from __future__ import annotations
 from eegfeat.model import _deps as _deps
 from eegfeat.model.aggregate import (
     AggregationConfig,
+    FoldResults,
     SubjectLevelR,
     bootstrap_mean_ci,
     fold_results,
     paired_signflip_p_value,
     subject_level_errors,
     subject_level_r,
+    subject_r_scorer,
 )
 from eegfeat.model.crossfit import (
     FoldClassification,
@@ -78,7 +80,9 @@ from eegfeat.model.residualize import (
     fit_staged_residual_preprocessor,
     reconstruct_staged_permutation_target_for_fold,
     residualize_targets,
+    residualize_within_subjects,
 )
+from eegfeat.model.screen import univariate_screen
 from eegfeat.model.scoring import (
     pearsonr_scorer,
     safe_pearsonr,
@@ -127,6 +131,7 @@ __all__ = [
     "FoldClassification",
     "FoldFitError",
     "FoldNuisanceFit",
+    "FoldResults",
     "FoldPrediction",
     "Importance",
     "InnerSplit",
@@ -181,6 +186,7 @@ __all__ = [
     "reconstruct_staged_permutation_target_for_fold",
     "regression_metrics",
     "residualize_targets",
+    "residualize_within_subjects",
     "ridge_grid",
     "ridge_pipeline",
     "run_aware_cv",
@@ -196,10 +202,12 @@ __all__ = [
     "should_parallelize",
     "subject_level_errors",
     "subject_level_r",
+    "subject_r_scorer",
     "svm_grid",
     "svm_pipeline",
     "transform_feature_names",
     "tune",
+    "univariate_screen",
     "validate_subject_missingness",
     "within_condition_metrics",
     "within_subject_centered_metrics",

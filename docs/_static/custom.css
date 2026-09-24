@@ -317,29 +317,58 @@ em, i {
 }
 
 .sidebar-brand {
-  padding: 1.25rem 1rem 0.75rem;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1rem 0.9rem 0.85rem;
   border-bottom: var(--hairline-quiet);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
+  text-decoration: none;
+}
+
+.sidebar-brand:hover {
+  background: transparent;
+  text-decoration: none;
 }
 
 .sidebar-logo-container {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  margin-bottom: 0.5rem;
+  justify-content: center;
+  margin: 0;
+  flex: none;
 }
 
 .sidebar-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: block;
+}
+
+.sidebar-brand-lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
 }
 
 .sidebar-brand-text {
   font-weight: 600;
-  font-size: var(--fs-ui-sm);
-  letter-spacing: 0;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   color: var(--color-foreground-primary);
+}
+
+.sidebar-brand-version {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--color-foreground-muted);
 }
 
 .sidebar-tree .reference {
@@ -361,6 +390,7 @@ em, i {
   color: var(--color-foreground-primary);
   font-weight: 600;
   position: relative;
+  background: var(--color-background-hover);
 }
 
 .sidebar-tree .current-page > .reference::before {
@@ -415,12 +445,19 @@ em, i {
   background: var(--color-background-secondary) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: none !important;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.sd-card:hover {
+.sd-card:hover,
+.sd-card-hover:hover {
   border-color: var(--color-foreground-secondary) !important;
   background: var(--color-background-hover) !important;
+  transform: none !important;
+}
+
+.sd-card:has(.sd-stretched-link:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .sd-card-header {
@@ -576,6 +613,55 @@ div.highlight {
   margin: var(--space-4) 0;
 }
 
+/* The language class lives on the wrapper Sphinx puts around div.highlight.
+   That wrapper becomes the frame; the label sits on its top edge. */
+div[class*="highlight-"]:not(.highlight) {
+  box-sizing: border-box;
+  position: relative;
+  margin: var(--space-4) 0;
+  border: var(--hairline-quiet);
+  border-radius: var(--radius-md);
+  background: var(--color-background-secondary);
+}
+
+div[class*="highlight-"]:not(.highlight)::before {
+  content: "Code";
+  display: block;
+  padding: 0.38rem 2.5rem 0.32rem 0.95rem;
+  border-bottom: var(--hairline-quiet);
+  font-family: var(--font-stack);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--color-foreground-muted);
+  line-height: 1.4;
+  user-select: none;
+}
+
+div.highlight-python:not(.highlight)::before { content: "Python"; }
+div.highlight-bash:not(.highlight)::before,
+div.highlight-shell:not(.highlight)::before,
+div.highlight-console:not(.highlight)::before,
+div.highlight-sh:not(.highlight)::before { content: "Shell"; }
+div.highlight-powershell:not(.highlight)::before { content: "PowerShell"; }
+div.highlight-toml:not(.highlight)::before { content: "TOML"; }
+div.highlight-yaml:not(.highlight)::before { content: "YAML"; }
+div.highlight-text:not(.highlight)::before,
+div.highlight-none:not(.highlight)::before,
+div.highlight-default:not(.highlight)::before {
+  content: none;
+  display: none;
+}
+
+div[class*="highlight-"]:not(.highlight) > div.highlight {
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  margin: 0;
+  position: static;
+}
+
 div.highlight pre {
   font-family: var(--font-stack--monospace);
   font-size: var(--fs-code);
@@ -724,11 +810,13 @@ button.copybtn {
   color: var(--color-foreground-secondary) !important;
   padding: 2px 6px !important;
   font-size: var(--fs-ui-xs) !important;
-  top: 0.4rem !important;
+  top: 0.32rem !important;
   right: 0.4rem !important;
+  z-index: 2;
 }
 
-div.highlight:hover button.copybtn {
+div.highlight:hover button.copybtn,
+div[class*="highlight-"]:hover button.copybtn {
   opacity: 1 !important;
 }
 
@@ -749,14 +837,26 @@ p code,
 li code,
 td code,
 dd code {
-  background: transparent !important;
+  background: var(--color-background-hover);
   border: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  font-size: 0.9em !important;
+  border-radius: 3px;
+  padding: 0.02em 0.22em;
+  font-size: 0.88em !important;
   color: var(--color-foreground-primary) !important;
   font-family: var(--font-stack--monospace);
   font-feature-settings: "calt", "ss03";
+}
+
+pre code,
+.sig code,
+dl.field-list code,
+.stage-grid code,
+.highlight code,
+.nav-cards code,
+h1 code, h2 code, h3 code, h4 code {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0;
 }
 
 /* Code inside headings should stay quiet */
@@ -833,6 +933,21 @@ table.docutils tr:hover td {
   background: var(--color-background-hover);
 }
 
+table.docutils caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 0.15rem 0.45rem;
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--color-foreground-muted);
+}
+
+table.docutils td:first-child:nth-last-child(2) {
+  font-weight: 600;
+}
+
 /* ---------------------------------------------------------
    Horizontal rule — quiet section break
    --------------------------------------------------------- */
@@ -851,6 +966,33 @@ hr.docutils {
    .sd-card-body (not a separate .sd-card-header). All landing-page
    header styling targets .sd-card-title, not .sd-card-header.
    --------------------------------------------------------- */
+.hero-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--color-foreground-muted);
+}
+
+.hero-kicker-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-foreground-border);
+  flex: none;
+}
+
+.hero-version {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 .hero-lede {
   font-size: var(--fs-lede);
   font-weight: 400;
@@ -1140,18 +1282,73 @@ img.hero-screenshot {
    Breadcrumb / prev-next navigation
    --------------------------------------------------------- */
 .related-pages {
-  border-top: var(--hairline-quiet);
-  padding-top: var(--space-4);
-  margin-top: var(--space-6);
+  display: flex;
+  gap: 0.75rem;
+  border-top: none;
+  padding-top: 0;
+  margin-top: var(--space-7);
 }
 
 .related-pages a {
-  font-size: var(--fs-ui-sm);
-  color: var(--color-foreground-secondary);
+  flex: 1 1 0;
+  align-items: center;
+  max-width: calc(50% - 0.375rem);
+  float: none;
+  border: var(--hairline-quiet);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.85rem;
+  background: transparent;
   text-decoration: none;
+  color: var(--color-foreground-secondary);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.related-pages a.prev-page {
+  order: 1;
+}
+
+.related-pages a.next-page {
+  order: 2;
+  margin-left: auto;
+  text-align: right;
 }
 
 .related-pages a:hover {
+  background: var(--color-background-secondary);
+  border-color: var(--color-foreground-secondary);
+  color: var(--color-foreground-primary);
+  text-decoration: none;
+}
+
+.related-pages a:hover .page-info .title {
+  color: var(--color-foreground-primary);
+  text-decoration: none;
+}
+
+.related-pages .context {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--color-foreground-muted);
+  margin-bottom: 0.15rem;
+}
+
+.related-pages .title {
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-foreground-primary);
+  text-wrap: balance;
+}
+
+.related-pages a svg.furo-related-icon,
+.related-pages a svg.furo-related-icon > use {
+  color: var(--color-foreground-muted);
+}
+
+.related-pages a:hover svg.furo-related-icon,
+.related-pages a:hover svg.furo-related-icon > use {
   color: var(--color-foreground-primary);
 }
 
@@ -1161,9 +1358,50 @@ img.hero-screenshot {
 footer {
   font-size: var(--fs-ui-xs);
   color: var(--color-foreground-muted);
-  border-top: var(--hairline-quiet);
-  padding-top: var(--space-4);
+  border-top: none;
+  padding-top: 0;
   margin-top: var(--space-6);
+  letter-spacing: 0.01em;
+}
+
+.bottom-of-page {
+  border-top: var(--hairline-quiet);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-2);
+}
+
+.bottom-of-page .right-details {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  text-align: right;
+}
+
+.footer-link {
+  color: var(--color-foreground-secondary);
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: var(--color-foreground-primary);
+  text-decoration: none;
+}
+
+.footer-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-foreground-border);
+  flex: none;
+}
+
+.footer-version {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.75rem;
+  color: var(--color-foreground-muted);
   letter-spacing: 0.01em;
 }
 
@@ -1171,18 +1409,54 @@ footer {
    Search input
    --------------------------------------------------------- */
 .sidebar-search-container {
-  border-top: var(--hairline-quiet);
-  border-bottom: var(--hairline-quiet);
+  margin: 0.4rem 0.75rem 0.85rem;
+  border: var(--hairline-quiet);
+  border-radius: var(--radius-md);
+  background: var(--color-background-secondary);
+}
+
+.sidebar-search-container:hover,
+.sidebar-search-container:focus-within {
+  border-color: var(--color-foreground-secondary);
+  background: var(--color-background-primary);
+}
+
+.sidebar-search-container::before {
+  left: 0.7rem;
 }
 
 input[type="search"] {
-  border-radius: var(--radius-sm) !important;
-  border: var(--hairline-quiet) !important;
-  background: var(--color-background-hover) !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  background: transparent !important;
   font-size: var(--fs-ui-sm) !important;
   color: var(--color-foreground-primary) !important;
-  padding: 0.45rem 0.6rem !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  padding-right: 2rem !important;
   font-family: var(--font-stack);
+}
+
+.search-hint {
+  position: absolute;
+  right: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 0.05rem 0.32rem;
+  border: var(--hairline-quiet);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-foreground-muted);
+  font-family: var(--font-stack--monospace);
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.sidebar-search-container:focus-within .search-hint {
+  opacity: 0;
 }
 
 input[type="search"]::placeholder {
@@ -1525,6 +1799,12 @@ dl.glossary dd {
     padding-right: 1rem !important;
   }
 
+  /* View and edit sit in the title row once the sidebar is gone. */
+  .view-this-page,
+  .edit-this-page {
+    display: none !important;
+  }
+
   .main,
   .page,
   article {
@@ -1833,13 +2113,227 @@ dl.field-list > dt {
 }
 
 dl.field-list > dd {
-  margin-left: 0.75rem !important;
-  padding-left: 0.5rem !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
   font-size: var(--fs-ui) !important;
   color: var(--color-foreground-primary) !important;
   line-height: 1.6;
 }
 
 dl.field-list > dd > ul {
-  padding-left: 1.1rem;
+  padding-left: 0;
+  list-style: none;
+  margin: 0.35rem 0 0;
+}
+
+dl.field-list > dd > ul > li {
+  margin: 0;
+  padding: 0.55rem 0;
+  border-bottom: var(--hairline-quiet);
+}
+
+dl.field-list > dd > ul > li:last-child {
+  border-bottom: none;
+  padding-bottom: 0.15rem;
+}
+
+dl.field-list > dd > ul > li > p {
+  margin: 0;
+}
+
+dl.field-list > dd > ul > li > p > strong {
+  font-family: var(--font-stack--monospace);
+  font-weight: 500;
+  font-size: 0.92em;
+}
+
+dl.field-list em {
+  font-style: normal;
+  color: var(--color-foreground-secondary);
+}
+
+dl.field-list a,
+.sig a {
+  text-decoration: none;
+}
+
+dl.field-list a:hover,
+.sig a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-foreground-border);
+}
+
+dl.field-list .colon {
+  display: none;
+}
+
+/* Permalink anchors. Furo already hides them until hover. */
+a.headerlink {
+  color: var(--color-foreground-muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+a.headerlink:hover {
+  color: var(--color-foreground-primary);
+  text-decoration: none;
+}
+
+/* Top-of-page controls: view, edit, theme, contents. */
+.content-icon-container a,
+.theme-toggle {
+  border-radius: var(--radius-sm);
+  color: var(--color-foreground-muted);
+}
+
+.content-icon-container a:hover,
+.theme-toggle:hover {
+  background: var(--color-background-hover);
+  color: var(--color-foreground-primary);
+}
+
+.theme-toggle {
+  border: none;
+  background: transparent;
+  padding: 0.2rem;
+  cursor: pointer;
+}
+
+.theme-toggle svg {
+  stroke-width: 1.6;
+}
+
+/* Right-hand outline. */
+.toc-tree li.scroll-current > .reference {
+  color: var(--color-foreground-primary);
+  box-shadow: inset 2px 0 0 var(--color-foreground-secondary);
+}
+
+.back-to-top {
+  border: var(--hairline);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  background: var(--color-background-primary);
+  color: var(--color-foreground-secondary);
+  font-size: var(--fs-ui-xs);
+}
+
+.back-to-top:hover {
+  color: var(--color-foreground-primary);
+  border-color: var(--color-foreground-secondary);
+  text-decoration: none;
+}
+
+/* An explicit rule already separates the section, so the heading
+   underline would be a second line. */
+hr.docutils:has(+ section) {
+  margin-bottom: var(--space-4) !important;
+}
+
+hr.docutils + section > h2:first-child {
+  margin-top: var(--space-4);
+}
+
+.mobile-header {
+  background: var(--color-background-primary);
+  border-bottom: var(--hairline-quiet);
+}
+
+.mobile-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  font-size: var(--fs-ui);
+  letter-spacing: -0.02em;
+}
+
+.mobile-header .brand::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: url("logo-light.svg") center / contain no-repeat;
+  flex: none;
+}
+
+body[data-theme="dark"] .mobile-header .brand::before {
+  background-image: url("logo-dark.svg");
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .mobile-header .brand::before {
+    background-image: url("logo-dark.svg");
+  }
+}
+
+.mobile-header a {
+  text-decoration: none;
+}
+
+@media (hover: none) {
+  button.copybtn {
+    opacity: 1 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-hint {
+    display: none;
+  }
+
+  .related-pages {
+    flex-direction: column;
+  }
+
+  .related-pages a,
+  .related-pages a.next-page,
+  .related-pages a.prev-page {
+    max-width: none;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .related-pages a.next-page .page-info {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* ---------------------------------------------------------
+   API classes — the class signature stays a panel. Members
+   under it are a ruled list, and the inheritance line recedes.
+   --------------------------------------------------------- */
+dl.py.class > dd {
+  margin-left: 0 !important;
+  margin-bottom: var(--space-6);
+  padding: 0.2rem 0 0.15rem 0.9rem;
+  border-left: 2px solid var(--color-background-border);
+}
+
+dl.py.class > dd dl.py > dt.sig:not(.sig-inline) {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  border-top: var(--hairline-quiet) !important;
+  padding: 0.85rem 0 0.35rem !important;
+  margin: 0.55rem 0 0.15rem !important;
+}
+
+dl.py.class > dd dl.py > dt.sig:not(.sig-inline):hover {
+  background: transparent !important;
+  border-top-color: var(--color-foreground-border) !important;
+}
+
+p.api-bases {
+  margin: 0.1rem 0 0.85rem;
+  font-size: var(--fs-ui-xs);
+  color: var(--color-foreground-muted);
+}
+
+p.api-bases a,
+p.api-bases code {
+  color: var(--color-foreground-secondary) !important;
+  background: transparent !important;
+  padding: 0 !important;
 }

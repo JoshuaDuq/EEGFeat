@@ -81,17 +81,24 @@ Metrics, nulls, uncertainty, and importance
 
 .. autofunction:: eegfeat.model.fold_results
 
+.. autoclass:: eegfeat.model.FoldResults
+   :members:
+
 .. autofunction:: eegfeat.model.regression_metrics
 
 .. autofunction:: eegfeat.model.subject_level_r
 
 .. autofunction:: eegfeat.model.subject_level_errors
 
+.. autofunction:: eegfeat.model.subject_r_scorer
+
 .. autofunction:: eegfeat.model.within_subject_centered_metrics
 
 .. autofunction:: eegfeat.model.within_condition_metrics
 
 .. autofunction:: eegfeat.model.residualize_targets
+
+.. autofunction:: eegfeat.model.residualize_within_subjects
 
 .. autofunction:: eegfeat.model.classification_metrics
 
@@ -109,6 +116,8 @@ Metrics, nulls, uncertainty, and importance
 .. autofunction:: eegfeat.model.paired_signflip_p_value
 
 .. autofunction:: eegfeat.model.permutation_test
+
+.. autofunction:: eegfeat.model.univariate_screen
 
 .. autoclass:: eegfeat.model.NullConfig
    :members:

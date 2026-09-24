@@ -8,9 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/app"
-	"github.com/JoshuaDuq/EEGFeatML/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeatML/tui/styles"
+	"github.com/JoshuaDuq/EEGFeat/tui/app"
+	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGFeat/tui/styles"
 )
 
 func main() {

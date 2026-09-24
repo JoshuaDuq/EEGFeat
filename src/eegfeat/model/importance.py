@@ -3,6 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -12,11 +13,14 @@ from sklearn.pipeline import Pipeline
 
 from eegfeat._validation import blank_non_finite
 from eegfeat.model._deps import require_shap
+from eegfeat.model.aggregate import _SubjectRScorer
 from eegfeat.model.crossfit import (
+    _default_scoring,
     _fit_fold,
     _FittedFold,
     _validate_and_resolve_inner_groups,
     _validate_outer_folds,
+    _validate_residualize_within,
     _validate_row_aligned,
 )
 from eegfeat.model.execution import run_folds
@@ -203,6 +207,7 @@ def _fold_fitter(
     harmonization: str | None,
     covariates: npt.NDArray[np.float64] | None,
     residualize_on: Sequence[str],
+    residualize_within: Literal["subject"] | None,
     scoring: object,
     refit: str | bool | None,
 ) -> Callable[[Fold], _FittedFold]:
@@ -212,8 +217,10 @@ def _fold_fitter(
     # through cross_fit_*.
     _validate_outer_folds(folds, len(X), groups, runs)
     _validate_row_aligned(len(X), y, covariates)
+    _validate_residualize_within(residualize_within, residualize_on)
     inner_groups_all = _validate_and_resolve_inner_groups(folds, inner, groups, runs)
-    task = "classification" if is_classifier(pipeline) else "regression"
+    task = _task(pipeline)
+    scoring = _default_scoring(task, scoring)
 
     def fit(f: Fold) -> _FittedFold:
         return _fit_fold(
@@ -230,11 +237,16 @@ def _fold_fitter(
             harmonization=harmonization,
             covariates=covariates,
             residualize_on=residualize_on,
+            residualize_within=residualize_within,
             scoring=scoring,
             refit=refit,
         )
 
     return fit
+
+
+def _task(pipeline: Pipeline) -> str:
+    return "classification" if is_classifier(pipeline) else "regression"
 
 
 def _importance_scoring(scoring: object, refit: str | bool | None) -> object:
@@ -295,6 +307,7 @@ def shap_importance_over_folds(
     harmonization: str | None = None,
     covariates: npt.NDArray[np.float64] | None = None,
     residualize_on: Sequence[str] = (),
+    residualize_within: Literal["subject"] | None = None,
     scoring: object = None,
     refit: str | bool | None = None,
     min_complete_fraction: float = 0.5,
@@ -313,6 +326,7 @@ def shap_importance_over_folds(
         harmonization=harmonization,
         covariates=covariates,
         residualize_on=residualize_on,
+        residualize_within=residualize_within,
         scoring=scoring,
         refit=refit,
     )
@@ -346,11 +360,12 @@ def permutation_importance_over_folds(
     harmonization: str | None = None,
     covariates: npt.NDArray[np.float64] | None = None,
     residualize_on: Sequence[str] = (),
+    residualize_within: Literal["subject"] | None = None,
     scoring: object = None,
     refit: str | bool | None = None,
     min_complete_fraction: float = 0.5,
 ) -> Importance:
-    importance_scoring = _importance_scoring(scoring, refit)
+    importance_scoring = _importance_scoring(_default_scoring(_task(pipeline), scoring), refit)
     fit = _fold_fitter(
         folds,
         X,
@@ -364,6 +379,7 @@ def permutation_importance_over_folds(
         harmonization=harmonization,
         covariates=covariates,
         residualize_on=residualize_on,
+        residualize_within=residualize_within,
         scoring=scoring,
         refit=refit,
     )
@@ -376,6 +392,16 @@ def permutation_importance_over_folds(
     def _fold_importance(f: Fold) -> npt.NDArray[np.float64]:
         fitted = fit(f)
         retained = [name for name, keep in zip(all_names, fitted.features, strict=True) if keep]
+        fold_scoring = importance_scoring
+        if isinstance(importance_scoring, _SubjectRScorer):
+            # The permuted rows stay in test order, so each keeps its subject.
+            test_groups = groups[f.test]
+
+            def fold_scoring(
+                estimator: object, X_: npt.NDArray[np.float64], y_: npt.NDArray[np.float64]
+            ) -> float:
+                return importance_scoring(estimator, X_, y_, test_groups)
+
         imp = permutation_importance(
             fitted.model,
             fitted.X_test,
@@ -383,7 +409,7 @@ def permutation_importance_over_folds(
             feature_names=retained,
             n_repeats=n_repeats,
             seed=seed + f.index,
-            scoring=importance_scoring,
+            scoring=fold_scoring,
         )
         return _fold_values(imp.values, fitted.features)
 

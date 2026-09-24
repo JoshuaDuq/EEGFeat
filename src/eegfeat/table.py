@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
+from functools import cached_property
 from typing import Literal
 
 import numpy as np
@@ -69,7 +70,7 @@ def _json_value(value: object) -> object:
     if isinstance(value, np.ndarray):
         return _json_value(value.tolist())
     if isinstance(value, np.generic):
-        return value.item()
+        return _json_value(value.item())
     if isinstance(value, float) and not np.isfinite(value):
         return "Infinity" if value > 0 else "-Infinity" if value < 0 else "NaN"
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -147,13 +148,15 @@ class FeatureMeta:
             "unit": self.unit,
             "source": self.source,
             "freq_resolution_hz": self.freq_resolution_hz,
-            "computation": self.computation.record(),
             "phase_band": _band_record(self.phase_band),
             "amplitude_band": _band_record(self.amplitude_band),
             "nodes": self.nodes,
+            "computation": self.computation.record(),
         }
 
-    @property
+    # Cached because the record is immutable and hashing it is not cheap: reading a cohort
+    # named every one of its 13,000 columns five times.
+    @cached_property
     def parameter_hash(self) -> str:
         """Stable digest of every field that defines this feature column."""
         canonical = json.dumps(
@@ -161,7 +164,7 @@ class FeatureMeta:
         )
         return hashlib.sha256(canonical.encode()).hexdigest()
 
-    @property
+    @cached_property
     def name(self) -> str:
         """The canonical feature name for this column."""
         readable = feature_name(
@@ -301,11 +304,63 @@ class FeatureTable:
             for i, m in enumerate(self.meta)
             if all(getattr(m, key) == value for key, value in conditions.items())
         ]
-        index = np.asarray(keep, dtype=int)
+        return self._columns(np.asarray(keep, dtype=int))
+
+    def drop_missing(self, max_fraction: float) -> FeatureTable:
+        """Return the columns missing in at most ``max_fraction`` of the rows.
+
+        The fraction ignores any target, so a cohort can be thinned before cross-validation;
+        each fold's own missingness limit still decides what its model sees.
+        """
+        if not 0.0 <= max_fraction <= 1.0:
+            raise ValueError(f"max_fraction must be between 0 and 1, got {max_fraction}.")
+        missing = (
+            (~np.isfinite(self.values)).mean(axis=0)
+            if self.n_rows
+            else np.zeros(self.values.shape[1])
+        )
+        return self._columns(np.flatnonzero(missing <= max_fraction))
+
+    def take(
+        self, rows: Sequence[int] | npt.NDArray[np.bool_] | npt.NDArray[np.intp]
+    ) -> FeatureTable:
+        """Return the given rows, in the given order, with their identities and flags.
+
+        Parameters
+        ----------
+        rows : sequence of int, or ndarray of bool
+            Row positions, or a mask with one entry per row. A row may be taken once.
+        """
+        index = np.asarray(rows)
+        if index.dtype == np.bool_:
+            if index.shape != (self.n_rows,):
+                raise ValueError(f"a row mask needs {self.n_rows} entries, got {index.shape}.")
+            index = np.flatnonzero(index)
+        if index.size == 0:
+            index = index.astype(np.intp)
+        if index.ndim != 1 or not np.issubdtype(index.dtype, np.integer):
+            raise ValueError("rows must be integer row positions or a boolean row mask.")
+        if np.any(index < 0) or np.any(index >= self.n_rows):
+            raise ValueError(f"row positions must lie in [0, {self.n_rows}).")
+        # Each row is an identity, so taking one twice would give a join two targets for it.
+        if np.unique(index).size != index.size:
+            raise ValueError("take would repeat a row; each row may be taken once.")
+        return FeatureTable(
+            values=self.values[index],
+            coverage=self.coverage[index],
+            meta=self.meta,
+            flags={key: flag[index] for key, flag in self.flags.items()},
+            row_labels=(
+                None if self.row_labels is None else tuple(self.row_labels[i] for i in index)
+            ),
+            row_ids=None if self.row_ids is None else tuple(self.row_ids[i] for i in index),
+        )
+
+    def _columns(self, index: npt.NDArray[np.intp]) -> FeatureTable:
         return FeatureTable(
             values=self.values[:, index],
             coverage=self.coverage[:, index],
-            meta=tuple(self.meta[i] for i in keep),
+            meta=tuple(self.meta[i] for i in index),
             flags={k: v[:, index] for k, v in self.flags.items()},
             row_labels=self.row_labels,
             row_ids=self.row_ids,
@@ -412,11 +467,14 @@ def stack_rows(
 
     meta = tables[0].meta
     identity_groups: list[tuple[RowId, ...]] = []
-    for table in tables:
+    for position, table in enumerate(tables):
         if table.row_labels is not None or table.row_ids is None:
             raise ValueError("stack_rows accepts per-epoch tables with row_ids only.")
         if columns == "identical" and table.meta != meta:
-            raise ValueError("stack_rows requires the same ordered feature metadata.")
+            raise ValueError(
+                "stack_rows requires the same ordered feature metadata; "
+                f"{_schema_difference(tables[0], table, position)}"
+            )
         identity_groups.append(table.row_ids)
 
     row_ids = tuple(row_id for identities in identity_groups for row_id in identities)
@@ -440,6 +498,31 @@ def stack_rows(
         meta=meta,
         flags=flags,
         row_ids=row_ids,
+    )
+
+
+def _schema_difference(first: FeatureTable, table: FeatureTable, position: int) -> str:
+    recording = table.row_ids[0][0] if table.row_ids else "no rows"
+    reference, names = first.names, table.names
+    extra = [name for name in names if name not in set(reference)]
+    missing = [name for name in reference if name not in set(names)]
+    if not extra and not missing:
+        return f"table {position} ({recording}) has the first table's columns in another order."
+
+    def count(names: list[str]) -> str:
+        return f"{len(names)} column{'' if len(names) == 1 else 's'} ({', '.join(names[:3])})"
+
+    parts = []
+    if extra:
+        parts.append(f"has {count(extra)} the first table lacks")
+    if missing:
+        parts.append(f"lacks {count(missing)} of the first table's")
+    # A fit of the recording's own, such as its microstate templates, enters the column
+    # names, so those columns can never match another recording's.
+    return (
+        f"table {position} ({recording}) {' and '.join(parts)}. Recordings that dropped "
+        "different channels, or fitted something of their own such as microstate templates, "
+        "differ in their columns: stack with columns='union', or leave the fitted measure out."
     )
 
 

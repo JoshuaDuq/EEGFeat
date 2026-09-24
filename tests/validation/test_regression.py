@@ -87,7 +87,7 @@ def predictions(design: efm.Design) -> tuple[pd.DataFrame, dict[str, float]]:
         design.y,
         design.groups,
         efm.ridge_pipeline(CONFIG, seed=SEED),
-        efm.ridge_grid(),
+        efm.ridge_grid(design.X),
         inner=INNER,
         seed=SEED,
     )
@@ -107,19 +107,21 @@ def predictions(design: efm.Design) -> tuple[pd.DataFrame, dict[str, float]]:
     "subject_level_r",
     kind="decoding",
     claim="Sleep depth 0 to 3 is recovered across subjects by leave-one-subject-out ridge",
-    criterion="subject-level r above 0.7 with interval above 0.5; R squared above 0.5",
+    criterion="subject-level r above 0.7, and in every subject; R squared above 0.5",
 )
 def test_sleep_depth_is_recovered_across_subjects(
     predictions: tuple[pd.DataFrame, dict[str, float]], record: Callable[[str], None]
 ) -> None:
+    # No interval over subjects: leave-one-subject-out scores share training data, so their
+    # significance is the permutation test's claim below, not a t interval's.
     frame, metrics = predictions
     summary = efm.subject_level_r(frame)
     record(
-        f"subject-level r {summary.r:.2f} (interval {summary.ci_low:.2f} to "
-        f"{summary.ci_high:.2f}), R squared {metrics['r2']:.2f}, {len(frame)} epochs"
+        f"subject-level r {summary.r:.2f} (lowest subject "
+        f"{min(r for _, r in summary.per_subject):.2f}), R squared {metrics['r2']:.2f}, "
+        f"{len(frame)} epochs"
     )
     assert summary.r > 0.7, summary
-    assert summary.ci_low > 0.5, summary
     assert all(r > 0.7 for _, r in summary.per_subject), summary.per_subject
     assert metrics["r2"] > 0.5, metrics
     assert metrics["subject_level_r"] == pytest.approx(summary.r)
@@ -144,7 +146,7 @@ def test_permutation_null_sits_at_zero(
         design.groups,
         None,
         efm.ridge_pipeline(CONFIG, seed=SEED),
-        efm.ridge_grid(),
+        efm.ridge_grid(design.X),
         metrics["subject_level_r"],
         config=efm.NullConfig(scheme="within_subject", n_permutations=50),
         inner=INNER,

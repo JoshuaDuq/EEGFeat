@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeatML/tui/styles"
+	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGFeat/tui/styles"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

@@ -2,15 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Literal
+from functools import partial
+from typing import Literal, cast
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
+from eegfeat.model import _ridge_null
 from eegfeat.model.aggregate import AggregationConfig, subject_level_r
-from eegfeat.model.crossfit import FoldPrediction, cross_fit_regression
+from eegfeat.model.crossfit import (
+    FoldPrediction,
+    _cross_fit_engine,
+    _default_scoring,
+    _validate_and_resolve_inner_groups,
+)
+from eegfeat.model.residualize import residualize_targets, residualize_within_subjects
 from eegfeat.model.splits import Fold, InnerSplit
 from eegfeat.model.tuning import FoldFitError
 
@@ -267,6 +275,43 @@ def _prediction_statistic(
     return score
 
 
+def _freedman_lane_target(
+    fold: Fold,
+    *,
+    y: npt.NDArray[np.float64],
+    source: npt.NDArray[np.intp],
+    covariates: npt.NDArray[np.float64] | None,
+    groups: npt.NDArray[np.object_],
+    columns: Sequence[str],
+    within: Literal["subject"] | None,
+) -> npt.NDArray[np.float64]:
+    if covariates is None:
+        raise ValueError(
+            "Target residualization requested via residualize_on, but covariates is None."
+        )
+    rows = np.concatenate([fold.train, fold.test])
+    in_fold = np.zeros(len(y), dtype=np.bool_)
+    in_fold[rows] = True
+    # The nuisance fit belongs to the fold, so its residuals can only be exchanged inside it.
+    if not np.all(in_fold[source[rows]]):
+        raise ValueError(
+            f"Fold {fold.index}: the permutation moves trials outside the fold, whose nuisance "
+            "fit cannot then be kept; use a scheme that exchanges trials within its runs."
+        )
+    residual = np.full(len(y), np.nan)
+    if within is None:
+        residual[fold.train], residual[fold.test] = residualize_targets(
+            y, covariates, fold.train, fold.test, columns=columns
+        )
+    else:
+        residual[fold.train], residual[fold.test] = residualize_within_subjects(
+            y, covariates, groups, fold.train, fold.test, columns=columns
+        )
+    permuted = y.copy()
+    permuted[rows] = y[rows] - residual[rows] + residual[source[rows]]
+    return permuted
+
+
 def permutation_test(
     folds: Sequence[Fold],
     X: npt.NDArray[np.float64],
@@ -284,6 +329,7 @@ def permutation_test(
     harmonization: str | None = None,
     covariates: npt.NDArray[np.float64] | None = None,
     residualize_on: Sequence[str] = (),
+    residualize_within: Literal["subject"] | None = None,
     scoring: object = None,
     refit: str | bool | None = None,
     metric_fn: Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], float] | None = None,
@@ -303,27 +349,28 @@ def permutation_test(
 
     ``observed`` must come from the same folds, model, seed, aggregation and metric
     as this call; it is recomputed and a mismatch is an error rather than a silently
-    invalid p-value. ``residualize_on`` is refused: permuting raw targets and
-    refitting the nuisance model does not give a nuisance-preserving conditional null.
+    invalid p-value.
+
+    With ``residualize_on`` the null is Freedman-Lane (Freedman & Lane 1983; Winkler et
+    al. 2014): each fold fits its nuisance model exactly as cross-fitting does, keeps
+    that fit's prediction and permutes only its residuals, so a draw breaks the
+    feature-target link and leaves the nuisance-target link in place. Permuting the raw
+    target instead would break both, and the null would describe the wrong hypothesis.
     """
-    if residualize_on:
-        raise ValueError(
-            "Nuisance-adjusted permutation inference requires a nuisance-preserving "
-            "null procedure. This function permutes raw labels and does not support "
-            "residualize_on; refitting nuisance regression after shuffling is insufficient."
-        )
     rng = np.random.default_rng(seed)
     groups_arr = np.asarray(groups, dtype=object)
-    # Each draw needs only the point estimate, so the per-draw bootstrap CI is skipped.
-    null_aggregation = replace(aggregation, ci_method="fixed_effects")
-    permuted_targets: list[npt.NDArray[np.float64]] = []
+    target = np.asarray(y, dtype=np.float64)
+    # Each draw needs only the point estimate, so no interval is computed for it.
+    null_aggregation = replace(aggregation, ci_method="none")
+    # Drawn as source rows, in the random stream permuting y itself would use.
+    sources: list[npt.NDArray[np.intp]] = []
     sampled_changed_fractions: list[float] = []
 
     for _ in range(config.n_permutations):
-        y_p = permute(y, groups, runs, trial_indices, config=config, rng=rng)
-        cf = changed_fraction(y, y_p)
-        permuted_targets.append(y_p)
-        sampled_changed_fractions.append(cf)
+        rows = np.arange(len(target), dtype=np.float64)
+        drawn = permute(rows, groups, runs, trial_indices, config=config, rng=rng)
+        sources.append(drawn.astype(np.intp))
+        sampled_changed_fractions.append(changed_fraction(target, target[sources[-1]]))
 
     changed_arr = np.asarray(sampled_changed_fractions, dtype=np.float64)
     if np.all(changed_arr == 0.0):
@@ -334,28 +381,45 @@ def permutation_test(
         raise ValueError("observed statistic must be finite.")
 
     def fit_targets(
-        target_values: npt.NDArray[np.float64],
-        fit_seed: int,
+        source: npt.NDArray[np.intp] | None,
     ) -> tuple[FoldPrediction, ...]:
-        return cross_fit_regression(
+        fold_targets = None
+        if source is not None and residualize_on:
+            fold_targets = partial(
+                _freedman_lane_target,
+                y=target,
+                source=source,
+                covariates=covariates,
+                groups=groups_arr,
+                columns=residualize_on,
+                within=residualize_within,
+            )
+        results = _cross_fit_engine(
+            "regression",
             folds,
             X,
-            target_values,
+            target if source is None or residualize_on else target[source],
             groups,
             pipeline,
             grid,
             inner=inner,
-            seed=fit_seed,
+            seed=seed,
             runs=runs,
             outer_n_jobs=outer_n_jobs,
             harmonization=harmonization,
             covariates=covariates,
             residualize_on=residualize_on,
+            residualize_within=residualize_within,
             scoring=scoring,
             refit=refit,
+            # The caller's own cross-fit already reported the grid; a null draw has no signal
+            # to find, so its choices at the grid's ends are noise.
+            warn_at_grid_edges=False,
+            fold_targets=fold_targets,
         )
+        return tuple(cast(list[FoldPrediction], results))
 
-    observed_predictions = fit_targets(y, seed)
+    observed_predictions = fit_targets(None)
     recomputed_observed = _prediction_statistic(
         observed_predictions,
         groups_arr,
@@ -375,27 +439,55 @@ def permutation_test(
             "model, seed, aggregation, and metric for both."
         )
 
-    null_scores: list[float] = []
-
-    for b, y_perm in enumerate(permuted_targets):
+    selection = _default_scoring("regression", scoring)
+    penalty = _ridge_null.ridge_penalty(pipeline, grid, selection, refit, metric_fn)
+    if penalty is not None:
         try:
-            predictions = fit_targets(y_perm, seed)
-            score = _prediction_statistic(
-                predictions,
+            null_arr = _ridge_null.ridge_null(
+                folds,
+                X,
+                target,
+                np.stack(sources),
                 groups_arr,
-                null_aggregation,
-                metric_fn,
+                _validate_and_resolve_inner_groups(folds, inner, groups_arr, runs),
+                pipeline,
+                grid,
+                penalty,
+                inner=inner,
+                seed=seed,
+                scoring=selection,
+                refit=refit,
+                aggregation=null_aggregation,
+                harmonization=harmonization,
+                covariates=covariates,
+                residualize_on=residualize_on,
+                residualize_within=residualize_within,
+                outer_n_jobs=outer_n_jobs,
             )
         except (FoldFitError, ValueError) as exc:
             raise RuntimeError(
-                f"Permutation {b + 1} failed. No p-value is returned "
-                "because dropping a failed permutation could alter "
-                "the null distribution."
+                "The permutation draws failed. No p-value is returned because dropping "
+                "a failed permutation could alter the null distribution."
             ) from exc
-
-        null_scores.append(score)
-
-    null_arr = np.asarray(null_scores, dtype=np.float64)
+    else:
+        null_scores: list[float] = []
+        for b, source in enumerate(sources):
+            try:
+                predictions = fit_targets(source)
+                score = _prediction_statistic(
+                    predictions,
+                    groups_arr,
+                    null_aggregation,
+                    metric_fn,
+                )
+            except (FoldFitError, ValueError) as exc:
+                raise RuntimeError(
+                    f"Permutation {b + 1} failed. No p-value is returned "
+                    "because dropping a failed permutation could alter "
+                    "the null distribution."
+                ) from exc
+            null_scores.append(score)
+        null_arr = np.asarray(null_scores, dtype=np.float64)
     # "At least as extreme" means the tail the metric improves into.
     extreme = null_arr >= observed if greater_is_better else null_arr <= observed
     count_extreme = int(np.sum(extreme))

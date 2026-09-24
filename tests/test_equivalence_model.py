@@ -35,6 +35,8 @@ def test_loso_folds_match_the_reference_pipeline(reference: dict[str, np.ndarray
         np.testing.assert_array_equal(fold.test, expected_test)
 
 
+# The reference grid is narrower than this data needs; the pin is on the engine, not the grid.
+@pytest.mark.filterwarnings("ignore:regressor__alpha was chosen at the lower end")
 def test_nested_loso_predictions_match_the_reference_pipeline(
     reference: dict[str, np.ndarray],
 ) -> None:
@@ -61,6 +63,7 @@ def test_nested_loso_predictions_match_the_reference_pipeline(
     np.testing.assert_allclose(y_pred, reference["loso_y_pred"], rtol=1e-5, atol=1e-7)
 
 
+@pytest.mark.filterwarnings("ignore:regressor__alpha was chosen at the lower end")
 def test_within_subject_predictions_match_the_reference_pipeline(
     reference: dict[str, np.ndarray],
 ) -> None:

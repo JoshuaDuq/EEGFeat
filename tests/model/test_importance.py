@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression
@@ -244,13 +245,14 @@ def test_permutation_importance_stage_requires_min_valid_fold_fraction() -> None
 
 
 def test_permutation_importance_over_folds_runs_and_aggregates() -> None:
+    # Three trials per held-out subject, the fewest a subject-level r can be scored on.
     folds = [
-        Fold(index=0, train=np.array([0, 1, 2, 3]), test=np.array([4, 5])),
-        Fold(index=1, train=np.array([2, 3, 4, 5]), test=np.array([0, 1])),
+        Fold(index=0, train=np.arange(6), test=np.array([6, 7, 8])),
+        Fold(index=1, train=np.arange(3, 9), test=np.array([0, 1, 2])),
     ]
-    X = np.arange(12, dtype=np.float64).reshape(6, 2)
-    y = np.array([1.0, 1.2, 2.0, 2.1, 3.0, 3.2])
-    groups = np.array(["s1", "s1", "s2", "s2", "s3", "s3"], dtype=object)
+    X = np.arange(18, dtype=np.float64).reshape(9, 2)
+    y = np.array([1.0, 1.2, 1.1, 2.0, 2.1, 2.3, 3.0, 3.2, 3.1])
+    groups = np.repeat(["s1", "s2", "s3"], 3).astype(object)
     pipe = Pipeline([("regressor", DummyRegressor())])
     inner = InnerSplit(grouping="subject", n_splits=2)
 
@@ -264,14 +266,14 @@ def test_permutation_importance_over_folds_runs_and_aggregates() -> None:
 
 def test_permutation_importance_over_folds_handles_fold_varying_widths() -> None:
     folds = [
-        Fold(index=0, train=np.array([2, 3, 4, 5]), test=np.array([0, 1])),
-        Fold(index=1, train=np.array([0, 1, 2, 3]), test=np.array([4, 5])),
+        Fold(index=0, train=np.arange(3, 9), test=np.array([0, 1, 2])),
+        Fold(index=1, train=np.arange(6), test=np.array([6, 7, 8])),
     ]
-    X = np.ones((6, 3))
-    # For subject s1 (rows 0, 1), f2 is all NaN
-    X[0:2, 2] = np.nan
-    y = np.arange(6, dtype=float)
-    groups = np.array(["s1", "s1", "s2", "s2", "s3", "s3"], dtype=object)
+    X = np.ones((9, 3))
+    # For subject s1 (rows 0 to 2), f2 is all NaN
+    X[0:3, 2] = np.nan
+    y = np.arange(9, dtype=float)
+    groups = np.repeat(["s1", "s2", "s3"], 3).astype(object)
     pipe = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
     inner = InnerSplit(grouping="subject", n_splits=2)
 
@@ -412,6 +414,42 @@ def test_permutation_importance_is_measured_with_the_selection_metric(multi_metr
         n_repeats=2,
     )
     np.testing.assert_array_equal(imp.values, np.zeros(2))
+
+
+class _Column(BaseEstimator, RegressorMixin):
+    # Predicts one input column as it is, so the score it loses when permuted is known.
+    def __init__(self, column: int = 1) -> None:
+        self.column = column
+
+    def fit(self, X, y):
+        self.n_features_in_ = np.asarray(X).shape[1]
+        return self
+
+    def predict(self, X):
+        return np.asarray(X, dtype=float)[:, self.column]
+
+
+def test_regression_importance_is_the_drop_in_subject_level_r_by_default() -> None:
+    # The model tracks every held-out trial at 100 times its scale: a within-subject r of 1
+    # and an R^2 far below zero. Permuting the tracking column costs the whole r, about 1;
+    # measured in R^2 the same permutation would cost about 200.
+    rng = np.random.default_rng(0)
+    groups = np.repeat([f"s{i}" for i in range(6)], 10).astype(object)
+    offset = np.repeat(np.arange(6) * 10.0, 10)
+    signal = rng.normal(size=groups.size)
+    X = np.column_stack([offset, 100.0 * signal])
+    imp = permutation_importance_over_folds(
+        loso_folds(groups),
+        X,
+        offset + signal,
+        groups,
+        Pipeline([("regressor", _Column())]),
+        {},
+        inner=InnerSplit(grouping="subject", n_splits=2),
+        n_repeats=10,
+    )
+    assert imp.values[0] == 0.0
+    assert imp.values[1] == pytest.approx(1.0, abs=0.2)
 
 
 @pytest.mark.parametrize(

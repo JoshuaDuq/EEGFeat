@@ -11,7 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
 )
 
 type fakeRunner struct {
@@ -400,6 +400,20 @@ func TestStoppingALiveRunAsksFirst(t *testing.T) {
 	m, _ = update(t, m, key('y'))
 	if !backend.runner.stopped || !strings.Contains(m.View(), "Stopping") {
 		t.Fatal("confirmed stop must stop the run")
+	}
+}
+
+func TestQuittingFromTheLogAsksWhileARunIsLive(t *testing.T) {
+	backend := &fakeBackend{status: statusFixture()}
+	m := startRun(t, backend, 40)
+	m, _ = update(t, m, key('l'))
+	m, cmd := update(t, m, key('q'))
+	if backend.runner.stopped || m.confirm == nil || cmd != nil {
+		t.Fatal("q in the log stopped the run without asking")
+	}
+	m, _ = update(t, m, key('n'))
+	if backend.runner.stopped || m.run == nil || !m.logOpen {
+		t.Fatal("cancel must leave the run and the log alone")
 	}
 }
 

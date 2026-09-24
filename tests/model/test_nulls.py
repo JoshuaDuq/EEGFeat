@@ -50,42 +50,49 @@ def test_circular_shifts_require_unambiguous_integer_trial_order(trial_indices) 
         )
 
 
-def test_label_permutation_refuses_nuisance_adjusted_inference() -> None:
-    covariates = np.sin(Y).reshape(-1, 1)
+def _nuisance_trials(effect: float) -> tuple[np.ndarray, ...]:
+    # The target follows a nuisance term strongly; the feature follows the nuisance too and
+    # tracks the rest of the target only as much as `effect` says.
+    rng = np.random.default_rng(0)
+    groups = np.repeat([f"s{i}" for i in range(6)], 20).astype(object)
+    nuisance = rng.normal(size=groups.size)
+    rest = rng.normal(size=groups.size)
+    y = 3.0 * nuisance + rest
+    X = np.column_stack([nuisance + effect * rest + rng.normal(size=groups.size)])
+    return X, y, groups, nuisance.reshape(-1, 1)
+
+
+@pytest.mark.parametrize("within", [None, "subject"])
+@pytest.mark.parametrize(("effect", "significant"), [(1.0, True), (0.0, False)])
+def test_nuisance_adjusted_inference_permutes_residuals_under_the_nuisance_fit(
+    within, effect: float, significant: bool
+) -> None:
+    # Freedman-Lane: every fold keeps its nuisance prediction and permutes only its residuals,
+    # so the null breaks the feature-target link and nothing else.
+    X_, y, groups, covariates = _nuisance_trials(effect)
+    folds = loso_folds(groups)
+    pipe = Pipeline([("regressor", LinearRegression())])
+    nuisance = {"covariates": covariates, "residualize_on": ("n",), "residualize_within": within}
     predictions = cross_fit_regression(
-        FOLDS,
-        X,
-        Y,
-        GROUPS,
-        PIPE,
+        folds, X_, y, groups, pipe, {}, inner=BY_SUBJECT, seed=0, **nuisance
+    )
+    observed = _prediction_statistic(predictions, groups, _DEFAULT_AGGREGATION, None)
+    result = permutation_test(
+        folds,
+        X_,
+        y,
+        groups,
+        None,
+        pipe,
         {},
+        observed,
+        config=NullConfig(n_permutations=99),
         inner=BY_SUBJECT,
         seed=0,
-        covariates=covariates,
-        residualize_on=("nuisance",),
+        **nuisance,
     )
-
-    def negative_mse(truth, prediction):
-        return -float(np.mean((truth - prediction) ** 2))
-
-    observed = _prediction_statistic(predictions, GROUPS, _DEFAULT_AGGREGATION, negative_mse)
-    with pytest.raises(ValueError, match="nuisance-preserving"):
-        permutation_test(
-            FOLDS,
-            X,
-            Y,
-            GROUPS,
-            RUNS,
-            PIPE,
-            {},
-            observed,
-            config=NullConfig(n_permutations=3),
-            inner=BY_SUBJECT,
-            seed=0,
-            covariates=covariates,
-            residualize_on=("nuisance",),
-            metric_fn=negative_mse,
-        )
+    assert (result.p_value <= 0.01) is significant
+    assert abs(float(np.mean(result.null))) < 0.1
 
 
 def test_the_shift_set_is_the_whole_cycle_including_the_identity() -> None:

@@ -67,8 +67,9 @@ within-subject permutations.
    * - File
      - Contents
    * - ``example_model_scores.tsv``
-     - Cohort correlation, its confidence interval, and the permutation *p*,
-       then each subject's correlation.
+     - Cohort correlation and the permutation *p*, then each subject's
+       correlation. There is no interval: every held-out score comes from a
+       model trained on the other subjects, so the scores are not independent.
    * - ``example_model_predictions.tsv``
      - Held-out prediction for every trial, with the fold index.
 

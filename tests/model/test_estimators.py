@@ -48,7 +48,7 @@ def test_pipelines_are_built_fresh_not_shared() -> None:
     ("pipeline_factory", "grid_factory"),
     [
         (elasticnet_pipeline, elasticnet_grid),
-        (ridge_pipeline, ridge_grid),
+        (ridge_pipeline, lambda: ridge_grid(np.ones((10, 3)))),
         (random_forest_pipeline, random_forest_grid),
         (svm_pipeline, svm_grid),
         (logistic_pipeline, logistic_grid),
@@ -81,11 +81,61 @@ def test_default_grids_give_the_same_predictions_whatever_the_feature_units() ->
     inner = InnerSplit(grouping="subject", n_splits=3)
     pipe = ridge_pipeline(_CONFIG, seed=0)
     as_given, rescaled = (
-        cross_fit_regression(folds, values, y, groups, pipe, ridge_grid(), inner=inner, seed=0)
+        cross_fit_regression(folds, values, y, groups, pipe, ridge_grid(X), inner=inner, seed=0)
         for values in (X, X * 1e-6)
     )
     np.testing.assert_allclose(
         np.concatenate([p.y_pred for p in as_given]),
+        np.concatenate([p.y_pred for p in rescaled]),
+        rtol=1e-6,
+    )
+
+
+def _effective_dof(X: np.ndarray, alpha: float) -> float:
+    # Degrees of freedom of a ridge fit on the standardized design the pipeline fits.
+    standardized = (X - X.mean(axis=0)) / X.std(axis=0)
+    s = np.linalg.svd(standardized, compute_uv=False)
+    return float(np.sum(s**2 / (s**2 + alpha)))
+
+
+@pytest.mark.parametrize("shape", [(1200, 40), (300, 2000)])
+def test_the_ridge_grid_spans_unpenalized_to_empty_whatever_the_design_size(shape) -> None:
+    # scikit-learn's Ridge does not divide its penalty by the number of trials, so a fixed
+    # grid that shrinks a small design barely touches a large one: at 1,200 trials the old
+    # largest penalty, 100, still left 37 of 40 degrees of freedom in place.
+    X = np.random.default_rng(0).normal(size=shape)
+    alphas = ridge_grid(X)["regressor__alpha"]
+    rank = min(shape[0] - 1, shape[1])
+    assert _effective_dof(X, min(alphas)) > 0.9 * rank
+    assert _effective_dof(X, max(alphas)) < 0.1
+
+
+def test_the_ridge_grid_ignores_columns_the_pipeline_drops_as_empty() -> None:
+    X = np.random.default_rng(0).normal(size=(100, 20))
+    padded = np.column_stack([X, np.full((100, 20), np.nan)])
+    assert ridge_grid(padded) == ridge_grid(X)
+
+
+def test_elastic_net_selects_the_same_model_whatever_the_target_units() -> None:
+    # ElasticNet's L1 penalty does not scale with the target, so a fixed grid shrinks a
+    # rating in points and the same rating in hundredths of a point differently: rescaling
+    # the target by 1,000 changed the selected alpha and cut the subject-level r by 0.1.
+    rng = np.random.default_rng(0)
+    groups = np.repeat([f"s{i}" for i in range(6)], 30).astype(object)
+    X = rng.normal(size=(180, 30))
+    y = X[:, 0] + 0.5 * X[:, 1] + rng.normal(size=180)
+    folds = loso_folds(groups)
+    inner = InnerSplit(grouping="subject", n_splits=3)
+    pipe = elasticnet_pipeline(_CONFIG, seed=0)
+    as_given, rescaled = (
+        cross_fit_regression(
+            folds, X, scale * y, groups, pipe, elasticnet_grid(), inner=inner, seed=0
+        )
+        for scale in (1.0, 1000.0)
+    )
+    assert [p.best_params for p in as_given] == [p.best_params for p in rescaled]
+    np.testing.assert_allclose(
+        1000.0 * np.concatenate([p.y_pred for p in as_given]),
         np.concatenate([p.y_pred for p in rescaled]),
         rtol=1e-6,
     )

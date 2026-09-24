@@ -87,15 +87,19 @@ html_css_files = [
     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
     "custom.css",
 ]
+html_js_files = ["custom.js"]
+html_permalinks_icon = "#"
+html_show_sphinx = False
 pygments_style = "friendly"
 pygments_dark_style = "monokai"
 copybutton_prompt_text = r"\$ |>>> |\.\.\. "
 copybutton_prompt_is_regexp = True
 copybutton_line_continuation_character = "\\"
 html_favicon = "_static/favicon.svg"
-html_logo = "_static/favicon.svg"
 
 html_theme_options = {
+    "light_logo": "logo-light.svg",
+    "dark_logo": "logo-dark.svg",
     "dark_css_variables": {
         "color-background-primary": "#0A0B0D",
         "color-background-secondary": "#131518",

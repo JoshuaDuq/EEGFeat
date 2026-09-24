@@ -31,7 +31,14 @@ Querying a table
    # eeg_band-power_alpha_cz_all_raw_p<hash>
    # eeg_peak-freq-adjusted_alpha_cz_all_raw_p<hash>
 
-``select`` matches :class:`~eegfeat.FeatureMeta` fields.
+``select`` matches :class:`~eegfeat.FeatureMeta` fields. ``take`` keeps rows by
+position or mask, in the order given, with their identities and flags.
+``drop_missing`` keeps the columns missing in at most a given fraction of rows.
+
+.. code-block:: python
+
+   first_ten = spectral_features.take(range(10))
+   mostly_measured = spectral_features.drop_missing(0.2)
 
 Writing and reading
 -------------------
@@ -63,7 +70,8 @@ Building a cohort
 rejects duplicate row identities and cross-trial group tables.
 ``columns="union"`` keeps every column any recording measured. A recording that
 did not measure a column gets ``NaN`` and zero coverage there. The default,
-``columns="identical"``, requires one schema.
+``columns="identical"``, requires one schema, and a mismatch names the columns
+that differ.
 
 .. code-block:: python
 

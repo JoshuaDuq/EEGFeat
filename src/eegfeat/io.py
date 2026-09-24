@@ -157,7 +157,10 @@ def read_table(path: str | os.PathLike[str]) -> FeatureTable:
         Values, coverage, metadata, flags and row labels as they were written.
     """
     source = Path(path)
-    sidecar = _read_sidecar(source)
+    return _table_from_sidecar(source, _read_sidecar(source))
+
+
+def _table_from_sidecar(source: Path, sidecar: Mapping[str, Any]) -> FeatureTable:
     meta = tuple(_meta_from_record(record) for record in sidecar["columns"])
     names = [m.name for m in meta]
 
@@ -225,11 +228,12 @@ def read_dataset(
     target_frames: list[pd.DataFrame] = []
     for path in paths:
         source = Path(path)
-        table = read_table(source)
+        sidecar = _read_sidecar(source)
+        table = _table_from_sidecar(source, sidecar)
         if table.row_ids is None:
             raise ValueError("read_dataset accepts per-epoch feature tables only.")
         tables.append(table)
-        target_frames.append(_read_targets(source, table, _read_sidecar(source)))
+        target_frames.append(_read_targets(source, table, sidecar))
 
     # Recordings differ in their bad channels, so their feature schemas differ; the
     # cohort is the union, with NaN where a recording did not measure a column.
@@ -248,7 +252,19 @@ def _read_targets(
     if not row_columns or row_columns[0] != _EPOCH_KEY:
         raise ValueError(f"{source.name} sidecar does not declare an epoch row key.")
     descriptor_columns = row_columns[1:]
-    frame = pd.read_csv(source, sep="\t", na_values=[_NA], keep_default_na=False)
+    wanted = {_EPOCH_KEY, *descriptor_columns}
+    frame = pd.read_csv(
+        source,
+        sep="\t",
+        na_values=[_NA],
+        keep_default_na=False,
+        # Identities are text however they look: MNE names events "1", "2", ... by default,
+        # and parsed as numbers they would never equal the row_ids they are checked against.
+        dtype={"recording": str, "event": str},
+        # The feature columns were already read with the table; parsing them again for the
+        # handful of descriptors doubled the cost of every bundle.
+        usecols=lambda column: column in wanted,
+    )
     if _EPOCH_KEY not in frame.columns:
         raise ValueError(f"{source.name} lacks the epoch row key its sidecar describes.")
     missing_descriptors = [column for column in descriptor_columns if column not in frame.columns]
@@ -278,7 +294,17 @@ def _read_targets(
 
 
 def _read_sidecar(source: Path) -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads(source.with_suffix(".json").read_text()))
+    path = source.with_suffix(".json")
+    try:
+        return cast(dict[str, Any], json.loads(path.read_text()))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # macOS writes a "._" twin beside every file on an exFAT drive, and globs find them.
+        hint = (
+            " It is a macOS AppleDouble resource file; leave out names starting with '._'."
+            if path.name.startswith("._")
+            else ""
+        )
+        raise ValueError(f"{path} is not a feature sidecar ({exc}).{hint}") from exc
 
 
 def _row_key(table: FeatureTable) -> tuple[str, list[int] | list[str]]:
@@ -338,39 +364,12 @@ def _sidecar(
 
 
 def _meta_record(meta: FeatureMeta) -> dict[str, Any]:
-    band = (
-        None
-        if meta.band is None
-        else {
-            "name": meta.band.name,
-            "fmin": meta.band.fmin,
-            "fmax": meta.band.fmax,
-        }
-    )
-    return {
-        "name": meta.name,
-        "measure": meta.measure,
-        "band": band,
-        "space": meta.space,
-        "space_kind": meta.space_kind,
-        "window": meta.window,
-        "window_bounds": (
-            _json_value(meta.window_bounds) if meta.window_bounds is not None else None
-        ),
-        "normalization": meta.normalization,
-        "unit": meta.unit,
-        "source": meta.source,
-        "freq_resolution_hz": meta.freq_resolution_hz,
-        "phase_band": _band_record(meta.phase_band),
-        "amplitude_band": _band_record(meta.amplitude_band),
-        "nodes": meta.nodes,
-        "computation": meta.computation.record(),
-        "parameter_hash": meta.parameter_hash,
-    }
+    # The record the column's name is hashed from, so no field can be written differently.
+    fields = cast(dict[str, Any], _json_value(meta.record()))
+    return {"name": meta.name, **fields, "parameter_hash": meta.parameter_hash}
 
 
 def _meta_from_record(record: Mapping[str, Any]) -> FeatureMeta:
-    band = record["band"]
     computation = record["computation"]
     bounds = record["window_bounds"]
     phase_band = record.get("phase_band")
@@ -378,7 +377,7 @@ def _meta_from_record(record: Mapping[str, Any]) -> FeatureMeta:
     nodes = record.get("nodes")
     meta = FeatureMeta(
         measure=record["measure"],
-        band=None if band is None else Band(band["name"], band["fmin"], band["fmax"]),
+        band=_band_from_record(record["band"]),
         space=record["space"],
         space_kind=record["space_kind"],
         window=record["window"],
@@ -402,12 +401,6 @@ def _meta_from_record(record: Mapping[str, Any]) -> FeatureMeta:
     if meta.parameter_hash != record["parameter_hash"]:
         raise ValueError(f"sidecar column {record['name']!r} has an invalid parameter hash.")
     return meta
-
-
-def _band_record(band: Band | None) -> dict[str, Any] | None:
-    if band is None:
-        return None
-    return {"name": band.name, "fmin": band.fmin, "fmax": band.fmax}
 
 
 def _band_from_record(record: Mapping[str, Any] | None) -> Band | None:

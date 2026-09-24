@@ -257,3 +257,45 @@ def test_run_aware_inner_cv_refuses_a_trial_without_a_run_label() -> None:
     blocks = np.array([1, 1, 2, 2, np.nan, np.nan, 3, 3], dtype=object)
     with pytest.raises(ValueError, match="run label for every trial"):
         run_aware_inner_cv(blocks, 3)
+
+
+# Six subjects, three of them tied at 20 trials: the tie order decides which fold each lands in.
+TIED = np.repeat(
+    np.array(["s1", "s2", "s3", "s4", "s5", "s6"], dtype=object), [30, 20, 20, 20, 10, 10]
+)
+# Largest first, ties in descending label order, each to the lightest fold (derived by hand).
+TIED_FOLDS = [{"s1", "s5"}, {"s2", "s4"}, {"s3", "s6"}]
+
+
+def _held_out(splits, groups) -> list[set[str]]:
+    return [set(groups[test]) for _, test in splits]
+
+
+@pytest.mark.parametrize("order", [slice(None), np.random.default_rng(0).permutation(TIED.size)])
+def test_inner_folds_break_trial_count_ties_by_subject_label(order) -> None:
+    groups = TIED[order]
+    splitter = inner_cv(groups, InnerSplit(grouping="subject", n_splits=3))
+    assert _held_out(splitter.split(groups, groups=groups), groups) == TIED_FOLDS
+
+
+def test_inner_folds_do_not_depend_on_the_installed_scikit_learn(monkeypatch) -> None:
+    # Before 1.6, scikit-learn ordered tied groups with an unstable sort, so the same cohort
+    # could be split differently on another machine. eegfeat assigns folds itself.
+    from sklearn.model_selection import GroupKFold
+
+    def ascending_ties(self, X, y, groups):
+        labels, index = np.unique(groups, return_inverse=True)
+        sizes = np.bincount(index)
+        load = np.zeros(self.n_splits)
+        fold_of = np.empty(labels.size, dtype=int)
+        for group in sorted(range(labels.size), key=lambda g: (-sizes[g], g)):
+            fold_of[group] = int(np.argmin(load))
+            load[fold_of[group]] += sizes[group]
+        for k in range(self.n_splits):
+            yield np.flatnonzero(fold_of[index] == k)
+
+    monkeypatch.setattr(GroupKFold, "_iter_test_indices", ascending_ties)
+    splitter = inner_cv(TIED, InnerSplit(grouping="subject", n_splits=3))
+    assert _held_out(splitter.split(TIED, groups=TIED), TIED) == TIED_FOLDS
+    blocks = run_aware_inner_cv(TIED, n_splits=3)
+    assert _held_out(blocks, TIED) == TIED_FOLDS

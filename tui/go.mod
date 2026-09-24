@@ -1,4 +1,4 @@
-module github.com/JoshuaDuq/EEGFeatML/tui
+module github.com/JoshuaDuq/EEGFeat/tui
 
 go 1.24.2
 

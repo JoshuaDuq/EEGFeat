@@ -322,7 +322,7 @@ predictions = efm.cross_fit_regression(
     design.y,
     design.groups,
     pipeline,
-    efm.ridge_grid(),
+    efm.ridge_grid(design.X),
     inner=efm.InnerSplit(grouping="subject", n_splits=5),
     seed=42,
     runs=design.runs,
@@ -336,7 +336,7 @@ print(metrics["subject_level_r"])
 
 `loso_folds` needs at least two groups. The files in [`examples/`](examples/) are one recording. `within_subject_folds` holds out runs within each subject.
 
-Preprocessing and hyperparameter tuning are fit on the training rows of each fold. Regression pipelines are ridge, elastic net, and random forest. Classification pipelines are logistic regression, SVM, random forest, and an ensemble, with labels in `{0, 1}`. `permutation_test` refits the full procedure on each draw. SHAP requires the `importance` extra.
+Preprocessing and hyperparameter tuning are fit on the training rows of each fold. Regression pipelines are ridge, elastic net, and random forest. Classification pipelines are logistic regression, SVM, random forest, and an ensemble, with labels in `{0, 1}`. `permutation_test` gives the null of the full procedure: refitted on every draw, or computed in closed form for a ridge pipeline. Held-out scores from different subjects share training data, so no interval is reported over them. SHAP requires the `importance` extra.
 
 ## Measures
 

@@ -36,7 +36,7 @@ class ReviewCancelled(ValueError):
 
 def _confirm_choices(title: str, labels: list[str]) -> list[int]:
     require("PyQt6", "preprocessing-gui")
-    from PyQt6.QtWidgets import (  # type: ignore[import-not-found]
+    from PyQt6.QtWidgets import (
         QApplication,
         QCheckBox,
         QDialog,

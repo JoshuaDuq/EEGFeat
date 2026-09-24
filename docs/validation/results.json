@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-22T00:29:59+00:00",
+ "generated": "2026-09-23T20:55:29+00:00",
  "versions": {
   "python": "3.11.14",
   "eegfeat": "0.1.0.dev0",
@@ -21,7 +21,7 @@
    "criterion": "lower in at least 90 percent of subjects; p below 1e-6",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:01:13+00:00",
+   "run": "2026-09-23T20:52:53+00:00",
    "cases": 1
   },
   {
@@ -36,7 +36,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:01:14+00:00",
+   "run": "2026-09-23T20:52:55+00:00",
    "cases": 1
   },
   {
@@ -50,7 +50,7 @@
    "criterion": "lower during movement in at least 90 percent of 20 subjects; p below 1e-4",
    "observed": "lower during movement in 20 of 20",
    "passed": true,
-   "run": "2026-09-21T20:01:14+00:00",
+   "run": "2026-09-23T20:52:55+00:00",
    "cases": 1
   },
   {
@@ -66,7 +66,7 @@
    "criterion": "lower during movement in at least 80 percent of 20 subjects; p below 1e-3",
    "observed": "burst_rate mu: lower during movement in 20 of 20 subjects, mean difference -0.355; burst_rate beta: lower during movement in 20 of 20 subjects, mean difference -0.250; fraction_above_threshold mu: lower during movement in 20 of 20 subjects, mean difference -0.088; fraction_above_threshold beta: lower during movement in 20 of 20 subjects, mean difference -0.090; burst_duration mu: lower during movement in 20 of 20 subjects, mean difference -0.025; burst_duration beta: lower during movement in 17 of 20 subjects, mean difference -0.007",
    "passed": true,
-   "run": "2026-09-21T20:01:11+00:00",
+   "run": "2026-09-23T20:52:52+00:00",
    "cases": 6
   },
   {
@@ -80,7 +80,7 @@
    "criterion": "exit 1 and the channel named",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:24+00:00",
+   "run": "2026-09-23T20:52:58+00:00",
    "cases": 1
   },
   {
@@ -94,7 +94,7 @@
    "criterion": "exit 0; recordings listed; no output directory",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:23+00:00",
+   "run": "2026-09-23T20:52:57+00:00",
    "cases": 1
   },
   {
@@ -109,7 +109,7 @@
    "criterion": "two bundles of each kind, as the recipe says; a second run refused",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:31+00:00",
+   "run": "2026-09-23T20:53:05+00:00",
    "cases": 1
   },
   {
@@ -123,7 +123,7 @@
    "criterion": "driven condition above the other by 0.03 at 12 and at 15 Hz",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:38+00:00",
+   "run": "2026-09-23T20:53:11+00:00",
    "cases": 1
   },
   {
@@ -138,7 +138,7 @@
    "criterion": "wPLI at 10 trials above wPLI at 42 by 0.1; debiased within 0.05",
    "observed": "wPLI 0.28 at 42 trials, 0.42 at 10; debiased 0.06 and 0.07",
    "passed": true,
-   "run": "2026-09-21T19:58:37+00:00",
+   "run": "2026-09-23T20:53:10+00:00",
    "cases": 1
   },
   {
@@ -152,7 +152,7 @@
    "criterion": "relative error below 1e-9 for all eight methods",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:37+00:00",
+   "run": "2026-09-23T20:53:10+00:00",
    "cases": 8
   },
   {
@@ -167,7 +167,7 @@
    "criterion": "efficiency in (0, 1], clustering in [0, 1]",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:36+00:00",
+   "run": "2026-09-23T20:53:09+00:00",
    "cases": 1
   },
   {
@@ -181,7 +181,7 @@
    "criterion": "relative error below 1e-9 on the first fifty pairs",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:36+00:00",
+   "run": "2026-09-23T20:53:09+00:00",
    "cases": 1
   },
   {
@@ -195,7 +195,7 @@
    "criterion": "raw near minus far above 0.2; orthogonalized near below half of raw",
    "observed": "raw near 0.73 against far 0.30; orthogonalized near 0.17 against far 0.16",
    "passed": true,
-   "run": "2026-09-21T19:58:36+00:00",
+   "run": "2026-09-23T20:53:09+00:00",
    "cases": 1
   },
   {
@@ -209,7 +209,7 @@
    "criterion": "relative error below 1e-9 on every pair",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:37+00:00",
+   "run": "2026-09-23T20:53:10+00:00",
    "cases": 1
   },
   {
@@ -223,7 +223,7 @@
    "criterion": "first component AUC below 0.5, second above; best above 0.6 in every subject",
    "observed": "mu: best component AUC 0.67 to 0.96, mean 0.84 over 20 subjects; beta: best component AUC 0.66 to 0.99, mean 0.86 over 20 subjects",
    "passed": true,
-   "run": "2026-09-21T19:58:50+00:00",
+   "run": "2026-09-23T20:53:23+00:00",
    "cases": 2
   },
   {
@@ -237,7 +237,7 @@
    "criterion": "filters times patterns transposed is the identity to 1e-8",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:50+00:00",
+   "run": "2026-09-23T20:53:23+00:00",
    "cases": 1
   },
   {
@@ -253,7 +253,7 @@
    "criterion": "balanced accuracy above 0.9 (chance 0.5)",
    "observed": "balanced accuracy 0.96, per subject 0.91 to 0.98, 893 epochs, p = 2e-198",
    "passed": true,
-   "run": "2026-09-21T19:58:57+00:00",
+   "run": "2026-09-23T20:53:30+00:00",
    "cases": 1
   },
   {
@@ -269,7 +269,7 @@
    "criterion": "balanced accuracy above 0.55 (chance 0.5); binomial p below 1e-3",
    "observed": "balanced accuracy 0.68, per subject 0.52 to 0.86, 1740 epochs, p = 2e-50",
    "passed": true,
-   "run": "2026-09-21T19:58:53+00:00",
+   "run": "2026-09-23T20:53:26+00:00",
    "cases": 1
   },
   {
@@ -287,7 +287,7 @@
    "criterion": "balanced accuracy above 0.65 (chance 0.5); binomial p below 1e-6",
    "observed": "balanced accuracy 0.79, per subject 0.60 to 0.95, 1740 epochs, p = 7e-134",
    "passed": true,
-   "run": "2026-09-21T19:58:51+00:00",
+   "run": "2026-09-23T20:53:24+00:00",
    "cases": 1
   },
   {
@@ -303,7 +303,7 @@
    "criterion": "relative error below 1e-12",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:57+00:00",
+   "run": "2026-09-23T20:53:30+00:00",
    "cases": 1
   },
   {
@@ -317,7 +317,7 @@
    "criterion": "160 Hz, 64 channels, 45 movement trials",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:59:52+00:00",
+   "run": "2026-09-23T20:54:20+00:00",
    "cases": 1
   },
   {
@@ -332,7 +332,7 @@
    "criterion": "correlation above 0.75 by channel and by trial-channel cell, every subject",
    "observed": "r by channel 0.79 to 0.99; by cell 0.79 to 0.98 over 20 subjects",
    "passed": true,
-   "run": "2026-09-21T19:59:25+00:00",
+   "run": "2026-09-23T20:53:57+00:00",
    "cases": 1
   },
   {
@@ -346,7 +346,7 @@
    "criterion": "per-subject mean dB below zero; one-sided t-test p below 0.05 across 20 subjects",
    "observed": "mu: mean -3.5 dB, range -5.1 to -2.4, negative in 20 of 20, p = 3e-15; beta: mean -3.6 dB, range -4.4 to -2.9, negative in 20 of 20, p = 3e-18",
    "passed": true,
-   "run": "2026-09-21T19:59:40+00:00",
+   "run": "2026-09-23T20:54:10+00:00",
    "cases": 2
   },
   {
@@ -360,7 +360,7 @@
    "criterion": "trial mean above trial median in at least 75 percent of subjects",
    "observed": "mean above median in 20 of 20 subjects",
    "passed": true,
-   "run": "2026-09-21T19:59:48+00:00",
+   "run": "2026-09-23T20:54:16+00:00",
    "cases": 1
   },
   {
@@ -376,7 +376,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:59:52+00:00",
+   "run": "2026-09-23T20:54:20+00:00",
    "cases": 1
   },
   {
@@ -390,7 +390,7 @@
    "criterion": "exact equality",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:57+00:00",
+   "run": "2026-09-23T20:53:30+00:00",
    "cases": 1
   },
   {
@@ -405,7 +405,7 @@
    "criterion": "relative error below 1e-12",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:57+00:00",
+   "run": "2026-09-23T20:53:30+00:00",
    "cases": 1
   },
   {
@@ -426,7 +426,7 @@
    "criterion": "relative error below 1e-9; durations tile the window",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:59:58+00:00",
+   "run": "2026-09-23T20:54:25+00:00",
    "cases": 1
   },
   {
@@ -442,7 +442,7 @@
    "criterion": "ERD larger and ERS smaller during movement in 90 percent of subjects; p below 1e-5",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:59:58+00:00",
+   "run": "2026-09-23T20:54:25+00:00",
    "cases": 2
   },
   {
@@ -456,7 +456,7 @@
    "criterion": "above 0.9 at a fixed 100 ms; below 0.15 at the default; lower still at 1500 ms",
    "observed": "beta rest trials with an onset: 1.00 at 100 ms, 0.05 at the six-cycle default, 0.00 at 1500 ms",
    "passed": true,
-   "run": "2026-09-21T20:00:00+00:00",
+   "run": "2026-09-23T20:54:26+00:00",
    "cases": 1
   },
   {
@@ -470,7 +470,7 @@
    "criterion": "global explained variance above 0.5; no two templates correlate above 0.9",
    "observed": "global explained variance 0.62",
    "passed": true,
-   "run": "2026-09-21T20:00:02+00:00",
+   "run": "2026-09-23T20:54:28+00:00",
    "cases": 1
   },
   {
@@ -487,7 +487,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:02+00:00",
+   "run": "2026-09-23T20:54:28+00:00",
    "cases": 1
   },
   {
@@ -501,7 +501,35 @@
    "criterion": "median duration of every state between 30 and 150 ms",
    "observed": "median durations 54 to 83 ms",
    "passed": true,
-   "run": "2026-09-21T20:00:02+00:00",
+   "run": "2026-09-23T20:54:28+00:00",
+   "cases": 1
+  },
+  {
+   "nodeid": "tests/validation/test_mne_reference.py::test_csp_decodes_like_mne_in_its_decoding_example",
+   "measures": [
+    "CommonSpatialPattern"
+   ],
+   "kind": "decoding",
+   "dataset": "eegbci",
+   "claim": "In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as well as mne.decoding.CSP",
+   "criterion": "mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits",
+   "observed": "mean accuracy over 20 subjects: MNE 0.757, eegfeat 0.731",
+   "passed": true,
+   "run": "2026-09-23T20:54:39+00:00",
+   "cases": 1
+  },
+  {
+   "nodeid": "tests/validation/test_mne_reference.py::test_orthogonalized_envelope_correlation_matches_mne_connectivity",
+   "measures": [
+    "envelope_correlation"
+   ],
+   "kind": "estimator",
+   "dataset": "eegbci",
+   "claim": "Orthogonalized envelope correlation is the Fisher-z mean of mne-connectivity's per-trial estimate",
+   "criterion": "relative error below 1e-9 on every pair",
+   "observed": "2016 pairs over 42 trials, maximum relative error 7.3e-16",
+   "passed": true,
+   "run": "2026-09-23T20:54:30+00:00",
    "cases": 1
   },
   {
@@ -515,7 +543,7 @@
    "criterion": "support at most 1 and below 1 somewhere; coverage exactly 1",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:18+00:00",
+   "run": "2026-09-23T20:54:54+00:00",
    "cases": 1
   },
   {
@@ -530,7 +558,7 @@
    "criterion": "median ratio at 80 against 160 Hz within 2 percent of one",
    "observed": "median ratio 80 Hz against 160 Hz: 0.999",
    "passed": true,
-   "run": "2026-09-21T20:00:16+00:00",
+   "run": "2026-09-23T20:54:52+00:00",
    "cases": 1
   },
   {
@@ -545,7 +573,7 @@
    "criterion": "median ratio within 0.9 to 1.1; log correlation above 0.95",
    "observed": "mu: median ratio 0.98, log correlation 0.98; beta: median ratio 1.02, log correlation 0.98",
    "passed": true,
-   "run": "2026-09-21T20:00:13+00:00",
+   "run": "2026-09-23T20:54:49+00:00",
    "cases": 2
   },
   {
@@ -559,7 +587,7 @@
    "criterion": "ValueError naming the normalization",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:18+00:00",
+   "run": "2026-09-23T20:54:54+00:00",
    "cases": 1
   },
   {
@@ -573,7 +601,7 @@
    "criterion": "median ratio within 0.9 to 1.1; log correlation above 0.9",
    "observed": "mu: median ratio 0.98, log correlation 0.92; beta: median ratio 1.00, log correlation 0.94",
    "passed": true,
-   "run": "2026-09-21T20:00:18+00:00",
+   "run": "2026-09-23T20:54:54+00:00",
    "cases": 2
   },
   {
@@ -588,7 +616,7 @@
    "criterion": "relative error below 1e-9 against an edge-interpolated trapezoid",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:18+00:00",
+   "run": "2026-09-23T20:54:54+00:00",
    "cases": 1
   },
   {
@@ -603,7 +631,7 @@
    "criterion": "fraction 1 inside and 0.5 straddling; refusal below the high-pass edge",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:18+00:00",
+   "run": "2026-09-23T20:54:54+00:00",
    "cases": 1
   },
   {
@@ -617,7 +645,7 @@
    "criterion": "identical candidate lists, retained epochs, repair labels, and samples",
    "observed": "",
    "passed": true,
-   "run": "2026-09-22T00:29:59+00:00",
+   "run": "2026-09-23T20:55:20+00:00",
    "cases": 1
   },
   {
@@ -632,7 +660,7 @@
    "criterion": "error trials below correct by more than 3 microvolts; p below 1e-6",
    "observed": "mean 0 to 100 ms at FCz: +3.9 microvolts on 346 correct trials, -7.1 on 54 errors",
    "passed": true,
-   "run": "2026-09-21T20:00:01+00:00",
+   "run": "2026-09-23T20:54:28+00:00",
    "cases": 1
   },
   {
@@ -646,7 +674,7 @@
    "criterion": "median in 150 to 220 ms; interquartile range below 50 ms; 60 percent within 40 ms",
    "observed": "median 183 ms, interquartile range 165 to 198 ms on a 150 ms window",
    "passed": true,
-   "run": "2026-09-21T20:00:01+00:00",
+   "run": "2026-09-23T20:54:27+00:00",
    "cases": 1
   },
   {
@@ -660,7 +688,7 @@
    "criterion": "positive on more than 70 percent of trials; pre-stimulus area near zero",
    "observed": "positive on 82 percent of 400 trials",
    "passed": true,
-   "run": "2026-09-21T20:00:01+00:00",
+   "run": "2026-09-23T20:54:27+00:00",
    "cases": 1
   },
   {
@@ -676,7 +704,7 @@
    "criterion": "exact for peaks; relative error below 1e-9 for area",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:02+00:00",
+   "run": "2026-09-23T20:54:28+00:00",
    "cases": 1
   },
   {
@@ -690,7 +718,22 @@
    "criterion": "1024 Hz, 400 stimuli, more than 300 correct and 30 error trials",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:01+00:00",
+   "run": "2026-09-23T20:54:27+00:00",
+   "cases": 1
+  },
+  {
+   "nodeid": "tests/validation/test_mne_reference.py::test_peaks_are_what_evoked_get_peak_reports",
+   "measures": [
+    "peak_latency",
+    "peak_amplitude"
+   ],
+   "kind": "estimator",
+   "dataset": "erp_core",
+   "claim": "Peak latency and amplitude are what MNE's Evoked.get_peak reports",
+   "criterion": "identical on every channel for negative, positive and absolute peaks",
+   "observed": "30 channels, three polarities, all identical",
+   "passed": true,
+   "run": "2026-09-23T20:54:29+00:00",
    "cases": 1
   },
   {
@@ -704,7 +747,7 @@
    "criterion": "identical events and drop log; samples within 1e-15 V",
    "observed": "",
    "passed": true,
-   "run": "2026-09-22T00:29:41+00:00",
+   "run": "2026-09-23T20:55:04+00:00",
    "cases": 1
   },
   {
@@ -718,7 +761,7 @@
    "criterion": "identical events, drop log, and samples; events past the crop dropped, not shifted",
    "observed": "",
    "passed": true,
-   "run": "2026-09-22T00:29:40+00:00",
+   "run": "2026-09-23T20:55:04+00:00",
    "cases": 1
   },
   {
@@ -732,7 +775,7 @@
    "criterion": "samples within 1e-15 V; 60 Hz bin reduced, 20 Hz bin within 0.5%",
    "observed": "",
    "passed": true,
-   "run": "2026-09-22T00:29:40+00:00",
+   "run": "2026-09-23T20:55:04+00:00",
    "cases": 1
   },
   {
@@ -746,7 +789,7 @@
    "criterion": "identical samples, first_samp, and channel order",
    "observed": "",
    "passed": true,
-   "run": "2026-09-22T00:29:39+00:00",
+   "run": "2026-09-23T20:55:03+00:00",
    "cases": 1
   },
   {
@@ -760,7 +803,7 @@
    "criterion": "samples within 1e-15 V; mean |corr(FP1, VEOG)| across epochs down by a quarter",
    "observed": "",
    "passed": true,
-   "run": "2026-09-22T00:29:40+00:00",
+   "run": "2026-09-23T20:55:04+00:00",
    "cases": 1
   },
   {
@@ -774,7 +817,7 @@
    "criterion": "median log10 ratio within 0.05 of zero",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:02+00:00",
+   "run": "2026-09-23T20:52:39+00:00",
    "cases": 1
   },
   {
@@ -788,7 +831,7 @@
    "criterion": "correlation above 0.98; median absolute difference below 0.1",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:01+00:00",
+   "run": "2026-09-23T20:52:38+00:00",
    "cases": 1
   },
   {
@@ -800,9 +843,9 @@
    "dataset": "sleep",
    "claim": "The aperiodic slope steepens wake, N2, N3",
    "criterion": "median ordering holds; wake-vs-N3 AUC below 0.1, both derivations, both subjects",
-   "observed": "median slope SC4001 Pz-Oz: wake -1.43, N2 -2.77, N3 -3.24; SC4011 Pz-Oz: wake -0.53, N2 -2.64, N3 -3.24",
+   "observed": "median slope SC4001 Pz-Oz: wake -1.42, N2 -2.77, N3 -3.24; SC4011 Pz-Oz: wake -0.47, N2 -2.63, N3 -3.23",
    "passed": true,
-   "run": "2026-09-21T19:58:04+00:00",
+   "run": "2026-09-23T20:52:40+00:00",
    "cases": 1
   },
   {
@@ -816,7 +859,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:57:58+00:00",
+   "run": "2026-09-23T20:52:38+00:00",
    "cases": 1
   },
   {
@@ -831,7 +874,7 @@
    "criterion": "wake-vs-N3 AUC below 0.2 on both derivations",
    "observed": "sample_entropy: AUC Fpz-Cz 0.07, Pz-Oz 0.06; higuchi_fractal_dimension: AUC Fpz-Cz 0.00, Pz-Oz 0.00",
    "passed": true,
-   "run": "2026-09-21T19:58:35+00:00",
+   "run": "2026-09-23T20:53:08+00:00",
    "cases": 2
   },
   {
@@ -846,7 +889,21 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T19:58:35+00:00",
+   "run": "2026-09-23T20:53:08+00:00",
+   "cases": 1
+  },
+  {
+   "nodeid": "tests/validation/test_mne_reference.py::test_band_power_reproduces_the_sleep_staging_tutorial",
+   "measures": [
+    "mean_psd"
+   ],
+   "kind": "decoding",
+   "dataset": "sleep",
+   "claim": "Band power reproduces the staging accuracy of MNE's sleep-classification tutorial",
+   "criterion": "random forest trained on one night scores the other within 0.03 of the tutorial's own features",
+   "observed": "accuracy on SC4011: tutorial 0.684, eegfeat 0.683",
+   "passed": true,
+   "run": "2026-09-23T20:54:30+00:00",
    "cases": 1
   },
   {
@@ -860,7 +917,7 @@
    "criterion": "Pz-Oz carries more than 60 percent of the total; every value finite",
    "observed": "Pz-Oz carries 0.81 of the total importance",
    "passed": true,
-   "run": "2026-09-21T20:00:07+00:00",
+   "run": "2026-09-23T20:54:44+00:00",
    "cases": 1
   },
   {
@@ -874,7 +931,7 @@
    "criterion": "split and CV+ within 0.85 to 0.95 at 90 percent nominal; quantile at least 0.9",
    "observed": "split: coverage 0.894 at 90 percent nominal; cv_plus: coverage 0.909 at 90 percent nominal; quantile: coverage 0.998 at 90 percent nominal",
    "passed": true,
-   "run": "2026-09-21T20:00:08+00:00",
+   "run": "2026-09-23T20:54:45+00:00",
    "cases": 3
   },
   {
@@ -888,7 +945,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:20+00:00",
+   "run": "2026-09-23T20:54:56+00:00",
    "cases": 1
   },
   {
@@ -902,7 +959,7 @@
    "criterion": "surrogate median above 0.03, all values in [0, 1]",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:21+00:00",
+   "run": "2026-09-23T20:54:57+00:00",
    "cases": 1
   },
   {
@@ -916,7 +973,7 @@
    "criterion": "null within 0.2 of zero; p below 0.05; observed statistic recomputed identically",
    "observed": "null within 0.07 of zero over 50 permutations, p = 0.02",
    "passed": true,
-   "run": "2026-09-21T20:00:28+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -935,7 +992,7 @@
    "criterion": "subject-level r above 0.7 with interval above 0.5; R squared above 0.5",
    "observed": "subject-level r 0.88 (interval 0.87 to 0.90), R squared 0.67, 2511 epochs",
    "passed": true,
-   "run": "2026-09-21T20:00:25+00:00",
+   "run": "2026-09-23T20:55:25+00:00",
    "cases": 1
   },
   {
@@ -950,7 +1007,7 @@
    "criterion": "wake-vs-N3 AUC above 0.8 (delta), below 0.2 (alpha), below 0.1 (beta)",
    "observed": "AUC SC4001: delta 0.94, alpha 0.01, beta 0.00; SC4011: delta 0.91, alpha 0.02, beta 0.00",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -964,7 +1021,7 @@
    "criterion": "100 Hz, Fpz-Cz and Pz-Oz, at least 50 wake and 50 N3 epochs",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -978,7 +1035,7 @@
    "criterion": "wake-vs-N3 AUC above 0.8, both subjects",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -992,7 +1049,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -1006,7 +1063,7 @@
    "criterion": "median ordering holds; wake-vs-N3 AUC below 0.1",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -1021,7 +1078,7 @@
    "criterion": "median ordering holds on both derivations, both subjects",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -1038,7 +1095,7 @@
    "criterion": "medians ordered; wake-vs-N3 AUC below 0.25",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -1052,7 +1109,7 @@
    "criterion": "relative error below 1e-12",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:30+00:00",
+   "run": "2026-09-23T20:55:29+00:00",
    "cases": 1
   },
   {
@@ -1068,7 +1125,7 @@
    "criterion": "wake-vs-N3 AUC above 0.7 for RMS and peak-to-peak, below 0.3 for line length",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:30+00:00",
+   "run": "2026-09-23T20:55:29+00:00",
    "cases": 1
   },
   {
@@ -1088,7 +1145,7 @@
    "criterion": "relative error below 1e-7",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:30+00:00",
+   "run": "2026-09-23T20:55:29+00:00",
    "cases": 1
   },
   {
@@ -1102,7 +1159,7 @@
    "criterion": "relative error below 1e-9",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:20+00:00",
+   "run": "2026-09-23T20:54:56+00:00",
    "cases": 1
   },
   {
@@ -1117,7 +1174,7 @@
    "criterion": "driven above undriven by 0.1 for ITPC and PPC, at 12 and at 15 Hz",
    "observed": "12 Hz band: itpc 0.49 driven, 0.31 not; ppc 0.19 driven, 0.02 not; 15 Hz band: itpc 0.53 driven, 0.40 not; ppc 0.24 driven, 0.10 not",
    "passed": true,
-   "run": "2026-09-21T20:00:19+00:00",
+   "run": "2026-09-23T20:54:55+00:00",
    "cases": 2
   },
   {
@@ -1131,7 +1188,7 @@
    "criterion": "absolute value below 0.1",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:19+00:00",
+   "run": "2026-09-23T20:54:55+00:00",
    "cases": 1
   },
   {
@@ -1146,7 +1203,7 @@
    "criterion": "within 6 percent per cell and 1 percent on average",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:20+00:00",
+   "run": "2026-09-23T20:54:56+00:00",
    "cases": 1
   },
   {
@@ -1160,7 +1217,7 @@
    "criterion": "condition medians within 0.3 Hz of 12 and 15 Hz; 70 percent of trials within",
    "observed": "medians 12.00 and 15.00 Hz; 17 of 20 trials within 0.3 Hz",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:29+00:00",
    "cases": 1
   },
   {
@@ -1175,7 +1232,7 @@
    "criterion": "smallest 12 Hz-trial ratio above largest 15 Hz-trial ratio",
    "observed": "12 Hz trials at least 0.87, 15 Hz trials at most 0.02 (log10 ratio)",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   },
   {
@@ -1190,7 +1247,7 @@
    "criterion": "driven trials' minimum SNR above undriven trials' maximum, at 12 and at 15 Hz",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 2
   },
   {
@@ -1205,7 +1262,7 @@
    "criterion": "smallest 12 Hz-trial ratio above largest 15 Hz-trial ratio",
    "observed": "",
    "passed": true,
-   "run": "2026-09-21T20:00:29+00:00",
+   "run": "2026-09-23T20:55:28+00:00",
    "cases": 1
   }
  ]

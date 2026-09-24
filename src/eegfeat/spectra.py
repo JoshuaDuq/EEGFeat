@@ -15,6 +15,7 @@ from eegfeat._validation import (
     validate_nonempty_shape,
 )
 from eegfeat.identity import epoch_row_ids
+from eegfeat.signal import _passband
 from eegfeat.table import ComputationSpec, RowId
 
 
@@ -37,6 +38,10 @@ class Window:
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Window name must be a non-empty string.")
+        # As for Band: 0 and 0.0 are different canonical JSON tokens, so an int-bounded
+        # window would name its columns differently from the identical float-bounded one.
+        object.__setattr__(self, "tmin", float(self.tmin))
+        object.__setattr__(self, "tmax", float(self.tmax))
         if not self.tmin < self.tmax:
             raise ValueError(
                 f"Window {self.name!r} requires tmin < tmax, got {self.tmin} >= {self.tmax}."
@@ -270,7 +275,15 @@ class Spectra:
             )
         data = data[:, :, np.newaxis, :]
         params = dict(estimator_parameters)
-        method = str(params.pop("method", getattr(spectrum, "method", "unknown")))
+        # MNE's array spectra report "unknown"; only then does the declaration decide.
+        actual = getattr(spectrum, "method", "unknown")
+        method = str(params.pop("method", actual))
+        # The density check below keys on the method, so a known one cannot be overridden.
+        if actual != "unknown" and method != actual:
+            raise ValueError(
+                f"estimator_parameters declare method {method!r}, but the spectrum was "
+                f"computed with {actual!r}."
+            )
         if method == "multitaper" and params.get("normalization") != "full":
             raise ValueError(
                 'Multitaper PSD requires normalization="full" when computing the '
@@ -350,11 +363,19 @@ class Spectra:
             )
         if not windows:
             raise ValueError("from_tfr requires at least one window.")
+        method = str(getattr(tfr, "method", "unknown"))
+        # The support mask and the recorded computation model MNE's Morlet wavelets; a TFR
+        # that says it was computed otherwise has another temporal support.
+        if method not in ("morlet", "unknown"):
+            raise ValueError(
+                f"from_tfr models Morlet wavelets, but this TFR was computed with {method!r}; "
+                "compute it with method='morlet'."
+            )
 
         data = np.asarray(tfr.get_data())
         if np.iscomplexobj(data):
             raise ValueError("from_tfr requires real power; got a complex TFR.")
-        data = data.astype(float)
+        data = np.asarray(data, dtype=float)
         if data.ndim != 4:
             raise ValueError(
                 "expected an EpochsTFR of shape (epochs, channels, freqs, times), "
@@ -363,20 +384,20 @@ class Spectra:
 
         if not np.isfinite(sfreq) or sfreq <= 0.0:
             raise ValueError(f"sfreq must be finite and positive, got {sfreq}.")
-        # Energy-2 wavelets: E|coefficient|^2 = sfreq * one-sided PSD, so this
-        # is what turns MNE's rate-dependent number into a density.
-        data = data / float(sfreq)
 
         times = np.asarray(tfr.times, dtype=float)
         freqs = np.asarray(tfr.freqs, dtype=float)
         per_window = [_reduce_window(data, times, freqs, window, n_cycles) for window in windows]
         return cls(
-            data=np.stack([values for values, _, _ in per_window], axis=2),
+            # Energy-2 wavelets: E|coefficient|^2 = sfreq * one-sided PSD, so dividing is what
+            # turns MNE's rate-dependent number into a density. Done on the window means, a
+            # window mean being linear, rather than on a copy of the whole TFR.
+            data=np.stack([values for values, _, _ in per_window], axis=2) / float(sfreq),
             freqs=freqs,
             ch_names=tuple(tfr.ch_names),
             windows=tuple(windows),
             coverage=np.stack([cover for _, cover, _ in per_window], axis=2),
-            source=str(getattr(tfr, "method", "unknown")),
+            source=method,
             representation="time_frequency_power",
             support=np.stack([support for _, _, support in per_window], axis=2),
             row_ids=epoch_row_ids(tfr, recording, data.shape[0]),
@@ -411,17 +432,6 @@ def _axis_identity(freqs: npt.NDArray[np.float64], spectrum: Any) -> dict[str, o
         ).hexdigest()[:16],
         "sfreq_hz": float(sfreq) if sfreq is not None else None,
     }
-
-
-def _passband(source: Any) -> tuple[float | None, float | None] | None:
-    """Filter edges from an MNE object's ``info``, or None if it has none."""
-    info = getattr(source, "info", None)
-    if info is None:
-        return None
-    try:
-        return float(info["highpass"]), float(info["lowpass"])
-    except (KeyError, TypeError, ValueError):  # pragma: no cover - exotic info dicts
-        return None
 
 
 def support_restricted_mask(
@@ -488,17 +498,20 @@ def _reduce_window(
             f"at any frequency once Morlet support is accounted for. Widen the window or "
             f"lower n_cycles."
         )
-    selected = np.where(mask_2d[np.newaxis, np.newaxis, :, :], data, np.nan)
+    # Supported coefficients lie inside the requested span, which is contiguous on an
+    # ascending axis: a slice is a view, where a boolean index would copy the whole TFR.
+    first, last = np.flatnonzero(requested)[[0, -1]]
+    span = slice(first, last + 1)
+    selected = np.where(mask_2d[:, span], data[..., span], np.nan)
     finite = np.isfinite(selected)
+    selected[~finite] = np.nan  # an infinity is missing, not a value for nanmean to average
     n_selected = mask_2d.sum(axis=1).astype(float)
     with warnings.catch_warnings():
         # A frequency whose support never fits the window is an all-NaN slice by
         # design; the finite.any() guard already discards its mean. np.errstate
         # does not suppress this one, because nanmean raises it through warnings.
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
-        values = np.where(
-            finite.any(axis=3), np.nanmean(np.where(finite, selected, np.nan), axis=3), np.nan
-        )
+        values = np.where(finite.any(axis=3), np.nanmean(selected, axis=3), np.nan)
     coverage = finite.sum(axis=3) / np.where(n_selected > 0, n_selected, np.nan)
     support_by_frequency = n_selected / float(requested.sum())
     support = np.broadcast_to(support_by_frequency, values.shape)

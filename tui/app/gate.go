@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeatML/tui/styles"
+	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGFeat/tui/styles"
 )
 
 // gateModel is one checklist: the gate's items in display order, then its

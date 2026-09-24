@@ -9,13 +9,15 @@ from eegfeat.table import ComputationSpec
 # geomspace, not logspace: logspace lands the top bin on 40 Hz or just under it depending
 # on the platform, which decides whether the half-open default fit_range keeps it.
 FREQS = np.geomspace(2.0, 40.0, 60)
+# A Welch grid starts at DC, where a power law has no value.
+WELCH_FREQS = np.arange(0.0, 45.0, 0.5)
 
 
-def _spectra(power: np.ndarray) -> Spectra:
-    data = power.reshape(1, 1, 1, FREQS.size)
+def _spectra(power: np.ndarray, freqs: np.ndarray = FREQS) -> Spectra:
+    data = power.reshape(1, 1, 1, freqs.size)
     return Spectra(
         data=data,
-        freqs=FREQS,
+        freqs=freqs,
         ch_names=("C3",),
         windows=(Window("all", -np.inf, np.inf),),
         coverage=np.isfinite(data).astype(float),
@@ -65,6 +67,28 @@ def test_non_positive_power_is_excluded_rather_than_producing_neg_inf() -> None:
     power[10] = 0.0
     table = aperiodic(_spectra(power), include_global=False)
     assert np.isfinite(table.values).all()
+
+
+def _power_law_with_dc(dc: float = 1e-3) -> np.ndarray:
+    positive = WELCH_FREQS > 0
+    power = np.full(WELCH_FREQS.size, dc)
+    power[positive] = 10.0 * WELCH_FREQS[positive] ** -1.7
+    return power
+
+
+def test_the_zero_hertz_bin_is_left_out_of_the_fit() -> None:
+    # log10(0) is -inf: a DC bin inside the fit range breaks the least squares.
+    table = aperiodic(
+        _spectra(_power_law_with_dc(), WELCH_FREQS), fit_range=(0.0, 40.0), include_global=False
+    )
+    assert table.select(measure="slope").values.item() == pytest.approx(-1.7, abs=1e-9)
+
+
+def test_whitening_leaves_the_zero_hertz_bin_out_of_its_fit() -> None:
+    # Read as log f = 0, the DC bin would sit at 1 Hz, far below the line, and tilt it.
+    spectra = _spectra(_power_law_with_dc(), WELCH_FREQS)
+    whitened = aperiodic_ratio(spectra, fit_range=(0.0, 40.0))
+    np.testing.assert_allclose(whitened.data[..., WELCH_FREQS > 0], 1.0, rtol=1e-9)
 
 
 def test_fit_range_outside_the_axis_raises() -> None:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, replace
+from typing import Literal, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -13,12 +13,14 @@ from eegfeat.model.scoring import safe_pearsonr
 
 __all__ = [
     "AggregationConfig",
+    "FoldResults",
     "SubjectLevelR",
     "bootstrap_mean_ci",
     "fold_results",
     "paired_signflip_p_value",
     "subject_level_errors",
     "subject_level_r",
+    "subject_r_scorer",
 ]
 
 
@@ -26,7 +28,13 @@ __all__ = [
 class AggregationConfig:
     subject_weighting: Literal["equal", "trial_count"] = "equal"
     bootstrap_iterations: int = 10_000
-    ci_method: Literal["fixed_effects", "bootstrap"] = "fixed_effects"
+    # An interval over subjects treats their scores as independent, which holds only when no
+    # subject is scored by a model trained on another subject's data (within-subject folds).
+    # Scores held out from cross-subject folds share training data and are positively
+    # correlated: in a null simulation of leave-one-subject-out ridge, the t interval excluded
+    # 0 in 13-19% of cohorts at a nominal 5%. So none is computed unless asked for, and those
+    # scores are tested with permutation_test.
+    ci_method: Literal["none", "fixed_effects", "bootstrap"] = "none"
     seed: int = 42
 
     def __post_init__(self) -> None:
@@ -34,9 +42,10 @@ class AggregationConfig:
             raise ValueError(
                 f"subject_weighting must be 'equal' or 'trial_count', got {self.subject_weighting}"
             )
-        if self.ci_method not in ("fixed_effects", "bootstrap"):
+        if self.ci_method not in ("none", "fixed_effects", "bootstrap"):
             raise ValueError(
-                f"ci_method must be 'fixed_effects' or 'bootstrap', got {self.ci_method!r}"
+                "ci_method must be 'none', 'fixed_effects' or 'bootstrap', "
+                f"got {self.ci_method!r}"
             )
         if self.bootstrap_iterations <= 0:
             raise ValueError(f"bootstrap_iterations must be > 0, got {self.bootstrap_iterations}")
@@ -59,6 +68,12 @@ def bootstrap_mean_ci(
     iterations: int,
     seed: int,
 ) -> tuple[float, float]:
+    """95% percentile bootstrap interval of the mean of independent per-subject values.
+
+    Resampling subjects treats them as independent, which scores held out from
+    cross-subject folds are not (see :class:`AggregationConfig`); test those with
+    :func:`~eegfeat.model.permutation_test`.
+    """
     vals = np.asarray(values, dtype=float)
     vals = vals[np.isfinite(vals)]
     if vals.size == 0:
@@ -82,6 +97,11 @@ def paired_signflip_p_value(
     iterations: int,
     seed: int,
 ) -> float:
+    """Two-sided sign-flip p of a zero mean over independent per-subject differences.
+
+    Flipping each subject's sign on its own assumes the subjects are independent, which
+    scores held out from cross-subject folds are not (see :class:`AggregationConfig`).
+    """
     vals = np.asarray(differences, dtype=float)
     vals = vals[np.isfinite(vals)]
     if vals.size == 0 or iterations <= 0:
@@ -98,10 +118,18 @@ def paired_signflip_p_value(
     return float((count + 1) / (iterations + 1))
 
 
+class FoldResults(NamedTuple):
+    y_true: npt.NDArray[np.float64]
+    y_pred: npt.NDArray[np.float64]
+    groups: list[str]
+    rows: list[int]
+    folds: list[int]
+
+
 def fold_results(
     results: Sequence[object],
     groups: npt.NDArray[np.object_] | None = None,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], list[str], list[int], list[int]]:
+) -> FoldResults:
     def _get_fold(r: object) -> int:
         if hasattr(r, "fold"):
             return int(getattr(r, "fold"))  # noqa: B009
@@ -180,12 +208,12 @@ def fold_results(
         )
         raise ValueError(msg)
 
-    return (
-        np.asarray(y_true_all, dtype=float),
-        np.asarray(y_pred_all, dtype=float),
-        groups_ordered,
-        test_indices,
-        fold_ids,
+    return FoldResults(
+        y_true=np.asarray(y_true_all, dtype=float),
+        y_pred=np.asarray(y_pred_all, dtype=float),
+        groups=groups_ordered,
+        rows=test_indices,
+        folds=fold_ids,
     )
 
 
@@ -329,7 +357,7 @@ def subject_level_r(
                 boot_means[i] = float(np.mean(boot_z))
         ci_low = float(np.tanh(np.percentile(boot_means, 2.5)))
         ci_high = float(np.tanh(np.percentile(boot_means, 97.5)))
-    elif len(z_vals) > 1:
+    elif config.ci_method == "fixed_effects" and len(z_vals) > 1:
         if config.subject_weighting == "trial_count":
             # Known Fisher-z variance, so the normal quantile is the right multiplier.
             se = float(np.sqrt(1.0 / sum_weights))
@@ -351,6 +379,47 @@ def subject_level_r(
         ci_low=ci_low,
         ci_high=ci_high,
     )
+
+
+@dataclass(frozen=True)
+class _SubjectRScorer:
+    config: AggregationConfig
+
+    def __call__(
+        self,
+        estimator: object,
+        X: npt.NDArray[np.float64],
+        y: npt.NDArray[np.float64],
+        groups: npt.NDArray[np.object_],
+    ) -> float:
+        y_pred = np.asarray(estimator.predict(X), dtype=np.float64)  # type: ignore[attr-defined]
+        y_true = np.asarray(y, dtype=np.float64)
+        # subject_level_r skips non-finite pairs, which here would let a failed prediction
+        # drop out of the comparison between candidates.
+        if not (np.isfinite(y_true).all() and np.isfinite(y_pred).all()):
+            raise ValueError(
+                "Model selection requires finite targets and predictions for every trial."
+            )
+        frame = pd.DataFrame({"subject_id": groups, "y_true": y_true, "y_pred": y_pred})
+        sizes = frame.groupby("subject_id").size()
+        if (sizes < 3).any():
+            raise ValueError(
+                f"Subject-level r needs at least 3 held-out trials per subject; "
+                f"{sizes.idxmin()} has {sizes.min()}. Hold out more trials or pass scoring."
+            )
+        # A candidate that predicts a constant for a subject tracks nothing in it, so it
+        # scores 0 there rather than aborting the search.
+        config = replace(self.config, ci_method="none")
+        return subject_level_r(frame, config=config, undefined="zero").r
+
+
+def subject_r_scorer(config: AggregationConfig = _DEFAULT_CONFIG) -> _SubjectRScorer:
+    """Score held-out predictions by their subject-level r, the statistic regression reports.
+
+    Cross-fitting selects regression hyperparameters with it by default. It needs the subject
+    of every validation row, so it works only through eegfeat's own tuning loop.
+    """
+    return _SubjectRScorer(config)
 
 
 def _center_within(

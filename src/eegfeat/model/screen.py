@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+import warnings
+from collections.abc import Sequence
+
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+from scipy import stats
+
+from eegfeat.model.residualize import residualize_within_subjects
+
+__all__ = ["univariate_screen"]
+
+# Flips are summed in blocks so the flip-by-feature matrix stays small.
+_BLOCK = 256
+
+
+def univariate_screen(
+    X: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64],
+    groups: npt.NDArray[np.object_],
+    *,
+    feature_names: Sequence[str] | None = None,
+    covariates: pd.DataFrame | npt.NDArray[np.float64] | None = None,
+    residualize_on: Sequence[str] = (),
+    n_flips: int = 10_000,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Test every feature for tracking the target within subjects, over the whole family.
+
+    Each subject's correlation between a feature and the target is taken over that
+    subject's own trials, averaged across subjects in Fisher z and tested with a
+    one-sample t across subjects. No model is trained across subjects, so unlike
+    held-out scores the subjects are independent, and flipping the sign of one subject's
+    z for every feature at once keeps the dependence between features: the largest
+    ``|t|`` under those flips controls the family-wise error (``p_fwer``). ``q`` is the
+    Benjamini-Hochberg adjustment of ``p``.
+
+    With ``residualize_on``, the features and the target are first residualized on each
+    subject's own nuisance design, as in :func:`residualize_within_subjects`, so a
+    feature's shared response to a stimulus does not read as tracking.
+
+    Returns one row per feature: ``r`` (the mean z back in r units), ``t``,
+    ``n_subjects``, ``p``, ``q`` and ``p_fwer``. A feature measured in fewer than 3
+    subjects has no spread across subjects to test and is NaN.
+    """
+    values = np.asarray(X, dtype=np.float64)
+    target = np.asarray(y, dtype=np.float64)
+    labels = np.asarray(groups, dtype=object)
+    if values.ndim != 2 or target.shape != (values.shape[0],) or labels.shape != target.shape:
+        raise ValueError("X, y and groups must have one row per trial.")
+    if not np.all(np.isfinite(target)):
+        raise ValueError("The screen needs a finite target for every trial.")
+    if n_flips < 1:
+        raise ValueError(f"n_flips must be at least 1, got {n_flips}.")
+    names = (
+        [f"feature_{i}" for i in range(values.shape[1])]
+        if feature_names is None
+        else [str(name) for name in feature_names]
+    )
+    if len(names) != values.shape[1]:
+        raise ValueError(f"{len(names)} feature names for {values.shape[1]} features.")
+    if residualize_on:
+        if covariates is None:
+            raise ValueError("residualize_on needs covariates.")
+        every_row, no_row = np.arange(len(target)), np.empty(0, dtype=np.intp)
+        values, _ = residualize_within_subjects(
+            values, covariates, labels, every_row, no_row, columns=residualize_on
+        )
+        target, _ = residualize_within_subjects(
+            target, covariates, labels, every_row, no_row, columns=residualize_on
+        )
+
+    z = np.vstack([_subject_z(values[labels == s], target[labels == s]) for s in pd.unique(labels)])
+    measured = np.isfinite(z)
+    n_subjects = measured.sum(axis=0)
+    testable = n_subjects >= 3
+    z = np.where(measured, z, 0.0)
+    t = _group_t(z, np.ones(z.shape[0]), n_subjects, testable)
+
+    # The null of the largest |t| over the family, one sign per subject for every feature.
+    rng = np.random.default_rng(seed)
+    largest = np.concatenate(
+        [
+            np.nanmax(np.abs(_group_t(z, signs, n_subjects, testable)), axis=1, initial=0.0)
+            for signs in np.array_split(
+                rng.choice([-1.0, 1.0], size=(n_flips, z.shape[0])),
+                max(1, n_flips // _BLOCK),
+            )
+        ]
+    )
+    exceeding = n_flips - np.searchsorted(np.sort(largest), np.abs(t), side="left")
+    p = np.where(testable, 2.0 * stats.t.sf(np.abs(t), np.maximum(n_subjects - 1, 1)), np.nan)
+    q = np.full_like(p, np.nan)
+    if testable.any():
+        q[testable] = stats.false_discovery_control(p[testable])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        mean_z = z.sum(axis=0) / n_subjects
+    return pd.DataFrame(
+        {
+            "r": np.where(testable, np.tanh(mean_z), np.nan),
+            "t": t,
+            "n_subjects": n_subjects,
+            "p": p,
+            "q": q,
+            "p_fwer": np.where(testable, (1 + exceeding) / (n_flips + 1), np.nan),
+        },
+        index=pd.Index(names, name="feature"),
+    )
+
+
+def _subject_z(
+    values: npt.NDArray[np.float64], target: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
+    # Pearson r of every feature with the target over the trials where the feature is finite.
+    finite = np.isfinite(values)
+    count = finite.sum(axis=0)
+    trials = np.where(finite, values, 0.0)
+    paired = np.where(finite, target[:, None], 0.0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        dx = np.where(finite, trials - trials.sum(axis=0) / count, 0.0)
+        dy = np.where(finite, paired - paired.sum(axis=0) / count, 0.0)
+        r = (dx * dy).sum(axis=0) / np.sqrt((dx * dx).sum(axis=0) * (dy * dy).sum(axis=0))
+    # A feature or target constant over its finite trials has no correlation to report.
+    varies = _spread(np.where(finite, values, np.nan)) & _spread(
+        np.where(finite, target[:, None], np.nan)
+    )
+    r = np.where((count >= 3) & varies, r, np.nan)
+    return np.asarray(np.arctanh(np.clip(r, -0.999999, 0.999999)))
+
+
+def _spread(values: npt.NDArray[np.float64]) -> npt.NDArray[np.bool_]:
+    lowest = np.where(np.isnan(values), np.inf, values).min(axis=0, initial=np.inf)
+    highest = np.where(np.isnan(values), -np.inf, values).max(axis=0, initial=-np.inf)
+    return np.asarray(highest > lowest)
+
+
+def _group_t(
+    z: npt.NDArray[np.float64],
+    signs: npt.NDArray[np.float64],
+    n_subjects: npt.NDArray[np.intp],
+    testable: npt.NDArray[np.bool_],
+) -> npt.NDArray[np.float64]:
+    # One-sample t of the (sign-flipped) subject z's; a flip leaves the sum of squares alone.
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = (signs @ z) / n_subjects
+        variance = ((z * z).sum(axis=0) - n_subjects * mean**2) / (n_subjects - 1)
+        t = mean / np.sqrt(variance / n_subjects)
+    return np.asarray(np.where(testable, t, np.nan))

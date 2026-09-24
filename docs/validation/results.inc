@@ -141,6 +141,14 @@ PhysioNet motor movement
      - median duration of every state between 30 and 150 ms
      - median durations 54 to 83 ms
      - pass
+   * - In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as well as mne.decoding.CSP (``CommonSpatialPattern``)
+     - mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits
+     - mean accuracy over 20 subjects: MNE 0.757, eegfeat 0.731
+     - pass
+   * - Orthogonalized envelope correlation is the Fisher-z mean of mne-connectivity's per-trial estimate (``envelope_correlation``)
+     - relative error below 1e-9 on every pair
+     - 2016 pairs over 42 trials, maximum relative error 7.3e-16
+     - pass
    * - Support is partial where wavelets overrun the window while coverage stays full (``Spectra.from_tfr``)
      - support at most 1 and below 1 somewhere; coverage exactly 1
      - –
@@ -205,6 +213,10 @@ ERP CORE Flankers
      - 1024 Hz, 400 stimuli, more than 300 correct and 30 error trials
      - –
      - pass
+   * - Peak latency and amplitude are what MNE's Evoked.get_peak reports (``peak_latency``, ``peak_amplitude``)
+     - identical on every channel for negative, positive and absolute peaks
+     - 30 channels, three polarities, all identical
+     - pass
    * - reject, reference, resample, crop-epochs, baseline are drop_bad, set_eeg_reference, decimate, crop, apply_baseline (``preprocessing``)
      - identical events and drop log; samples within 1e-15 V
      - –
@@ -247,7 +259,7 @@ Sleep-EDF
      - pass
    * - The aperiodic slope steepens wake, N2, N3 (``aperiodic``)
      - median ordering holds; wake-vs-N3 AUC below 0.1, both derivations, both subjects
-     - median slope SC4001 Pz-Oz: wake -1.43, N2 -2.77, N3 -3.24; SC4011 Pz-Oz: wake -0.53, N2 -2.64, N3 -3.24
+     - median slope SC4001 Pz-Oz: wake -1.42, N2 -2.77, N3 -3.24; SC4011 Pz-Oz: wake -0.47, N2 -2.63, N3 -3.23
      - pass
    * - With peak rejection off, the aperiodic fit is least squares in log-log space (``aperiodic``)
      - relative error below 1e-9
@@ -260,6 +272,10 @@ Sleep-EDF
    * - Multiscale entropy at scale one is sample entropy (``multiscale_entropy``, ``sample_entropy``)
      - relative error below 1e-9
      - –
+     - pass
+   * - Band power reproduces the staging accuracy of MNE's sleep-classification tutorial (``mean_psd``)
+     - random forest trained on one night scores the other within 0.03 of the tutorial's own features
+     - accuracy on SC4011: tutorial 0.684, eegfeat 0.683
      - pass
    * - Held-out permutation importance points at the derivation that carries sleep depth (``permutation_importance_over_folds``)
      - Pz-Oz carries more than 60 percent of the total; every value finite

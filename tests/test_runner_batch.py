@@ -99,7 +99,7 @@ def test_runner_outputs_feed_group_disjoint_modeling_without_manual_reassembly(t
         design.y,
         design.groups,
         efm.ridge_pipeline(efm.PreprocessingConfig(), seed=42),
-        efm.ridge_grid(),
+        efm.ridge_grid(design.X),
         inner=efm.InnerSplit(grouping="subject", n_splits=2),
         seed=42,
     )

@@ -584,6 +584,11 @@
     "n_epochs": 16,
     "sfreq": 200.0,
     "mne_version": "1.13.2",
-    "created": "2026-09-21T18:58:13+00:00"
+    "settings_sha256": "d09786deea5359a54834b4589f069978629cc4c95f1144b8d4e82fc66e16e0e3",
+    "tables": [
+      "features",
+      "crosstrial"
+    ],
+    "created": "2026-09-23T20:37:58+00:00"
   }
 }

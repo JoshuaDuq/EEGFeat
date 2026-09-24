@@ -15,6 +15,7 @@ from eegfeat.table import ComputationSpec, FeatureTable, concat
 
 _MIN_FIT_POINTS = 5
 
+# In the order _fit_one returns the three measures.
 _UNITS: dict[str, str] = {
     "slope": "log10 power per log10 Hz",
     "offset": "log10 power",
@@ -64,24 +65,27 @@ def aperiodic(
     """
     _validate_fit_settings(peak_rejection_z, max_iterations)
     band = Band("fit", *fit_range)
-    tables: list[FeatureTable] = []
-    for which in ("slope", "offset", "r_squared"):
+    mask = band.mask(spectra.freqs)
+    # One fit per cell serves all three measures; expand only lays out the columns.
+    fits = _fit_cells(
+        spectra.data[..., mask], spectra.freqs[mask], peak_rejection_z, max_iterations
+    )
 
-        def make_kernel(w: str) -> Kernel:
-            def kernel(
-                data: npt.NDArray[np.float64],
-                freqs: npt.NDArray[np.float64],
-                weights: npt.NDArray[np.float64],
-            ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
-                return _fit_kernel(
-                    data, freqs, weights, which=w, z=peak_rejection_z, iterations=max_iterations
-                )
+    def column(index: int) -> Kernel:
+        def kernel(
+            data: npt.NDArray[np.float64],
+            freqs: npt.NDArray[np.float64],
+            weights: npt.NDArray[np.float64],
+        ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
+            del data, freqs, weights
+            return fits[..., index], {}
 
-            return kernel
+        return kernel
 
-        table = expand(
+    tables = [
+        expand(
             spectra,
-            make_kernel(which),
+            column(index),
             measure=which,
             unit=_UNITS[which],
             bands=(band,),
@@ -96,7 +100,8 @@ def aperiodic(
                 "max_iterations": max_iterations,
             },
         )
-        tables.append(table)
+        for index, which in enumerate(_UNITS)
+    ]
 
     # The fit range is not a named band, so these columns are broadband.
     stripped = [
@@ -159,22 +164,14 @@ def aperiodic_ratio(
             f"least {_MIN_FIT_POINTS}."
         )
 
-    positive = spectra.freqs > 0.0
-    log_f = np.zeros_like(spectra.freqs)
-    np.log10(spectra.freqs, where=positive, out=log_f)
-
-    data = spectra.data
-    out = np.full(data.shape, np.nan)
-    failed = np.ones(data.shape[:3], dtype=bool)
-    for index in np.ndindex(data.shape[:3]):
-        slope, offset, _ = _fit_one(
-            log_f[mask], data[index][mask], peak_rejection_z, max_iterations
-        )
-        if not (np.isfinite(slope) and np.isfinite(offset)):
-            continue
-        curve = 10.0 ** (offset + slope * log_f)
-        out[index] = np.where(positive, data[index] / curve, data[index])
-        failed[index] = False
+    fits = _fit_cells(
+        spectra.data[..., mask], spectra.freqs[mask], peak_rejection_z, max_iterations
+    )
+    slope, offset = fits[..., 0, np.newaxis], fits[..., 1, np.newaxis]
+    failed = ~(np.isfinite(slope) & np.isfinite(offset))[..., 0]
+    curve = 10.0 ** (offset + slope * _log_frequency(spectra.freqs))
+    out = np.where(spectra.freqs > 0.0, spectra.data / curve, spectra.data)
+    out[failed] = np.nan
 
     return replace(
         spectra,
@@ -208,25 +205,23 @@ def _validate_fit_settings(peak_rejection_z: float, max_iterations: int) -> None
         raise ValueError(f"max_iterations must be a positive integer, got {max_iterations!r}.")
 
 
-def _fit_kernel(
-    data: npt.NDArray[np.float64],
-    freqs: npt.NDArray[np.float64],
-    weights: npt.NDArray[np.float64],
-    *,
-    which: str,
-    z: float,
-    iterations: int,
-) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
-    del weights  # the fit is unweighted in log-log space
-    log_f = np.log10(freqs)
-    n_epochs, n_channels, n_windows, _ = data.shape
-    out = np.full((n_epochs, n_channels, n_windows), np.nan)
-    for e in range(n_epochs):
-        for c in range(n_channels):
-            for w in range(n_windows):
-                slope, offset, r_squared = _fit_one(log_f, data[e, c, w, :], z, iterations)
-                out[e, c, w] = {"slope": slope, "offset": offset, "r_squared": r_squared}[which]
-    return out, {}
+def _fit_cells(
+    data: npt.NDArray[np.float64], freqs: npt.NDArray[np.float64], z: float, iterations: int
+) -> npt.NDArray[np.float64]:
+    """Slope, offset and r_squared of every cell, stacked on a last axis of three."""
+    log_f = _log_frequency(freqs)
+    fits = np.full((*data.shape[:3], 3), np.nan)
+    for index in np.ndindex(data.shape[:3]):
+        fits[index] = _fit_one(log_f, data[index], z, iterations)
+    return fits
+
+
+def _log_frequency(freqs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    # A power law has no value at 0 Hz: NaN there keeps a DC bin out of every fit.
+    positive = freqs > 0.0
+    log_f = np.full(freqs.shape, np.nan)
+    log_f[positive] = np.log10(freqs[positive])
+    return log_f
 
 
 def _fit_one(
@@ -235,7 +230,7 @@ def _fit_one(
     z: float,
     iterations: int,
 ) -> tuple[float, float, float]:
-    usable = np.isfinite(power) & (power > 0.0)
+    usable = np.isfinite(power) & (power > 0.0) & np.isfinite(log_f)
     if int(usable.sum()) < _MIN_FIT_POINTS:
         return np.nan, np.nan, np.nan
     log_p = np.full(power.shape, np.nan)

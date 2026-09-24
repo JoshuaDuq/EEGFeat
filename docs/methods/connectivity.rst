@@ -210,8 +210,10 @@ is normalized by the trace.
 With ``regularization`` :math:`\rho > 0`, :math:`C_c` is shrunk to
 :math:`(1-\rho)C_c + \rho\,\operatorname{tr}(C_c)I/n` for :math:`n` channels.
 
-The filters solve :math:`C_0 w = \lambda(C_0+C_1)w`. Components are taken
-alternately from the largest and the smallest eigenvalues. The feature is the
+The filters solve :math:`C_0 w = \lambda(C_0+C_1)w`. An average reference or removed ICA
+components make :math:`C_0+C_1` singular; the problem is then solved in the span of its
+non-null eigenvectors, as MNE's CSP does, and at most that many components exist.
+Components are taken alternately from the largest and the smallest eigenvalues. The feature is the
 log of relative projected variance. Trace normalization, component order, and
 the cross-fitting split are stored with the column.
 `mne.decoding.CSP <https://mne.tools/stable/generated/mne.decoding.CSP.html>`__

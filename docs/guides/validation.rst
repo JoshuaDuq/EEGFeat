@@ -72,12 +72,23 @@ every cross-estimator comparison agreed, and the following effects came out of t
   more than distant ones until orthogonalized, all eight spectral connectivity methods
   reproduce ``mne_connectivity``, and four resting microstates explain most of the variance
   with durations of tens of milliseconds.
+- **MNE's own implementations.** Peak latency and amplitude equal ``Evoked.get_peak`` on
+  every ERP CORE channel, and orthogonalized envelope correlation equals mne-connectivity's
+  per-trial estimate to rounding. Rerun with EEGFeat's band power in place of its own
+  features, MNE's sleep-staging tutorial scores the held-out night within 0.01 of its own
+  accuracy; in MNE's CSP decoding example, EEGFeat's CSP separates movement from rest within
+  0.03 of ``mne.decoding.CSP``, the gap being its relative rather than absolute log power.
 
 What the data changed
 ---------------------
 
-Two defaults were changed and two notes added because real recordings showed the previous
-behaviour would mislead a user who trusted it.
+Two defaults were changed, one estimator fixed and two notes added because real recordings
+showed the previous behaviour would mislead a user who trusted it.
+
+- **CSP fits average-referenced data.** MNE's CSP decoding example failed with EEGFeat's CSP:
+  an average reference, like removed ICA components, leaves the class covariance
+  rank-deficient, and the fit refused it unless shrinkage was added. It now solves in the
+  data's own subspace, as MNE's CSP does.
 
 - **ERDS reports decibels.** Single-trial percent change is right-skewed by quiet-baseline
   trials; on the percent scale only about half the motor subjects showed mu desynchronization

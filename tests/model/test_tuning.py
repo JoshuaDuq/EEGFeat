@@ -6,6 +6,7 @@ from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import Pipeline
 
+from eegfeat.model.aggregate import subject_r_scorer
 from eegfeat.model.estimators import (
     elasticnet_grid,
     elasticnet_pipeline,
@@ -116,7 +117,7 @@ def test_fit_untuned_sets_available_random_state_parameter() -> None:
 def test_within_subject_regression_tunes_with_real_pipeline() -> None:
     cfg = PreprocessingConfig()
     pipe = ridge_pipeline(cfg, seed=42)
-    grid = ridge_grid()
+    grid = ridge_grid(X8)
     fit = tune(pipe, grid, X8, Y8, TWO_RUNS, split=BY_RUN, seed=42, fold=1)
     assert "regressor__alpha" in fit.best_params
 
@@ -184,4 +185,20 @@ def test_tune_refuses_refit_false() -> None:
             seed=0,
             fold=1,
             refit=False,
+        )
+
+
+def test_tune_refuses_a_scorer_that_needs_each_rows_subject() -> None:
+    # GridSearchCV hands a scorer the validation rows alone, so it cannot say whose they are.
+    with pytest.raises(ValueError, match="subject"):
+        tune(
+            ridge_pipeline(PreprocessingConfig(), seed=0),
+            {"regressor__alpha": [1.0, 10.0]},
+            X8,
+            Y8,
+            TWO_RUNS,
+            split=BY_RUN,
+            seed=0,
+            fold=1,
+            scoring=subject_r_scorer(),
         )

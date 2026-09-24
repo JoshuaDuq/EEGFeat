@@ -46,21 +46,19 @@ def test_parameter_hash_is_canonical_and_stable() -> None:
     assert left.parameter_hash == right.parameter_hash
 
 
+def test_numpy_non_finite_parameters_are_encoded_like_python_ones() -> None:
+    # A NumPy infinity is still infinity: it takes the same token a Python one does,
+    # rather than reaching json.dumps(allow_nan=False) raw and aborting the measure.
+    spec = ComputationSpec.create("x", bounds=[np.float64(-np.inf), np.float64(np.inf)])
+    assert spec.parameters == {"bounds": ["-Infinity", "Infinity"]}
+
+
 def test_window_bounds_and_parameters_distinguish_feature_identifiers() -> None:
     base = _meta()
-    shifted = FeatureMeta(
-        **{
-            **base.__dict__,
-            "window_bounds": (0.25, 1.25),
-        }
-    )
-    thresholded = FeatureMeta(
-        **{
-            **base.__dict__,
-            "computation": ComputationSpec.create(
-                "band_power", weighting="trapezoid", threshold=0.75
-            ),
-        }
+    shifted = replace(base, window_bounds=(0.25, 1.25))
+    thresholded = replace(
+        base,
+        computation=ComputationSpec.create("band_power", weighting="trapezoid", threshold=0.75),
     )
 
     assert len({base.name, shifted.name, thresholded.name}) == 3
@@ -327,3 +325,57 @@ def test_stack_rows_union_of_identical_schemas_matches_the_strict_stack() -> Non
 def test_stack_rows_refuses_an_unknown_columns_mode() -> None:
     with pytest.raises(ValueError, match="columns must be"):
         table_module.stack_rows([_identified_table("recording-01")], columns="outer")
+
+
+# --- row and column subsets -------------------------------------------------------------
+
+
+def test_take_returns_the_chosen_rows_in_order_with_their_identities_and_flags() -> None:
+    table = _identified_table("recording-01")
+    taken = table.take([2, 0])
+    np.testing.assert_array_equal(taken.values, [[4.0, 5.0], [0.0, 1.0]])
+    np.testing.assert_array_equal(taken.coverage, np.full((2, 2), 0.75))
+    np.testing.assert_array_equal(taken.flags["edge_hit"], [[False, True], [True, False]])
+    assert taken.row_ids == (("recording-01", 2, "stim"), ("recording-01", 0, "stim"))
+    assert taken.meta == table.meta
+
+
+def test_take_accepts_a_mask_and_keeps_group_row_labels() -> None:
+    grouped = FeatureTable(
+        values=np.arange(3.0).reshape(3, 1),
+        coverage=np.ones((3, 1)),
+        meta=(_meta("C3"),),
+        row_labels=("left", "right", "both"),
+    )
+    taken = grouped.take(np.array([True, False, True]))
+    assert taken.row_labels == ("left", "both")
+    np.testing.assert_array_equal(taken.values, [[0.0], [2.0]])
+
+
+@pytest.mark.parametrize("rows", [[0, 0], [3], [-1], np.array([True, False])])
+def test_take_refuses_rows_that_repeat_or_do_not_exist(rows) -> None:
+    # A repeated row would carry the same identity twice into a cohort join.
+    with pytest.raises(ValueError, match="row"):
+        _identified_table("recording-01").take(rows)
+
+
+def test_drop_missing_keeps_columns_missing_in_at_most_the_given_fraction() -> None:
+    values = np.array([[1.0, np.nan, np.nan], [2.0, 5.0, np.nan], [3.0, 6.0, np.inf]])
+    table = FeatureTable(
+        values=values, coverage=np.ones((3, 3)), meta=tuple(_meta(s) for s in ("C3", "C4", "Pz"))
+    )
+    assert [m.space for m in table.drop_missing(0.4).meta] == ["C3", "C4"]
+    assert [m.space for m in table.drop_missing(0.0).meta] == ["C3"]
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        table.drop_missing(1.5)
+
+
+def test_an_incompatible_schema_is_described_by_the_columns_that_differ() -> None:
+    # Diffing sidecars by hand is the alternative: name the columns and the recording.
+    incompatible = replace(_identified_table("recording-02"), meta=(_meta("C3"), _meta("Pz")))
+    with pytest.raises(ValueError) as error:
+        table_module.stack_rows([_identified_table("recording-01"), incompatible])
+    message = str(error.value)
+    assert "recording-02" in message
+    assert _meta("Pz").name in message and _meta("C4").name in message
+    assert "1 column" in message

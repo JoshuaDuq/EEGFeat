@@ -212,7 +212,8 @@ def load_erp_core(locked: Literal["stimulus", "response"]) -> Recording:
             "subject": "sub-001",
             "target": target,
             "pressed": pressed,
-            "congruent": np.char.find(names[pairs_array[:, 0]], "compatible") >= 0,
+            # A path segment, not a substring: "incompatible" contains "compatible".
+            "congruent": np.char.find(names[pairs_array[:, 0]], "/compatible/") >= 0,
             "correct": (target == pressed).astype(int),
         }
     )

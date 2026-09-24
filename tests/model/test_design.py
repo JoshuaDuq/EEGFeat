@@ -13,7 +13,47 @@ from eegfeat.table import FeatureMeta, FeatureTable
 def test_every_selection_field_is_a_real_feature_meta_field() -> None:
     # Selection keys are metadata field names rather than name fragments, so a measure
     # that gets renamed upstream fails loudly here instead of selecting nothing.
-    assert set(Selection.__dataclass_fields__) <= set(FeatureMeta.__dataclass_fields__)
+    fields = set(Selection.__dataclass_fields__) - {"exclude"}
+    assert fields <= set(FeatureMeta.__dataclass_fields__)
+
+
+def test_excluding_a_measure_keeps_every_other_column(alpha_beta_table: FeatureTable) -> None:
+    # Dropping one measure used to mean listing every other one.
+    kept = select(alpha_beta_table, Selection(exclude=Selection(band=("beta",))))
+    assert [m.band.name for m in kept.meta if m.band is not None] == ["alpha"]
+
+
+def test_an_exclusion_applies_after_the_inclusion(alpha_beta_table: FeatureTable) -> None:
+    selection = Selection(measure=("power",), exclude=Selection(band=("alpha",)))
+    assert [m.band.name for m in select(alpha_beta_table, selection).meta if m.band] == ["beta"]
+
+
+def test_an_exclusion_that_restricts_nothing_is_refused(alpha_beta_table: FeatureTable) -> None:
+    # An empty Selection matches every column, so excluding it would exclude everything.
+    with pytest.raises(ValueError, match="exclude"):
+        select(alpha_beta_table, Selection(exclude=Selection()))
+
+
+def test_unmatched_rows_are_counted_on_both_sides_and_named(
+    alpha_beta_table: FeatureTable,
+) -> None:
+    # Excluded trials leave feature rows with no target. Say how many, and which, so the
+    # table can be cut to the modeled rows rather than rebuilt by hand.
+    targets = pd.DataFrame(
+        {
+            "recording": ["sub-01", "sub-03"],
+            "epoch": [0, 0],
+            "event": ["stim", "stim"],
+            "pain": [1.0, 2.0],
+            "subject_id": ["sub-01", "sub-03"],
+        }
+    )
+    with pytest.raises(ValueError) as error:
+        build_design(alpha_beta_table, targets, target="pain")
+    message = str(error.value)
+    assert "1 feature row has no target row" in message and "sub-02" in message
+    assert "1 target row has no feature row" in message and "sub-03" in message
+    assert "take" in message
 
 
 def test_selecting_a_band_keeps_only_that_band(alpha_beta_table: FeatureTable) -> None:

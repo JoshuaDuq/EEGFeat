@@ -10,6 +10,7 @@ from eegfeat.model.residualize import (
     fit_staged_residual_preprocessor,
     reconstruct_staged_permutation_target_for_fold,
     residualize_targets,
+    residualize_within_subjects,
 )
 from eegfeat.model.transformers import PreprocessingConfig
 
@@ -225,4 +226,74 @@ def test_a_constant_covariate_is_refused_even_when_its_value_is_inexact_in_binar
             np.arange(12, dtype=np.intp),
             np.arange(12, 16, dtype=np.intp),
             columns=["c"],
+        )
+
+
+# s1 trains on 8 trials and is tested on 2; s2 is held out whole, with 8 trials.
+SUBJECTS = np.repeat(np.array(["s1", "s2"], dtype=object), [10, 8])
+NUISANCE = np.r_[np.arange(10.0) % 4, [5.0, 1.0, 3.0, 2.0, 4.0, 0.0, 2.0, 6.0]].reshape(-1, 1)
+SPLIT_TRAIN = np.arange(8, dtype=np.intp)
+SPLIT_TEST = np.arange(8, 18, dtype=np.intp)
+
+
+def _within(values, nuisance=NUISANCE, columns=("n",)):
+    return residualize_within_subjects(
+        values, nuisance, SUBJECTS, SPLIT_TRAIN, SPLIT_TEST, columns=columns
+    )
+
+
+def test_a_subject_with_training_rows_never_sees_its_held_out_targets() -> None:
+    y = np.random.default_rng(0).normal(size=18)
+    changed = y.copy()
+    changed[8:10] += 100.0
+    np.testing.assert_array_equal(_within(y)[0], _within(changed)[0])
+
+
+def test_a_subject_held_out_whole_is_fitted_on_its_own_rows() -> None:
+    # Its residual target is then orthogonal to its own nuisance design, whatever the others do.
+    _, test = _within(np.random.default_rng(1).normal(size=18))
+    design = np.column_stack([np.ones(8), NUISANCE[10:, 0]])
+    np.testing.assert_allclose(design.T @ test[2:], 0.0, atol=1e-10)
+
+
+def test_a_missing_feature_value_stays_missing_and_the_rest_is_residualized() -> None:
+    X = np.random.default_rng(2).normal(size=(18, 2))
+    X[11, 1] = np.nan
+    _, test = _within(X)
+    assert np.isnan(test[3, 1])
+    finite = np.array([10, 12, 13, 14, 15, 16, 17])
+    design = np.column_stack([np.ones(finite.size), NUISANCE[finite, 0]])
+    np.testing.assert_allclose(design.T @ test[finite - 8, 1], 0.0, atol=1e-10)
+
+
+def test_a_nuisance_column_constant_within_a_subject_is_projected_out_not_refused() -> None:
+    # A subject may meet a single level of a nuisance factor; its residual is still defined.
+    level = np.r_[np.arange(10.0) % 2, np.full(8, 3.0)]
+    _, test = _within(
+        np.random.default_rng(3).normal(size=18),
+        np.column_stack([NUISANCE[:, 0], level]),
+        columns=("n", "level"),
+    )
+    np.testing.assert_allclose(test[2:].sum(), 0.0, atol=1e-10)
+
+
+def test_a_value_constant_within_a_subject_leaves_an_exact_zero_residual() -> None:
+    # Rounding leaves about 1e-15 behind, which anything downstream reads as variation.
+    X = np.random.default_rng(5).normal(size=(18, 2))
+    X[:, 1] = 3.7
+    train, test = _within(X)
+    assert np.all(train[:, 1] == 0.0) and np.all(test[:, 1] == 0.0)
+    train, test = _within(np.full(18, 2.5))
+    assert np.all(train == 0.0) and np.all(test == 0.0)
+
+
+def test_a_subject_left_without_residual_degrees_of_freedom_is_named() -> None:
+    # Six nuisance terms fit s2's 8 trials all but exactly, so nothing is left to correlate.
+    rng = np.random.default_rng(4)
+    nuisance = rng.normal(size=(18, 6))
+    columns = tuple(f"c{i}" for i in range(6))
+    y = rng.normal(size=18)
+    with pytest.raises(ValueError, match="Subject s2: .*fewer than 3 residual degrees"):
+        residualize_within_subjects(
+            y, nuisance, SUBJECTS, np.arange(10, dtype=np.intp), np.arange(10, 18), columns=columns
         )

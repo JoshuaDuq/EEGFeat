@@ -8,9 +8,10 @@ import numpy.typing as npt
 import pandas as pd
 from sklearn.base import clone
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import GroupKFold, GroupShuffleSplit, KFold, LeaveOneGroupOut
+from sklearn.model_selection import GroupShuffleSplit, KFold, LeaveOneGroupOut
 from sklearn.pipeline import Pipeline
 
+from eegfeat.model.splits import _GroupKFold
 from eegfeat.model.tuning import fit_untuned
 
 __all__ = [
@@ -129,7 +130,7 @@ def _get_cv_splits(
         unique_groups = [g for g in pd.unique(groups_arr) if not pd.isna(g)]
         n_unique = len(unique_groups)
         if n_unique >= cv_splits:
-            splitter = GroupKFold(n_splits=cv_splits)
+            splitter = _GroupKFold(n_splits=cv_splits)
             splits = splitter.split(X_train, y_train, groups=groups_arr)
         else:
             splitter_logo = LeaveOneGroupOut()

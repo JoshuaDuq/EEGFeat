@@ -10,6 +10,7 @@ import numpy.typing as npt
 
 from eegfeat._expand import check_signals, window_mask
 from eegfeat.bands import Band, check_passband
+from eegfeat.phase import _resolve_rows
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Window
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
@@ -390,21 +391,6 @@ def _require_mne_connectivity() -> Callable[..., Any]:
         ) from exc
     estimator: Callable[..., Any] = spectral_connectivity_epochs
     return estimator
-
-
-def _resolve_rows(
-    trials: Sequence[str] | npt.NDArray[np.str_] | None, n_epochs: int
-) -> tuple[npt.NDArray[np.int_], tuple[str, ...]]:
-    if trials is None:
-        return np.zeros(n_epochs, dtype=int), ("all",)
-    labels = np.asarray(trials)
-    if labels.shape != (n_epochs,):
-        raise ValueError(
-            f"trials must have one label per epoch; got {labels.shape} for {n_epochs} epochs."
-        )
-    unique = tuple(str(value) for value in sorted(set(labels.tolist())))
-    index = {name: position for position, name in enumerate(unique)}
-    return np.array([index[str(value)] for value in labels], dtype=int), unique
 
 
 def _nodes(

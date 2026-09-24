@@ -36,8 +36,9 @@ Leave-one-subject-out ridge regression of `rating` on the band-power and ERDS co
 Scores are per subject. The cohort correlation is tested against 200 within-subject
 permutations.
 
-- [`example_model_scores.tsv`](example_model_scores.tsv) — cohort correlation, its confidence
-  interval, and the permutation *p*, then each subject's correlation.
+- [`example_model_scores.tsv`](example_model_scores.tsv) — cohort correlation and the
+  permutation *p*, then each subject's correlation. There is no interval: every held-out
+  score comes from a model trained on the other subjects, so the scores are not independent.
 - [`example_model_predictions.tsv`](example_model_predictions.tsv) — held-out prediction for
   every trial, with the fold index.
 

@@ -22,6 +22,7 @@ import pytest
 from mne.datasets import eegbci, erp_core
 
 from eegfeat.preprocessing import load_config, open_workflow, read_checkpoint, run_until
+from eegfeat.preprocessing.config import read_yaml
 from eegfeat.preprocessing.execution import Workflow
 from eegfeat.preprocessing.review import save_review
 
@@ -67,7 +68,7 @@ def erp_workflow(tmp_path_factory: pytest.TempPathFactory) -> Workflow:
     workflow = open_workflow(load_config(config))
     pending = run_until(workflow)
     assert pending.state == "needs-review"
-    template = json.loads(pending.steps[-1].path.read_text())
+    template = read_yaml(pending.steps[-1].path)
     # Review chooses the component with the strongest VEOG score; a real review would look.
     scores = np.asarray(
         read_checkpoint(workflow, "fit-artifact").state.artifact.evidence["scores"]["VEOG"]
@@ -262,7 +263,9 @@ def test_automated_tools_match_their_libraries(tmp_path: Path) -> None:
     detector.find_bad_by_deviation()
     detector.find_bad_by_correlation()
     candidates = read_checkpoint(workflow, "detect-bads").state.candidates
-    assert candidates["bads"] == detector.get_bads()
+    # PyPREP returns a set as a list, in an order that changes with each process's hash
+    # seed; the candidates are listed in the recording's channel order.
+    assert candidates["bads"] == [name for name in good if name in detector.get_bads()]
 
     epochs = _epochs(workflow, "epoch")
     model = autoreject.AutoReject(

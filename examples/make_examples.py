@@ -123,7 +123,7 @@ def model(features: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         design.y,
         design.groups,
         pipeline,
-        efm.ridge_grid(),
+        efm.ridge_grid(design.X),
         runs=design.runs,
         **shared,
     )
@@ -141,7 +141,7 @@ def model(features: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         design.groups,
         design.runs,
         pipeline,
-        efm.ridge_grid(),
+        efm.ridge_grid(design.X),
         metrics["subject_level_r"],
         config=efm.NullConfig(scheme="within_subject", n_permutations=200),
         **shared,
@@ -165,8 +165,6 @@ def model(features: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "scope": "cohort",
                 "n_epochs": int(metrics["n"]),
                 "r": round(summary.r, 4),
-                "ci_low": round(summary.ci_low, 4),
-                "ci_high": round(summary.ci_high, 4),
                 "permutation_p": round(null.p_value, 4),
             },
             *(
@@ -174,8 +172,6 @@ def model(features: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                     "scope": subject,
                     "n_epochs": int((groups == subject).sum()),
                     "r": round(value, 4),
-                    "ci_low": None,
-                    "ci_high": None,
                     "permutation_p": None,
                 }
                 for subject, value in summary.per_subject

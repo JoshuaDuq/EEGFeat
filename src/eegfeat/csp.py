@@ -87,8 +87,8 @@ def _covariance(epochs: npt.NDArray[np.float64], regularization: float) -> npt.N
         raise ValueError("no epoch in this class had finite data with non-zero variance.")
     mean = total / used
     if regularization > 0.0:
-        # Shrink toward a sphere. With more channels than usable epochs the class
-        # covariance is singular and the generalized eigenproblem has no solution.
+        # Shrink toward a sphere: with few epochs per channel the class covariance is a
+        # noisy estimate, and shrinkage steadies the filters fitted from it.
         mean = (1.0 - regularization) * mean + regularization * np.trace(
             mean
         ) / n_channels * np.eye(n_channels)
@@ -148,7 +148,8 @@ class CommonSpatialPattern:
             for description and leaks for prediction.
         n_components : int, default 4
             Number of filters, taken in pairs from the two ends of the spectrum,
-            so it must be even and at most the channel count.
+            so it must be even and at most the rank of the data: the channel count,
+            less one for an average reference and one per removed ICA component.
         regularization : float, default 0.0
             Shrinkage toward a sphere, in ``[0, 1)``. Raise it when there are
             more channels than epochs.
@@ -188,13 +189,19 @@ class CommonSpatialPattern:
             for label in (first, second)
         ]
         pooled = covariances[0] + covariances[1]
-        try:
-            values, vectors = eigh(covariances[0], pooled)
-        except np.linalg.LinAlgError as error:  # pragma: no cover - needs a singular pool
+        # An average reference, or ICA components removed, leaves the pooled covariance
+        # singular. As in MNE's CSP, the problem is solved in its non-null subspace, where it
+        # is well posed, rather than shrunk toward a sphere the data do not span.
+        spread, axes = np.linalg.eigh(pooled)
+        basis = axes[:, spread > spread.max() * spread.size * np.finfo(float).eps]
+        if n_components > basis.shape[1]:
             raise ValueError(
-                "the pooled covariance is singular, so no spatial filter is defined. "
-                "Raise regularization, use fewer channels, or supply more epochs."
-            ) from error
+                f"n_components ({n_components}) exceeds the rank ({basis.shape[1]}) of these "
+                "epochs' covariance; a reference or removed ICA components take dimensions "
+                "away that no spatial filter can recover."
+            )
+        values, reduced = eigh(basis.T @ covariances[0] @ basis, basis.T @ pooled @ basis)
+        vectors = basis @ reduced
 
         order = np.argsort(values)[::-1]
         values, vectors = values[order], vectors[:, order]

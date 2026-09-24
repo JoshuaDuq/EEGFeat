@@ -27,7 +27,7 @@ def normalize(
         Raw power.
     baseline : ndarray, shape (n_epochs, n_channels), or None
         Baseline power, one value per epoch and channel. Required by
-        ``"log_ratio"`` and ``"db"``, forbidden by the others.
+        ``"log_ratio"``, ``"db"`` and ``"percent"``, forbidden by the others.
     mode : {"raw", "log10", "log_ratio", "db", "percent"}
         ``"raw"`` returns the input, ``"log10"`` returns ``log10(p)``,
         ``"log_ratio"`` returns ``log10(p / b)``, ``"db"`` returns

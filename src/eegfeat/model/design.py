@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast
 
 import numpy as np
@@ -9,7 +9,7 @@ import numpy.typing as npt
 import pandas as pd
 
 from eegfeat.model import _deps as _deps
-from eegfeat.table import FeatureTable, RowId
+from eegfeat.table import FeatureMeta, FeatureTable, RowId
 
 __all__ = [
     "Design",
@@ -29,6 +29,8 @@ class Selection:
     window: tuple[str, ...] = ()
     normalization: tuple[str, ...] = ()
     space: tuple[str, ...] = ()
+    # Columns matching this are dropped from those the fields above keep.
+    exclude: Selection | None = None
 
 
 @dataclass(frozen=True)
@@ -50,22 +52,26 @@ class Design:
 _DEFAULT_SELECTION = Selection()
 
 
+def _matches(meta: FeatureMeta, selection: Selection) -> bool:
+    return (
+        (not selection.measure or meta.measure in selection.measure)
+        and (not selection.band or (meta.band is not None and meta.band.name in selection.band))
+        and (not selection.space_kind or meta.space_kind in selection.space_kind)
+        and (not selection.window or (meta.window is not None and meta.window in selection.window))
+        and (not selection.normalization or meta.normalization in selection.normalization)
+        and (not selection.space or meta.space in selection.space)
+        and not (selection.exclude is not None and _matches(meta, selection.exclude))
+    )
+
+
 def select(table: FeatureTable, selection: Selection) -> FeatureTable:
-    kept_indices: list[int] = []
-    for i, meta in enumerate(table.meta):
-        if selection.measure and meta.measure not in selection.measure:
-            continue
-        if selection.band and (meta.band is None or meta.band.name not in selection.band):
-            continue
-        if selection.space_kind and meta.space_kind not in selection.space_kind:
-            continue
-        if selection.window and (meta.window is None or meta.window not in selection.window):
-            continue
-        if selection.normalization and meta.normalization not in selection.normalization:
-            continue
-        if selection.space and meta.space not in selection.space:
-            continue
-        kept_indices.append(i)
+    exclusion = selection.exclude
+    while exclusion is not None:
+        # An exclusion that restricts nothing matches every column and would drop them all.
+        if replace(exclusion, exclude=None) == _DEFAULT_SELECTION:
+            raise ValueError(f"Selection.exclude restricts no field: {exclusion}.")
+        exclusion = exclusion.exclude
+    kept_indices = [i for i, meta in enumerate(table.meta) if _matches(meta, selection)]
 
     if not kept_indices:
         msg = f"Selection {selection} matched no columns in FeatureTable."
@@ -166,8 +172,7 @@ def build_design(
         raise ValueError(msg)
 
     if set(table_keys) != set(target_keys):
-        msg = "FeatureTable row_ids and targets keys do not match one-to-one."
-        raise ValueError(msg)
+        raise ValueError(_unmatched_rows(table_keys, target_keys))
 
     target_key_map = {k: i for i, k in enumerate(target_keys)}
     target_row_indices = [target_key_map[k] for k in table_keys]
@@ -213,6 +218,29 @@ def build_design(
         column_names=column_names,
         feature_columns=feature_columns,
         covariate_columns=covariate_columns,
+    )
+
+
+def _unmatched_rows(table_keys: Sequence[RowId], target_keys: Sequence[RowId]) -> str:
+    def count(keys: list[RowId], row: str, other: str) -> str:
+        one = len(keys) == 1
+        return (
+            f"{len(keys)} {row} row{'' if one else 's'} {'has' if one else 'have'} no {other} "
+            f"row (first: {keys[0]})"
+        )
+
+    table_set, target_set = set(table_keys), set(target_keys)
+    parts = [
+        count(keys, row, other)
+        for keys, row, other in (
+            ([k for k in table_keys if k not in target_set], "feature", "target"),
+            ([k for k in target_keys if k not in table_set], "target", "feature"),
+        )
+        if keys
+    ]
+    return (
+        f"FeatureTable row_ids and targets keys do not match one-to-one: {'; '.join(parts)}. "
+        "To model some of the rows, cut the table to them with FeatureTable.take."
     )
 
 

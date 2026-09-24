@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/JoshuaDuq/EEGFeatML/tui/styles"
+	"github.com/JoshuaDuq/EEGFeat/tui/styles"
 )
 
 // logCap bounds what a run can hold: MNE narrates enough per stage that a whole
@@ -88,7 +88,7 @@ func (m Model) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "end":
 		m.log.scroll = 0
 	case "q":
-		return m.quit()
+		return m.requestQuit()
 	}
 	return m, nil
 }

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
+import pandas as pd
 import pytest
+from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.dummy import DummyRegressor
 from sklearn.pipeline import Pipeline
 
+from eegfeat.model.aggregate import fold_results, subject_level_r
 from eegfeat.model.crossfit import cross_fit_regression
 from eegfeat.model.estimators import ridge_pipeline
 from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
@@ -37,9 +42,13 @@ def test_no_fold_is_fitted_on_the_subject_it_predicts() -> None:
 
 def test_the_same_loop_serves_within_subject_folds_grouped_on_runs() -> None:
     # The only things that change between designs are the folds and the inner grouping.
-    folds = within_subject_folds(GROUPS, RUNS, inner_splits=2)
+    # Each run holds 3 trials, the fewest a validation run can score a correlation on.
+    groups = np.repeat(["s1", "s2", "s3", "s4"], 12).astype(object)
+    runs = np.tile(np.repeat(["r1", "r2", "r3", "r4"], 3), 4).astype(object)
+    y = np.random.default_rng(0).normal(size=groups.size)
+    folds = within_subject_folds(groups, runs, inner_splits=2)
     predictions = cross_fit_regression(
-        folds, X, Y, GROUPS, PIPE, GRID, inner=BY_RUN, seed=0, runs=RUNS
+        folds, y.reshape(-1, 1), y, groups, PIPE, GRID, inner=BY_RUN, seed=0, runs=runs
     )
     assert all(p.subject is not None for p in predictions)
 
@@ -336,3 +345,170 @@ def test_run_grouping_under_cross_subject_folds_is_refused() -> None:
         cross_fit_regression(
             loso_folds(GROUPS), X, Y, GROUPS, PIPE, GRID, inner=BY_RUN, seed=0, runs=RUNS
         )
+
+
+class _Column(BaseEstimator, RegressorMixin):
+    # Predicts one input column as it is, so every candidate's inner scores are known ahead.
+    def __init__(self, column: int = 0) -> None:
+        self.column = column
+
+    def fit(self, X, y):
+        self.n_features_in_ = np.asarray(X).shape[1]
+        return self
+
+    def predict(self, X):
+        return np.asarray(X, dtype=float)[:, self.column]
+
+
+def _offsets_or_tracking() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # Column 0 is each subject's offset: a good pooled R^2 and no within-subject tracking.
+    # Column 1 tracks every trial at the wrong scale: a hopeless R^2 and a subject r of 1.
+    rng = np.random.default_rng(0)
+    groups = np.repeat([f"s{i}" for i in range(6)], 10).astype(object)
+    offset = np.repeat(np.arange(6) * 10.0, 10)
+    signal = rng.normal(size=groups.size)
+    return np.column_stack([offset, 100.0 * signal]), offset + signal, groups
+
+
+def test_regression_tuning_selects_on_the_subject_level_r_it_is_evaluated_with() -> None:
+    # Pooled R^2 rewards predicting each subject's offset, which the outer subject-level r
+    # ignores; selecting on it picks the model that tracks nothing within a subject.
+    X_, y, groups = _offsets_or_tracking()
+    predictions = cross_fit_regression(
+        loso_folds(groups),
+        X_,
+        y,
+        groups,
+        Pipeline([("regressor", _Column())]),
+        {"regressor__column": [0, 1]},
+        inner=BY_SUBJECT,
+        seed=0,
+    )
+    assert [p.best_params["regressor__column"] for p in predictions] == [1] * 6
+
+
+def test_an_explicit_scikit_learn_scorer_still_decides_the_selection() -> None:
+    X_, y, groups = _offsets_or_tracking()
+    predictions = cross_fit_regression(
+        loso_folds(groups),
+        X_,
+        y,
+        groups,
+        Pipeline([("regressor", _Column())]),
+        {"regressor__column": [0, 1]},
+        inner=BY_SUBJECT,
+        seed=0,
+        scoring="r2",
+    )
+    assert [p.best_params["regressor__column"] for p in predictions] == [0] * 6
+
+
+class _Blend(BaseEstimator, RegressorMixin):
+    # Tracks column 1, blurred by column 2 at 1/k and by column 3 at k/1000, so the
+    # blur is least at k = sqrt(1000) and the best k is known in advance.
+    def __init__(self, k: float = 1.0) -> None:
+        self.k = k
+
+    def fit(self, X, y):
+        self.n_features_in_ = np.asarray(X).shape[1]
+        return self
+
+    def predict(self, X):
+        X = np.asarray(X, dtype=float)
+        return X[:, 1] + X[:, 2] / self.k + self.k * X[:, 3] / 1000.0
+
+
+def _blend_design() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    X_, y, groups = _offsets_or_tracking()
+    noise = np.random.default_rng(1).normal(size=(groups.size, 2))
+    return np.column_stack([X_[:, 0], y, noise]), y, groups
+
+
+def test_a_search_that_settles_on_a_grid_edge_is_reported() -> None:
+    X_, y, groups = _blend_design()
+    with pytest.warns(
+        UserWarning, match=r"regressor__k .* upper end of its grid \(10\.0\) in all 6"
+    ):
+        cross_fit_regression(
+            loso_folds(groups),
+            X_,
+            y,
+            groups,
+            Pipeline([("regressor", _Blend())]),
+            {"regressor__k": [1.0, 3.0, 10.0]},
+            inner=BY_SUBJECT,
+            seed=0,
+        )
+
+
+def test_an_interior_optimum_raises_no_grid_edge_warning() -> None:
+    X_, y, groups = _blend_design()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        predictions = cross_fit_regression(
+            loso_folds(groups),
+            X_,
+            y,
+            groups,
+            Pipeline([("regressor", _Blend())]),
+            {"regressor__k": [1.0, 10.0, 30.0, 100.0, 1000.0]},
+            inner=BY_SUBJECT,
+            seed=0,
+        )
+    assert {p.best_params["regressor__k"] for p in predictions} == {30.0}
+
+
+def _shared_stimulus_slopes() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    # Subjects differ in how steeply both the target and the feature follow the stimulus;
+    # beyond the stimulus the feature tracks nothing of the target.
+    rng = np.random.default_rng(0)
+    groups = np.repeat([f"s{i}" for i in range(8)], 40).astype(object)
+    stimulus = rng.choice([-2.0, -1.0, 0.0, 1.0, 2.0], size=groups.size)
+    slope = np.repeat(np.linspace(0.2, 2.0, 8), 40)
+    y = slope * stimulus + 0.3 * rng.normal(size=groups.size)
+    feature = slope * stimulus + 0.3 * rng.normal(size=groups.size)
+    return feature.reshape(-1, 1), y, groups, stimulus.reshape(-1, 1)
+
+
+def _subject_r(predictions, groups) -> float:
+    y_true, y_pred, labels, _, _ = fold_results(predictions, groups=groups)
+    frame = pd.DataFrame({"subject_id": labels, "y_true": y_true, "y_pred": y_pred})
+    return subject_level_r(frame).r
+
+
+def test_a_pooled_nuisance_model_leaves_each_subjects_own_stimulus_slope_behind() -> None:
+    # Removing the average slope from both sides leaves every subject's deviation from it in
+    # both residuals, where it reads as trial-level tracking the feature does not do.
+    feature, y, groups, stimulus = _shared_stimulus_slopes()
+    pipeline = ridge_pipeline(PreprocessingConfig(deconfound=True), seed=0, n_covariates=1)
+    predictions = cross_fit_regression(
+        loso_folds(groups),
+        np.column_stack([feature, stimulus]),
+        y,
+        groups,
+        pipeline,
+        {},
+        inner=BY_SUBJECT,
+        seed=0,
+        covariates=stimulus,
+        residualize_on=["stimulus"],
+    )
+    assert _subject_r(predictions, groups) > 0.5
+
+
+def test_residualizing_within_subjects_removes_each_subjects_own_stimulus_response() -> None:
+    feature, y, groups, stimulus = _shared_stimulus_slopes()
+    predictions = cross_fit_regression(
+        loso_folds(groups),
+        feature,
+        y,
+        groups,
+        ridge_pipeline(PreprocessingConfig(), seed=0),
+        {},
+        inner=BY_SUBJECT,
+        seed=0,
+        covariates=stimulus,
+        residualize_on=["stimulus"],
+        residualize_within="subject",
+    )
+    assert abs(_subject_r(predictions, groups)) < 0.15

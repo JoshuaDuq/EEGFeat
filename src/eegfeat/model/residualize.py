@@ -19,7 +19,12 @@ __all__ = [
     "fit_staged_residual_preprocessor",
     "reconstruct_staged_permutation_target_for_fold",
     "residualize_targets",
+    "residualize_within_subjects",
 ]
+
+# A residual this small relative to the values it came from is rounding, not variation: a
+# thousand times the error of residualizing on a well-conditioned design.
+_ROUNDING = 1e-12
 
 
 @dataclass(frozen=True)
@@ -251,6 +256,119 @@ def residualize_targets(
     """
     fit = fit_nuisance_model(y, covariates, train, test, columns=columns)
     return fit.train_residual, fit.test_residual
+
+
+def residualize_within_subjects(
+    values: npt.NDArray[np.float64],
+    covariates: pd.DataFrame | npt.NDArray[np.float64],
+    groups: npt.NDArray[np.object_],
+    train: npt.NDArray[np.intp] | Sequence[int],
+    test: npt.NDArray[np.intp] | Sequence[int],
+    *,
+    columns: Sequence[str],
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """``(train_residual, test_residual)`` of each subject's own nuisance model.
+
+    ``values`` is the target, or a feature matrix, with one row per design row. A pooled
+    nuisance model removes only the average nuisance effect, so each subject's own
+    deviation from it -- its own stimulus response, say -- survives in the residuals of
+    both the target and the features and reads as trial-level tracking. Here every
+    subject gets its own model instead. A subject with training rows is fitted on those
+    alone and its held-out rows are predicted from them. A subject with none, as in a
+    leave-one-subject-out fold, is fitted on its own held-out rows: that defines its
+    residual target without informing any model, which is what makes the estimand
+    within-subject. On features this uses no target at all. A missing value stays missing.
+    """
+    column_names = tuple(str(c).strip() for c in columns if str(c).strip())
+    if not column_names:
+        raise ValueError("Target residualization requires at least one nuisance column.")
+    data = np.asarray(values, dtype=np.float64)
+    group_labels = np.asarray(groups, dtype=object)
+    train_rows = np.asarray(train, dtype=np.intp)
+    test_rows = np.asarray(test, dtype=np.intp)
+    _validate_indices(np.empty(len(data)), train_rows, test_rows)
+    if len(group_labels) != len(data):
+        raise ValueError(f"groups has {len(group_labels)} rows and values has {len(data)}.")
+
+    residual = np.full(data.shape, np.nan)
+    for subject in pd.unique(group_labels[np.concatenate([train_rows, test_rows])]):
+        own_train = train_rows[group_labels[train_rows] == subject]
+        own_test = test_rows[group_labels[test_rows] == subject]
+        rows = np.concatenate([own_train, own_test])
+        try:
+            residual[rows] = _subject_residual(
+                data,
+                covariates,
+                fit_rows=own_train if own_train.size else own_test,
+                rows=rows,
+                columns=column_names,
+                extrapolate=bool(own_train.size and own_test.size),
+            )
+        except ValueError as exc:
+            raise ValueError(f"Subject {subject}: {exc}") from exc
+    return residual[train_rows], residual[test_rows]
+
+
+def _subject_residual(
+    data: npt.NDArray[np.float64],
+    covariates: pd.DataFrame | npt.NDArray[np.float64],
+    *,
+    fit_rows: npt.NDArray[np.intp],
+    rows: npt.NDArray[np.intp],
+    columns: tuple[str, ...],
+    extrapolate: bool,
+) -> npt.NDArray[np.float64]:
+    fit_design = _design_matrix(covariates, fit_rows, columns, check_rank=extrapolate)
+    design = _design_matrix(covariates, rows, columns, check_rank=False)
+    # Comparable units, so the rank cutoff does not depend on the covariates' scale.
+    scales = np.linalg.norm(fit_design, axis=0)
+    scales[scales == 0.0] = 1.0
+    if data.ndim == 1:
+        target = data[fit_rows]
+        if not np.all(np.isfinite(target)):
+            raise ValueError("Target residualization requires finite target values.")
+        rank = int(np.linalg.matrix_rank(fit_design / scales))
+        if fit_rows.size - rank < 3:
+            raise ValueError(
+                f"{fit_rows.size} trials and a nuisance design of rank {rank} leave fewer "
+                "than 3 residual degrees of freedom to correlate."
+            )
+        # Predicting held-out rows needs identified coefficients; residualizing the rows
+        # that were fitted needs only the projection, which a constant column leaves intact.
+        coefficients = (
+            _fit_coefficients(fit_design, target)
+            if extrapolate
+            else np.linalg.lstsq(fit_design / scales, target, rcond=None)[0] / scales
+        )
+        return _without_rounding(data[rows] - design @ coefficients, data[rows])
+
+    # Feature columns are fitted on the rows where they are finite, one missingness pattern
+    # at a time; a column left with no residual degrees of freedom is missing.
+    finite = np.isfinite(data[fit_rows])
+    patterns, inverse = np.unique(finite.T, axis=0, return_inverse=True)
+    residual = np.full((rows.size, data.shape[1]), np.nan)
+    for which, pattern in enumerate(patterns):
+        kept = np.flatnonzero(inverse.ravel() == which)
+        pattern_design = fit_design[pattern] / scales
+        rank = int(np.linalg.matrix_rank(pattern_design)) if pattern.any() else 0
+        if pattern.sum() - rank < 2 or (extrapolate and rank < pattern_design.shape[1]):
+            continue
+        fitted = data[fit_rows[pattern]][:, kept]
+        coefficients = np.linalg.lstsq(pattern_design, fitted, rcond=None)[0] / scales[:, None]
+        residual[:, kept] = data[rows][:, kept] - design @ coefficients
+    return _without_rounding(residual, data[rows])
+
+
+def _without_rounding(
+    residual: npt.NDArray[np.float64], values: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
+    # A value the nuisance design explains exactly, such as a feature constant within a
+    # subject, leaves rounding error of about 1e-15 rather than zero, and anything downstream
+    # reads that as variation: a correlation, or a unit-variance column after scaling.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        scale = np.nanmax(np.abs(values), axis=0)
+    return np.where(np.abs(residual) <= _ROUNDING * scale, 0.0, residual)
 
 
 def _finite_feature_block(

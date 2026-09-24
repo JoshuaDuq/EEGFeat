@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -237,6 +238,18 @@ def test_read_dataset_refuses_descriptor_event_that_disagrees_with_row_identity(
         io_module.read_dataset([path])
 
 
+def test_read_dataset_accepts_event_names_that_look_numeric(tmp_path) -> None:
+    # mne.Epochs(raw, events) names its events "1", "2", ...; a TSV reader parses those as
+    # numbers, and "01" as the number 1, yet they are the same identities the rows carry.
+    table = replace(_epoch_table(), row_ids=(("rec", 0, "1"), ("rec", 1, "2"), ("rec", 2, "01")))
+    path = tmp_path / "features.tsv"
+    write_table(table, path, rows=pd.DataFrame({"event": ["1", "2", "01"]}))
+
+    dataset = io_module.read_dataset([path])
+
+    assert dataset.targets["event"].tolist() == ["1", "2", "01"]
+
+
 def test_read_dataset_refuses_epoch_key_that_disagrees_with_row_identity(tmp_path) -> None:
     path = tmp_path / "features.tsv"
     write_table(_epoch_table(), path)
@@ -333,3 +346,41 @@ def test_read_dataset_unions_columns_across_recordings_that_measured_different_c
     assert np.all(np.isnan(values[:3, 2]))
     np.testing.assert_array_equal(values[3:, 2], second.values[:, 1])
     assert len(dataset.targets) == 6
+
+
+def test_reading_a_dataset_hashes_each_column_once(tmp_path, monkeypatch) -> None:
+    # A column's name embeds a SHA-256 of its whole metadata record. Reading a 13,000-column
+    # bundle recomputed it five times per column, most of read_dataset's time.
+    import eegfeat.table as table_module
+
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path, rows=pd.DataFrame({"event": ["left", "right", "left"]}))
+    real = table_module.hashlib.sha256
+    calls: list[int] = []
+
+    def counting(data: bytes = b"") -> object:
+        calls.append(1)
+        return real(data)
+
+    monkeypatch.setattr(table_module.hashlib, "sha256", counting)
+    io_module.read_dataset([path])
+    assert len(calls) == len(_epoch_table().meta)
+
+
+def test_a_macos_resource_file_is_named_instead_of_failing_to_decode(tmp_path) -> None:
+    # macOS writes a "._" twin beside every file on an exFAT drive, and a glob picks it up.
+    real = tmp_path / "sub-01_features.tsv"
+    write_table(_epoch_table(), real, rows=pd.DataFrame({"event": ["left", "right", "left"]}))
+    junk = b"\x00\x05\x16\x07\x00\x02\x00\x00Mac OS X        \xff\xfe"
+    for suffix in (".tsv", ".json"):
+        (tmp_path / f"._sub-01_features{suffix}").write_bytes(junk)
+    with pytest.raises(ValueError, match=r"\._sub-01_features\.json.*AppleDouble"):
+        io_module.read_dataset([real, tmp_path / "._sub-01_features.tsv"])
+
+
+def test_a_sidecar_that_is_not_json_is_named(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path, rows=pd.DataFrame({"event": ["left", "right", "left"]}))
+    path.with_suffix(".json").write_text("{ not json")
+    with pytest.raises(ValueError, match=r"features\.json"):
+        read_table(path)

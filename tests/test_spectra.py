@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from eegfeat.signal import Signal
 from eegfeat.spectra import (
     Spectra,
     Window,
@@ -9,6 +10,7 @@ from eegfeat.spectra import (
     trapezoid_weights,
 )
 from eegfeat.table import ComputationSpec
+from eegfeat.temporal import variance
 
 
 def test_trapezoid_weights_sum_to_the_frequency_span() -> None:
@@ -48,6 +50,30 @@ def test_window_requires_ordered_bounds() -> None:
     with pytest.raises(ValueError):
         Window("", 0.0, 1.0)
     assert Window("all", -np.inf, np.inf).name == "all"
+
+
+def _one_channel(n_times: int = 5) -> Signal:
+    return Signal.from_arrays(
+        data=np.arange(float(n_times)).reshape(1, 1, n_times),
+        times=np.linspace(0.0, 1.0, n_times),
+        ch_names=("C3",),
+        sfreq=n_times - 1.0,
+        row_ids=(("r", 0, "e"),),
+    )
+
+
+def test_integer_and_float_window_bounds_name_the_same_column() -> None:
+    # 0 and 0.0 are different JSON tokens: kept as given, one window would hash to two
+    # column names and the same feature would land in two columns of a cohort table.
+    by_int = variance([_one_channel()], windows=[Window("post", 0, 1)], include_global=False)
+    by_float = variance([_one_channel()], windows=[Window("post", 0.0, 1.0)], include_global=False)
+    assert by_int.names == by_float.names
+
+
+def test_numpy_infinite_window_bounds_name_a_column() -> None:
+    window = Window("all", *np.array([-np.inf, np.inf]))
+    table = variance([_one_channel()], windows=[window], include_global=False)
+    assert table.meta[0].window_bounds == (-np.inf, np.inf)
 
 
 def test_from_epochs_spectrum_gains_a_singleton_window_axis() -> None:
@@ -221,13 +247,13 @@ def test_spectra_require_nonempty_axes() -> None:
         )
 
 
-def _toy_tfr(n_epochs: int = 4):
+def _toy_tfr(n_epochs: int = 4, method: str = "morlet"):
     mne = pytest.importorskip("mne")
     info = mne.create_info(["C3", "C4"], 200.0, "eeg")
     rng = np.random.RandomState(0)
     epochs = mne.EpochsArray(rng.randn(n_epochs, 2, 800) * 1e-6, info, tmin=-2.0, verbose="ERROR")
     return epochs.compute_tfr(
-        "morlet",
+        method,
         freqs=np.array([8.0, 10.0, 12.0]),
         n_cycles=3.0,
         return_itc=False,
@@ -262,6 +288,19 @@ def test_from_tfr_refuses_an_already_baselined_tfr() -> None:
     with pytest.raises(ValueError, match="already baseline"):
         Spectra.from_tfr(
             tfr, (Window("stim", 0.0, 1.0),), recording="test", n_cycles=3.0, sfreq=200.0
+        )
+
+
+def test_from_tfr_refuses_a_tfr_that_is_not_morlet() -> None:
+    # The support mask and the recorded method assume Morlet wavelets; a multitaper TFR,
+    # as in MNE's ERDS example, has another support and would be labelled morlet.
+    with pytest.raises(ValueError, match="multitaper"):
+        Spectra.from_tfr(
+            _toy_tfr(method="multitaper"),
+            (Window("stim", 0.0, 1.0),),
+            recording="test",
+            n_cycles=3.0,
+            sfreq=200.0,
         )
 
 
@@ -432,6 +471,39 @@ def test_from_spectrum_accepts_method_in_estimator_parameters() -> None:
     )
     assert spectra.source == "welch"
     assert spectra.computation.method == "welch"
+
+
+def test_from_spectrum_refuses_a_declared_method_the_spectrum_contradicts() -> None:
+    # The density check keys on the method; a declaration that overrode the object would
+    # let MNE's length-normalized multitaper PSD pass as a Welch density.
+    spectrum = _epochs_for_hashing().compute_psd("multitaper", fmax=40.0, verbose=False)
+    with pytest.raises(ValueError, match="multitaper"):
+        Spectra.from_spectrum(spectrum, recording="r", estimator_parameters={"method": "welch"})
+
+
+def test_from_spectrum_takes_the_declared_method_when_the_spectrum_does_not_know_it() -> None:
+    mne = pytest.importorskip("mne")
+    info = mne.create_info(["C3"], 100.0, "eeg")
+    freqs = np.arange(1.0, 6.0)
+    array = mne.time_frequency.EpochsSpectrumArray(
+        np.ones((2, 1, 5)),
+        info,
+        freqs,
+        events=np.array([[0, 0, 1], [100, 0, 1]]),
+        event_id={"a": 1},
+    )
+    spectra = Spectra.from_spectrum(array, recording="r", estimator_parameters={"method": "welch"})
+    assert spectra.source == "welch"
+
+
+def test_array_spectra_without_event_id_name_events_by_code_as_mne_epochs_does() -> None:
+    mne = pytest.importorskip("mne")
+    info = mne.create_info(["C3"], 100.0, "eeg")
+    array = mne.time_frequency.EpochsSpectrumArray(
+        np.ones((2, 1, 5)), info, np.arange(1.0, 6.0), events=np.array([[0, 0, 1], [100, 0, 2]])
+    )
+    spectra = Spectra.from_spectrum(array, recording="r", estimator_parameters={"method": "welch"})
+    assert spectra.row_ids == (("r", 0, "1"), ("r", 1, "2"))
 
 
 def _epochs_for_hashing(sfreq: float = 500.0):

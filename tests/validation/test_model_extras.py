@@ -40,7 +40,7 @@ def test_importance_points_at_the_occipital_derivation(
         design.y,
         design.groups,
         efm.ridge_pipeline(CONFIG, seed=SEED),
-        efm.ridge_grid(),
+        efm.ridge_grid(design.X),
         inner=INNER,
         feature_names=design.column_names,
         n_repeats=5,

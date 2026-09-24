@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import warnings
 from collections.abc import Mapping, Sequence
 from typing import Literal
@@ -40,6 +41,11 @@ value stands and ``baseline_extreme_ratio`` marks it for the caller's own QC.
 """
 
 ErdsScale = Literal["percent", "db"]
+
+# Blanked power, baseline reference (NaN where degenerate), baseline spread, degenerate.
+_Prepared = tuple[
+    npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.bool_]
+]
 
 _UNITS: dict[str, dict[str, str]] = {
     "percent": {
@@ -650,8 +656,17 @@ def _erds_measure(
             return min_duration_ms / 1000.0
         return min_duration_cycles / signal.band.fmin
 
+    # The power and its baseline feed the trace, the flags and every window's onset. The
+    # expander finishes one signal before the next, so one entry spares the recomputation
+    # while holding a single band's power.
+    @functools.lru_cache(maxsize=1)
+    def prepared(signal: BandSignal) -> _Prepared:
+        power = _power(signal)
+        return (power, *_baseline_reference(power, signal.times, baseline))
+
     def trace_of(signal: BandSignal) -> npt.NDArray[np.float64]:
-        return _trace(signal, baseline, normalize)
+        power, reference, _, _ = prepared(signal)
+        return _normalize(power, baseline=reference, mode=normalize)
 
     def kernel(
         signal: BandSignal,
@@ -659,25 +674,22 @@ def _erds_measure(
         times: npt.NDArray[np.float64],
         mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
-        reference, deviation = _baseline_stats(signal, baseline)
-        # The expander's own selector, not one recovered from the time values.
-        power = signal.power[:, :, mask]
-        onset_crossing = (
-            np.isfinite(power)
-            & np.isfinite(reference[:, :, np.newaxis])
-            & (np.abs(power - reference[:, :, np.newaxis]) > deviation[:, :, np.newaxis])
-        )
+        power, reference, deviation, _ = prepared(signal)
+        # The expander's own selector, not one recovered from the time values. A missing
+        # sample or baseline is NaN here, and NaN never crosses.
+        departure = np.abs(power[:, :, mask] - reference[:, :, np.newaxis])
+        onset_crossing = departure > deviation[:, :, np.newaxis]
         onset_samples = max(1, int(round(onset_seconds(signal) * signal.sfreq)))
         # Every measure derives from the same trace, so computing the set and
         # taking one is cheaper than it looks and keeps the definitions together.
         return {measure: _measures(signal, trace, times, onset_crossing, onset_samples)[measure]}
 
     def flags_of(signal: BandSignal) -> dict[str, npt.NDArray[np.bool_]]:
-        reference, _, degenerate = _baseline_reference(signal, baseline)
-        with warnings.catch_warnings(), np.errstate(invalid="ignore", divide="ignore"):
+        power, reference, _, degenerate = prepared(signal)
+        with warnings.catch_warnings():
             warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
-            peak = np.nanmax(_power(signal), axis=2)
-            extreme = ~degenerate & (peak > _EXTREME_POWER_RATIO * reference)
+            # A degenerate reference is NaN, and no peak compares above it.
+            extreme = np.nanmax(power, axis=2) > _EXTREME_POWER_RATIO * reference
         return {
             "baseline_degenerate": degenerate,
             "baseline_extreme_ratio": np.asarray(extreme, dtype=np.bool_),
@@ -711,13 +723,6 @@ def _erds_measure(
     )
 
 
-def _baseline_stats(
-    signal: BandSignal, baseline: Window
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    reference, deviation, degenerate = _baseline_reference(signal, baseline)
-    return np.where(degenerate, np.nan, reference), deviation
-
-
 def _power(signal: BandSignal) -> npt.NDArray[np.float64]:
     """Instantaneous power with non-finite samples blanked.
 
@@ -730,20 +735,18 @@ def _power(signal: BandSignal) -> npt.NDArray[np.float64]:
 
 
 def _baseline_reference(
-    signal: BandSignal, baseline: Window
+    power: npt.NDArray[np.float64], times: npt.NDArray[np.float64], baseline: Window
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.bool_]]:
-    """Baseline mean power, its spread, and which cells cannot anchor a ratio."""
-    mask = window_mask(signal.times, baseline)
-    full = _power(signal)
-    power = full[:, :, mask]
+    """Baseline mean power, NaN where it cannot anchor a ratio; its spread; those cells."""
+    within = power[:, :, window_mask(times, baseline)]
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
         warnings.filterwarnings("ignore", "Degrees of freedom <= 0", RuntimeWarning)
-        reference = np.nanmean(power, axis=2)
-        deviation = np.nanstd(power, axis=2)
+        reference = np.nanmean(within, axis=2)
+        deviation = np.nanstd(within, axis=2)
         # The whole epoch, not just the baseline, so the comparison is against this
         # channel's own scale rather than an assumed unit of measurement.
-        scale = np.nanmean(full, axis=2)
+        scale = np.nanmean(power, axis=2)
     with np.errstate(invalid="ignore"):
         degenerate: npt.NDArray[np.bool_] = np.asarray(
             ~np.isfinite(reference)
@@ -751,13 +754,7 @@ def _baseline_reference(
             | (np.isfinite(scale) & (reference <= _MIN_BASELINE_FRACTION * scale)),
             dtype=np.bool_,
         )
-    return reference, deviation, degenerate
-
-
-def _trace(signal: BandSignal, baseline: Window, mode: ErdsScale) -> npt.NDArray[np.float64]:
-    power = _power(signal)
-    reference, _ = _baseline_stats(signal, baseline)
-    return _normalize(power, baseline=reference, mode=mode)
+    return np.where(degenerate, np.nan, reference), deviation, degenerate
 
 
 def _measures(
