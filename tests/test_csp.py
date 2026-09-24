@@ -180,8 +180,17 @@ def test_on_an_average_reference_the_informative_components_agree_with_mne() -> 
     signal, y = _lateralised(n_per_class=60)
     referenced = _average_referenced(signal)
     ours = ef.CommonSpatialPattern.fit(referenced, y, n_components=2).transform(referenced)
+    # The rank is given: MNE's estimate from the data uses a tolerance within a factor of two
+    # of the rounding an average reference leaves, so on some CPUs it solved the singular
+    # full-rank problem. Its default order, by mutual information, here swaps the components.
     reference = CSP(
-        n_components=2, reg=None, log=True, norm_trace=True, cov_est="epoch"
+        n_components=2,
+        reg=None,
+        log=True,
+        norm_trace=True,
+        cov_est="epoch",
+        component_order="alternate",
+        rank={"eeg": N_CHANNELS - 1},
     ).fit_transform(referenced.data, y)
     for component in range(2):
         assert abs(np.corrcoef(ours[:, component], reference[:, component])[0, 1]) > 0.99

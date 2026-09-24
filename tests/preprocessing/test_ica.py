@@ -108,10 +108,13 @@ def test_iclabel_requires_extended_infomax_and_average_reference():
 def test_iclabel_labels_every_component(mixture):
     pytest.importorskip("mne_icalabel")
     from eegfeat.preprocessing.artifacts import reference_artifact_data
-    from eegfeat.preprocessing.config import ICLabelSettings
+    from eegfeat.preprocessing.config import FilterSettings, ICLabelSettings
     from eegfeat.preprocessing.ica import fit_ica
+    from eegfeat.preprocessing.raw import filter_raw
 
-    referenced = reference_artifact_data(mixture, "average")
+    # ICLabel's training band, 1-100 Hz: fit_ica adds the 1 Hz high-pass.
+    lowpassed = filter_raw(mixture, FilterSettings(h_freq=100.0))
+    referenced = reference_artifact_data(lowpassed, "average")
     settings = ICASettings(
         method="infomax", n_components=4, max_iter=2000, iclabel=ICLabelSettings(threshold=0.5)
     )

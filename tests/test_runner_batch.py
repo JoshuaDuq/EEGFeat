@@ -606,21 +606,21 @@ def test_a_failing_recording_does_not_stop_the_other_workers(tmp_path) -> None:
     assert second.error is not None and "F3" in second.error
 
 
+def _work_or_crash(recording, *args):
+    # Stands in for a real crash (a segfault in a compiled dependency, the OOM killer). At
+    # module level, so spawned workers import it by name, and with it an unpatched batch.
+    from eegfeat.runner.batch import _work
+
+    if recording.label.startswith("sub-02"):
+        os._exit(1)
+    return _work(recording, *args)
+
+
 def test_a_worker_process_that_dies_fails_its_recording_and_not_the_run(tmp_path, monkeypatch):
-    # Fork, so the children inherit the patched function: a real crash (a segfault in a
-    # compiled dependency, the OOM killer) is what this stands in for.
     import eegfeat.runner.batch as batch
 
     _three_recordings(tmp_path)
-    original = batch._process
-
-    def crash_on_the_second(recording, *args, **kwargs):
-        if recording.label.startswith("sub-02"):
-            os._exit(1)
-        return original(recording, *args, **kwargs)
-
-    monkeypatch.setattr(batch, "_process", crash_on_the_second)
-    monkeypatch.setattr(batch, "_WORKER_CONTEXT", "fork")
+    monkeypatch.setattr(batch, "_work", _work_or_crash)
 
     result = run(_recipe(tmp_path, POWER), workers=2)
 

@@ -306,8 +306,20 @@ def test_multitaper_windows_measured_together_must_be_equally_long(tmp_path) -> 
     with pytest.raises(ValueError, match="equally long"):
         features(
             tmp_path,
-            '[spectra]\nmethod = "multitaper"\n\n'
+            '[spectra]\nmethod = "multitaper"\nbandwidth = 3.0\n\n'
             "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
+            '[[features]]\nmeasure = "integrated_band_power"\n',
+        )
+
+
+def test_a_multitaper_bandwidth_too_narrow_for_its_window_is_an_error(tmp_path) -> None:
+    # 2 Hz is 1.01 frequency bins of a 0.5 s window: MNE would fall back, with only a
+    # warning, to a single taper that keeps 79% of its power in the band.
+    with pytest.raises(ValueError, match="1.35 frequency bins.*window 'base'"):
+        features(
+            tmp_path,
+            '[spectra]\nmethod = "multitaper"\n\n'
+            "[windows]\nbase = [-0.5, 0.0]\n\n"
             '[[features]]\nmeasure = "integrated_band_power"\n',
         )
 

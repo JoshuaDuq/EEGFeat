@@ -5,6 +5,11 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
+# The first Slepian taper keeps 90% of its power in the band, MNE's low-bias criterion, only
+# from a time-halfbandwidth product of 0.675, a bandwidth of 1.35 frequency bins. Below it
+# MNE falls back to that leaky taper with just a warning.
+MULTITAPER_MIN_BINS = 1.35
+
 
 def validate_fraction_array(values: npt.NDArray[np.float64], name: str) -> None:
     """Require finite fractions on the closed unit interval."""
@@ -24,6 +29,19 @@ def validate_names(names: Sequence[str], name: str) -> None:
         raise ValueError(f"{name} must contain non-empty strings.")
     if len(set(names)) != len(names):
         raise ValueError(f"{name} must be unique.")
+
+
+def validate_multitaper_bandwidth(
+    bandwidth: float, sfreq: float, n_times: int, window: str, name: str
+) -> None:
+    """Require a band wide enough for one taper of the window to stay inside it."""
+    floor = MULTITAPER_MIN_BINS * sfreq / n_times
+    if bandwidth < floor:
+        raise ValueError(
+            f"{name} = {bandwidth} Hz is below {floor:.3f} Hz, {MULTITAPER_MIN_BINS} frequency "
+            f"bins of window {window!r} ({n_times} samples): in a narrower band no Slepian "
+            "taper keeps 90% of its power. Raise the bandwidth or widen the window."
+        )
 
 
 def blank_non_finite(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:

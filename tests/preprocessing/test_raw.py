@@ -75,6 +75,12 @@ def test_montage_from_a_custom_file(raw, tmp_path):
         "\t".join([name, *map(str, ch["loc"][:3])])
         for name, ch in zip(raw.ch_names[:8], raw.info["chs"][:8], strict=True)
     ]
+    # A digitizer's file carries the fiducials MNE derives head coordinates from.
+    fiducials = raw.get_montage().get_positions()
+    lines += [
+        "\t".join([name, *map(str, fiducials[point])])
+        for name, point in (("FidNz", "nasion"), ("FidT9", "lpa"), ("FidT10", "rpa"))
+    ]
     path = tmp_path / "electrodes.sfp"
     path.write_text("\n".join(lines) + "\n")
     bare = raw.copy()

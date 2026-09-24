@@ -104,8 +104,6 @@ def test_load_checkpoint_from_brainvision(tmp_path):
         ch_names=channels,
         fname_base="source",
         folder_out=tmp_path,
-        resolution=1e-7,
-        unit="V",
         fmt="binary_float32",
     )
     config = PreprocessingConfig(

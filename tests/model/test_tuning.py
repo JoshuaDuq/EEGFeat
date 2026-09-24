@@ -100,6 +100,7 @@ class _NaNScoringRegressor(DummyRegressor):
         return float("nan")
 
 
+@pytest.mark.filterwarnings("ignore:One or more of the test scores are non-finite")
 def test_non_finite_inner_scores_are_refused() -> None:
     # A grid point scoring NaN on every inner split is not the best model; selecting it
     # by argmax over NaN picks whichever the sort happened to put first.

@@ -22,6 +22,7 @@ from mne.time_frequency import (  # type: ignore[import-untyped]
 )
 
 from eegfeat._expand import window_mask
+from eegfeat._validation import validate_multitaper_bandwidth
 from eegfeat.bands import Band
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.identity import epoch_row_ids
@@ -304,15 +305,9 @@ class RecordingInputs:
             )
         else:
             resolution = self.sfreq / data.shape[-1]
-            # MNE needs a time-halfbandwidth product of at least 0.5, i.e. a
-            # bandwidth of at least one Rayleigh resolution; say which window fails.
-            if settings.bandwidth < resolution:
-                raise ValueError(
-                    f"spectra.bandwidth = {settings.bandwidth} Hz is below the "
-                    f"{resolution:.3f} Hz resolution of window {window.name!r} "
-                    f"({data.shape[-1]} samples); a multitaper cannot smooth over less than "
-                    "one frequency bin. Raise the bandwidth or widen the window."
-                )
+            validate_multitaper_bandwidth(
+                settings.bandwidth, self.sfreq, data.shape[-1], window.name, "spectra.bandwidth"
+            )
             psd, freqs = psd_array_multitaper(
                 data,
                 self.sfreq,

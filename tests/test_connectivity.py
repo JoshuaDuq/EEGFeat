@@ -785,6 +785,6 @@ def test_multitaper_bandwidth_is_fixed_in_hertz_and_recorded() -> None:
     )
     recorded = table.meta[0].computation.parameters["estimator_parameters"]
     assert recorded["bandwidth_hz"] == 3.0
-    # Below one frequency bin the tapers cannot be built; the window is named.
-    with pytest.raises(ValueError, match="resolution of window 'all'"):
-        spectral_connectivity(signal, method="coh", bands=[ALPHA], windows=[window], bandwidth=0.1)
+    # 1.2 frequency bins: MNE would fall back to one leaky taper; the window is named.
+    with pytest.raises(ValueError, match="window 'all'"):
+        spectral_connectivity(signal, method="coh", bands=[ALPHA], windows=[window], bandwidth=0.6)

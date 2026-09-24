@@ -101,6 +101,7 @@ def test_export_feeds_feature_runner_and_hides_checkpoints(raw, tmp_path, capsys
     assert np.isfinite(features.select_dtypes("number").to_numpy()).all()
 
 
+@pytest.mark.filterwarnings("ignore:Invalid tag with only")
 def test_cohort_run_mirrors_tree_and_isolates_failures(raw, tmp_path, capsys):
     config = _write_cohort(raw, tmp_path, "disabled", "sub-01", "sub-02")
     (tmp_path / "raw" / "sub-00").mkdir()
@@ -171,6 +172,7 @@ def test_init_refuses_to_overwrite(tmp_path, capsys):
     assert "already exists" in capsys.readouterr().err
 
 
+@pytest.mark.filterwarnings("ignore:This filename .* does not conform to MNE naming")
 def test_check_applies_the_same_source_checks_as_run(raw, tmp_path, capsys):
     raw.save(tmp_path / "rec_epo.fif", fmt="double", verbose=False)
     config = tmp_path / "preprocessing.yaml"

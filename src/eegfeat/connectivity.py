@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import check_signals, window_mask
+from eegfeat._validation import validate_multitaper_bandwidth
 from eegfeat.bands import Band, check_passband
 from eegfeat.phase import _resolve_rows
 from eegfeat.signal import BandSignal, Signal
@@ -205,7 +206,8 @@ def spectral_connectivity(
         ``"fourier"``. Fixed in hertz on purpose: mne-connectivity's own default
         is ``8 / window_length`` Hz, which on a 1 s window smooths over ±4 Hz,
         wider than the delta or theta band, and changes with every window
-        length. Must be at least one frequency bin, ``sfreq / n_samples``.
+        length. Must be at least 1.35 frequency bins, ``1.35 * sfreq / n_samples``:
+        in a narrower band no Slepian taper keeps 90% of its power.
 
     Returns
     -------
@@ -238,13 +240,9 @@ def spectral_connectivity(
             check_passband(band, *signal.passband, source=method)
         for window in windows:
             mask = window_mask(signal.times, window)
-            resolution = signal.sfreq / int(mask.sum())
-            if mode == "multitaper" and bandwidth < resolution:
-                raise ValueError(
-                    f"bandwidth = {bandwidth} Hz is below the {resolution:.3f} Hz resolution of "
-                    f"window {window.name!r} ({int(mask.sum())} samples); a multitaper cannot "
-                    "smooth over less than one frequency bin. Raise the bandwidth or widen the "
-                    "window."
+            if mode == "multitaper":
+                validate_multitaper_bandwidth(
+                    bandwidth, signal.sfreq, int(mask.sum()), window.name, "bandwidth"
                 )
             matrices = []
             for row in range(len(labels)):

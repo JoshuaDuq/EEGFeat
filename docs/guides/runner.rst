@@ -180,9 +180,11 @@ Spectra
    Computed in each window with a frequency-smoothing ``bandwidth`` in Hz. The
    default is 2.0 Hz. MNE's own default is ``8 / window_length`` Hz, which on a
    1 s window smooths by ±4 Hz, wider than delta or theta. A bandwidth below
-   ``1 / window_length`` is rejected. The frequency grid follows the window
-   length, so windows measured together must be the same length. The call uses
-   MNE ``normalization="full"``, and the output is a density in V²/Hz.
+   ``1.35 / window_length`` is rejected: in a narrower band no Slepian taper keeps
+   90% of its power, and MNE would fall back to a leaky one with only a warning.
+   The frequency grid follows the window length, so windows measured together
+   must be the same length. The call uses MNE ``normalization="full"``, and the
+   output is a density in V²/Hz.
 ``morlet``
    One time-frequency decomposition per recording. Defaults are ``n_freqs`` = 40,
    ``spacing`` = ``"log"``, ``n_cycles = clip(f / n_cycles_factor, min_cycles,
