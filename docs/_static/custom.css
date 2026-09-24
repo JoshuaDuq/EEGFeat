@@ -614,14 +614,25 @@ div.highlight {
 }
 
 /* The language class lives on the wrapper Sphinx puts around div.highlight.
-   That wrapper becomes the frame; the label sits on its top edge. */
+   That wrapper becomes the frame; the label sits on its top edge.
+
+   Furo sets this wrapper to display:flex (a row). The ::before label is then
+   a flex item beside the code, and Furo's .highlight { width: 100% } will not
+   shrink, so the command paints past the frame. Column flex keeps the label
+   on the top edge and the code inside the frame. */
 div[class*="highlight-"]:not(.highlight) {
   box-sizing: border-box;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 100%;
+  min-width: 0;
   margin: var(--space-4) 0;
   border: var(--hairline-quiet);
   border-radius: var(--radius-md);
   background: var(--color-background-secondary);
+  overflow: hidden;
 }
 
 div[class*="highlight-"]:not(.highlight)::before {
@@ -660,6 +671,10 @@ div[class*="highlight-"]:not(.highlight) > div.highlight {
   background: transparent !important;
   margin: 0;
   position: static;
+  /* Override Furo's width:100%, which refuses to shrink beside the label. */
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 div.highlight pre {
@@ -670,6 +685,7 @@ div.highlight pre {
   padding: 0.9rem 1.1rem !important;
   background: transparent !important;
   color: var(--color-foreground-primary);
+  max-width: 100%;
   overflow-x: auto;
 }
 

@@ -56,6 +56,7 @@ EXPECTED = {
     "peak_frequency",
     "peak_latency",
     "peak_to_peak",
+    "periodic_power",
     "ppc",
     "sample_entropy",
     "segment",

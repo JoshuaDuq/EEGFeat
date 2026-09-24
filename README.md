@@ -344,7 +344,7 @@ Exported from `eegfeat`. Definitions and signatures are in the [API reference](h
 
 | Family | Functions | Rows |
 | :--- | :--- | :--- |
-| PSD and TFR power | `mean_psd`, `integrated_band_power`, `mean_tfr_power` | Per epoch |
+| PSD and TFR power | `mean_psd`, `integrated_band_power`, `mean_tfr_power`, `periodic_power` | Per epoch |
 | Spectral shape | `peak_frequency`, `spectral_centroid`, `spectral_bandwidth`, `spectral_edge`, `spectral_entropy`, `aperiodic`, `aperiodic_ratio` | Per epoch |
 | Time domain | `variance`, `mean_amplitude`, `peak_to_peak`, `area_under_curve`, `peak_amplitude`, `peak_latency`, `amplitude_quantile`, `kurtosis`, `line_length`, `root_mean_square`, `skewness`, `zero_crossing_rate`, `hjorth_mobility`, `hjorth_complexity` | Per epoch |
 | Bursts and ERDS | `burst_count`, `burst_rate`, `burst_duration`, `burst_amplitude`, `fraction_above_threshold`, `erds_mean`, `erds_slope`, `erd_magnitude`, `erd_duration`, `ers_magnitude`, `ers_duration`, `erds_onset_latency`, `erds_peak_latency`, `erds_rebound_latency` | Per epoch |

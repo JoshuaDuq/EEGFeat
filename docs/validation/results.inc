@@ -249,6 +249,10 @@ Sleep-EDF
      - Criterion
      - Observed
      - Result
+   * - A broadband gain changes band power but not the power above the 1/f fit (``periodic_power``)
+     - under a tenfold gain, periodic power within 1e-9 of unchanged, mean PSD tenfold
+     - –
+     - pass
    * - Dividing by the fitted line leaves a spectrum centred on one (``aperiodic_ratio``)
      - median log10 ratio within 0.05 of zero
      - –

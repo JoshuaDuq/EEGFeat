@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -5,7 +6,7 @@ import numpy as np
 import pytest
 
 from eegfeat.bands import Band
-from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
+from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power, periodic_power
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec, FeatureTable
 
@@ -184,3 +185,92 @@ def test_normalized_feature_identity_includes_baseline_bounds():
         for source in (spectra, longer_baseline)
     ]
     assert tables[0].names != tables[1].names
+
+
+# --- periodic_power ------------------------------------------------------------------
+
+# geomspace keeps the 40 Hz bin exact, which decides whether the half-open fit range keeps it.
+FIT_FREQS = np.geomspace(2.0, 40.0, 60)
+BACKGROUND = 10.0 * FIT_FREQS**-1.7
+AGAINST_BASELINE = {
+    "bands": (ALPHA,),
+    "include_global": False,
+    "baseline": "baseline",
+    "normalize": "log_ratio",
+}
+
+
+def _alpha_peak(height: float) -> np.ndarray:
+    return 1.0 + height * np.exp(-0.5 * ((FIT_FREQS - 10.0) / 1.0) ** 2)
+
+
+def _baseline_and_stimulus(baseline: np.ndarray, stimulus: np.ndarray) -> Spectra:
+    data = np.stack([baseline, stimulus])[np.newaxis, np.newaxis]
+    return replace(
+        _spectra(baseline, FIT_FREQS),
+        data=data,
+        windows=(Window("baseline", -1.0, 0.0), Window("stimulus", 0.0, 1.0)),
+        coverage=np.ones(data.shape),
+        support=np.ones(data.shape),
+    )
+
+
+def test_a_pure_power_law_has_unit_periodic_power() -> None:
+    table = periodic_power(_spectra(BACKGROUND, FIT_FREQS), bands=(ALPHA,), include_global=False)
+    np.testing.assert_allclose(table.values, 1.0, rtol=1e-6)
+
+
+def test_a_broadband_gain_moves_band_power_but_not_periodic_power() -> None:
+    # The whole spectrum four times higher around the same oscillation: band power rises
+    # by the gain, while the power above the fitted 1/f component does not move.
+    peaked = BACKGROUND * _alpha_peak(1.5)
+    spectra = _baseline_and_stimulus(peaked, 4.0 * peaked)
+    band = mean_psd(spectra, **AGAINST_BASELINE).values.item()
+    assert band == pytest.approx(np.log10(4.0), rel=1e-12)
+    periodic = periodic_power(spectra, **AGAINST_BASELINE).values.item()
+    assert periodic == pytest.approx(0.0, abs=1e-12)
+
+
+def test_an_oscillation_masked_by_a_broadband_rise_is_recovered() -> None:
+    # Alpha falls while every frequency triples: band power reports a rise, the power
+    # above the 1/f component the fall.
+    spectra = _baseline_and_stimulus(
+        BACKGROUND * _alpha_peak(1.5), 3.0 * BACKGROUND * _alpha_peak(0.75)
+    )
+    assert mean_psd(spectra, **AGAINST_BASELINE).values.item() > 0.0
+    assert periodic_power(spectra, **AGAINST_BASELINE).values.item() < 0.0
+
+
+def test_periodic_power_is_the_same_for_a_psd_and_time_frequency_power() -> None:
+    psd = _spectra(BACKGROUND * _alpha_peak(1.5), FIT_FREQS)
+    tfr = replace(psd, representation="time_frequency_power")
+    np.testing.assert_array_equal(
+        periodic_power(psd, bands=(ALPHA,)).values, periodic_power(tfr, bands=(ALPHA,)).values
+    )
+
+
+def test_a_cell_whose_aperiodic_fit_fails_is_withheld_and_flagged() -> None:
+    power = np.full(FIT_FREQS.size, np.nan)
+    power[:4] = 1.0
+    table = periodic_power(_spectra(power, FIT_FREQS), bands=(ALPHA,), include_global=False)
+    assert np.isnan(table.values).all()
+    assert table.flags["aperiodic_fit_failed"].all()
+
+
+@pytest.mark.parametrize(
+    ("normalize", "unit"), [("raw", "ratio to the aperiodic fit"), ("db", "dB")]
+)
+def test_periodic_power_is_named_with_its_unit_and_its_fit(normalize: str, unit: str) -> None:
+    spectra = _baseline_and_stimulus(BACKGROUND, BACKGROUND)
+    table = periodic_power(
+        spectra,
+        bands=(ALPHA,),
+        include_global=False,
+        baseline="baseline" if normalize != "raw" else None,
+        normalize=normalize,
+        fit_range=(3.0, 30.0),
+    )
+    meta = table.meta[0]
+    assert (meta.measure, meta.unit, meta.normalization) == ("periodic_power", unit, normalize)
+    fit = json.loads(meta.computation.parameters_json)["input_computation"]
+    assert (fit["method"], fit["parameters"]["fit_range"]) == ("aperiodic_ratio", [3.0, 30.0])

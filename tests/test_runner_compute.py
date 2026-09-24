@@ -5,6 +5,8 @@ sine locked to every epoch has a known peak, a known variance and no event-relat
 power change.
 """
 
+import json
+
 import mne
 import numpy as np
 import pytest
@@ -154,6 +156,27 @@ def test_morlet_spectra_restrict_each_window_to_its_support(tmp_path) -> None:
     alpha = result.epochs.select(band=ef.Band("alpha", 8.0, 13.0)).values
     beta = result.epochs.select(band=ef.Band("beta", 13.0, 30.0)).values
     assert np.all(alpha > 10 * beta)
+
+
+def test_periodic_power_measures_the_oscillation_against_the_noise_floor(tmp_path) -> None:
+    # White noise is a flat power law, which the fit takes as the floor; the 10 Hz sine
+    # stands above it and the beta band does not.
+    result = features(
+        tmp_path,
+        '[spectra]\nmethod = "morlet"\nfmin = 4.0\nn_freqs = 20\n\n'
+        "[windows]\nstim = [0.0, 1.0]\n\n"
+        '[[features]]\nmeasure = "periodic_power"\nbands = ["alpha", "beta"]\n'
+        'fit_range = [4.0, 40.0]\nspatial = ["global"]\n',
+    )
+
+    assert result.epochs is not None
+    assert {m.measure for m in result.epochs.meta} == {"periodic_power"}
+    alpha = result.epochs.select(band=ef.Band("alpha", 8.0, 13.0)).values
+    beta = result.epochs.select(band=ef.Band("beta", 13.0, 30.0)).values
+    assert np.all(alpha > 2.0 * beta)
+    assert 0.5 < np.median(beta) < 2.0
+    fit = json.loads(result.epochs.meta[0].computation.parameters_json)["input_computation"]
+    assert fit["parameters"]["fit_range"] == [4.0, 40.0]
 
 
 def test_baseline_normalized_power_consumes_the_baseline(tmp_path) -> None:

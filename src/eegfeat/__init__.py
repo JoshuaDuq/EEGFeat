@@ -53,7 +53,7 @@ from eegfeat.microstates import (
     segment,
 )
 from eegfeat.phase import itpc, pac, ppc
-from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
+from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power, periodic_power
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat, stack_rows
@@ -128,6 +128,7 @@ __all__ = [
     "peak_frequency",
     "peak_latency",
     "peak_to_peak",
+    "periodic_power",
     "ppc",
     "sample_entropy",
     "segment",

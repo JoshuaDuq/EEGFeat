@@ -9,6 +9,7 @@ must reproduce exactly when peak rejection is switched off.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
@@ -102,6 +103,25 @@ def test_flattened_spectrum_is_centred_on_one(spectra: list[ef.Spectra]) -> None
         inside = ef.Band("fit", *FIT_RANGE).mask(spectrum.freqs)
         ratio = ef.aperiodic_ratio(spectrum, fit_range=FIT_RANGE)
         assert abs(np.nanmedian(np.log10(ratio.data[:, :, 0, inside]))) < 0.05
+
+
+@pytest.mark.validates(
+    "periodic_power",
+    kind="formula",
+    claim="A broadband gain changes band power but not the power above the 1/f fit",
+    criterion="under a tenfold gain, periodic power within 1e-9 of unchanged, mean PSD tenfold",
+)
+def test_a_broadband_gain_leaves_periodic_power_unchanged(spectra: list[ef.Spectra]) -> None:
+    alpha = ef.Band("alpha", 8.0, 13.0)
+    for spectrum in spectra:
+        louder = replace(spectrum, data=10.0 * spectrum.data)
+        for measure, scale in ((ef.periodic_power, 1.0), (ef.mean_psd, 10.0)):
+            kwargs = {"fit_range": FIT_RANGE} if measure is ef.periodic_power else {}
+            original, scaled = (
+                measure(source, bands=(alpha,), include_global=False, **kwargs).values
+                for source in (spectrum, louder)
+            )
+            np.testing.assert_allclose(scaled, scale * original, rtol=1e-9)
 
 
 @pytest.mark.validates(

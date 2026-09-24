@@ -241,6 +241,17 @@ power is the ratio of the observed power to that curve. If the fit fails,
 ``aperiodic_fit_failed``. The unadjusted spectrum is not relabelled as
 adjusted.
 
+``periodic_power`` is the frequency-weighted mean of that ratio over a band,
+weighted as ``mean_psd`` weighs power. A pure power law gives 1 in every band. A
+broadband change the line can follow, a gain or a tilt of the whole spectrum as
+from a movement or muscle artifact, moves the fit and leaves the ratio unchanged,
+while an oscillation changes the ratio. Band power sums the two, so a broadband
+rise can hide an oscillatory fall. The ratio is dimensionless, so a PSD and
+time-frequency power give the same value. The normalizations are those above,
+with :math:`B` the periodic power of the baseline window, itself divided by that
+window's own fit. A cell whose fit fails is NaN and carries
+``aperiodic_fit_failed``.
+
 The line is the model above. FOOOF (Donoghue et al., 2020) adds a knee
 parameter and a different peak parameterization. Matching those settings is a
 separate analysis.

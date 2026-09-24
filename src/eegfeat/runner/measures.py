@@ -105,6 +105,7 @@ MEASURES: dict[str, Measure] = _measures(
     "integrated_band_power",
     "mean_psd",
     "mean_tfr_power",
+    "periodic_power",
     "aperiodic",
     "peak_frequency",
     "spectral_centroid",
