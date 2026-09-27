@@ -41,6 +41,7 @@ epoch_metadata = true               # copy each epoch's metadata into its row
 [spectra]
 method = "welch"
 # n_fft = 500                       # welch segment in samples; default 2 s, capped by the shortest window
+# window_statistic = "median"       # welch/morlet: median over segments or time, resists brief bursts
 
 # How cross-trial measures (itpc, ppc, envelope_correlation, wpli) group epochs:
 # "all" (one group), "event" (by event name) or "metadata" (by a metadata column).

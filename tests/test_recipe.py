@@ -307,6 +307,45 @@ def test_spectral_option_of_another_method_is_rejected(tmp_path) -> None:
     assert "n_fft" in problems and "welch" in problems
 
 
+def test_window_statistic_defaults_to_the_mean(tmp_path) -> None:
+    recipe = _load(tmp_path, '[[features]]\nmeasure = "integrated_band_power"\n')
+
+    assert recipe.spectra.window_statistic == "mean"
+
+
+@pytest.mark.parametrize(
+    ("method", "measure"), [("welch", "integrated_band_power"), ("morlet", "mean_tfr_power")]
+)
+def test_window_statistic_is_read_for_welch_and_morlet(tmp_path, method, measure) -> None:
+    recipe = _load(
+        tmp_path,
+        f'[spectra]\nmethod = "{method}"\nwindow_statistic = "median"\n\n'
+        f'[[features]]\nmeasure = "{measure}"\n',
+    )
+
+    assert recipe.spectra.window_statistic == "median"
+
+
+def test_window_statistic_must_be_mean_or_median(tmp_path) -> None:
+    problems = _problems(
+        tmp_path,
+        '[spectra]\nwindow_statistic = "mode"\n\n[[features]]\nmeasure = "integrated_band_power"\n',
+    )
+
+    assert "window_statistic" in problems and "'mode'" in problems
+
+
+def test_window_statistic_does_not_apply_to_multitaper(tmp_path) -> None:
+    # A multitaper window is one estimate, with no segments or time points to reduce.
+    problems = _problems(
+        tmp_path,
+        '[spectra]\nmethod = "multitaper"\nwindow_statistic = "median"\n\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n',
+    )
+
+    assert "window_statistic" in problems and "morlet" in problems
+
+
 def test_microstate_settings_are_type_checked(tmp_path) -> None:
     problems = _problems(
         tmp_path,

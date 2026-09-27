@@ -30,7 +30,7 @@ from eegfeat.runner.measures import (
     convert,
 )
 from eegfeat.runner.measures import describe as describe_annotation
-from eegfeat.spectra import Window
+from eegfeat.spectra import Window, WindowStatistic
 
 WHOLE_EPOCH = Window("all", -math.inf, math.inf)
 """The window a measure spans when a recipe defines none."""
@@ -55,9 +55,17 @@ _SECTIONS = (
 _DEFAULT_KEYS = ("bands", "windows", "spatial", "series")
 _SPATIAL_LEVELS = ("channels", "rois", "global")
 _SPECTRA_KEYS: dict[str, tuple[str, ...]] = {
-    "welch": ("n_fft", "n_overlap"),
+    "welch": ("n_fft", "n_overlap", "window_statistic"),
     "multitaper": ("bandwidth",),
-    "morlet": ("n_freqs", "spacing", "n_cycles_factor", "min_cycles", "max_cycles", "decim"),
+    "morlet": (
+        "n_freqs",
+        "spacing",
+        "n_cycles_factor",
+        "min_cycles",
+        "max_cycles",
+        "decim",
+        "window_statistic",
+    ),
 }
 _BROADBAND = "broadband"
 
@@ -100,6 +108,7 @@ class SpectraSettings:
     min_cycles: float = 3.0
     max_cycles: float = 15.0
     decim: int = 4
+    window_statistic: WindowStatistic = "mean"
 
 
 @dataclass(frozen=True)
@@ -345,13 +354,14 @@ class _Parser:
             self.problem(f"spectra: method must be one of {list(_SPECTRA_KEYS)}, got {method!r}")
             method = "welch"
         for key in table:
-            owner = next((m for m, keys in _SPECTRA_KEYS.items() if key in keys), None)
+            owners = [m for m, keys in _SPECTRA_KEYS.items() if key in keys]
             if key in ("method", "fmin", "fmax"):
                 continue
-            if owner is None:
+            if not owners:
                 self.problem(f"spectra: unknown key {key!r}")
-            elif owner != method:
-                self.problem(f"spectra: {key} applies only to method = {owner!r}")
+            elif method not in owners:
+                named = " or ".join(repr(m) for m in owners)
+                self.problem(f"spectra: {key} applies only to method = {named}")
 
         low = min((b.fmin for b in bands), default=1.0)
         high = max((b.fmax for b in bands), default=45.0)
@@ -361,6 +371,12 @@ class _Parser:
             self.problem(f"spectra: fmin ({fmin}) must be below fmax ({fmax})")
 
         defaults = SpectraSettings()
+        statistic = self.value(
+            "spectra", table, "window_statistic", str, "a string", defaults.window_statistic
+        )
+        if statistic not in ("mean", "median"):
+            self.problem(f"spectra: window_statistic must be 'mean' or 'median', got {statistic!r}")
+            statistic = defaults.window_statistic
         spacing = self.value("spectra", table, "spacing", str, "a string", defaults.spacing)
         if spacing not in ("log", "linear"):
             self.problem(f"spectra: spacing must be 'log' or 'linear', got {spacing!r}")
@@ -388,6 +404,7 @@ class _Parser:
             max_cycles=max_cycles,
             decim=self.integer("spectra", table, "decim", defaults.decim, minimum=1)
             or defaults.decim,
+            window_statistic=statistic,
         )
 
     def band_signal(self, table: dict[str, Any]) -> BandSignalSettings:

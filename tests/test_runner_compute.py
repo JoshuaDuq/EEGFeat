@@ -347,6 +347,91 @@ def test_a_multitaper_bandwidth_too_narrow_for_its_window_is_an_error(tmp_path) 
         )
 
 
+def test_default_spectral_recipes_keep_their_column_names(tmp_path) -> None:
+    # Pinned before window_statistic existed: a new setting left at its default must not
+    # rename the columns of tables computed without it.
+    welch = features(
+        tmp_path,
+        "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n',
+    )
+    morlet = features(
+        tmp_path,
+        '[spectra]\nmethod = "morlet"\nfmin = 4.0\nn_freqs = 20\n\n'
+        "[windows]\nstim = [0.0, 1.0]\n\n"
+        '[[features]]\nmeasure = "mean_tfr_power"\nbands = ["alpha"]\nspatial = ["global"]\n',
+    )
+
+    assert welch.epochs is not None and morlet.epochs is not None
+    assert list(welch.epochs.to_dataframe().columns) == [
+        "eeg_band-power_alpha_global_base_raw_pada66ace3048",
+        "eeg_band-power_alpha_global_stim_raw_pb56764cacd5a",
+    ]
+    assert list(morlet.epochs.to_dataframe().columns) == [
+        "eeg_mean-tfr-power_alpha_global_stim_raw_p5a1c82383a5a"
+    ]
+
+
+def _burst_epochs() -> mne.EpochsArray:
+    # 8 s epochs with a 0.1 s broadband burst at 30 times the noise, 1.0-1.1 s: a small
+    # share of a [0, 7] s window.
+    epochs = make_epochs(seconds=8.0)
+    data = epochs.get_data()
+    burst = (epochs.times >= 1.0) & (epochs.times < 1.1)
+    data[:, :, burst] += (
+        30
+        * NOISE
+        * np.random.default_rng(1).standard_normal(
+            (len(epochs), len(epochs.ch_names), int(burst.sum()))
+        )
+    )
+    return mne.EpochsArray(
+        data,
+        epochs.info,
+        events=epochs.events,
+        tmin=epochs.tmin,
+        event_id=epochs.event_id,
+        verbose="error",
+    )
+
+
+@pytest.mark.parametrize(
+    ("spectra", "measure"),
+    [('method = "welch"', "integrated_band_power"), ('method = "morlet"', "mean_tfr_power")],
+)
+def test_median_window_statistic_resists_a_burst(tmp_path, spectra, measure) -> None:
+    # A band clear of the 10 Hz sine, whose wavelet leakage reaches into beta: a steady
+    # oscillation's median is its mean, so there only noise-like power would be compared.
+    body = (
+        "[bands]\nhigh = [25.0, 40.0]\n\n"
+        "[spectra]\n{spectra}\n{statistic}\n[windows]\nstim = [0.0, 7.0]\n\n"
+        '[[features]]\nmeasure = "{measure}"\nbands = ["high"]\nspatial = ["global"]\n'
+    )
+    mean = features(
+        tmp_path, body.format(spectra=spectra, statistic="", measure=measure), _burst_epochs()
+    ).epochs
+    median = features(
+        tmp_path,
+        body.format(spectra=spectra, statistic='window_statistic = "median"', measure=measure),
+        _burst_epochs(),
+    ).epochs
+
+    assert mean is not None and median is not None
+    assert np.all(median.values < 0.25 * mean.values)
+    assert set(mean.to_dataframe().columns).isdisjoint(median.to_dataframe().columns)
+
+
+def test_median_welch_needs_three_segments_per_window(tmp_path) -> None:
+    # The median of one or two segments is their mean, so the setting would do nothing.
+    with pytest.raises(ValueError, match="segments"):
+        features(
+            tmp_path,
+            '[spectra]\nwindow_statistic = "median"\n\n[windows]\nbase = [-0.5, 0.0]\n\n'
+            '[[features]]\nmeasure = "integrated_band_power"\n',
+        )
+
+
 def test_welch_segment_longer_than_a_window_is_an_error(tmp_path) -> None:
     with pytest.raises(ValueError, match="n_fft = 400"):
         features(

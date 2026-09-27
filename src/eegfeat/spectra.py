@@ -18,6 +18,8 @@ from eegfeat.identity import epoch_row_ids
 from eegfeat.signal import _passband
 from eegfeat.table import ComputationSpec, RowId
 
+WindowStatistic = Literal["mean", "median"]
+
 
 @dataclass(frozen=True)
 class Window:
@@ -322,6 +324,7 @@ class Spectra:
         recording: str,
         n_cycles: float | npt.NDArray[np.float64],
         sfreq: float,
+        statistic: WindowStatistic = "mean",
     ) -> Spectra:
         """Build from an MNE ``EpochsTFR`` by averaging over time windows.
 
@@ -349,12 +352,23 @@ class Spectra:
             for the same reason: a TFR computed with ``decim`` reports the
             decimated rate as its own, and MNE keeps no record of the original,
             so reading it off the object would scale a decimated TFR wrongly.
+        statistic : {"mean", "median"}, default "mean"
+            How each window's coefficients are reduced over time. The median
+            resists brief bursts, such as movement or muscle artifact, that hold
+            a minority of the window; it is divided by ln 2 so that for Gaussian
+            data it estimates the same density as the mean. A steady oscillation
+            has constant power, so there the median is the mean and the divided
+            value reads up to 1/ln 2 (1.44 times) above it. Ratios between
+            windows, bands or a 1/f fit cancel the factor only where both sides
+            share the same mix of oscillation and noise.
 
         Returns
         -------
         Spectra
             One spectrum per window, in V²/Hz.
         """
+        if statistic not in ("mean", "median"):
+            raise ValueError(f"statistic must be 'mean' or 'median', got {statistic!r}.")
         if getattr(tfr, "baseline", None) is not None:
             raise ValueError(
                 "this TFR is already baseline-corrected "
@@ -387,11 +401,17 @@ class Spectra:
 
         times = np.asarray(tfr.times, dtype=float)
         freqs = np.asarray(tfr.freqs, dtype=float)
-        per_window = [_reduce_window(data, times, freqs, window, n_cycles) for window in windows]
+        per_window = [
+            _reduce_window(data, times, freqs, window, n_cycles, statistic) for window in windows
+        ]
+        # Recorded only when it departs from the mean, so columns computed before the
+        # option existed keep their names.
+        reduction = {} if statistic == "mean" else {"window_statistic": statistic}
         return cls(
             # Energy-2 wavelets: E|coefficient|^2 = sfreq * one-sided PSD, so dividing is what
-            # turns MNE's rate-dependent number into a density. Done on the window means, a
-            # window mean being linear, rather than on a copy of the whole TFR.
+            # turns MNE's rate-dependent number into a density. Done on the reduced windows,
+            # since a mean or median commutes with a positive scale, rather than on a copy
+            # of the whole TFR.
             data=np.stack([values for values, _, _ in per_window], axis=2) / float(sfreq),
             freqs=freqs,
             ch_names=tuple(tfr.ch_names),
@@ -409,6 +429,7 @@ class Spectra:
                 # this scaling existed must not land on the same column.
                 scaling="power_divided_by_sfreq",
                 sfreq_hz=float(sfreq),
+                **reduction,
             ),
             passband=_passband(tfr),
         )
@@ -480,6 +501,7 @@ def _reduce_window(
     freqs: npt.NDArray[np.float64],
     window: Window,
     n_cycles: float | npt.NDArray[np.float64],
+    statistic: WindowStatistic = "mean",
 ) -> tuple[
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
@@ -511,7 +533,14 @@ def _reduce_window(
         # design; the finite.any() guard already discards its mean. np.errstate
         # does not suppress this one, because nanmean raises it through warnings.
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
-        values = np.where(finite.any(axis=3), np.nanmean(selected, axis=3), np.nan)
+        warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+        if statistic == "median":
+            # Gaussian power is exponential at each time point, and an exponential's
+            # median is ln 2 of its mean.
+            reduced = np.nanmedian(selected, axis=3) / np.log(2.0)
+        else:
+            reduced = np.nanmean(selected, axis=3)
+        values = np.where(finite.any(axis=3), reduced, np.nan)
     coverage = finite.sum(axis=3) / np.where(n_selected > 0, n_selected, np.nan)
     support_by_frequency = n_selected / float(requested.sum())
     support = np.broadcast_to(support_by_frequency, values.shape)

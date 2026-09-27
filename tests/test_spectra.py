@@ -283,6 +283,75 @@ def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
     np.testing.assert_allclose(spectra.data[:, :, 0, :], expected)
 
 
+def _noise_tfr(burst: bool):
+    # White noise in 20 epochs, optionally with a 0.2 s burst at ten times the noise
+    # amplitude inside the window: 3% of it, or up to 9% once the wavelet smears it.
+    # A median moves with the contaminated fraction too, by about 14% at 9%.
+    mne = pytest.importorskip("mne")
+    sfreq = 200.0
+    data = np.random.RandomState(1).randn(20, 1, 1600) * 1e-6
+    if burst:
+        data[:, :, 600:640] *= 10.0
+    epochs = mne.EpochsArray(data, mne.create_info(["C3"], sfreq, "eeg"), verbose="ERROR")
+    tfr = epochs.compute_tfr(
+        "morlet",
+        freqs=np.array([10.0, 20.0, 40.0]),
+        n_cycles=7.0,
+        return_itc=False,
+        verbose="ERROR",
+    )
+    return tfr, sfreq
+
+
+def _reduced(burst: bool, statistic: str) -> np.ndarray:
+    tfr, sfreq = _noise_tfr(burst)
+    spectra = Spectra.from_tfr(
+        tfr,
+        (Window("stim", 1.0, 7.0),),
+        recording="test",
+        n_cycles=7.0,
+        sfreq=sfreq,
+        statistic=statistic,
+    )
+    return spectra.data[:, 0, 0, :].mean(axis=0)
+
+
+def test_from_tfr_median_estimates_the_mean_density_of_gaussian_noise() -> None:
+    # Power of Gaussian noise is exponential at each time point, so its median is ln 2
+    # of its mean; without that correction the median would read 31% low.
+    np.testing.assert_allclose(_reduced(False, "median"), _reduced(False, "mean"), rtol=0.1)
+
+
+def test_from_tfr_median_ignores_a_brief_burst_that_the_mean_absorbs() -> None:
+    # Each statistic against its own burst-free value, so the median's sampling error
+    # on clean data does not count as the burst's effect.
+    assert np.all(_reduced(True, "mean") > 4.0 * _reduced(False, "mean"))
+    assert np.all(_reduced(True, "median") < 1.25 * _reduced(False, "median"))
+
+
+def test_from_tfr_records_a_median_reduction_in_its_computation() -> None:
+    tfr = _toy_tfr()
+    window = (Window("stim", 0.0, 1.0),)
+    mean = Spectra.from_tfr(tfr, window, recording="test", n_cycles=3.0, sfreq=200.0)
+    median = Spectra.from_tfr(
+        tfr, window, recording="test", n_cycles=3.0, sfreq=200.0, statistic="median"
+    )
+    assert median.computation.parameters["window_statistic"] == "median"
+    assert "window_statistic" not in mean.computation.parameters
+
+
+def test_from_tfr_rejects_an_unknown_window_statistic() -> None:
+    with pytest.raises(ValueError, match="statistic"):
+        Spectra.from_tfr(
+            _toy_tfr(),
+            (Window("stim", 0.0, 1.0),),
+            recording="test",
+            n_cycles=3.0,
+            sfreq=200.0,
+            statistic="mode",
+        )
+
+
 def test_from_tfr_refuses_an_already_baselined_tfr() -> None:
     tfr = _toy_tfr().apply_baseline((-2.0, -1.0), mode="logratio", verbose="ERROR")
     with pytest.raises(ValueError, match="already baseline"):

@@ -193,6 +193,17 @@ Spectra
    wavelet must fit inside the epoch. Power is divided by the sampling rate of
    the recording. ``mean_tfr_power`` is then a smoothed density in V²/Hz. MNE's
    raw wavelet power scales with the sampling rate.
+``window_statistic``
+   How ``welch`` and ``morlet`` reduce a window: ``"mean"`` (the default) or
+   ``"median"``. Welch takes the median over its segments. Morlet takes it over each
+   frequency's retained time points. A burst that holds a minority of the window,
+   such as movement or muscle artifact, then barely moves the value, where it
+   raises a mean in proportion to its power. Both medians are divided by their
+   bias for Gaussian data, so on noise they estimate the same density as the mean.
+   A steady oscillation has constant power, and there Morlet's median reads up to
+   1.44 times above the mean. Welch refuses the median for a window with fewer
+   than 3 segments, because the median of one or two segments is their mean. The
+   median is recorded in each column's computation, so it gets its own column names.
 
 Checking a Recipe
 -----------------

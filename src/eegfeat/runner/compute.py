@@ -208,7 +208,12 @@ class RecordingInputs:
             tfr, n_cycles = self._morlet()
             # The recording's own rate, not the TFR's: decim has already lowered that one.
             return Spectra.from_tfr(
-                tfr, finite, recording=self.recording, n_cycles=n_cycles, sfreq=self.sfreq
+                tfr,
+                finite,
+                recording=self.recording,
+                n_cycles=n_cycles,
+                sfreq=self.sfreq,
+                statistic=self.recipe.spectra.window_statistic,
             )
 
         estimates = [self._window_psd(window) for window in finite]
@@ -234,10 +239,12 @@ class RecordingInputs:
             computation=ComputationSpec.create(
                 self.recipe.spectra.method,
                 normalization="full" if self.recipe.spectra.method == "multitaper" else "density",
+                # The statistic is left out at the mean, so columns computed before the
+                # option existed keep their names.
                 settings={
                     key: value
                     for key, value in self.recipe.spectra.__dict__.items()
-                    if value is not None
+                    if value is not None and (key, value) != ("window_statistic", "mean")
                 },
             ),
             passband=_passband(self.epochs),
@@ -291,6 +298,16 @@ class RecordingInputs:
                     f"n_fft = {n_fft} is longer than window {window.name!r}, which holds "
                     f"{data.shape[-1]} samples; lower n_fft or widen the window."
                 )
+            n_overlap = n_fft // 2 if settings.n_overlap is None else settings.n_overlap
+            # An overlap of n_fft or more is left for MNE to refuse.
+            if settings.window_statistic == "median" and n_overlap < n_fft:
+                segments = 1 + (data.shape[-1] - n_fft) // (n_fft - n_overlap)
+                if segments < 3:
+                    raise ValueError(
+                        f"window {window.name!r} holds {segments} Welch segment(s) of n_fft = "
+                        f"{n_fft}, and a median of fewer than 3 segments is their mean; lower "
+                        "n_fft or widen the window."
+                    )
             resolution = self.sfreq / n_fft
             psd, freqs = psd_array_welch(
                 data,
@@ -298,8 +315,11 @@ class RecordingInputs:
                 fmin=max(0.0, settings.fmin - resolution),
                 fmax=min(self.sfreq / 2.0, settings.fmax + resolution),
                 n_fft=n_fft,
-                n_overlap=n_fft // 2 if settings.n_overlap is None else settings.n_overlap,
+                n_overlap=n_overlap,
                 window=_WELCH_TAPER,
+                # MNE divides the median by its bias for the segment count, so for
+                # Gaussian data both statistics estimate the same density.
+                average=settings.window_statistic,
                 n_jobs=self.n_jobs,
                 verbose=False,
             )
