@@ -12,6 +12,7 @@ import math
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal, localcontext
 from typing import Any
 
 import numpy as np
@@ -361,10 +362,8 @@ class RecordingInputs:
     def _morlet(self) -> tuple[Any, npt.NDArray[np.float64]]:
         if self._tfr is None:
             settings = self.recipe.spectra
-            # geomspace rather than logspace of the log bounds: only geomspace returns
-            # fmax itself, and fmax is usually a band edge that then has to be integrated.
             freqs = (
-                np.geomspace(settings.fmin, settings.fmax, settings.n_freqs)
+                _log_grid(settings.fmin, settings.fmax, settings.n_freqs)
                 if settings.spacing == "log"
                 else np.linspace(settings.fmin, settings.fmax, settings.n_freqs)
             )
@@ -385,6 +384,22 @@ class RecordingInputs:
             )
             self._tfr = (tfr, n_cycles)
         return self._tfr
+
+
+def _log_grid(fmin: float, fmax: float, n: int) -> npt.NDArray[np.float64]:
+    # The grid is hashed into every Morlet column name. np.geomspace goes through libm
+    # pow, which is a few ulp apart between macOS and Linux, so the same recipe named its
+    # columns differently per platform. decimal is software arithmetic: each value is
+    # rounded once to the nearest double, identically everywhere, and fmax is exact,
+    # which matters because it is usually a band edge that then has to be integrated.
+    if n == 1:
+        return np.array([fmin], dtype=np.float64)
+    with localcontext() as context:
+        context.prec = 50
+        low, ratio = Decimal(fmin), Decimal(fmax) / Decimal(fmin)
+        values = [float(low * ratio ** (Decimal(k) / Decimal(n - 1))) for k in range(n)]
+    values[-1] = fmax
+    return np.array(values, dtype=np.float64)
 
 
 def _compute(spec: FeatureSpec, inputs: RecordingInputs) -> FeatureTable:

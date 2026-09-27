@@ -347,6 +347,26 @@ def test_a_multitaper_bandwidth_too_narrow_for_its_window_is_an_error(tmp_path) 
         )
 
 
+def test_log_frequency_grid_is_correctly_rounded() -> None:
+    # The grid is hashed into every Morlet column name, so it must be the same bits on every
+    # platform. np.geomspace goes through libm pow and differs by a few ulp between macOS and
+    # Linux; the correctly rounded value is the one answer they can all agree on.
+    from decimal import Decimal, localcontext
+
+    from eegfeat.runner.compute import _log_grid
+
+    grid = _log_grid(4.0, 45.0, 20)
+    with localcontext() as context:
+        context.prec = 80
+        ratio = Decimal(45) / Decimal(4)
+        expected = [float(Decimal(4) * ratio ** (Decimal(k) / Decimal(19))) for k in range(20)]
+    assert grid.tolist() == expected
+    assert grid[0] == 4.0 and grid[-1] == 45.0
+    # One of the values libm rounds wrongly on macOS arm64 (geomspace gives ...505).
+    assert grid[3] == 5.861806015358504
+    assert _log_grid(8.0, 8.0, 1).tolist() == [8.0]
+
+
 def test_default_spectral_recipes_keep_their_column_names(tmp_path) -> None:
     # Pinned before window_statistic existed: a new setting left at its default must not
     # rename the columns of tables computed without it.
@@ -368,8 +388,10 @@ def test_default_spectral_recipes_keep_their_column_names(tmp_path) -> None:
         "eeg_band-power_alpha_global_base_raw_pada66ace3048",
         "eeg_band-power_alpha_global_stim_raw_pb56764cacd5a",
     ]
+    # Re-pinned when the log grid became correctly rounded: the earlier value held the
+    # macOS libm bits of np.geomspace and never matched on Linux.
     assert list(morlet.epochs.to_dataframe().columns) == [
-        "eeg_mean-tfr-power_alpha_global_stim_raw_p5a1c82383a5a"
+        "eeg_mean-tfr-power_alpha_global_stim_raw_pdeb0c6888a55"
     ]
 
 
