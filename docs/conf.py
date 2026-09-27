@@ -25,6 +25,7 @@ extensions = [
     "myst_parser",
     "sphinx_design",
     "sphinx_copybutton",
+    "notfound.extension",
 ]
 
 # ---------------------------------------------------------------------------
@@ -76,6 +77,14 @@ intersphinx_mapping = {
     "pandas": ("https://pandas.pydata.org/docs", None),
     "mne": ("https://mne.tools/stable", None),
 }
+
+# ---------------------------------------------------------------------------
+# 404 page
+# ---------------------------------------------------------------------------
+# GitHub Pages serves 404.html for a missing path at any depth, so its links
+# must be absolute from the site root. Build with
+# `-D notfound_urls_prefix=/` to preview it from a local server.
+notfound_urls_prefix = "/EEGFeat/"
 
 # ---------------------------------------------------------------------------
 # HTML output — furo theme
@@ -152,3 +161,21 @@ html_theme_options = {
     "source_branch": "main",
     "source_directory": "docs/",
 }
+
+
+# notfound rewrites the theme's asset and sidebar URLs but leaves links in the
+# page body relative, so the 404 page's own links break under a nested path.
+def _root_404_links(app, doctree, docname):
+    if docname != app.config.notfound_pagename:
+        return
+    from docutils import nodes
+
+    prefix = app.config.notfound_urls_prefix or "/"
+    for node in doctree.findall(nodes.reference):
+        uri = node.get("refuri", "")
+        if uri and not uri.startswith(("#", "/")) and "://" not in uri:
+            node["refuri"] = prefix + uri
+
+
+def setup(app):
+    app.connect("doctree-resolved", _root_404_links)

@@ -1,0 +1,28 @@
+:orphan:
+
+Page Not Found
+==============
+
+.. raw:: html
+
+   <p class="hero-lede">
+     Nothing lives at this address. It may have moved when the documentation was reorganised.
+   </p>
+
+.. grid:: 1 2 2 2
+   :gutter: 3
+   :class-container: nav-cards
+
+   .. grid-item-card:: Home
+      :link: index
+      :link-type: doc
+
+      What EEGFeat computes and where each part is documented.
+
+   .. grid-item-card:: API Reference
+      :link: api/index
+      :link-type: doc
+
+      Every exported function and container, by module.
+
+Use the search box in the sidebar, or press :kbd:`/`, to find a function or topic by name.

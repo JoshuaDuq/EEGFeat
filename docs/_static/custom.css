@@ -96,8 +96,34 @@ body[data-theme="auto"] {
   --color-selection-bg: rgba(242, 243, 245, 0.18);
   --color-focus-ring:   rgba(242, 243, 245, 0.45);
 
+  /* Search-term marks, on the results page and on a page opened from it.
+     Furo's default is blue. */
+  --color-highlighted-background: rgba(242, 243, 245, 0.16);
+  --color-highlighted-text:       #F2F3F5;
+
   --font-stack:            "Inter", "Inter Tight", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   --font-stack--monospace: "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, Menlo, monospace;
+}
+
+/* "auto" is the dark palette above whatever the OS asks for, but Furo still
+   picks logos and the toggle icon from prefers-color-scheme. Without this a
+   light-OS reader gets the light logo on a dark sidebar. custom.js makes
+   the toggle two-state to match. */
+html body[data-theme="auto"] .only-light {
+  display: none !important;
+}
+
+html body[data-theme="auto"] .only-dark {
+  display: block !important;
+}
+
+body[data-theme="auto"] .theme-toggle svg.theme-icon-when-auto-light,
+body[data-theme="auto"] .theme-toggle svg.theme-icon-when-auto-dark {
+  display: none !important;
+}
+
+body[data-theme="auto"] .theme-toggle svg.theme-icon-when-dark {
+  display: block;
 }
 
 body[data-theme="light"] {
@@ -130,6 +156,9 @@ body[data-theme="light"] {
 
   --color-selection-bg: rgba(26, 28, 32, 0.12);
   --color-focus-ring:   rgba(26, 28, 32, 0.45);
+
+  --color-highlighted-background: rgba(26, 28, 32, 0.12);
+  --color-highlighted-text:       #0E0F12;
 }
 
 /* ---------------------------------------------------------
@@ -176,7 +205,16 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-foreground-primary);
   padding-left: 0;
   padding-right: 0;
+  /* Furo rounds headings for its :target highlight, which curls the ends
+     of the h1/h2 underline. */
+  border-radius: 0;
   scroll-margin-top: var(--space-5);
+}
+
+/* Furo starts the title flush with the top of the viewport; this lines it
+   up with the view/edit/theme controls beside it. */
+article {
+  padding-top: var(--space-5);
 }
 
 /* Prose is set one step above the UI chrome so the thing you actually
@@ -275,8 +313,8 @@ article blockquote {
   max-width: var(--measure);
 }
 
-article h1,
-article h2,
+/* The ruled headings keep the full column so their underline spans the
+   code blocks and signatures beneath them, not just the prose. */
 article h3,
 article h4 {
   max-width: var(--measure);
@@ -291,7 +329,7 @@ details.sd-dropdown :is(p, ul, ol),
 table.docutils :is(p, ul, ol),
 dl.field-list :is(p, ul, ol),
 .module-ref p,
-.search-results :is(p, ul) {
+#search-results :is(p, ul) {
   max-width: none;
 }
 
@@ -371,6 +409,13 @@ em, i {
   color: var(--color-foreground-muted);
 }
 
+/* Furo runs the tree to the drawer edge, so link highlights touched it and
+   sat 12px outside the search box above. Match the search box's inset. */
+.sidebar-tree {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
 .sidebar-tree .reference {
   font-size: var(--fs-ui-sm);
   color: var(--color-foreground-secondary);
@@ -414,6 +459,12 @@ em, i {
   padding-bottom: 0.3rem;
 }
 
+/* Furo insets captions by 1rem, links by their own 0.5rem padding; line the
+   caption up with the link text under it. */
+.sidebar-tree .caption {
+  padding-left: 0.5rem;
+}
+
 /* ---------------------------------------------------------
    Right-side TOC — tighter, quieter
    --------------------------------------------------------- */
@@ -427,6 +478,19 @@ em, i {
 
 .toc-tree .reference:hover {
   color: var(--color-foreground-primary);
+}
+
+/* API pages list every member here as code. The prose chip made the
+   outline a column of badges, and a long name broke mid-badge. Wrapping at
+   any character keeps names like compute_train_group_intersection_mask()
+   inside the 240px column. */
+.toc-tree code.literal {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.94em !important;
+  color: inherit !important;
+  overflow-wrap: anywhere;
 }
 
 .toc-title {
@@ -918,6 +982,14 @@ table.docutils {
   margin: var(--space-4) 0;
   border-top: var(--hairline);
   border-bottom: var(--hairline);
+  /* Furo floats tables on a drop shadow; everything else here is ruled. */
+  box-shadow: none;
+}
+
+/* The wrapper already carries the vertical spacing, and scrolling makes
+   it a formatting context, so the table's own margin added a second gap. */
+.table-wrapper > table.docutils {
+  margin: 0;
 }
 
 table.docutils th {
@@ -962,6 +1034,43 @@ table.docutils caption {
 
 table.docutils td:first-child:nth-last-child(2) {
   font-weight: 600;
+}
+
+/* Wide tables and long code lines scroll sideways, which nothing showed:
+   the scorecard's last column and the end of `pip install` lines were
+   simply cut off. custom.js marks what overflows and which end is reached;
+   the hidden side fades out. */
+.is-overflowing:not(.at-end) {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+}
+
+/* Tables keep the first column pinned instead, so no left fade. */
+pre.is-overflowing:not(.at-start):not(.at-end) {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+}
+
+pre.is-overflowing.at-end:not(.at-start) {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem);
+  mask-image: linear-gradient(to right, transparent, #000 3rem);
+}
+
+/* The row label stays in view while the columns scroll under it. */
+.table-wrapper.is-overflowing :is(th, td):first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-background-primary) !important;
+  box-shadow: inset -1px 0 0 var(--color-background-border);
+}
+
+.admonition .table-wrapper.is-overflowing :is(th, td):first-child {
+  background: var(--color-admonition-background) !important;
+}
+
+.table-wrapper.is-overflowing tr:hover td:first-child {
+  background: var(--color-background-hover) !important;
 }
 
 /* ---------------------------------------------------------
@@ -1023,6 +1132,23 @@ hr.docutils {
 .hero-lede strong {
   color: var(--color-foreground-primary);
   font-weight: 600;
+}
+
+/* sphinx-design pads every grid 0.75rem inside the column, so card edges
+   sat indented from the text and rules around them. */
+.sd-container-fluid {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* An odd card out in the two-up stage grid spans the row instead of
+   leaving a hole beside it. Below 701px every card is full width anyway. */
+@media (min-width: 701px) {
+  .stage-grid .sd-col:last-child:nth-child(odd) {
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 
 /* Disable the default sphinx-design hover lift on landing grids —
@@ -1189,6 +1315,9 @@ img.hero-screenshot {
   padding: 0 !important;
   color: inherit !important;
   font-size: 1em !important;
+  /* A name wraps whole. index.rst glues each " ·" to the name before it
+     with a no-break space, so a line never starts with a separator. */
+  white-space: nowrap;
 }
 
 /* Secondary docs navigation — borderless, top-rule emphasis */
@@ -1327,6 +1456,9 @@ img.hero-screenshot {
   order: 2;
   margin-left: auto;
   text-align: right;
+  /* The link is a flex row; text-align alone left the label and arrow
+     floating mid-card. */
+  justify-content: flex-end;
 }
 
 .related-pages a:hover {
@@ -1525,7 +1657,7 @@ details.sd-dropdown .sd-summary-content p:last-child {
 /* ---------------------------------------------------------
    Search results
    --------------------------------------------------------- */
-.search-results .context {
+#search-results .context {
   font-size: var(--fs-ui-sm);
   color: var(--color-foreground-secondary);
   line-height: 1.6;
@@ -1534,30 +1666,30 @@ details.sd-dropdown .sd-summary-content p:last-child {
   margin: 0.25rem 0 0.75rem;
 }
 
-.search-results li {
+#search-results li {
   border-bottom: var(--hairline-quiet);
   padding: 0.6rem 0;
   list-style: none;
 }
 
-.search-results li:last-child {
+#search-results li:last-child {
   border-bottom: none;
 }
 
-.search-results a {
+#search-results a {
   font-size: var(--fs-h4);
   font-weight: 600;
   color: var(--color-foreground-primary);
   text-decoration: none;
 }
 
-.search-results a:hover {
+#search-results a:hover {
   text-decoration: underline;
 }
 
-.search-results .highlighted {
-  background: var(--color-background-hover);
-  color: var(--color-foreground-primary);
+#search-results .highlighted {
+  background: var(--color-highlighted-background);
+  color: var(--color-highlighted-text);
   border-radius: var(--radius-sm);
   padding: 0 2px;
   font-weight: 600;
@@ -1826,16 +1958,6 @@ dl.glossary dd {
   article {
     max-width: 100%;
     min-width: 0;
-  }
-
-  .sd-container-fluid {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  .sd-row {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
   }
 
   .sd-card-text,
@@ -2136,10 +2258,12 @@ dl.field-list > dd {
   line-height: 1.6;
 }
 
+/* Furo pulls this list 1.2rem left of its label with a high-specificity
+   rule, so the parameter rows would hang outside the docstring column. */
 dl.field-list > dd > ul {
   padding-left: 0;
   list-style: none;
-  margin: 0.35rem 0 0;
+  margin: 0.35rem 0 0 !important;
 }
 
 dl.field-list > dd > ul > li {
@@ -2248,6 +2372,8 @@ hr.docutils:has(+ section) {
 
 hr.docutils + section > h2:first-child {
   margin-top: var(--space-4);
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .mobile-header {
@@ -2273,14 +2399,8 @@ hr.docutils + section > h2:first-child {
   flex: none;
 }
 
-body[data-theme="dark"] .mobile-header .brand::before {
+body:not([data-theme="light"]) .mobile-header .brand::before {
   background-image: url("logo-dark.svg");
-}
-
-@media (prefers-color-scheme: dark) {
-  body:not([data-theme="light"]) .mobile-header .brand::before {
-    background-image: url("logo-dark.svg");
-  }
 }
 
 .mobile-header a {
@@ -2308,6 +2428,10 @@ body[data-theme="dark"] .mobile-header .brand::before {
     max-width: none;
     margin-left: 0;
     text-align: left;
+  }
+
+  .related-pages a.next-page {
+    justify-content: space-between;
   }
 
   .related-pages a.next-page .page-info {

@@ -33,6 +33,7 @@ docs = [
     "sphinx>=7.0",
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.6",
+    "sphinx-notfound-page>=1.0",
 ]
 dev = ["pytest>=8.0", "ruff>=0.6", "black>=24.0", "mypy>=1.11", "pandas-stubs", "scipy-stubs", "types-PyYAML", "pybv>=0.8.1"]
 

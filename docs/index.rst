@@ -66,7 +66,7 @@ What It Computes
       iterative MAD 1/f fitting, prominence-gated peak detection, and Morlet
       support masking.
 
-      ``integrated_band_power`` · ``peak_frequency`` · ``aperiodic_ratio``
+      ``integrated_band_power`` · ``peak_frequency`` · ``aperiodic_ratio``
 
    .. grid-item-card:: Dynamics
       :link: methods/dynamics
@@ -76,7 +76,7 @@ What It Computes
       magnitudes, onset, peak and rebound latencies, and time-domain descriptors
       of the waveform itself.
 
-      ``burst_rate`` · ``erds_mean`` · ``hjorth_complexity``
+      ``burst_rate`` · ``erds_mean`` · ``hjorth_complexity``
 
    .. grid-item-card:: Phase & Connectivity
       :link: methods/connectivity
@@ -86,7 +86,7 @@ What It Computes
       phase-amplitude coupling, envelope correlation, wPLI via MNE-Connectivity,
       common spatial patterns, and graph summaries.
 
-      ``itpc`` · ``pac`` · ``wpli``
+      ``itpc`` · ``pac`` · ``wpli``
 
    .. grid-item-card:: Complexity & Microstates
       :link: methods/complexity
@@ -96,7 +96,7 @@ What It Computes
       and GFP-peak clustered microstate segmentation with duration, occurrence
       and transition metrics.
 
-      ``sample_entropy`` · ``microstates.segment``
+      ``sample_entropy`` · ``microstates.segment``
 
    .. grid-item-card:: Predictive Modeling
       :link: guides/modeling
@@ -106,7 +106,7 @@ What It Computes
       inside the training fold, permutation nulls, conformal intervals, and
       importance with the column metadata attached.
 
-      ``build_design`` · ``cross_fit_regression`` · ``permutation_test``
+      ``build_design`` · ``cross_fit_regression`` · ``permutation_test``
 
    .. grid-item-card:: Preprocessing
       :link: guides/preprocessing
@@ -116,7 +116,7 @@ What It Computes
       filtering, ICA/SSP/regression with explicit review, rejection, reference,
       and resampling, each as a validated checkpoint.
 
-      ``eegfeat preprocess run`` · ``eegfeat preprocess review``
+      ``eegfeat preprocess run`` · ``eegfeat preprocess review``
 
    .. grid-item-card:: Batch Runner
       :link: guides/runner
@@ -125,7 +125,7 @@ What It Computes
       One TOML recipe applied to a folder of preprocessed epochs files. Each
       written table loads back as a ``FeatureTable``.
 
-      ``eegfeat run`` · ``eegfeat check`` · ``eegfeat status``
+      ``eegfeat run`` · ``eegfeat check`` · ``eegfeat status``
 
 Definitions are in :doc:`methods/index`. Signatures are in :doc:`api/index`.
 
