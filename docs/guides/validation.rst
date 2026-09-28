@@ -11,20 +11,23 @@ Validation on Public Datasets
 
 .. include:: ../validation/summary.inc
 
-The summary line, the scorecard, and the table of every check are written by the validation
-suite each time it runs. The tests declare what they establish and record what they observe,
-so those parts cannot drift from the code. The sections in between are written by hand from
-those results and from exploratory analyses the suite does not re-run.
+**Generated parts.** The summary line, the scorecard, and the table of every check are
+written by the validation suite each time it runs. The tests declare what they establish and
+record what they observe, so those parts cannot drift from the code.
+
+**Hand-written parts.** The sections in between are written from those results and from
+exploratory analyses the suite does not re-run.
 
 .. _validation-scorecard:
 
 Scorecard
 ---------
 
-One row per public function, one column per kind of evidence. A check mark with a count
-gives the number of claims of that kind, all of which passed on real data (a parametrized
-claim counts once); a dash means no check of that kind
-exists for that function.
+One row per public function, one column per kind of evidence.
+
+- **Check mark with a count**: the number of claims of that kind, all of which passed on
+  real data (a parametrized claim counts once).
+- **Dash**: no check of that kind exists for that function.
 
 .. list-table::
    :header-rows: 1
@@ -50,8 +53,11 @@ exists for that function.
 What was confirmed
 ------------------
 
-Across four public datasets, every closed-form measure matched its reference computation,
-every cross-estimator comparison agreed, and the following effects came out of the data:
+Across four public datasets:
+
+- Every closed-form measure matched its reference computation.
+- Every cross-estimator comparison agreed.
+- The following effects came out of the data:
 
 - **Motor cortex.** Hand movement desynchronizes mu and beta over the hand areas in all
   twenty PhysioNet subjects, deepens and lengthens the desynchronized part of the ERDS trace,
@@ -89,7 +95,6 @@ showed the previous behaviour would mislead a user who trusted it.
   an average reference, like removed ICA components, leaves the class covariance
   rank-deficient, and the fit refused it unless shrinkage was added. It now solves in the
   data's own subspace, as MNE's CSP does.
-
 - **ERDS reports decibels.** Single-trial percent change is right-skewed by quiet-baseline
   trials; on the percent scale only about half the motor subjects showed mu desynchronization
   in the trial mean, on the decibel scale all twenty did. Every ``erds_*`` function now
@@ -161,26 +166,37 @@ the sleep data from Kemp et al. (2000), and the flanker data from Kappenman et a
 Running it
 ----------
 
-The recordings are downloaded on first use, about 470 MB in total, into MNE's data
-directory (``MNE_DATA``, default ``~/mne_data``). The suite is skipped unless asked for:
+**Data.** The recordings are downloaded on first use, about 470 MB in total, into MNE's
+data directory (``MNE_DATA``, default ``~/mne_data``).
+
+**Opt-in.** The suite is skipped unless asked for:
 
 .. code-block:: bash
 
    python -m pip install -e ".[dev,model,connectivity,microstates]"
    EEGFEAT_DATASETS=1 python -m pytest tests/validation -ra
 
-A run rewrites ``docs/validation/results.json`` and the fragments this page includes, so
-the scorecard and the tables below reflect the last run on the machine that built the docs.
-The ``validation`` GitHub workflow runs the suite weekly and on demand, once on the oldest
-supported MNE (1.8) and once on the newest, with the data cached between runs.
+**Output.** A run rewrites ``docs/validation/results.json`` and the fragments this page
+includes, so the scorecard and the tables below reflect the last run on the machine that
+built the docs.
+
+**CI.** The ``validation`` GitHub workflow:
+
+- Runs the suite weekly and on demand.
+- Runs once on the oldest supported MNE (1.8) and once on the newest.
+- Caches the data between runs.
 
 .. _validation-results:
 
 Every check
 -----------
 
-Each row is one test: the claim it makes, the criterion it applies, what it observed on the
-last run, and whether it passed. Rows are grouped by dataset.
+Each row is one test. Rows are grouped by dataset and give:
+
+- the claim the test makes,
+- the criterion it applies,
+- what it observed on the last run,
+- whether it passed.
 
 .. include:: ../validation/results.inc
 

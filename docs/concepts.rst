@@ -35,7 +35,7 @@ Hilbert transform.
    .. grid-item-card:: 3. Query and Export
 
       Filter columns with :meth:`~eegfeat.FeatureTable.select`, read
-      :attr:`~eegfeat.FeatureTable.coverage`, or export with
+      ``coverage``, or export with
       :meth:`~eegfeat.FeatureTable.to_dataframe`.
 
 The spectral estimator, the filter, and the trial grouping are arguments of the
@@ -84,7 +84,7 @@ parts.
 ``coverage``
    Same shape. Fraction of finite input behind each value, in ``[0, 1]``.
    This is the fraction of the input that was present. It is not an artifact
-   score. For Morlet input, :attr:`~eegfeat.Spectra.support` is the fraction of
+   score. For Morlet input, ``support`` on :class:`~eegfeat.Spectra` is the fraction of
    the requested window with complete wavelet support.
 
 ``meta``

@@ -68,17 +68,17 @@ Optional extras.
      - Used For
    * - ``[connectivity]``
      - ``mne-connectivity>=0.7``
-     - Weighted Phase Lag Index (:func:`~eegfeat.connectivity.wpli`).
+     - Weighted Phase Lag Index (:func:`~eegfeat.wpli`).
    * - ``[microstates]``
      - ``scikit-learn>=1.3``
-     - GFP peak clustering and microstate segmentation (:mod:`eegfeat.microstates`).
+     - GFP peak clustering and microstate segmentation (``eegfeat.microstates``).
    * - ``[model]``
      - ``scikit-learn>=1.3``
      - Design matrices, grouped cross-fitting, metrics, nulls, uncertainty, and
-       model selection (:mod:`eegfeat.model`).
+       model selection (``eegfeat.model``, :doc:`/api/model`).
    * - ``[importance]``
      - ``scikit-learn>=1.3``, ``shap>=0.45``
-     - SHAP explanations (:mod:`eegfeat.model.importance`). Permutation importance
+     - SHAP explanations (``eegfeat.model.importance``). Permutation importance
        is in the ``model`` extra.
    * - ``[preprocessing]``
      - ``mne>=1.13.2``, ``PyYAML``, ``scikit-learn``, ``h5io``, ``h5py``, ``filelock``

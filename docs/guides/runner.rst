@@ -21,18 +21,31 @@ Quick Start
    eegfeat run recipe.toml --workers 4        # compute features for every recording
    eegfeat status recipe.toml                 # which recordings are done, and what to run next
 
-``python -m eegfeat`` is the same command. ``init`` has three templates: ``basic`` (the
-default, a few spectral measures), ``task`` (every measure family, for epochs around an
-event, with a baseline and a response window) and ``resting`` (every family that needs no
-event). ``check`` writes nothing. It loads the recipe and runs the first recording, which
-catches an ROI that names a missing channel, a window outside the epochs, or a Morlet
-wavelet longer than the epoch, and it times that recording: see `Checking a Recipe`_.
+``python -m eegfeat`` is the same command.
+
+``init`` **templates**
+   ``basic``
+      The default: a few spectral measures.
+   ``task``
+      Every measure family, for epochs around an event, with a baseline and a response window.
+   ``resting``
+      Every family that needs no event.
+
+**check** writes nothing. It loads the recipe and runs the first recording, then times that
+recording (see `Checking a Recipe`_). It catches:
+
+- an ROI that names a missing channel,
+- a window outside the epochs,
+- a Morlet wavelet longer than the epoch.
 
 The Recipe
 ----------
 
-A recipe is a TOML file. Relative paths resolve against the recipe's directory.
-Unknown keys are errors. Every problem found is reported together.
+A recipe is a TOML file.
+
+- Relative paths resolve against the recipe's directory.
+- Unknown keys are errors.
+- Every problem found is reported together.
 
 .. code-block:: toml
 
@@ -108,11 +121,16 @@ Unknown keys are errors. Every problem found is reported together.
 Feature Entries
 ~~~~~~~~~~~~~~~
 
-``measure`` names a library function. ``measures = [...]`` names several instead, and the
-entry's other keys apply to each of them, as if it were written once per measure; a key
-one of them does not take is an error for that measure. Every other key is either one of
-that function's own keyword parameters, checked against its annotations (``normalize``,
-``fit_range``, ``threshold``, ``polarity``, ...), or one of the runner's keys:
+Each ``[[features]]`` entry names one measure or several.
+
+- ``measure`` names a library function.
+- ``measures = [...]`` names several instead. The entry's other keys apply to each of them, as
+  if it were written once per measure.
+- A key one of them does not take is an error for that measure.
+
+Every other key is either one of that function's own keyword parameters, checked against its
+annotations (``normalize``, ``fit_range``, ``threshold``, ``polarity``, ...), or one of the
+runner's keys:
 
 .. list-table::
    :header-rows: 1
@@ -149,11 +167,7 @@ that function's own keyword parameters, checked against its annotations (``norma
 Shared Defaults
 ~~~~~~~~~~~~~~~
 
-A ``[defaults]`` section sets ``bands``, ``windows``, ``spatial`` or ``series`` once. An
-entry inherits each key it takes and leaves out, so a default ``bands`` does not reach
-``aperiodic``, and a default ``spatial`` keeps only the levels a measure has
-(``envelope_correlation`` has no ``global``). An entry with a baseline leaves that window
-out of the inherited windows, as leaving ``windows`` out does. Keys an entry sets win.
+A ``[defaults]`` section sets ``bands``, ``windows``, ``spatial`` or ``series`` once.
 
 .. code-block:: toml
 
@@ -169,41 +183,66 @@ out of the inherited windows, as leaving ``windows`` out does. Keys an entry set
    bands = ["alpha", "beta"]
    baseline = "baseline"      # computed on "response" only
 
+**Inheritance rules**
+
+- An entry inherits each key it takes and leaves out.
+- A default ``bands`` does not reach ``aperiodic``.
+- A default ``spatial`` keeps only the levels a measure has (``envelope_correlation`` has no
+  ``global``).
+- An entry with a baseline leaves that window out of the inherited windows, as leaving
+  ``windows`` out does.
+- Keys an entry sets win.
+
 Spectra
 ~~~~~~~
 
+Set by ``[spectra]``. Each method has its own defaults and constraints.
+
 ``welch``
-   Hann-tapered segments of ``n_fft`` samples with 50% overlap, computed separately in
-   each window. The default segment is 2 s, capped by the shortest window any spectral
-   entry uses, so every window shares one frequency grid.
+   Hann-tapered segments of ``n_fft`` samples with 50% overlap, computed separately in each
+   window.
+
+   - The default segment is 2 s, capped by the shortest window any spectral entry uses, so
+     every window shares one frequency grid.
+
 ``multitaper``
-   Computed in each window with a frequency-smoothing ``bandwidth`` in Hz. The
-   default is 2.0 Hz. MNE's own default is ``8 / window_length`` Hz, which on a
-   1 s window smooths by ±4 Hz, wider than delta or theta. A bandwidth below
-   ``1.35 / window_length`` is rejected: in a narrower band no Slepian taper keeps
-   90% of its power, and MNE would fall back to a leaky one with only a warning.
-   The frequency grid follows the window length, so windows measured together
-   must be the same length. The call uses MNE ``normalization="full"``, and the
-   output is a density in V²/Hz.
+   Computed in each window with a frequency-smoothing ``bandwidth`` in Hz.
+
+   - **Default**: 2.0 Hz. MNE's own default is ``8 / window_length`` Hz, which on a 1 s window
+     smooths by ±4 Hz, wider than delta or theta.
+   - **Lower limit**: a bandwidth below ``1.35 / window_length`` is rejected. In a narrower
+     band no Slepian taper keeps 90% of its power, and MNE would fall back to a leaky one with
+     only a warning.
+   - **Grid**: the frequency grid follows the window length, so windows measured together
+     must be the same length.
+   - **Units**: the call uses MNE ``normalization="full"``, and the output is a density in
+     V²/Hz.
+
 ``morlet``
-   One time-frequency decomposition per recording. Defaults are ``n_freqs`` = 40,
-   ``spacing`` = ``"log"``, ``n_cycles = clip(f / n_cycles_factor, min_cycles,
-   max_cycles)`` with factors (2.0, 3.0, 15.0), and ``decim`` = 4. Each window
-   keeps the coefficients whose wavelet support lies inside it. The lowest
-   wavelet must fit inside the epoch. Power is divided by the sampling rate of
-   the recording. ``mean_tfr_power`` is then a smoothed density in V²/Hz. MNE's
-   raw wavelet power scales with the sampling rate.
+   One time-frequency decomposition per recording.
+
+   - **Defaults**: ``n_freqs`` = 40, ``spacing`` = ``"log"``, ``n_cycles = clip(f /
+     n_cycles_factor, min_cycles, max_cycles)`` with factors (2.0, 3.0, 15.0), and ``decim`` = 4.
+   - **Windows**: each window keeps the coefficients whose wavelet support lies inside it.
+   - **Epoch length**: the lowest wavelet must fit inside the epoch.
+   - **Units**: power is divided by the sampling rate of the recording. ``mean_tfr_power`` is
+     then a smoothed density in V²/Hz. MNE's raw wavelet power scales with the sampling rate.
+
 ``window_statistic``
-   How ``welch`` and ``morlet`` reduce a window: ``"mean"`` (the default) or
-   ``"median"``. Welch takes the median over its segments. Morlet takes it over each
-   frequency's retained time points. A burst that holds a minority of the window,
-   such as movement or muscle artifact, then barely moves the value, where it
-   raises a mean in proportion to its power. Both medians are divided by their
-   bias for Gaussian data, so on noise they estimate the same density as the mean.
-   A steady oscillation has constant power, and there Morlet's median reads up to
-   1.44 times above the mean. Welch refuses the median for a window with fewer
-   than 3 segments, because the median of one or two segments is their mean. The
-   median is recorded in each column's computation, so it gets its own column names.
+   How ``welch`` and ``morlet`` reduce a window: ``"mean"`` (the default) or ``"median"``.
+
+   - **Welch**: takes the median over its segments.
+   - **Morlet**: takes it over each frequency's retained time points.
+   - **Why**: a burst that holds a minority of the window, such as movement or muscle
+     artifact, barely moves a median, where it raises a mean in proportion to its power.
+   - **Bias**: both medians are divided by their bias for Gaussian data, so on noise they
+     estimate the same density as the mean.
+   - **Steady oscillation**: it has constant power, and there Morlet's median reads up to 1.44
+     times above the mean.
+   - **Refusal**: Welch refuses the median for a window with fewer than 3 segments, because the
+     median of one or two segments is their mean.
+   - **Column names**: the median is recorded in each column's computation, so it gets its own
+     column names.
 
 Checking a Recipe
 -----------------
@@ -218,29 +257,40 @@ slowest, and a projection for the whole run:
    Projected      126 recordings ≈ 8 h 24 min one at a time, ≈ 52 min with --workers 10,
                   if the others are like it
 
-A measure's time includes building the inputs it is the first to need (spectra, band
-signals, the microstate fit), so shared costs show up on the first entry that uses them.
-The projection assumes each worker gets a full core; on processors with efficiency cores,
-or when memory bandwidth is shared, parallel runs take longer than that. ``--workers N``
-sets the worker count it assumes (default: one per core, up to the number of recordings).
+**Reading the report**
+
+- A measure's time includes building the inputs it is the first to need (spectra, band
+  signals, the microstate fit), so shared costs show up on the first entry that uses them.
+- The projection assumes each worker gets a full core. On processors with efficiency cores,
+  or when memory bandwidth is shared, parallel runs take longer than that.
+- ``--workers N`` sets the worker count it assumes (default: one per core, up to the number
+  of recordings).
+
+**Quick mode**
 
 ``check --quick`` computes only the first four epochs and scales the timing up by the epoch
-count. It finds recipe errors in seconds, but its projection is rougher, and cross-trial
-measures see fewer trials than a run gives them.
+count.
+
+- It finds recipe errors in seconds.
+- Its projection is rougher.
+- Cross-trial measures see fewer trials than a run gives them.
 
 Running in Parallel
 -------------------
 
-``eegfeat run --workers N`` computes N recordings at once, each in its own process. Results
-are the same as one at a time, and the run log lists recordings in input order. Each
-worker's BLAS and OpenMP thread pools are sized to its share of the cores
-(``OMP_NUM_THREADS`` and the like), unless those variables are already set. Memory grows
-with the workers: each holds its recording's spectra and band signals (see
-`Things to Know`_).
+``eegfeat run --workers N`` computes N recordings at once, each in its own process.
+
+- Results are the same as one at a time, and the run log lists recordings in input order.
+- Each worker's BLAS and OpenMP thread pools are sized to its share of the cores
+  (``OMP_NUM_THREADS`` and the like), unless those variables are already set.
+- Memory grows with the workers: each holds its recording's spectra and band signals (see
+  `Things to Know`_).
+
+**Worker crashes**
 
 If a worker process dies (the operating system killing it for memory, a crash in compiled
-code), every recording in flight is rerun alone, and only the one that dies again is
-recorded as failed; the run goes on.
+code), every recording in flight is rerun alone. Only the one that dies again is recorded as
+failed, and the run goes on.
 
 Outputs
 -------
@@ -259,12 +309,18 @@ The input tree is mirrored under the output root. For
    sub-01/eeg/sub-01_task-rest_failed.json             only while the recording fails: error, traceback
    eegfeat_run.json                                    what happened to every recording
 
-Measures estimated within an epoch go to ``_features``. Its rows start with ``epoch``,
-``selection`` and ``event``, then the epoch metadata, then a ``__eegfeat_row_id``
-column that ``read_table`` checks against the sidecar, then the features. Measures
-estimated across trials (``itpc``, ``ppc``, ``envelope_correlation``, ``wpli`` and their graph
-summaries) go to ``_crosstrial``, keyed by ``group``. The two files are separate.
-See :ref:`concepts-row-kinds`. Missing values are written ``n/a``.
+**Tables**
+
+- ``_features`` holds measures estimated within an epoch. Its rows start with ``epoch``,
+  ``selection`` and ``event``, then the epoch metadata, then a ``__eegfeat_row_id`` column that
+  ``read_table`` checks against the sidecar, then the features.
+- ``_crosstrial`` holds measures estimated across trials (``itpc``, ``ppc``,
+  ``envelope_correlation``, ``wpli`` and their graph summaries), keyed by ``group``.
+- The two files are separate. See :ref:`concepts-row-kinds`.
+- Missing values are written ``n/a``.
+
+Loading Results
+~~~~~~~~~~~~~~~
 
 Load a table back with its metadata:
 
@@ -277,11 +333,14 @@ Load a table back with its metadata:
    alpha = table.select(band=ef.Band("alpha", 8.0, 13.0), space="global")
 
 For modeling across recordings, pass several per-epoch ``*_features.tsv`` paths to
-:func:`eegfeat.io.read_dataset`. The loader stacks tables on the union of their
-feature columns and restores the descriptor columns written by the runner, plus
-``recording``, ``epoch``, and ``event`` from the stored row identity. Put target
-and grouping variables in the epoch metadata when :func:`eegfeat.model.build_design`
-needs them. Descriptor columns are separate from feature columns.
+:func:`eegfeat.io.read_dataset`.
+
+- The loader stacks tables on the union of their feature columns.
+- It restores the descriptor columns written by the runner, plus ``recording``, ``epoch``, and
+  ``event`` from the stored row identity.
+- Put target and grouping variables in the epoch metadata when
+  :func:`eegfeat.model.build_design` needs them.
+- Descriptor columns are separate from feature columns.
 
 .. code-block:: python
 
@@ -292,12 +351,16 @@ needs them. Descriptor columns are separate from feature columns.
        "derivatives/eegfeat/sub-02/eeg/sub-02_task-rest_features.tsv",
    ])
 
-A run refuses to write over earlier results unless given ``--overwrite``, which also
-removes result files the new recipe no longer produces. A recording that fails is
-logged with its error and traceback, and the run moves on. ``_failed.json`` records the
-failure beside the results it did not produce, and a later success removes it. The run log
-is rewritten after every recording, with ``finished`` false until the run ends, so a run
-that is interrupted still says what it did.
+Overwriting and Failures
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- A run refuses to write over earlier results unless given ``--overwrite``, which also removes
+  result files the new recipe no longer produces.
+- A recording that fails is logged with its error and traceback, and the run moves on.
+- ``_failed.json`` records the failure beside the results it did not produce, and a later
+  success removes it.
+- The run log is rewritten after every recording, with ``finished`` false until the run ends,
+  so a run that is interrupted still says what it did.
 
 Resuming
 --------
@@ -319,17 +382,22 @@ each recording in one of five states:
    Files of a run are gone: a table lacks its coverage file or sidecar, or a table the
    run wrote is missing.
 
-"This recipe" means what the recipe computes. Comments, formatting, and the three
-location keys (``inputs.root``, ``inputs.pattern``, ``output.root``) are left out, so
-moving the data and repointing ``inputs.root`` keeps results ``done``. Results written
-before EEGFeat recorded this fingerprint count as current only while the recipe file is
-unchanged byte for byte.
+**What "this recipe" means**
 
-``eegfeat run --resume`` computes only the recordings that are not ``done``. Recordings
-that have stale or partial results still need ``--overwrite``, so nothing is replaced
-unasked. ``status`` ends with the command to run next, and ``--json`` gives the same
-report as one object, ``{recipe, output_root, counts, recordings, next}``, where ``next``
-is that command's arguments or ``null``.
+- It is what the recipe computes. Comments, formatting, and the three location keys
+  (``inputs.root``, ``inputs.pattern``, ``output.root``) are left out, so moving the data and
+  repointing ``inputs.root`` keeps results ``done``.
+- Results written before EEGFeat recorded this fingerprint count as current only while the
+  recipe file is unchanged byte for byte.
+
+**Resuming a run**
+
+- ``eegfeat run --resume`` computes only the recordings that are not ``done``.
+- Recordings that have stale or partial results still need ``--overwrite``, so nothing is
+  replaced unasked.
+- ``status`` ends with the command to run next.
+- ``--json`` gives the same report as one object, ``{recipe, output_root, counts, recordings,
+  next}``, where ``next`` is that command's arguments or ``null``.
 
 Command Reference
 -----------------
@@ -341,19 +409,31 @@ Command Reference
    eegfeat status RECIPE [--json]
    eegfeat init [PATH] [--template basic|task|resting]
 
-``--n-jobs`` is passed to MNE's filtering and spectral estimation. Exit status is 0 when
-everything succeeded, 1 when some recordings failed (or ``check``'s trial did, or it found
-recordings lacking channels the recipe names), and 2 when
-nothing could start. ``status`` exits 0 whatever state the recordings are in.
+``--n-jobs`` is passed to MNE's filtering and spectral estimation.
+
+Exit Status
+~~~~~~~~~~~
+
+- **0**: everything succeeded.
+- **1**: some recordings failed, or ``check``'s trial did, or it found recordings lacking
+  channels the recipe names.
+- **2**: nothing could start.
+- ``status`` exits 0 whatever state the recordings are in.
+
+Progress Protocol
+~~~~~~~~~~~~~~~~~
 
 ``--progress-json`` prints one JSON object per line: ``start``, ``subject_start``,
 ``progress`` (``step``, ``current``, ``total``), ``log``, ``subject_done`` (``success``,
-``elapsed``, ``eta``), ``complete`` and ``error``. This is the protocol of the
-EEG_fMRI_Pipeline terminal UI, with each recording standing in for a subject. ``eta`` is
-seconds left at the pace so far, null after the last recording. With ``--workers``,
-recordings start and finish in any order, and each event names its recording. The text
-output shows the same estimate after each recording, and names a recording whose result
-does not directly follow its start line.
+``elapsed``, ``eta``), ``complete`` and ``error``.
+
+- This is the protocol of the EEG_fMRI_Pipeline terminal UI, with each recording standing in
+  for a subject.
+- ``eta`` is seconds left at the pace so far, null after the last recording.
+- With ``--workers``, recordings start and finish in any order, and each event names its
+  recording.
+- The text output shows the same estimate after each recording, and names a recording whose
+  result does not directly follow its start line.
 
 Things to Know
 --------------

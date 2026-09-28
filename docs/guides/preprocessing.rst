@@ -9,10 +9,13 @@ Preprocessing
      does not call this package.
    </p>
 
-Install the ``preprocessing`` extra. PyPREP, autoreject, ICLabel, and Picard
-need ``preprocessing-auto``. ``review`` and ``inspect`` open MNE viewers when
-``preprocessing-gui`` is installed. Accepted suffixes are ``.fif``,
-``.fif.gz``, ``.edf``, ``.bdf``, ``.vhdr``, and ``.set``.
+Install the ``preprocessing`` extra.
+
+- **Automatic methods**: PyPREP, autoreject, ICLabel, and Picard need
+  ``preprocessing-auto``.
+- **Viewers**: ``review`` and ``inspect`` open MNE viewers when
+  ``preprocessing-gui`` is installed.
+- **Suffixes**: ``.fif``, ``.fif.gz``, ``.edf``, ``.bdf``, ``.vhdr``, and ``.set``.
 
 A stage runs when its setting is present. ``null``, an empty list, or a
 disabled review leaves that stage out. Amplitudes are volts, times are seconds,
@@ -23,84 +26,111 @@ Quick Start
 
 ``python -m eegfeat preprocess`` is the same command as ``eegfeat preprocess``.
 
+Create the Recipe
+~~~~~~~~~~~~~~~~~
+
 .. code-block:: bash
 
    python -m pip install -e ".[preprocessing]"
    eegfeat preprocess init preprocessing.yaml --mode events
 
-``--mode resting`` writes ``epochs.kind: fixed`` and ``duration: 2.0`` instead of
-an event block. ``init`` will not replace an existing file.
+- ``--mode resting`` writes ``epochs.kind: fixed`` and ``duration: 2.0`` instead of
+  an event block.
+- ``init`` will not replace an existing file.
 
 Edit the recipe before ``check``. ``init`` writes placeholders.
 
-- ``input.path`` is ``recording_raw.fif``. Point it at the recording, or
+- **input.path**: ``recording_raw.fif``. Point it at the recording, or
   replace it with ``input.root`` and ``input.pattern`` to select a cohort and
   delete ``output.name``.
-- ``epochs.events`` is ``source: annotations`` and ``event_id: {stimulus: 1}``.
+- **epochs.events**: ``source: annotations`` and ``event_id: {stimulus: 1}``.
   The names and codes have to be annotations on the recordings. Use
   ``source: stim`` or ``source: file`` when they are not.
-- ``workflow`` is ``raw_review: required``. Keep it to review each recording
+- **workflow**: ``raw_review: required``. Keep it to review each recording
   yourself, or set ``suggested`` to save the detectors' verdict and continue.
-- ``channels.projections`` is ``error``. A FIF with inactive projectors stops
+- **channels.projections**: ``error``. A FIF with inactive projectors stops
   ``check`` until this is ``apply`` or ``discard-inactive``.
+
+Check and Run
+~~~~~~~~~~~~~
 
 .. code-block:: bash
 
    eegfeat preprocess check preprocessing.yaml
    eegfeat preprocess run preprocessing.yaml
 
-``check`` reads every recording and runs ``load``, ``prepare``, and ``events``.
-It writes nothing. ``run`` processes the recordings in order. A failure in one
-is reported and the next one starts. With ``raw_review: required``, each
-recording stops at the raw gate; the run prints the command that continues it
-and exits 3:
+- ``check`` reads every recording and runs ``load``, ``prepare``, and ``events``.
+  It writes nothing.
+- ``run`` processes the recordings in order. A failure in one is reported and
+  the next one starts.
+- With ``raw_review: required``, each recording stops at the raw gate. The run
+  prints the command that continues it and exits 3:
 
 .. code-block:: text
 
    [1/2] sub-01
          ✓ awaiting review-raw · eegfeat preprocess review preprocessing.yaml --recording sub-01 raw
 
-With a display, install ``eegfeat[preprocessing-gui]`` and run that printed
-command. It opens the Qt browser. The decision is saved when the dialog is
-accepted.
+Review the Raw Gate
+~~~~~~~~~~~~~~~~~~~
 
-Without a display, fill in the pending file the run wrote,
-``<bundle directory>/.preprocessing/<name>/decisions/review-raw.pending.yaml``.
-Each field is explained in a comment above it; replace every ``null`` and
-leave ``parent_id`` as written. Then run the same ``review`` command: it reads
-the filled file. Without ``--recording``, ``review`` walks every recording
-that awaits that gate.
+- **With a display**: install ``eegfeat[preprocessing-gui]`` and run that
+  printed command. It opens the Qt browser. The decision is saved when the
+  dialog is accepted.
+- **Without a display**: fill in the pending file the run wrote,
+  ``<bundle directory>/.preprocessing/<name>/decisions/review-raw.pending.yaml``.
+  Each field is explained in a comment above it; replace every ``null`` and
+  leave ``parent_id`` as written. Then run the same ``review`` command: it reads
+  the filled file.
+- **Cohorts**: without ``--recording``, ``review`` walks every recording
+  that awaits that gate.
 
 .. code-block:: bash
 
    eegfeat preprocess review preprocessing.yaml raw
    eegfeat preprocess run preprocessing.yaml
 
-That second ``run`` exports. The init recipe has ``artifact: null`` and
-``epoch_review: optional``, so there is no second gate. ``optional`` and
-``disabled`` both skip epoch review. Only ``epoch_review: required`` stops at
-``review-epochs``. An ``artifact`` block adds ``review-artifact``, governed by
-``artifact_review``, with the same exit code and the same pending-file
-pattern. :file:`examples/preprocessing.yaml` is a cohort recipe with ICA and
-both gates set to ``suggested``, so it runs to export unattended.
+That second ``run`` exports.
+
+- The init recipe has ``artifact: null`` and ``epoch_review: optional``, so
+  there is no second gate.
+- ``optional`` and ``disabled`` both skip epoch review. Only
+  ``epoch_review: required`` stops at ``review-epochs``.
+- An ``artifact`` block adds ``review-artifact``, governed by
+  ``artifact_review``, with the same exit code and the same pending-file
+  pattern.
+- :file:`examples/preprocessing.yaml` is a cohort recipe with ICA and
+  both gates set to ``suggested``, so it runs to export unattended.
+
+Status and Resuming
+~~~~~~~~~~~~~~~~~~~
 
 When every recording is exported, ``run`` prints the ``eegfeat init`` command
-and the ``inputs.root`` to set. On a cohort, ``status`` prints one line per
-recording (``exported``, ``awaiting <stage>``, ``stale at <stage>``, or how many
-stages are done) and the next command to run. For one recording it prints every
-stage with its state. ``--recording LABEL`` limits a command
-to one recording. On a cohort it is required for ``step``, ``next``,
-``inspect``, and ``reset``.
+and the ``inputs.root`` to set.
 
-A later ``run`` reuses a checkpoint whose recipe and parents still match,
-checking only its identity; a payload is read and hashed when a stage
-consumes it, and ``status --verify`` re-reads every completed checkpoint of one recording
-(``--recording``), or of every recording with ``--json``.
-The source recording is read and hashed once per ``run``. A pending review
-file the run already wrote is kept, with any edits in it.
-``next`` runs one pending stage. ``step STAGE`` runs that stage and requires
-its parents. ``reset --from STAGE`` retires that stage and every stage that
-depends on it. Payloads stay on disk.
+- **status on a cohort**: one line per recording (``exported``,
+  ``awaiting <stage>``, ``stale at <stage>``, or how many stages are done) and
+  the next command to run.
+- **status on one recording**: every stage with its state.
+- **--recording LABEL**: limits a command to one recording. On a cohort it is
+  required for ``step``, ``next``, ``inspect``, and ``reset``.
+
+A later ``run`` reuses a checkpoint whose recipe and parents still match.
+
+- **Reuse check**: only the checkpoint's identity is checked. A payload is read
+  and hashed when a stage consumes it.
+- **status --verify**: re-reads every completed checkpoint of one recording
+  (``--recording``), or of every recording with ``--json``.
+- **Source recording**: read and hashed once per ``run``.
+- **Pending review file**: a file the run already wrote is kept, with any edits
+  in it.
+- **next**: runs one pending stage.
+- **step STAGE**: runs that stage and requires its parents.
+- **reset --from STAGE**: retires that stage and every stage that depends on
+  it. Payloads stay on disk.
+
+Command Reference
+~~~~~~~~~~~~~~~~~
 
 .. code-block:: text
 
@@ -133,16 +163,21 @@ command and flag has ``--help``.
    * - 3
      - No recording failed and at least one awaits a review.
 
-``--n-jobs`` is passed to filtering and resampling. ``--overwrite`` republishes
-an export that already matches the recipe; a deleted bundle is republished
-without it. A stale checkpoint is removed with ``reset``, not with
-``--overwrite``. ``--progress-json`` writes one JSON event
-per line in the feature runner's format, with each recording as a subject.
+- ``--n-jobs``: passed to filtering and resampling.
+- ``--overwrite``: republishes an export that already matches the recipe. A
+  deleted bundle is republished without it. A stale checkpoint is removed with
+  ``reset``, not with ``--overwrite``.
+- ``--progress-json``: writes one JSON event per line in the feature runner's
+  format, with each recording as a subject.
 
-From Python, :func:`eegfeat.preprocessing.load_recipe` returns one
-configuration per recording, keyed by label, and
-:func:`eegfeat.preprocessing.load_config` returns the single configuration of
-a one-recording recipe. The rest of the API is per recording.
+Python
+~~~~~~
+
+- :func:`eegfeat.preprocessing.load_recipe` returns one configuration per
+  recording, keyed by label.
+- :func:`eegfeat.preprocessing.load_config` returns the single configuration of
+  a one-recording recipe.
+- The rest of the API is per recording.
 
 .. code-block:: python
 
@@ -155,8 +190,11 @@ a one-recording recipe. The rest of the API is per recording.
 The Recipe
 ----------
 
-A recipe is YAML. Relative paths resolve against the recipe file. Unknown keys
-are errors. Duplicate keys are errors.
+A recipe is YAML.
+
+- Relative paths resolve against the recipe file.
+- Unknown keys are errors.
+- Duplicate keys are errors.
 
 .. code-block:: yaml
 
@@ -183,6 +221,9 @@ are errors. Duplicate keys are errors.
 instead of the event block. A filled study file is
 :file:`examples/preprocessing.yaml`.
 
+Sections
+~~~~~~~~
+
 .. list-table::
    :header-rows: 1
    :widths: 22 78
@@ -190,43 +231,52 @@ instead of the event block. A filled study file is
    * - Section
      - Keys
    * - ``input``
-     - ``path``, one recording. Or ``root`` and ``pattern``, a directory and a
-       glob below it; ``pattern`` has no default. Exactly one of ``path`` and
-       ``root``. Every match must be a recording (``.fif``, ``.fif.gz``,
-       ``.edf``, ``.bdf``, ``.vhdr``, ``.set``); another suffix is an error.
-       Hidden files and directories are skipped.
+     - - ``path``, one recording. Or ``root`` and ``pattern``, a directory and a
+         glob below it; ``pattern`` has no default.
+       - Exactly one of ``path`` and ``root``.
+       - Every match must be a recording (``.fif``, ``.fif.gz``, ``.edf``,
+         ``.bdf``, ``.vhdr``, ``.set``); another suffix is an error.
+       - Hidden files and directories are skipped.
    * - ``output``
-     - ``directory``, and with ``path`` an optional ``name``. Without
-       ``name``, the export is named after the file with its suffix and one
-       trailing ``_raw`` or ``_eeg`` removed. With ``root``, ``name`` is not
-       allowed and the tree below ``root`` is mirrored under ``directory``.
-       Two recordings that would share a bundle are an error.
+     - - ``directory``, and with ``path`` an optional ``name``.
+       - Without ``name``, the export is named after the file with its suffix and
+         one trailing ``_raw`` or ``_eeg`` removed.
+       - With ``root``, ``name`` is not allowed and the tree below ``root`` is
+         mirrored under ``directory``.
+       - Two recordings that would share a bundle are an error.
    * - ``workflow``
-     - ``raw_review`` is ``required`` (default), ``suggested``, or
-       ``disabled``. ``artifact_review`` is ``required`` (default) or
-       ``suggested``. ``epoch_review`` is ``required``, ``optional``, or
-       ``disabled``. ``suggested`` saves the detectors' verdict as the
-       decision when the gate is reached without one, bound to the same
-       parent checkpoint as a saved review.
+     - - ``raw_review`` is ``required`` (default), ``suggested``, or ``disabled``.
+       - ``artifact_review`` is ``required`` (default) or ``suggested``.
+       - ``epoch_review`` is ``required``, ``optional``, or ``disabled``.
+       - ``suggested`` saves the detectors' verdict as the decision when the
+         gate is reached without one, bound to the same parent checkpoint as a
+         saved review.
    * - ``channels``
-     - ``rename``, ``types``, ``drop``, ``bads``, ``montage`` (a standard name,
-       or ``{path: ...}`` to a digitized FIF or any electrode file
-       ``mne.channels.read_custom_montage`` reads, positions taken as
-       written), ``interpolate_bads``, ``bipolar``
-       (``name``, ``anode``, ``cathode``, ``type`` of ``eog`` or ``ecg``),
-       ``projections`` (``error``, ``apply``, ``discard-inactive``).
+     - - ``rename``, ``types``, ``drop``, ``bads``, ``interpolate_bads``.
+       - ``montage``: a standard name, or ``{path: ...}`` to a digitized FIF or
+         any electrode file ``mne.channels.read_custom_montage`` reads,
+         positions taken as written.
+       - ``bipolar``: ``name``, ``anode``, ``cathode``, ``type`` of ``eog`` or
+         ``ecg``.
+       - ``projections``: ``error``, ``apply``, ``discard-inactive``.
    * - ``crop``
      - ``tmin``, ``tmax``, seconds from the start of the file. ``null`` skips it.
    * - ``annotations``
      - ``bad_spans`` (``onset``, ``duration``, ``description`` starting with
-       ``BAD``), ``amplitude``, ``breaks``, ``muscle``. A null detector is skipped.
+       ``BAD``), ``amplitude``, ``breaks``, ``muscle``. A null detector is
+       skipped.
    * - ``bad_channels``
-     - PyPREP. ``method: pyprep``. ``methods`` among ``flat``, ``deviation``,
-       ``correlation``, ``high_frequency``, ``snr``. ``snr`` requires
-       ``correlation`` and ``high_frequency``. ``ransac``, ``random_state``, ``repeats`` (RANSAC draws that vote;
-       a channel is a candidate when a strict majority flags it), and
-       ``notch_freqs`` (a notch on the diagnostic copy only, as PREP does
-       before its deviation test).
+     - PyPREP.
+
+       - ``method: pyprep``.
+       - ``methods`` among ``flat``, ``deviation``, ``correlation``,
+         ``high_frequency``, ``snr``. ``snr`` requires ``correlation`` and
+         ``high_frequency``.
+       - ``ransac``, ``random_state``.
+       - ``repeats``: RANSAC draws that vote; a channel is a candidate when a
+         strict majority flags it.
+       - ``notch_freqs``: a notch on the diagnostic copy only, as PREP does
+         before its deviation test.
    * - ``bridges``
      - ``true`` records bridged pairs and their median electrical distance as
        raw-review evidence. ``false`` skips it.
@@ -241,55 +291,81 @@ instead of the event block. A filled study file is
        block, and ``reference`` (``average``, a list of EEG names, or ``null``).
        Regression requires a reference. ``null`` skips fitting, review, and apply.
    * - ``epochs``
-     - ``kind: events`` with ``events``, ``tmin``, ``tmax``. Or ``kind: fixed``
-       with ``duration``, ``overlap``, ``start``, ``stop``. Both accept
-       ``padding``, ``baseline``, and ``detrend`` (``constant`` or ``linear``).
-       Event epochs also accept ``metadata``, a TSV with one row per event.
-       ``metadata`` and ``events.path`` accept ``{name}`` (the export name)
-       and ``{parent}`` (the recording's directory), resolved per recording.
+     - - ``kind: events`` with ``events``, ``tmin``, ``tmax``. Or ``kind: fixed``
+         with ``duration``, ``overlap``, ``start``, ``stop``.
+       - Both accept ``padding``, ``baseline``, and ``detrend`` (``constant`` or
+         ``linear``).
+       - Event epochs also accept ``metadata``, a TSV with one row per event.
+       - ``metadata`` and ``events.path`` accept ``{name}`` (the export name)
+         and ``{parent}`` (the recording's directory), resolved per recording.
    * - ``epochs.events``
-     - ``source`` of ``annotations``, ``stim``, or ``file``. ``event_id`` maps
-       names to codes. ``stim`` also takes ``stim_channel``, ``shortest_event``,
-       and ``min_duration``. ``file`` takes ``path``. ``delay`` subtracts
-       ``round(delay * sfreq)`` samples from every event, so a positive value
-       moves events earlier.
+     - - ``source`` of ``annotations``, ``stim``, or ``file``.
+       - ``event_id`` maps names to codes.
+       - ``stim`` also takes ``stim_channel``, ``shortest_event``, and
+         ``min_duration``. ``file`` takes ``path``.
+       - ``delay`` subtracts ``round(delay * sfreq)`` samples from every event,
+         so a positive value moves events earlier.
    * - ``rejection``
-     - ``method: thresholds`` with ``reject`` and ``flat`` in volts, and an
-       optional ``tmin`` and ``tmax`` inside the analysis window. Or
-       ``method: autoreject`` with ``n_interpolate``, ``consensus``, ``cv``,
-       and ``random_state``.
+     - - ``method: thresholds`` with ``reject`` and ``flat`` in volts, and an
+         optional ``tmin`` and ``tmax`` inside the analysis window.
+       - Or ``method: autoreject`` with ``n_interpolate``, ``consensus``,
+         ``cv``, and ``random_state``.
    * - ``reference``
      - Final EEG reference. ``channels: average`` or a list of good EEG names.
        ``add_channels`` inserts missing reference electrodes first. ``null``
        leaves the reference unchanged.
    * - ``sampling``
-     - ``method: decimate`` with integer ``factor``, which requires
-       ``filter.h_freq``. Or ``method: resample`` with ``sfreq`` and ``padding``.
-       The padding must equal ``epochs.padding``.
+     - - ``method: decimate`` with integer ``factor``, which requires
+         ``filter.h_freq``.
+       - Or ``method: resample`` with ``sfreq`` and ``padding``. The padding
+         must equal ``epochs.padding``.
 
-``annotations.amplitude`` takes ``peak`` and ``flat`` in volts for ``eeg`` only,
-plus ``bad_percent`` and ``min_duration``. ``annotations.breaks`` takes
-``min_break_duration``, ``t_start_after_previous``, and ``t_stop_before_next``,
-and requires event epochs. ``annotations.muscle`` takes ``filter_freq``,
-``threshold``, and ``min_length_good``.
+Detector Settings
+~~~~~~~~~~~~~~~~~
 
-ICA settings are ``method`` (``fastica``, the default, ``infomax`` with the
-extended update, or ``picard`` with ``ortho: false`` and ``extended: true``),
-``l_freq`` (default 1 Hz, on a copy), ``n_components``, ``random_state``,
-``max_iter``, ``reject``, ``flat``, ``tstep``, ``eog_channels``,
-``ecg_channel``, and ``iclabel``. ``iclabel`` takes ``threshold`` (default
-0.8) and ``keep`` (default ``[brain, other]``); it requires ``infomax`` or
-``picard``, ``artifact.reference: average``, ``l_freq`` of at least 1 Hz, and
-a low-pass at or below 100 Hz, the band ICLabel was trained on, and runs
-ICLabel on the training copy. The fit checkpoint records every detector's verdict as
-evidence: ``scores`` per channel, ``iclabel`` labels and class probabilities,
-``suggested`` per detector, and ``suggested_exclude``, the union of the
-components MNE's EOG and ECG detectors flag and the components whose winning
-ICLabel class is outside ``keep`` at or above ``threshold``. The fit excludes
-nothing. SSP settings are ``n_eeg``,
-``eog_channels`` or ``ecg_channel``, ``l_freq``, ``h_freq``, ``tmin``, ``tmax``,
-and ``reject``. Regression settings are ``eog_channels``, ``tstep``, ``reject``,
-and ``flat``.
+- ``annotations.amplitude`` takes ``peak`` and ``flat`` in volts for ``eeg``
+  only, plus ``bad_percent`` and ``min_duration``.
+- ``annotations.breaks`` takes ``min_break_duration``,
+  ``t_start_after_previous``, and ``t_stop_before_next``, and requires event
+  epochs.
+- ``annotations.muscle`` takes ``filter_freq``, ``threshold``, and
+  ``min_length_good``.
+
+Artifact Settings
+~~~~~~~~~~~~~~~~~
+
+**ICA** settings:
+
+- ``method``: ``fastica`` (the default), ``infomax`` with the extended update,
+  or ``picard`` with ``ortho: false`` and ``extended: true``.
+- ``l_freq``: default 1 Hz, on a copy.
+- ``n_components``, ``random_state``, ``max_iter``, ``reject``, ``flat``,
+  ``tstep``, ``eog_channels``, ``ecg_channel``, and ``iclabel``.
+
+**ICLabel**: ``iclabel`` takes ``threshold`` (default 0.8) and ``keep``
+(default ``[brain, other]``). It runs ICLabel on the training copy and
+requires:
+
+- ``infomax`` or ``picard``.
+- ``artifact.reference: average``.
+- ``l_freq`` of at least 1 Hz.
+- A low-pass at or below 100 Hz, the band ICLabel was trained on.
+
+**Fit evidence**: the fit checkpoint records every detector's verdict.
+
+- ``scores`` per channel.
+- ``iclabel`` labels and class probabilities.
+- ``suggested`` per detector.
+- ``suggested_exclude``: the union of the components MNE's EOG and ECG
+  detectors flag and the components whose winning ICLabel class is outside
+  ``keep`` at or above ``threshold``.
+
+The fit excludes nothing.
+
+**SSP** settings: ``n_eeg``, ``eog_channels`` or ``ecg_channel``, ``l_freq``,
+``h_freq``, ``tmin``, ``tmax``, and ``reject``.
+
+**Regression** settings: ``eog_channels``, ``tstep``, ``reject``, and ``flat``.
 
 Stages
 ------
@@ -355,24 +431,40 @@ previous enabled parent. ``apply-artifact`` waits for both ``epoch`` and
      - ``report`` validates the final epochs and ledger. ``export`` writes the
        HTML report and the files below.
 
-Event samples stay on the acquisition grid. The events table has the original
-sample, the delay-corrected sample, and ``event_sample_sfreq``.
-``final_sfreq`` in the manifest is the epoch rate after resampling. A
-fixed-length epoch of ``duration`` seconds has ``round(duration * sfreq)``
-samples, so its last time is ``(n_samples - 1) / sfreq``.
+Timing and Sampling
+~~~~~~~~~~~~~~~~~~~
+
+- **Event samples**: stay on the acquisition grid. The events table has the
+  original sample, the delay-corrected sample, and ``event_sample_sfreq``.
+- **final_sfreq**: in the manifest, the epoch rate after resampling.
+- **Fixed-length epochs**: an epoch of ``duration`` seconds has
+  ``round(duration * sfreq)`` samples, so its last time is
+  ``(n_samples - 1) / sfreq``.
 
 Review
 ------
 
 ``run`` returns at the first enabled review that has no saved decision and
-no ``suggested`` policy. The pending file for that gate is
+no ``suggested`` policy. The quick start above is the raw gate; the other gates
+use the same steps and the fields below.
+
+Filling a Pending File
+~~~~~~~~~~~~~~~~~~~~~~
+
+The pending file for a gate is
 ``<bundle directory>/.preprocessing/<name>/decisions/review-<target>.pending.yaml``,
-YAML with a comment above each field. Leave ``parent_id``. Replace every
-``null``, then run ``review`` for that gate: a filled pending file is used
-before the viewer is opened. ``--decisions FILE`` reads another file instead.
-The Qt viewer (``preprocessing-gui``) writes the same decision when the dialog
-is accepted. The quick start above is the raw gate. The other gates use the
-same steps and the fields below.
+YAML with a comment above each field.
+
+- Leave ``parent_id``.
+- Replace every ``null``.
+- Run ``review`` for that gate: a filled pending file is used before the viewer
+  is opened.
+- ``--decisions FILE`` reads another file instead.
+- The Qt viewer (``preprocessing-gui``) writes the same decision when the dialog
+  is accepted.
+
+Decision Fields
+~~~~~~~~~~~~~~~
 
 .. list-table::
    :header-rows: 1
@@ -381,12 +473,14 @@ same steps and the fields below.
    * - Target
      - Decision
    * - ``raw``
-     - ``bads`` replaces ``info["bads"]``. ``[]`` clears it. ``spans`` are
-       appended. ``[]`` appends none. Each span has ``onset``, ``duration``,
-       and a ``description`` that starts with ``BAD``. ``onset`` is seconds
-       from the start of the recording, like ``annotations.bad_spans``, also
-       after ``crop-raw``. The viewer opens with the suggested bad channels and
-       spans already marked and saves the spans added to them.
+     - - ``bads`` replaces ``info["bads"]``. ``[]`` clears it.
+       - ``spans`` are appended. ``[]`` appends none.
+       - Each span has ``onset``, ``duration``, and a ``description`` that
+         starts with ``BAD``.
+       - ``onset`` is seconds from the start of the recording, like
+         ``annotations.bad_spans``, also after ``crop-raw``.
+       - The viewer opens with the suggested bad channels and spans already
+         marked and saves the spans added to them.
    * - ``artifact``, ICA
      - ``fit_id``. ``exclude``, component indices. ``[]`` excludes none.
    * - ``artifact``, SSP
@@ -396,58 +490,85 @@ same steps and the fields below.
    * - ``epochs``
      - ``exclude``, original event rows to drop.
 
-``review --suggested``, and a ``suggested`` policy in ``workflow``, save the
-detectors' own verdict as the decision without a viewer or a file: for
-``raw`` the channels already marked bad plus the amplitude and PyPREP
-candidates, and the detected BAD spans; for ``artifact`` the ICA
-``suggested_exclude`` list, every SSP projector, or applying the regression.
-There is no suggestion for ``epochs``. The saved decision is the same file a
-viewer or ``--decisions`` would write, so provenance records the choice
-either way, and a changed detector setting invalidates it like any decision.
+Suggested Decisions
+~~~~~~~~~~~~~~~~~~~
 
-A decision is kept. Replacing it requires ``reset --from`` that review stage.
-A new fit requires a new decision. ``parent_id`` has to match the checkpoint
-the decision was written for.
+``review --suggested``, and a ``suggested`` policy in ``workflow``, save the
+detectors' own verdict as the decision without a viewer or a file.
+
+- ``raw``: the channels already marked bad plus the amplitude and PyPREP
+  candidates, and the detected BAD spans.
+- ``artifact``: the ICA ``suggested_exclude`` list, every SSP projector, or
+  applying the regression.
+- ``epochs``: there is no suggestion.
+
+The saved decision is the same file a viewer or ``--decisions`` would write, so
+provenance records the choice either way. A changed detector setting
+invalidates it like any decision.
+
+Keeping and Replacing Decisions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- A decision is kept. Replacing it requires ``reset --from`` that review stage.
+- A new fit requires a new decision.
+- ``parent_id`` has to match the checkpoint the decision was written for.
+
+Inspecting a Checkpoint
+~~~~~~~~~~~~~~~~~~~~~~~
 
 ``inspect STAGE`` opens that checkpoint in the browser. ``--report`` writes
-``<stage>-<checkpoint id>-inspection.html`` inside the workspace and opens it: the continuous data before
-epoching, the fitted operator at ``fit-artifact`` and ``review-artifact``, the
-epochs after.
+``<stage>-<checkpoint id>-inspection.html`` inside the workspace and opens it.
+It shows:
+
+- the continuous data before epoching;
+- the fitted operator at ``fit-artifact`` and ``review-artifact``;
+- the epochs after.
 
 Terminal Front End
 ~~~~~~~~~~~~~~~~~~
 
-``tui/`` is an optional Go program for the same commands. It lists every
-recording, runs ``run`` with the log under the stage list, and opens each gate
-as a checklist. The list starts ticked with the detectors' verdict. PyPREP
-tests, ICLabel class and confidence, and peak-to-peak amplitude per epoch.
-Decisions go through ``review --decisions``. State comes from
-``status --json`` and ``inspect STAGE --json``. The Python package does not
-import it. ``v`` opens the checkpoint in the MNE viewer when
-``preprocessing-gui`` is installed.
+``tui/`` is an optional Go program for the same commands. The Python package
+does not import it.
 
-``Tab`` moves between recordings and stages. ``Enter`` runs the selected
-action. ``?`` lists the keys. ``l`` opens the log. ``PgUp`` and ``PgDn``
-scroll. ``End`` jumps to the latest log line. ``Esc`` closes the log.
-``Home`` and ``End`` also jump to the first and last row of a list.
-``o`` sorts a review and keeps the same row selected. While a command is
-running, the header names it and other actions wait.
+- **Recordings**: lists every recording and runs ``run`` with the log under the
+  stage list.
+- **Gates**: opens each gate as a checklist. The list starts ticked with the
+  detectors' verdict. It shows PyPREP tests, ICLabel class and confidence, and
+  peak-to-peak amplitude per epoch.
+- **Decisions**: go through ``review --decisions``.
+- **State**: comes from ``status --json`` and ``inspect STAGE --json``.
+- **Viewer**: ``v`` opens the checkpoint in the MNE viewer when
+  ``preprocessing-gui`` is installed.
 
 .. code-block:: bash
 
    cd tui && go build -o eegfeat-tui .     # Go 1.24+
    ./eegfeat-tui preprocessing.yaml        # finds eegfeat on PATH, or set EEGFEAT
 
-``--json`` on ``status`` and ``inspect`` is a documented contract for any
-front end: ``status --json`` lists each recording's stages and its ``next``
-action (``review``, ``run`` or ``reset``); ``inspect review-raw --json``
-returns the gate's ``items`` with ``suggested`` flags and ``tags``, its
-``parent`` checkpoint, and the ``parent_id`` a decision must echo.
+**Keys**:
+
+- ``Tab`` moves between recordings and stages.
+- ``Enter`` runs the selected action.
+- ``?`` lists the keys.
+- ``l`` opens the log. ``PgUp`` and ``PgDn`` scroll. ``End`` jumps to the
+  latest log line. ``Esc`` closes the log.
+- ``Home`` and ``End`` also jump to the first and last row of a list.
+- ``o`` sorts a review and keeps the same row selected.
+- While a command is running, the header names it and other actions wait.
+
+**JSON contract**: ``--json`` on ``status`` and ``inspect`` is a documented
+contract for any front end.
+
+- ``status --json`` lists each recording's stages and its ``next`` action
+  (``review``, ``run`` or ``reset``).
+- ``inspect review-raw --json`` returns the gate's ``items`` with ``suggested``
+  flags and ``tags``, its ``parent`` checkpoint, and the ``parent_id`` a
+  decision must echo.
 
 Outputs
 -------
 
-Export writes into ``output.directory``. The manifest is published last. A
+Export writes into ``output.directory``. The manifest is published last, so a
 directory without ``<name>_preprocessing.json`` has no finished export.
 
 .. list-table::
@@ -469,15 +590,18 @@ directory without ``<name>_preprocessing.json`` has no finished export.
      - Provenance, stage order, settings, review decisions, and file hashes.
        Package versions enter the stage identities but are not listed.
 
-``run`` also keeps ``preprocess-run-<timestamp>.log`` at the common output
-root when MNE or a stage printed anything, and prints its path.
+Log and Checkpoints
+~~~~~~~~~~~~~~~~~~~
 
-Checkpoints live in ``<bundle directory>/.preprocessing/<name>/``, where the
-bundle directory is ``output.directory`` plus the recording's path below
-``input.root``. Hidden files the OS adds there, such as ``.DS_Store``, are
-ignored. The feature runner skips that hidden directory. Point its
-``inputs.root`` at ``output.directory`` and its pattern at ``**/*_epo.fif``;
-``run`` prints that handoff when every recording is exported.
+- **Log**: ``run`` also keeps ``preprocess-run-<timestamp>.log`` at the common
+  output root when MNE or a stage printed anything, and prints its path.
+- **Checkpoints**: live in ``<bundle directory>/.preprocessing/<name>/``, where
+  the bundle directory is ``output.directory`` plus the recording's path below
+  ``input.root``. Hidden files the OS adds there, such as ``.DS_Store``, are
+  ignored.
+- **Handoff**: the feature runner skips that hidden directory. Point its
+  ``inputs.root`` at ``output.directory`` and its pattern at ``**/*_epo.fif``;
+  ``run`` prints that handoff when every recording is exported.
 
 .. literalinclude:: ../../examples/preprocessing.yaml
    :language: yaml
@@ -490,7 +614,7 @@ Notes
   filter, or EEG-fMRI gradient correction.
 - ICA, SSP, EOG regression, and autoreject are fit on the recording being
   processed. A fit that must stay inside a training split uses the numerical
-  functions in :mod:`eegfeat.preprocessing` directly.
+  functions in ``eegfeat.preprocessing`` (:doc:`/api/preprocessing`) directly.
 - Muscle and high-frequency detectors need the unfiltered recording to cover
   the band they measure.
 - A notch removes a line and does not change the highpass or lowpass stored on

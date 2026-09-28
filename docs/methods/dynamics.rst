@@ -11,7 +11,8 @@ Event-Related Desynchronization and Synchronization (ERDS)
 ----------------------------------------------------------
 
 ERDS is the change in band-limited power relative to a baseline window
-:math:`B`.
+:math:`B`. It is reported per sample as a trace, then summarized inside the
+analysis window.
 
 .. math::
 
@@ -21,19 +22,38 @@ ERDS is the change in band-limited power relative to a baseline window
    \text{ERDS}_{\text{dB}}(t) &= 10 \log_{10}\left(\frac{P_\epsilon(t)}{B_\epsilon}\right)
    \end{aligned}
 
-:math:`P(t)` is instantaneous power :math:`|z(t)|^2` from the Hilbert envelope,
-:math:`B` is mean baseline power, and :math:`\epsilon` is :math:`10^{-12}` of the
-largest finite power of that epoch and channel. The floor is relative, so it
-does not depend on the recording units. The percent
-numerator is unfloored, so zero power is an exact :math:`-100\%` change. A
-baseline is rejected when it is non-finite, non-positive, or no greater than
-:math:`10^{-6}` of that channel's mean power over the epoch. The
-:math:`10^{-6}` guard is relative to the channel, so it does not depend on the
-recording units. Rejected cells are NaN and carry ``baseline_degenerate``. A
-cell whose peak power exceeds :math:`10^4` times its baseline is reported and
-flagged ``baseline_extreme_ratio``.
+Terms
+~~~~~
 
-The trace is
+- :math:`P(t)` is instantaneous power :math:`|z(t)|^2` from the Hilbert
+  envelope.
+- :math:`B` is mean baseline power.
+- :math:`\epsilon` is :math:`10^{-12}` of the largest finite power of that
+  epoch and channel. The floor is relative, so it does not depend on the
+  recording units.
+- The percent numerator is unfloored, so zero power is an exact
+  :math:`-100\%` change.
+
+Baseline checks
+~~~~~~~~~~~~~~~
+
+A baseline is rejected when any of these holds:
+
+- it is non-finite;
+- it is non-positive;
+- it is no greater than :math:`10^{-6}` of that channel's mean power over the
+  epoch.
+
+The :math:`10^{-6}` guard is relative to the channel, so it does not depend on
+the recording units.
+
+**Missing values.** Rejected cells are NaN and carry ``baseline_degenerate``.
+
+**Flags.** A cell whose peak power exceeds :math:`10^4` times its baseline is
+reported and flagged ``baseline_extreme_ratio``.
+
+Trace
+~~~~~
 
 .. code-block:: python
 
@@ -45,29 +65,50 @@ The trace is
    percent = (power - baseline_power[..., None]) / baseline_power[..., None] * 100.0
    decibels = 10.0 * np.log10(np.maximum(power, floor[..., None]) / baseline_power[..., None])
 
+Summaries
+~~~~~~~~~
+
 Summaries use the finite samples :math:`\{t_k\}` inside the analysis window.
 
-- **mean**. Mean of the trace, in percent or in decibels.
-- **slope**. Ordinary least-squares slope of the trace against time. Needs at
-  least three finite samples.
-- **erd_magnitude**. Mean of :math:`|\text{ERDS}|` over samples with
-  :math:`\text{ERDS} < 0`. The value is 0 when no sample is negative.
-- **erd_duration**. Number of negative samples divided by the sampling rate,
-  in seconds.
-- **ers_magnitude**. Mean of :math:`\text{ERDS}` over samples with
-  :math:`\text{ERDS} > 0`. The value is 0 when no sample is positive.
-- **ers_duration**. Number of positive samples divided by the sampling rate,
-  in seconds.
-- **peak_latency**. Time of the maximum of :math:`|\text{ERDS}|`.
-- **onset_latency**. Start of the first run of samples, of length at least
-  ``min_duration_cycles`` cycles of the band's low edge (default 6), or
-  ``min_duration_ms`` when that is given, on which
-  :math:`|P(t) - B| > \sigma_B`, where :math:`\sigma_B` is the population
-  standard deviation (divisor :math:`n`) of baseline power. A non-finite
-  sample breaks the run. The test
-  uses raw power, before percent or decibel conversion.
-- **rebound_latency**. Time of the maximum of :math:`\text{ERDS}` strictly
-  after ``peak_latency``.
+.. list-table::
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Summary
+     - Definition
+   * - ``mean``
+     - Mean of the trace, in percent or in decibels.
+   * - ``slope``
+     - Ordinary least-squares slope of the trace against time. Needs at least
+       three finite samples.
+   * - ``erd_magnitude``
+     - Mean of :math:`|\text{ERDS}|` over samples with :math:`\text{ERDS} < 0`.
+       The value is 0 when no sample is negative.
+   * - ``erd_duration``
+     - Number of negative samples divided by the sampling rate, in seconds.
+   * - ``ers_magnitude``
+     - Mean of :math:`\text{ERDS}` over samples with :math:`\text{ERDS} > 0`.
+       The value is 0 when no sample is positive.
+   * - ``ers_duration``
+     - Number of positive samples divided by the sampling rate, in seconds.
+   * - ``peak_latency``
+     - Time of the maximum of :math:`|\text{ERDS}|`.
+   * - ``onset_latency``
+     - Start of the first run of samples on which
+       :math:`|P(t) - B| > \sigma_B`. See below.
+   * - ``rebound_latency``
+     - Time of the maximum of :math:`\text{ERDS}` strictly after
+       ``peak_latency``.
+
+Onset rule
+~~~~~~~~~~
+
+- The run must last at least ``min_duration_cycles`` cycles of the band's low
+  edge (default 6), or ``min_duration_ms`` when that is given.
+- :math:`\sigma_B` is the population standard deviation (divisor :math:`n`) of
+  baseline power.
+- A non-finite sample breaks the run.
+- The test uses raw power, before percent or decibel conversion.
 
 .. warning::
 
@@ -105,70 +146,81 @@ Summaries use the finite samples :math:`\{t_k\}` inside the analysis window.
         - fires on some trials, at a rate that depends on bandwidth
         - NaN when nothing happens
 
-   A single sample exceeds a one-standard-deviation criterion about 14% of the
-   time by chance. On rest epochs of a public motor dataset, a fixed 100 ms
-   run still produced an onset on essentially every trial in theta, mu, and
-   beta. A narrow-band envelope moves slowly, so neighbouring samples are
-   dependent. About six cycles of the band's low edge brought that false-onset
-   rate to roughly 5% in each of those bands, which is why the default length
-   is in cycles. On that dataset the onset rate on movement trials matched the
-   rate on rest trials. Compare a condition with a null from shuffled labels or
-   from pre-stimulus windows. Durations scale with window length, and
-   magnitudes depend on the distribution of power, so two windows of different
-   length need that comparison before they are compared with each other.
+   Why the onset rule is in cycles:
+
+   - A single sample exceeds a one-standard-deviation criterion about 14% of
+     the time by chance.
+   - On rest epochs of a public motor dataset, a fixed 100 ms run still
+     produced an onset on essentially every trial in theta, mu, and beta.
+   - A narrow-band envelope moves slowly, so neighbouring samples are
+     dependent.
+   - About six cycles of the band's low edge brought that false-onset rate to
+     roughly 5% in each of those bands, which is why the default length is in
+     cycles.
+   - On that dataset the onset rate on movement trials matched the rate on
+     rest trials.
+
+   How to compare:
+
+   - Compare a condition with a null from shuffled labels or from
+     pre-stimulus windows.
+   - Durations scale with window length, and magnitudes depend on the
+     distribution of power.
+   - Two windows of different length need that comparison before they are
+     compared with each other.
 
 Scale
-^^^^^
+~~~~~
 
-Every ``erds_*`` function reports decibels by default. Percent change on a
-single trial is right-skewed. A quiet baseline turns an ordinary fluctuation
-into several hundred percent, and those trials dominate a mean. On twenty
-subjects of a public motor dataset, the trial-mean percent ERDS showed mu
-desynchronization in about half of the subjects, and the decibel mean showed
-it in all twenty. Percent is available with ``normalize="percent"``.
+Every ``erds_*`` function reports decibels by default. Percent is available
+with ``normalize="percent"``.
 
-Two decibel quantities in the library average in a different order. The
-``erds_*`` functions average the per-sample dB trace. :func:`~eegfeat.mean_tfr_power`
-with a baseline and ``normalize="db"`` takes the decibel of the window-mean
-power. For near-exponential
-instantaneous power the per-sample mean sits about 2.5 dB below the decibel of
-the mean, and on real data the two correlate only moderately across trials.
-Report which one was used.
+**Why decibels.**
 
-The ERD/ERS terms and the baseline-referenced interpretation follow
-Pfurtscheller and Lopes da Silva (1999). The relative baseline guard, the onset
-rule, and the rebound rule are defined above.
+- Percent change on a single trial is right-skewed.
+- A quiet baseline turns an ordinary fluctuation into several hundred
+  percent, and those trials dominate a mean.
+- On twenty subjects of a public motor dataset, the trial-mean percent ERDS
+  showed mu desynchronization in about half of the subjects. The decibel mean
+  showed it in all twenty.
+
+**Order of averaging.** Two decibel quantities in the library average in a
+different order.
+
+- The ``erds_*`` functions average the per-sample dB trace.
+- :func:`~eegfeat.mean_tfr_power` with a baseline and ``normalize="db"`` takes
+  the decibel of the window-mean power.
+- For near-exponential instantaneous power the per-sample mean sits about
+  2.5 dB below the decibel of the mean.
+- On real data the two correlate only moderately across trials.
+- Report which one was used.
+
+**Reference.** The ERD/ERS terms and the baseline-referenced interpretation
+follow Pfurtscheller and Lopes da Silva (1999). The relative baseline guard,
+the onset rule, and the rebound rule are defined above.
 
 Oscillatory Bursts
 ------------------
 
-A burst is a contiguous run of the band-limited amplitude envelope above a
-threshold.
+A burst is a contiguous run of the band-limited amplitude envelope :math:`E(t)`
+above a threshold :math:`\theta`.
 
-1. The threshold :math:`\theta` is an envelope quantile (default
-   ``threshold=0.75``), computed separately for each epoch and channel and
-   calibrated on the
-   baseline when one is given and on the analysis windows otherwise, or it is
-   an array supplied by the caller. A sample is above threshold when
-   :math:`E(t) > \theta`. A non-finite sample is not above threshold, so it
-   ends a run.
-2. Contiguous runs are found by differencing. A run that touches the window
-   edge is kept.
-3. Runs shorter than ``min_duration_ms`` (default 100 ms, rounded to whole
-   samples, minimum one) are dropped.
+Detection
+~~~~~~~~~
 
-Five summaries are taken from the retained runs.
+1. **Threshold.** :math:`\theta` is an envelope quantile (default
+   ``threshold=0.75``) or an array supplied by the caller.
 
-- **count**. Number of retained bursts.
-- **rate**. ``count`` divided by the window length in seconds.
-- **duration_mean**. Mean duration of retained bursts, in seconds.
-- **amp_mean**. Mean of the peak envelope inside each retained burst.
-- **fraction_above**. Fraction of finite samples above threshold, computed
-  before the duration filter. A missing sample is omitted from this fraction.
+   - The quantile is computed separately for each epoch and channel.
+   - It is calibrated on the baseline when one is given, and on the analysis
+     windows otherwise.
+   - A sample is above threshold when :math:`E(t) > \theta`.
+   - A non-finite sample is not above threshold, so it ends a run.
 
-With no retained burst, ``count`` and ``rate`` are 0 and ``duration_mean`` and
-``amp_mean`` are NaN. ``fraction_above`` is 0 when no sample exceeds
-:math:`\theta`.
+2. **Runs.** Contiguous runs are found by differencing. A run that touches the
+   window edge is kept.
+3. **Minimum duration.** Runs shorter than ``min_duration_ms`` (default
+   100 ms, rounded to whole samples, minimum one) are dropped.
 
 .. code-block:: python
 
@@ -184,39 +236,96 @@ With no retained burst, ``count`` and ``rate`` are 0 and ``duration_mean`` and
 An externally supplied threshold array is broadcast to
 ``(n_epochs, n_channels)`` and used in place of the quantile.
 
-Whitten et al. (2011) and Hughes et al. (2012) detect oscillations by fitting a
-1/f background, applying a chi-square threshold to power, and requiring a
-minimum number of cycles (BOSC). The detector here uses the envelope quantile
-or the supplied threshold, and ``min_duration_ms``.
+Summaries
+~~~~~~~~~
+
+Five summaries are taken from the retained runs.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Summary
+     - Definition
+   * - ``count``
+     - Number of retained bursts.
+   * - ``rate``
+     - ``count`` divided by the window length in seconds.
+   * - ``duration_mean``
+     - Mean duration of retained bursts, in seconds.
+   * - ``amp_mean``
+     - Mean of the peak envelope inside each retained burst.
+   * - ``fraction_above``
+     - Fraction of finite samples above threshold, computed before the
+       duration filter. A missing sample is omitted from this fraction.
+
+**Missing values.** With no retained burst:
+
+- ``count`` and ``rate`` are 0.
+- ``duration_mean`` and ``amp_mean`` are NaN.
+- ``fraction_above`` is 0 when no sample exceeds :math:`\theta`.
+
+**Reference.** Whitten et al. (2011) and Hughes et al. (2012) detect
+oscillations by fitting a 1/f background, applying a chi-square threshold to
+power, and requiring a minimum number of cycles (BOSC). The detector here uses
+the envelope quantile or the supplied threshold, and ``min_duration_ms``.
 
 Time-Domain Measures
 --------------------
 
-``variance``, ``mean_amplitude``, ``peak_to_peak``, ``area_under_curve``,
-``amplitude_quantile``, ``root_mean_square``, ``skewness``, ``kurtosis``,
-``line_length``, and ``zero_crossing_rate`` summarize one window.
-``hjorth_mobility`` and ``hjorth_complexity`` follow Hjorth (1970), with
-mobility rescaled by :math:`1/2\pi` to hertz. Hjorth activity is
-``variance``.
-On a :class:`~eegfeat.Signal` the input is the waveform. On a
-:class:`~eegfeat.BandSignal` the input is the envelope.
+These measures summarize one window: ``variance``, ``mean_amplitude``,
+``peak_to_peak``, ``area_under_curve``, ``amplitude_quantile``,
+``root_mean_square``, ``skewness``, ``kurtosis``, ``line_length``, and
+``zero_crossing_rate``. ``hjorth_mobility`` and ``hjorth_complexity`` are
+also included.
 
-Non-finite samples are omitted and counted in ``coverage``. ``coverage`` is
-the window mean of the signal's per-sample coverage, which by default is the
-finite fraction. A large finite artifact remains in the summary unless it
-was rejected before extraction.
+**Input.**
+
+- On a :class:`~eegfeat.Signal` the input is the waveform.
+- On a :class:`~eegfeat.BandSignal` the input is the envelope.
+
+**Missing values and coverage.**
+
+- Non-finite samples are omitted and counted in ``coverage``.
+- ``coverage`` is the window mean of the signal's per-sample coverage, which by
+  default is the finite fraction.
+- A large finite artifact remains in the summary unless it was rejected before
+  extraction.
+
+Simple reductions
+~~~~~~~~~~~~~~~~~
+
+The other reductions are the corresponding NumPy reductions with non-finite
+samples omitted: ``nanvar``, ``nanmean``, ``nanmax - nanmin``,
+``sqrt(nanmean(x**2))``, and ``nanquantile``. Hjorth activity is ``variance``.
+Subha, Joseph, Acharya, and Lim (2010) review this family as EEG features.
+
+Area under the curve
+~~~~~~~~~~~~~~~~~~~~
 
 ``area_under_curve`` applies the trapezoid rule on each contiguous run of
 finite samples and sums the runs. A gap contributes nothing. It is not bridged
 by a straight line.
 
-Skewness is SciPy's biased Fisher–Pearson :math:`g_1 = m_3 / m_2^{3/2}`, and
-kurtosis is Fisher excess :math:`g_2 = m_4 / m_2^2 - 3`, with NaNs omitted
-(Joanes and Gill, 1998). :math:`m_r` uses divisor :math:`n`. Skewness needs at
-least three finite samples. Kurtosis needs at least four. See
+Skewness and kurtosis
+~~~~~~~~~~~~~~~~~~~~~
+
+- **Skewness** is SciPy's biased Fisher–Pearson :math:`g_1 = m_3 / m_2^{3/2}`.
+- **Kurtosis** is Fisher excess :math:`g_2 = m_4 / m_2^2 - 3`.
+- NaNs are omitted, and :math:`m_r` uses divisor :math:`n`.
+
+**Missing values.**
+
+- Skewness needs at least three finite samples.
+- Kurtosis needs at least four.
+
+**Reference.** Joanes and Gill (1998). See
 `scipy.stats.skew <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.skew.html>`__
 and
 `scipy.stats.kurtosis <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kurtosis.html>`__.
+
+Line length
+~~~~~~~~~~~
 
 ``line_length`` is the mean absolute first difference times the sampling rate,
 in the lineage of Esteller et al. (2001). It is a mean, not a cumulative sum.
@@ -229,20 +338,24 @@ in the lineage of Esteller et al. (2001). It is a mean, not a cumulative sum.
                                  finite_differences, np.nan)
    line_length = np.nanmean(finite_differences, axis=-1) * sfreq
 
+Zero-crossing rate
+~~~~~~~~~~~~~~~~~~
+
 ``zero_crossing_rate`` counts sign changes between successive nonzero finite
-samples and divides by the window length in seconds (Rice, 1944, 1945). Zeros and
-gaps keep the previous sign and do not add a crossing.
+samples and divides by the window length in seconds (Rice, 1944, 1945). Zeros
+and gaps keep the previous sign and do not add a crossing.
 
-The other reductions are the corresponding NumPy reductions with non-finite
-samples omitted (``nanvar``, ``nanmean``, ``nanmax - nanmin``,
-``sqrt(nanmean(x**2))``, ``nanquantile``). Subha, Joseph, Acharya, and Lim
-(2010) review this family as EEG features.
+Hjorth parameters
+~~~~~~~~~~~~~~~~~
 
-Hjorth mobility uses the sample difference scaled by the sampling rate, so the
-derivative is per second. Mobility is divided by :math:`2\pi` and reported in
-hertz, so it does not depend on the sampling rate, apart from the
-finite-difference gain :math:`\sin(\pi f/f_s)/(\pi f/f_s)` near Nyquist.
-Complexity is a ratio of mobilities, so unscaled differences suffice.
+``hjorth_mobility`` and ``hjorth_complexity`` follow Hjorth (1970).
+
+- Mobility uses the sample difference scaled by the sampling rate, so the
+  derivative is per second.
+- Mobility is divided by :math:`2\pi` and reported in hertz.
+- Mobility therefore does not depend on the sampling rate, apart from the
+  finite-difference gain :math:`\sin(\pi f/f_s)/(\pi f/f_s)` near Nyquist.
+- Complexity is a ratio of mobilities, so unscaled differences suffice.
 
 .. code-block:: python
 
@@ -255,23 +368,32 @@ Complexity is a ratio of mobilities, so unscaled differences suffice.
 Peak Amplitude and Latency
 --------------------------
 
-``peak_amplitude`` is the signed extremum in the window. ``peak_latency`` is
-its time. ``polarity="positive"`` searches the signal, ``"negative"`` searches
-its negation, and ``"absolute"`` searches its magnitude. The returned amplitude
-is the original signed sample in every case. The window name is not read as a
-component label. There is no inference of N2, P300, or any other named
-component.
+``peak_amplitude`` is the signed extremum in the window, and ``peak_latency``
+is its time.
 
-When ``prominence`` is set, candidates are the local maxima returned by
-`scipy.signal.find_peaks <https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html>`__
-at that prominence, and the most prominent is kept. An edge sample has no
-interior prominence, so it is never a candidate while an interior peak
-qualifies. When no local maximum reaches the prominence, the plain extremum is
-returned, which for a monotonic trend is the edge sample. An isolated tall
-sample is prominent and is kept.
+**Polarity.**
 
-Duncan et al. (2009) review windowed peak measures for ERP components. Report
-the window, the polarity, and the prominence.
+- ``polarity="positive"`` searches the signal.
+- ``"negative"`` searches its negation.
+- ``"absolute"`` searches its magnitude.
+- The returned amplitude is the original signed sample in every case.
+
+**Naming.** The window name is not read as a component label. There is no
+inference of N2, P300, or any other named component.
+
+**Prominence.** When ``prominence`` is set:
+
+- Candidates are the local maxima returned by
+  `scipy.signal.find_peaks <https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html>`__
+  at that prominence, and the most prominent is kept.
+- An edge sample has no interior prominence, so it is never a candidate while
+  an interior peak qualifies.
+- When no local maximum reaches the prominence, the plain extremum is returned.
+  For a monotonic trend this is the edge sample.
+- An isolated tall sample is prominent and is kept.
+
+**Reference.** Duncan et al. (2009) review windowed peak measures for ERP
+components. Report the window, the polarity, and the prominence.
 
 References
 ----------

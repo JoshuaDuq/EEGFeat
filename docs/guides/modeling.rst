@@ -9,37 +9,55 @@ Predictive Modeling
      screen, conformal intervals, and feature importance.
    </p>
 
-``eegfeat.model`` is optional. Install it with ``pip install "eegfeat[model]"``.
-SHAP needs ``pip install "eegfeat[importance]"``. Held-out permutation
-importance is included in ``model``.
+``eegfeat.model`` is optional.
+
+- **Install**: ``pip install "eegfeat[model]"``.
+- **SHAP**: needs ``pip install "eegfeat[importance]"``.
+- **Held-out permutation importance**: included in ``model``.
 
 Inputs
 ------
 
-Modeling uses one row per epoch. The :class:`~eegfeat.FeatureTable` must carry
-``row_ids`` of ``(recording, epoch, event)`` for every row. The target frame
-passed to :func:`eegfeat.model.build_design` must contain the same
-``recording``, ``epoch``, and ``event`` columns, the target column, and a
-grouping column such as ``subject_id``.
+Modeling uses one row per epoch.
 
-Cross-trial tables are rejected (:ref:`concepts-row-kinds`). ITPC, PPC,
-envelope correlation, every ``spectral_connectivity`` method including wPLI, and
-their graph summaries have one row per trial group. Copying a
-group value onto its epochs repeats one number across rows.
+**Feature table**
+   The :class:`~eegfeat.FeatureTable` must carry ``row_ids`` of
+   ``(recording, epoch, event)`` for every row.
+
+**Target frame**
+   The frame passed to :func:`eegfeat.model.build_design` must contain:
+
+   - the same ``recording``, ``epoch``, and ``event`` columns,
+   - the target column,
+   - a grouping column such as ``subject_id``.
+
+**Rejected tables**
+   Cross-trial tables are rejected (:ref:`concepts-row-kinds`).
+
+   - ITPC, PPC, envelope correlation, every ``spectral_connectivity`` method
+     including wPLI, and their graph summaries have one row per trial group.
+   - Copying a group value onto its epochs repeats one number across rows.
 
 Building a cohort
 -----------------
 
-For tables already in memory, compute the same measures per recording and stack
-the per-epoch tables. :func:`eegfeat.stack_rows` keeps input order, values,
-coverage, flags, and metadata, and it rejects duplicate row identities.
-Recordings drop different bad channels, so their columns differ.
-``columns="union"`` keeps every column any recording measured. A column a
-recording did not measure is NaN with zero coverage. With
-``harmonization="intersection"``, each fold then drops columns that some
-training subject lacks. The target frame uses the same ``recording``,
-``epoch``, and ``event`` keys. :func:`eegfeat.model.build_design` aligns rows
-on those keys.
+Stack per-epoch tables into one cohort table and align them with the targets.
+
+Tables in memory
+~~~~~~~~~~~~~~~~
+
+Compute the same measures per recording and stack the per-epoch tables.
+
+- **Stacking**: :func:`eegfeat.stack_rows` keeps input order, values, coverage,
+  flags, and metadata, and rejects duplicate row identities.
+- **Differing columns**: recordings drop different bad channels, so their
+  columns differ.
+- ``columns="union"``: keeps every column any recording measured. A column a
+  recording did not measure is NaN with zero coverage.
+- ``harmonization="intersection"``: each fold then drops columns that some
+  training subject lacks.
+- **Alignment**: the target frame uses the same ``recording``, ``epoch``, and
+  ``event`` keys. :func:`eegfeat.model.build_design` aligns rows on those keys.
 
 .. code-block:: python
 
@@ -63,8 +81,10 @@ on those keys.
        groups="subject_id",
    )
 
-For runner output, pass the ``*_features.tsv`` paths to
-:func:`eegfeat.io.read_dataset`.
+Runner output
+~~~~~~~~~~~~~
+
+Pass the ``*_features.tsv`` paths to :func:`eegfeat.io.read_dataset`.
 
 .. code-block:: python
 
@@ -84,24 +104,33 @@ For runner output, pass the ``*_features.tsv`` paths to
        groups="subject_id",
    )
 
-``read_dataset`` stacks the union of the feature columns. Pass
-``columns="identical"`` to require one schema; a mismatch names the recording and
-the columns that differ. A measure fitted to each recording, such as its
-microstate templates, names its columns after that fit, so those columns never
-match another recording's. Leave such a measure out of a cohort model with
-``Selection(exclude=...)``. Descriptor columns are those
-named in each JSON sidecar. The canonical key columns are rebuilt from the
-stored ``row_ids``, and a descriptor that disagrees with those identities is
-rejected. Targets and grouping variables are not read from filenames. Put them
-in the descriptor rows when writing the tables.
+- **Columns**: ``read_dataset`` stacks the union of the feature columns. Pass
+  ``columns="identical"`` to require one schema; a mismatch names the recording
+  and the columns that differ.
+- **Per-recording fits**: a measure fitted to each recording, such as its
+  microstate templates, names its columns after that fit, so those columns never
+  match another recording's. Leave such a measure out of a cohort model with
+  ``Selection(exclude=...)``.
+- **Descriptors**: descriptor columns are those named in each JSON sidecar. The
+  canonical key columns are rebuilt from the stored ``row_ids``, and a
+  descriptor that disagrees with those identities is rejected.
+- **Targets and groups**: not read from filenames. Put them in the descriptor
+  rows when writing the tables.
+
+Matching rows and subsets
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``build_design`` requires every feature row to have a target row and every
-target row a feature row, and says how many are left over on each side. To
-model a subset of the epochs, such as the trials that remain after exclusions,
-cut the table to them with :meth:`~eegfeat.FeatureTable.take`.
-:meth:`~eegfeat.FeatureTable.drop_missing` keeps the columns missing in at most
-a given fraction of rows. Neither uses a target, so both can run before
-cross-validation; each fold still applies its own missingness limit.
+target row a feature row, and says how many are left over on each side.
+
+To model a subset of the epochs, such as the trials that remain after
+exclusions, cut the table first.
+
+- :meth:`~eegfeat.FeatureTable.take` cuts the table to the given rows.
+- :meth:`~eegfeat.FeatureTable.drop_missing` keeps the columns missing in at
+  most a given fraction of rows.
+- Neither uses a target, so both can run before cross-validation. Each fold
+  still applies its own missingness limit.
 
 .. code-block:: python
 
@@ -120,10 +149,12 @@ covariates are appended to ``X`` after the feature columns and listed in
 
 ``measure`` matches ``FeatureMeta.measure``, the label stored on the column.
 That label is not always the function name or the recipe key.
-:func:`eegfeat.integrated_band_power` labels columns ``"band_power"``.
-:func:`eegfeat.peak_frequency` labels them ``"peak_freq_adjusted"``.
-:func:`eegfeat.aperiodic` emits ``"slope"``, ``"offset"``, and ``"r_squared"``. The labels
-in a cohort are ``sorted({m.measure for m in cohort_table.meta})``.
+
+- :func:`eegfeat.integrated_band_power` labels columns ``"band_power"``.
+- :func:`eegfeat.peak_frequency` labels them ``"peak_freq_adjusted"``.
+- :func:`eegfeat.aperiodic` emits ``"slope"``, ``"offset"``, and
+  ``"r_squared"``.
+- The labels in a cohort are ``sorted({m.measure for m in cohort_table.meta})``.
 
 .. code-block:: python
 
@@ -143,7 +174,7 @@ in a cohort are ``sorted({m.measure for m in cohort_table.meta})``.
        selection=selection,
    )
 
-``exclude`` takes a second ``Selection``: the columns it matches are dropped
+``exclude`` takes a second ``Selection``. The columns it matches are dropped
 from those the other fields keep, so leaving one measure out does not mean
 listing every other one.
 
@@ -152,17 +183,19 @@ listing every other one.
    microstates = ("coverage", "duration", "occurrence", "transition")
    selection = efm.Selection(exclude=efm.Selection(measure=microstates))
 
-A missing covariate raises. ``strict_covariates=False`` drops requested
-covariates that are absent from the target frame. The target column cannot
-also be a covariate.
+- **Missing covariate**: raises. ``strict_covariates=False`` drops requested
+  covariates that are absent from the target frame.
+- **Target as covariate**: the target column cannot also be a covariate.
 
 Group-disjoint cross-fitting
 ----------------------------
 
-The outer split is the evaluation. :func:`eegfeat.model.loso_folds` holds out
-groups. :func:`eegfeat.model.within_subject_folds` holds out runs within each
-subject and requires a run label on every row. Inner tuning uses
-:class:`eegfeat.model.InnerSplit` and stays inside the outer grouping.
+The outer split is the evaluation. Inner tuning stays inside the outer grouping.
+
+- :func:`eegfeat.model.loso_folds` holds out groups.
+- :func:`eegfeat.model.within_subject_folds` holds out runs within each subject
+  and requires a run label on every row.
+- Inner tuning uses :class:`eegfeat.model.InnerSplit`.
 
 .. code-block:: python
 
@@ -189,52 +222,83 @@ subject and requires a run label on every row. Inner tuning uses
        seed=42,
    )
 
-Regression pipelines are ``elasticnet_pipeline``, ``ridge_pipeline``, and
-``random_forest_pipeline``. Classification pipelines are ``svm_pipeline``,
-``logistic_pipeline``, ``random_forest_classifier_pipeline``, and
-``ensemble_pipeline``. :func:`eegfeat.model.classification_metrics` requires
-labels in ``{0, 1}``.
+Pipelines
+~~~~~~~~~
+
+- **Regression**: ``elasticnet_pipeline``, ``ridge_pipeline``, and
+  ``random_forest_pipeline``.
+- **Classification**: ``svm_pipeline``, ``logistic_pipeline``,
+  ``random_forest_classifier_pipeline``, and ``ensemble_pipeline``.
+  :func:`eegfeat.model.classification_metrics` requires labels in ``{0, 1}``.
+
+Ridge grid
+~~~~~~~~~~
 
 :func:`~eegfeat.model.ridge_grid` takes the design because scikit-learn's
-``Ridge`` does not divide its penalty by the number of trials. On standardized
-features the eigenvalues of the Gram matrix sum to trials × features, so a fixed
-grid stops shrinking as a cohort grows: with 1,200 trials and 12,600 features, a
-penalty of 100 barely touches any direction. The grid is scaled by that sum and
-runs from effectively unpenalized to an almost empty model.
+``Ridge`` does not divide its penalty by the number of trials.
 
-Regression is tuned on the statistic it is reported with. By default each inner
-validation split is scored by its subject-level ``r``
-(:func:`~eegfeat.model.subject_r_scorer`), not by pooled ``R²``. Pooled ``R²``
-rewards predicting each subject's mean, which the subject-level ``r`` ignores,
-and with no signal it always prefers the most heavily shrunk model. The scorer
-needs at least 3 held-out trials of each validation subject. Pass ``scoring`` to
-select on something else. When every fold chooses the same end of a numeric grid,
-cross-fitting warns: the search may have stopped short, unless that end already
-means no penalty or an empty model.
+- On standardized features the eigenvalues of the Gram matrix sum to
+  trials × features, so a fixed grid stops shrinking as a cohort grows.
+- With 1,200 trials and 12,600 features, a penalty of 100 barely touches any
+  direction.
+- The grid is scaled by that sum and runs from effectively unpenalized to an
+  almost empty model.
 
-Preprocessing is fit on the training rows of the fold. The pipeline replaces
-infinities, drops all-NaN columns, applies the feature and subject missingness
-limits, imputes, removes constant columns, and can select features, scale,
-deconfound, or reduce dimension with PCA. ``harmonization="intersection"``
-keeps features that have at least one finite value in every training group.
-``harmonization="union_impute"`` keeps the full feature union. Target
-residualization is ``covariates=...`` and ``residualize_on=...`` on the
-cross-fitting call, so the nuisance model is fit inside each outer training
-fold. Those least-squares fits scale the training design before solving. The
-numerical rank cutoff then does not depend on the units of the covariates.
+Tuning statistic
+~~~~~~~~~~~~~~~~
 
-That nuisance model is pooled: one fit over the training subjects, which
+Regression is tuned on the statistic it is reported with.
+
+- **Default**: each inner validation split is scored by its subject-level ``r``
+  (:func:`~eegfeat.model.subject_r_scorer`), not by pooled ``R²``.
+- **Why**: pooled ``R²`` rewards predicting each subject's mean, which the
+  subject-level ``r`` ignores, and with no signal it always prefers the most
+  heavily shrunk model.
+- **Requirement**: the scorer needs at least 3 held-out trials of each
+  validation subject.
+- **Override**: pass ``scoring`` to select on something else.
+- **Warning**: when every fold chooses the same end of a numeric grid,
+  cross-fitting warns that the search may have stopped short, unless that end
+  already means no penalty or an empty model.
+
+Preprocessing
+~~~~~~~~~~~~~
+
+Preprocessing is fit on the training rows of the fold.
+
+- **Steps**: the pipeline replaces infinities, drops all-NaN columns, applies the
+  feature and subject missingness limits, imputes, and removes constant columns.
+  It can also select features, scale, deconfound, or reduce dimension with PCA.
+- ``harmonization="intersection"``: keeps features that have at least one
+  finite value in every training group.
+- ``harmonization="union_impute"``: keeps the full feature union.
+- **Target residualization**: ``covariates=...`` and ``residualize_on=...`` on
+  the cross-fitting call, so the nuisance model is fit inside each outer
+  training fold.
+- **Scaling**: those least-squares fits scale the training design before
+  solving. The numerical rank cutoff then does not depend on the units of the
+  covariates.
+
+Within-subject residualization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The default nuisance model is pooled: one fit over the training subjects, which
 removes only the average nuisance effect. Each subject's own departure from it,
 such as a steeper response to the stimulus, stays in the residual, and a
 feature that follows the stimulus the same way then appears to track the
-target within subjects. ``residualize_within="subject"`` fits every subject's
-own nuisance model instead, and applies it to the features as well as to the
-target. The features' residuals use no target. A subject with training rows is
-fitted on them alone; a held-out subject, as in leave-one-subject-out folds, is
-fitted on its own rows. That defines the subject's residual target without
-informing any model, and it makes the estimand the within-subject association
-beyond the nuisance. :func:`~eegfeat.model.residualize_within_subjects` is the
-same step for a fold loop of your own.
+target within subjects.
+
+``residualize_within="subject"`` fits every subject's own nuisance model
+instead.
+
+- It applies the model to the features as well as to the target. The features'
+  residuals use no target.
+- A subject with training rows is fitted on them alone.
+- A held-out subject, as in leave-one-subject-out folds, is fitted on its own
+  rows. That defines the subject's residual target without informing any model.
+- The estimand becomes the within-subject association beyond the nuisance.
+- :func:`~eegfeat.model.residualize_within_subjects` is the same step for a fold
+  loop of your own.
 
 .. code-block:: python
 
@@ -255,22 +319,34 @@ same step for a fold loop of your own.
 Evaluation
 ----------
 
-:func:`eegfeat.model.fold_results` returns predictions in fold order and maps
-them back to the design groups. :func:`eegfeat.model.regression_metrics`
-returns Pearson ``r``, ``R²``, explained variance, and subject-level
-correlation. The default subject-level correlation averages Fisher ``z`` with
-equal weight per subject. :func:`eegfeat.model.classification_metrics` returns
-accuracy, balanced accuracy, AUC, average precision, F1, precision, recall,
-specificity, and the confusion matrix. With ``groups``, each scalar is the
-equal-weight mean over the subjects for which it is defined. A subject with one
-class is left out of the balanced-accuracy and AUC means. The confusion matrix stays pooled
-over trials, so accuracy recomputed from it differs from the reported
-``accuracy``.
+Predictions are mapped back to the design groups, then scored.
 
-Pearson correlation and centered ``R²`` use no absolute variance floor, so
-whether they are defined does not depend on the units of the target.
-Classification probabilities and the predictions used for model selection must
-be finite on every trial. A failed prediction is an error.
+- :func:`eegfeat.model.fold_results` returns predictions in fold order and maps
+  them back to the design groups.
+- :func:`eegfeat.model.regression_metrics` returns Pearson ``r``, ``R²``,
+  explained variance, and subject-level correlation. The default subject-level
+  correlation averages Fisher ``z`` with equal weight per subject.
+- :func:`eegfeat.model.classification_metrics` returns accuracy, balanced
+  accuracy, AUC, average precision, F1, precision, recall, specificity, and the
+  confusion matrix.
+
+Classification details
+~~~~~~~~~~~~~~~~~~~~~~
+
+- With ``groups``, each scalar is the equal-weight mean over the subjects for
+  which it is defined.
+- A subject with one class is left out of the balanced-accuracy and AUC means.
+- The confusion matrix stays pooled over trials, so accuracy recomputed from it
+  differs from the reported ``accuracy``.
+
+Defined values
+~~~~~~~~~~~~~~
+
+- Pearson correlation and centered ``R²`` use no absolute variance floor, so
+  whether they are defined does not depend on the units of the target.
+- Classification probabilities and the predictions used for model selection must
+  be finite on every trial.
+- A failed prediction is an error.
 
 .. code-block:: python
 
@@ -287,66 +363,109 @@ be finite on every trial. A failed prediction is an error.
    )
    print(metrics["subject_level_r"])
 
+Dependence between subjects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Held-out scores from cross-subject folds are not independent. Every fold model
 is trained on the other subjects, so two subjects' scores share most of their
-training data. In a null simulation of leave-one-subject-out ridge, a
-:math:`t` interval over the per-subject correlations excluded zero in 13–19% of
-cohorts at a nominal 5%. :func:`~eegfeat.model.subject_level_r` therefore
-reports no interval unless ``AggregationConfig.ci_method`` asks for one, and
-should only be asked for one when no subject is scored by a model trained on
-another subject's data, as with within-subject folds. Test cross-subject scores
-with :func:`~eegfeat.model.permutation_test`, which refits the whole procedure
-under the null.
+training data.
+
+- **Evidence**: in a null simulation of leave-one-subject-out ridge, a
+  :math:`t` interval over the per-subject correlations excluded zero in 13–19%
+  of cohorts at a nominal 5%.
+- **Default**: :func:`~eegfeat.model.subject_level_r` therefore reports no
+  interval unless ``AggregationConfig.ci_method`` asks for one.
+- **When to ask**: only when no subject is scored by a model trained on another
+  subject's data, as with within-subject folds.
+- **Testing instead**: test cross-subject scores with
+  :func:`~eegfeat.model.permutation_test`, which refits the whole procedure
+  under the null.
+
+Independent statistics
+~~~~~~~~~~~~~~~~~~~~~~
 
 :func:`eegfeat.model.bootstrap_mean_ci` and
 :func:`eegfeat.model.paired_signflip_p_value` take a pre-specified vector of
 independent subject-level statistics, which leave-one-subject-out scores are
-not. ``bootstrap_mean_ci`` is a 95% percentile interval of the mean. Pass
-Fisher-:math:`z` values, not correlations. ``paired_signflip_p_value`` is a
-two-sided test of zero mean on paired differences and returns
-:math:`(b + 1)/(B + 1)`.
+not.
+
+- ``bootstrap_mean_ci`` is a 95% percentile interval of the mean. Pass
+  Fisher-:math:`z` values, not correlations.
+- ``paired_signflip_p_value`` is a two-sided test of zero mean on paired
+  differences and returns :math:`(b + 1)/(B + 1)`.
 
 Permutation nulls
 -----------------
 
 :func:`eegfeat.model.permutation_test` refits the full cross-fitting procedure
 on each draw. It is for regression and refits
-:func:`~eegfeat.model.cross_fit_regression`. ``NullConfig.scheme`` accepts ``"within_subject"``,
+:func:`~eegfeat.model.cross_fit_regression`.
+
+Schemes
+~~~~~~~
+
+``NullConfig.scheme`` accepts ``"within_subject"``,
 ``"within_subject_within_run"``, and ``"circular_shift_within_run"``.
-``"run_wise"`` is an alias of ``"within_subject_within_run"``, the name used
-for this shuffle in the upstream pipeline (``runwise``). Both of those schemes
-shuffle labels inside each run of each subject. No scheme exchanges whole runs.
-Run structure differs by paradigm. Run-aware schemes require ``runs``.
-Circular shifts also require finite integer trial indices (``trial_indices``)
-that are unique inside each subject and run, and at least
-``min_retained_trials`` trials per run (default 8). A draw that fails to fit raises. Failed draws are
-not dropped from the null.
 
-``greater_is_better`` chooses the tail. The default is ``True``. Set it to
-``False`` when a smaller value is the better score, as with
-``mean_squared_error``. Left at the default, a strong effect on an error
-metric returns :math:`p \approx 1`, and only a model that scores worse than the
-permuted refits returns a small :math:`p`. A model at chance gives a :math:`p`
-spread uniformly on :math:`(0, 1]` under either tail. The direction is an argument. It is not inferred from ``metric_fn``.
+- ``"run_wise"`` is an alias of ``"within_subject_within_run"``, the name used
+  for this shuffle in the upstream pipeline (``runwise``).
+- Both of those schemes shuffle labels inside each run of each subject. No
+  scheme exchanges whole runs.
+- Run structure differs by paradigm. Run-aware schemes require ``runs``.
+- Circular shifts also require finite integer trial indices
+  (``trial_indices``) that are unique inside each subject and run.
+- Circular shifts also require at least ``min_retained_trials`` trials per run
+  (default 8).
+- A draw that fails to fit raises. Failed draws are not dropped from the null.
 
-With ``residualize_on``, pooled or within subjects, the null is
-Freedman-Lane (Freedman & Lane, 1983; Winkler et al., 2014). Each fold fits its
-nuisance model exactly as cross-fitting does, keeps that fit's prediction, and
-permutes only its residuals, so a draw breaks the feature-target link and
-leaves the nuisance-target link in place. Permuting the raw target would break
-both, and the null would describe a different hypothesis. The residuals are
-exchanged within the scheme's blocks, which must stay inside each fold.
+Tail
+~~~~
 
-A ridge pipeline whose preprocessing never sees the target, which is the
-default ``ridge_pipeline``, is tuned on the subject-level ``r`` and scored with
-it, gets every draw in closed form. Its preprocessing, ridge predictions, target
-residualization and the Freedman-Lane rebuild are all linear in the target, so
-each fold and inner split is decomposed once and each draw is a few matrix
-products: the refitted null to rounding error, at the cost of one cross-fit. On
-12 subjects, 720 trials and 2,000 features a draw took about a thousandth of the
-time a refit took. Any other pipeline, a target-driven step such as
-``feature_selection_percentile``, a ``metric_fn`` or another ``scoring`` falls
-back to refitting every draw.
+``greater_is_better`` chooses the tail. The default is ``True``.
+
+- Set it to ``False`` when a smaller value is the better score, as with
+  ``mean_squared_error``.
+- Left at the default, a strong effect on an error metric returns
+  :math:`p \approx 1`, and only a model that scores worse than the permuted
+  refits returns a small :math:`p`.
+- A model at chance gives a :math:`p` spread uniformly on :math:`(0, 1]` under
+  either tail.
+- The direction is an argument. It is not inferred from ``metric_fn``.
+
+Nuisance covariates
+~~~~~~~~~~~~~~~~~~~
+
+With ``residualize_on``, pooled or within subjects, the null is Freedman-Lane
+(Freedman & Lane, 1983; Winkler et al., 2014).
+
+- Each fold fits its nuisance model exactly as cross-fitting does, keeps that
+  fit's prediction, and permutes only its residuals.
+- A draw therefore breaks the feature-target link and leaves the
+  nuisance-target link in place.
+- Permuting the raw target would break both, and the null would describe a
+  different hypothesis.
+- The residuals are exchanged within the scheme's blocks, which must stay inside
+  each fold.
+
+Closed-form draws
+~~~~~~~~~~~~~~~~~
+
+A ridge pipeline gets every draw in closed form when all of these hold:
+
+- its preprocessing never sees the target, as in the default
+  ``ridge_pipeline``;
+- it is tuned on the subject-level ``r`` and scored with it.
+
+Its preprocessing, ridge predictions, target residualization and the
+Freedman-Lane rebuild are all linear in the target. Each fold and inner split is
+decomposed once and each draw is a few matrix products: the refitted null to
+rounding error, at the cost of one cross-fit.
+
+- **Speed**: on 12 subjects, 720 trials and 2,000 features a draw took about a
+  thousandth of the time a refit took.
+- **Fallback**: any other pipeline, a target-driven step such as
+  ``feature_selection_percentile``, a ``metric_fn`` or another ``scoring``
+  falls back to refitting every draw.
 
 .. code-block:: python
 
@@ -372,14 +491,19 @@ Univariate screen
 -----------------
 
 :func:`eegfeat.model.univariate_screen` asks which single features track the
-target within subjects. Each subject's correlation is taken over its own trials,
-averaged across subjects in Fisher :math:`z`, and tested with a one-sample
-:math:`t`. No model is trained across subjects, so here the subjects are
-independent. Flipping the sign of a subject's :math:`z` for every feature at
-once keeps the dependence between features, and the largest :math:`|t|` over
-those flips gives ``p_fwer``, controlled over the whole family. ``q`` is the
-Benjamini-Hochberg adjustment of ``p``. ``residualize_on`` removes each
-subject's own nuisance design from both sides first.
+target within subjects.
+
+- **Statistic**: each subject's correlation is taken over its own trials,
+  averaged across subjects in Fisher :math:`z`, and tested with a one-sample
+  :math:`t`.
+- **Independence**: no model is trained across subjects, so here the subjects are
+  independent.
+- ``p_fwer``: flipping the sign of a subject's :math:`z` for every feature at
+  once keeps the dependence between features. The largest :math:`|t|` over those
+  flips gives ``p_fwer``, controlled over the whole family.
+- ``q``: the Benjamini-Hochberg adjustment of ``p``.
+- ``residualize_on``: removes each subject's own nuisance design from both sides
+  first.
 
 .. code-block:: python
 
@@ -395,28 +519,40 @@ Conformal intervals
 -------------------
 
 :func:`eegfeat.model.prediction_intervals` returns bounds for ``"split"``,
-``"cv_plus"``, or ``"quantile"`` conformal calibration. With ``groups``, the
-fitting split and the calibration split are group-disjoint. Calibration scores
-are still pooled over trials, so a participant with more trials contributes
-more scores. The procedure does not give a distribution-free coverage guarantee
-for a new participant. The result stores ``lower``, ``upper``, ``alpha``,
-``method``, and ``calibration_unit``. It does not store the coverage realized on a test set.
+``"cv_plus"``, or ``"quantile"`` conformal calibration.
 
-Split conformal has marginal coverage of at least :math:`1 - \alpha` when
-calibration and test trials are exchangeable (Lei et al., 2018). ``"cv_plus"``
-and ``"quantile"`` use the CV+ construction of Barber et al. (2021), which puts
-:math:`\alpha` in each tail. For :math:`K` folds of :math:`n` trials its
-guarantee is
+- **Groups**: with ``groups``, the fitting split and the calibration split are
+  group-disjoint.
+- **Pooling**: calibration scores are still pooled over trials, so a participant
+  with more trials contributes more scores.
+- **No new-participant guarantee**: the procedure does not give a
+  distribution-free coverage guarantee for a new participant.
+- **Result fields**: ``lower``, ``upper``, ``alpha``, ``method``, and
+  ``calibration_unit``.
+- **Not stored**: the coverage realized on a test set.
 
-.. math::
+Coverage guarantees
+~~~~~~~~~~~~~~~~~~~
 
-   1 - 2\alpha - \min\left\{ \frac{2(1 - 1/K)}{n/K + 1},
-   \frac{1 - K/n}{K + 1} \right\},
+- ``"split"``: marginal coverage of at least :math:`1 - \alpha` when
+  calibration and test trials are exchangeable (Lei et al., 2018).
+- ``"cv_plus"`` and ``"quantile"``: the CV+ construction of Barber et al.
+  (2021), which puts :math:`\alpha` in each tail. For :math:`K` folds of
+  :math:`n` trials its guarantee is
 
-which is :math:`1 - 2\alpha` in the jackknife+ limit. Coverage near
-:math:`1 - \alpha` is typical but not guaranteed. ``"quantile"`` is
-conformalized quantile regression (Romano et al., 2019) in CV+ form. A
-non-finite calibration score or prediction raises.
+  .. math::
+
+     1 - 2\alpha - \min\left\{ \frac{2(1 - 1/K)}{n/K + 1},
+     \frac{1 - K/n}{K + 1} \right\},
+
+  which is :math:`1 - 2\alpha` in the jackknife+ limit.
+- Coverage near :math:`1 - \alpha` is typical but not guaranteed.
+- ``"quantile"`` is conformalized quantile regression (Romano et al., 2019) in
+  CV+ form.
+- A non-finite calibration score or prediction raises.
+
+Example
+~~~~~~~
 
 The test rows must not be used for fitting or calibration, or no coverage
 statement applies to them. The example holds out the first subject.
@@ -440,18 +576,23 @@ statement applies to them. The example holds out the first subject.
 Importance
 ----------
 
-:func:`eegfeat.model.permutation_importance_over_folds` computes held-out
-permutation importance on the same fold-fitted models used for evaluation.
-Pass the feature names that were selected so a score can be matched after
-fold-local column drops. :func:`eegfeat.model.shap_importance_over_folds`
-computes SHAP values. A step such as PCA that mixes columns cannot be mapped
-back to one input feature.
+Importance is computed on the same fold-fitted models used for evaluation.
+
+- :func:`eegfeat.model.permutation_importance_over_folds` computes held-out
+  permutation importance. Pass the feature names that were selected so a score
+  can be matched after fold-local column drops.
+- :func:`eegfeat.model.shap_importance_over_folds` computes SHAP values.
+- A step such as PCA that mixes columns cannot be mapped back to one input
+  feature.
 
 The example below uses the feature-only ``design`` from the cohort section and
-a pipeline without covariates. With covariates, fit on a pipeline with the same
-``n_covariates`` and pass ``design.column_names``. Covariates have no
-``FeatureMeta`` record, so :func:`~eegfeat.model.aggregate_by` refuses them.
-Keep only ``design.feature_columns`` before aggregating.
+a pipeline without covariates. With covariates:
+
+- fit on a pipeline with the same ``n_covariates``;
+- pass ``design.column_names``;
+- keep only ``design.feature_columns`` before aggregating, because covariates
+  have no ``FeatureMeta`` record and :func:`~eegfeat.model.aggregate_by`
+  refuses them.
 
 .. code-block:: python
 
@@ -470,9 +611,10 @@ Keep only ``design.feature_columns`` before aggregating.
    by_band = efm.aggregate_by(importance, cohort_table.meta, field="band")
 
 The reported value is the mean decrease in the held-out score when that
-feature is permuted. With ``scoring=None`` the score is the one the model was
-selected on: the subject-level ``r`` for regressors and accuracy for
-classifiers.
+feature is permuted.
+
+- ``scoring=None``: the score is the one the model was selected on, the
+  subject-level ``r`` for regressors and accuracy for classifiers.
 
 References
 ----------

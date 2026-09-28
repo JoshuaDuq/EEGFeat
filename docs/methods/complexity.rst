@@ -17,34 +17,61 @@ Moorman, 2000).
 
    H(x, m, r) = -\log \frac{A}{B}
 
-:math:`B` and :math:`A` count the pairs of templates, among the first
-:math:`N - m`, that match over :math:`m` and over :math:`m + 1` samples.
-Two templates match when their Chebyshev distance is strictly below
-:math:`r \sigma_x`, where :math:`\sigma_x` is the population standard deviation
-of the finite samples. Each unordered pair is counted once and self-matches are
-excluded. The log is natural. No match at length
-:math:`m` returns NaN. Matches at length :math:`m` and none at length
-:math:`m + 1` return infinity. Zero is the value for a perfectly regular
-series, so those two outcomes are not replaced by zero.
+Definition
+~~~~~~~~~~
 
-``multiscale_entropy`` repeats the measure after coarse-graining by
-non-overlapping block means, one column per scale (Costa, Goldberger, and Peng,
-2002). ``tolerance_mode="original_sd"`` keeps :math:`r \sigma_x` from the
-original series at every scale. ``tolerance_mode="scale_sd"`` recomputes
-:math:`\sigma` after coarse-graining and is stored as a separate estimator.
-A block that contains a non-finite sample stays non-finite. A trailing
-incomplete block is dropped. An embedding template that crosses a gap is
-excluded. Missing samples are not deleted in a way that would make new
-neighbours.
+- :math:`B` and :math:`A` count the pairs of templates, among the first
+  :math:`N - m`, that match over :math:`m` and over :math:`m + 1` samples.
+- Two templates match when their Chebyshev distance is strictly below
+  :math:`r \sigma_x`.
+- :math:`\sigma_x` is the population standard deviation of the finite samples.
+- Each unordered pair is counted once, and self-matches are excluded.
+- The log is natural.
+- Cost grows with the square of the window length.
+
+Missing values
+~~~~~~~~~~~~~~
+
+- No match at length :math:`m` returns NaN.
+- Matches at length :math:`m` and none at length :math:`m + 1` return infinity.
+- Zero is the value for a perfectly regular series, so those two outcomes are
+  not replaced by zero.
+
+Tolerance fallback
+~~~~~~~~~~~~~~~~~~
 
 If :math:`r` times the standard deviation of the finite samples is non-finite
 or non-positive, the tolerance falls back to
-:math:`\max(\epsilon, r \cdot \operatorname{nanstd})` of those samples, where
-:math:`\epsilon` is double-precision machine epsilon
-(``np.finfo(float).eps``, about :math:`2.2 \times 10^{-16}`). The log is not evaluated when
-the match count in the denominator or the numerator is zero.
+:math:`\max(\epsilon, r \cdot \operatorname{nanstd})` of those samples. Here
+:math:`\epsilon` is double-precision machine epsilon (``np.finfo(float).eps``,
+about :math:`2.2 \times 10^{-16}`). The log is not evaluated when the match
+count in the denominator or the numerator is zero.
 
-Cost grows with the square of the window length.
+Multiscale entropy
+~~~~~~~~~~~~~~~~~~
+
+``multiscale_entropy`` repeats the measure after coarse-graining by
+non-overlapping block means, one column per scale (Costa, Goldberger, and Peng,
+2002).
+
+.. list-table::
+   :widths: 25 75
+   :header-rows: 1
+
+   * - ``tolerance_mode``
+     - Tolerance
+   * - ``"original_sd"``
+     - Keeps :math:`r \sigma_x` from the original series at every scale.
+   * - ``"scale_sd"``
+     - Recomputes :math:`\sigma` after coarse-graining. Stored as a separate
+       estimator.
+
+Missing samples:
+
+- A block that contains a non-finite sample stays non-finite.
+- A trailing incomplete block is dropped.
+- An embedding template that crosses a gap is excluded.
+- Missing samples are not deleted in a way that would make new neighbours.
 
 .. code-block:: python
 
@@ -59,11 +86,8 @@ Higuchi Fractal Dimension
 
 ``higuchi_fractal_dimension`` retraces the series at integer strides
 :math:`k`, estimates the mean curve length :math:`L(k)`, and fits
-:math:`L(k) \propto k^{-D}` (Higuchi, 1988). :math:`D` is the slope of
-:math:`\log L(k)` against :math:`-\log k`. Values near 1 are smooth curves.
-Larger values keep structure at finer scales. For a fixed ``k_max`` the cost
-is linear in the number of samples. The quantity is geometric scale dependence.
-It is a different estimator from sample entropy.
+:math:`L(k) \propto k^{-D}` (Higuchi, 1988). The quantity is geometric scale
+dependence, a different estimator from sample entropy.
 
 For :math:`N` samples and stride :math:`k`,
 
@@ -73,10 +97,26 @@ For :math:`N` samples and stride :math:`k`,
    \qquad L(k) = \frac{1}{k}\sum_{m=0}^{k-1} L_m(k),
 
 with :math:`x` indexed from 0 and :math:`q_{\max} = \lfloor (N - m - 1) / k \rfloor`.
-The slope is ``np.polyfit(-log(k), log(L), 1)`` over the strides with a
-positive :math:`L(k)`. A window with any non-finite sample, with ``k_max`` or
-fewer samples, or with fewer than two strides giving a positive :math:`L(k)`
-(a flat window, for example) returns NaN.
+
+**Fit**
+   :math:`D` is the slope of :math:`\log L(k)` against :math:`-\log k`, computed
+   as ``np.polyfit(-log(k), log(L), 1)`` over the strides with a positive
+   :math:`L(k)`.
+
+**Interpretation**
+   Values near 1 are smooth curves. Larger values keep structure at finer
+   scales.
+
+**Cost**
+   For a fixed ``k_max`` the cost is linear in the number of samples.
+
+**Missing values**
+   A window returns NaN if:
+
+   - any sample is non-finite;
+   - it has ``k_max`` or fewer samples;
+   - fewer than two strides give a positive :math:`L(k)` (a flat window, for
+     example).
 
 Microstates
 -----------
@@ -89,10 +129,14 @@ power (Lehmann, Ozaki, and Pal, 1987; Pascual-Marqui, Michel, and Lehmann,
 
    \text{GFP}(t) = \sqrt{\frac{1}{N_{\text{channels}}} \sum_{c=1}^{N_{\text{channels}}} \left( V_c(t) - \bar{V}(t) \right)^2 }
 
-:math:`\bar{V}(t)` is the average reference at that sample. Each peak map is
-oriented so that its largest-magnitude channel is positive. Clustering is the
-polarity-invariant modified :math:`k`-means of Pascual-Marqui et al. (1995).
-Assignment uses absolute spatial correlation.
+:math:`\bar{V}(t)` is the average reference at that sample.
+
+Clustering and assignment
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each peak map is oriented so that its largest-magnitude channel is positive.
+Clustering is the polarity-invariant modified :math:`k`-means of Pascual-Marqui
+et al. (1995). Assignment uses absolute spatial correlation.
 
 .. math::
 
@@ -101,16 +145,23 @@ Assignment uses absolute spatial correlation.
 :math:`V(t)` is the average-referenced map, so the ratio is the spatial
 correlation.
 
-Each template is the principal eigenvector of its members' scatter matrix, so
-negating a member does not change the template. The start is scikit-learn
-:math:`k`-means run to convergence on the sign-normalized peak maps (k-means++
-initialisation, best of ``n_init=20`` restarts by inertia). Ordinary :math:`k`-means on
-sign-normalized maps is a different procedure. Orientation by the strongest
-channel jumps when two extrema have similar magnitude, and noise can then split
-one state's maps across clusters.
+**Templates**
+   Each template is the principal eigenvector of its members' scatter matrix,
+   so negating a member does not change the template.
 
-Segments shorter than ``min_duration_ms`` are absorbed into the longer
-neighbouring state, or split between the two neighbours on a tie.
+**Start**
+   The start is scikit-learn :math:`k`-means run to convergence on the
+   sign-normalized peak maps (k-means++ initialisation, best of ``n_init=20``
+   restarts by inertia).
+
+**Notes**
+   Ordinary :math:`k`-means on sign-normalized maps is a different procedure.
+   Orientation by the strongest channel jumps when two extrema have similar
+   magnitude, and noise can then split one state's maps across clusters.
+
+**Short segments**
+   Segments shorter than ``min_duration_ms`` are absorbed into the longer
+   neighbouring state, or split between the two neighbours on a tie.
 
 .. code-block:: python
 
@@ -133,41 +184,71 @@ is a reporting convention. The modified :math:`k`-means objective does not use
 it, but the Euclidean :math:`k`-means start is computed on sign-flipped maps and
 so depends on it.
 
-``fit_on`` names the trials whose maps may enter the fit, as a
-cross-validation fold would require. The default uses every trial. That pool
-includes the trial later scored if these features are used for prediction.
-Assignment and the measures below are computed per epoch, so each returned
-table has one row per epoch.
+Fitting and labelling
+~~~~~~~~~~~~~~~~~~~~~
 
-Cluster indices have no anatomical meaning. Templates that are not matched to
-a reference are labelled ``state1`` onward. Labels A–D require a one-to-one
-match to an identified reference set and are not assigned here. Temporal
-features from two fits are comparable after that topographic match, and not
-before. The segmentation returns its templates and the global explained
-variance. Column identity includes the templates, the channel order, the rows
-that contributed, and the segmentation settings, so ``state1`` from two fits
-is two features. If any sample is non-finite or spatially constant,
-``segment`` raises ``ValueError`` for the whole input, so reject such data
-first.
+**fit_on**
+   ``fit_on`` names the trials whose maps may enter the fit, as a
+   cross-validation fold would require. The default uses every trial. That pool
+   includes the trial later scored if these features are used for prediction.
 
-The objective matches the modified :math:`k`-means in Pycrostates. The
-template update (the exact principal eigenvector rather than one power-iteration
-step), the stopping rule (labels unchanged, at most 300 iterations),
-initialisation, GFP-peak selection, and short-segment smoothing are the choices
-above, so templates need not match a Pycrostates fit. They are stored with the
-templates. Michel and Koenig (2018) review
-why GFP peaks, topographic correlation, polarity, and the temporal summaries
-are separate choices.
+**Output shape**
+   Assignment and the measures below are computed per epoch, so each returned
+   table has one row per epoch.
 
-From the sequence :math:`s(t)`,
+**Labels**
+   Cluster indices have no anatomical meaning. Templates that are not matched
+   to a reference are labelled ``state1`` onward. Labels A--D require a
+   one-to-one match to an identified reference set and are not assigned here.
 
-- **coverage** is occupancy, :math:`n_T^{-1} \sum_t \mathbb{I}[s(t) = k]` over
-  the :math:`n_T` samples in the window. Across states the values sum to 1.
-- **duration** is the mean dwell of a visit, in milliseconds. A state that is
-  never entered is NaN.
-- **occurrence** is the number of visits per second. A state that is never
-  entered is 0.
-- **transitions** are probabilities between successive segments,
+**Comparability**
+   Temporal features from two fits are comparable after that topographic match,
+   and not before. The segmentation returns its templates and the global
+   explained variance. Column identity includes the templates, the channel
+   order, the rows that contributed, and the segmentation settings, so
+   ``state1`` from two fits is two features.
+
+**Missing values**
+   If any sample is non-finite or spatially constant, ``segment`` raises
+   ``ValueError`` for the whole input, so reject such data first.
+
+**Relation to Pycrostates**
+   The objective matches the modified :math:`k`-means in Pycrostates. The
+   template update (the exact principal eigenvector rather than one
+   power-iteration step), the stopping rule (labels unchanged, at most 300
+   iterations), initialisation, GFP-peak selection, and short-segment smoothing
+   are the choices above, so templates need not match a Pycrostates fit. They
+   are stored with the templates.
+
+**Reference**
+   Michel and Koenig (2018) review why GFP peaks, topographic correlation,
+   polarity, and the temporal summaries are separate choices.
+
+Temporal measures
+~~~~~~~~~~~~~~~~~
+
+From the sequence :math:`s(t)`:
+
+.. list-table::
+   :widths: 18 52 30
+   :header-rows: 1
+
+   * - Measure
+     - Definition
+     - Never-entered state
+   * - **coverage**
+     - Occupancy, :math:`n_T^{-1} \sum_t \mathbb{I}[s(t) = k]` over the
+       :math:`n_T` samples in the window. Across states the values sum to 1.
+     -
+   * - **duration**
+     - Mean dwell of a visit, in milliseconds.
+     - NaN
+   * - **occurrence**
+     - Number of visits per second.
+     - 0
+   * - **transitions**
+     - Probabilities between successive segments (below).
+     - Row is NaN
 
 .. math::
 
@@ -175,6 +256,9 @@ From the sequence :math:`s(t)`,
 
 Self-transitions are omitted. Each row sums to 1, or is NaN when the source
 state is never left inside the window.
+
+Global explained variance
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Global explained variance is the GFP-weighted squared correlation with the
 assigned template after smoothing, pooled over every epoch, including those
@@ -188,12 +272,19 @@ best-correlated one.
    assigned = correlations[np.arange(n_times), states]
    gev = np.sum(gfp ** 2 * assigned ** 2) / np.sum(gfp ** 2)
 
-Coverage, duration, occurrence, and transitions are then ``mean(state == k)``,
-mean run length divided by the sampling rate and times 1000 (a run cut by the
-window edge counts as a visit), run count divided by the window
-length in seconds, and row-normalized counts of successive runs.
+Implementation
+~~~~~~~~~~~~~~
 
-Segmentation requires scikit-learn (``pip install eegfeat[microstates]``).
+Coverage, duration, occurrence, and transitions are then computed as follows:
+
+- **coverage**: ``mean(state == k)``.
+- **duration**: mean run length divided by the sampling rate and times 1000. A
+  run cut by the window edge counts as a visit.
+- **occurrence**: run count divided by the window length in seconds.
+- **transitions**: row-normalized counts of successive runs.
+
+**Requirement**
+   Segmentation requires scikit-learn (``pip install eegfeat[microstates]``).
 
 References
 ----------

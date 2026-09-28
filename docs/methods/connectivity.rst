@@ -11,48 +11,70 @@ Signatures are in :doc:`/api/connectivity`.
 Inter-Trial Phase Coherence
 ---------------------------
 
+Inter-trial phase coherence (ITPC) measures how consistent the phase at one
+sensor is across trials. It is the length of the across-trial mean unit-phase
+vector, averaged over time.
+
 .. math::
 
    \mathrm{ITPC} = \frac{1}{T} \sum_t
    \left| \frac{1}{N} \sum_n e^{i \phi_n(t)} \right|
 
-The value is 1 when the phase matches on every trial at that latency, and 0
-when the phase is uniform across trials. The mean across trials is taken at
-each time, and those values are then averaged over time. Averaging over time
-first is a different quantity. A phase that drifts within the trial but matches
-across trials is 1 in the order above and near 0 if time is averaged first.
+**Range**
+   1 when the phase matches on every trial at that latency, and 0 when the
+   phase is uniform across trials.
 
-Under a uniform-phase null, :math:`E[\mathrm{ITPC}^2] = 1/N` and
-:math:`E[\mathrm{ITPC}] \approx \sqrt{\pi/(4N)}`.
-Small :math:`N` is biased high, and values from different trial counts are not
-comparable. The default requires at least two valid trials. Cells below
-``min_valid_trials`` are flagged, and time points with fewer finite phases than
-that minimum are omitted from the mean.
+**Order of averaging**
+   The mean across trials is taken at each time, and those values are then
+   averaged over time. Averaging over time first is a different quantity.
+   A phase that drifts within the trial but matches across trials is 1 in the
+   order above and near 0 if time is averaged first.
 
-Pairwise phase consistency (Vinck et al., 2010) estimates squared population
-phase locking. Its expectation is 0 under uniform phase, so values from
-different trial counts can be compared.
+**Bias**
+   Under a uniform-phase null, :math:`E[\mathrm{ITPC}^2] = 1/N` and
+   :math:`E[\mathrm{ITPC}] \approx \sqrt{\pi/(4N)}`. Small :math:`N` is biased
+   high, and values from different trial counts are not comparable.
+
+**Missing values and flags**
+   - The default requires at least two valid trials.
+   - Cells below ``min_valid_trials`` are flagged.
+   - Time points with fewer finite phases than ``min_valid_trials`` are
+     omitted from the mean.
+
+**Reference**
+   ITPC is used by Tallon-Baudry, Bertrand, Delpuech, and Pernier (1996) and
+   described in Delorme and Makeig (2004).
+
+Pairwise Phase Consistency
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pairwise phase consistency (PPC; Vinck et al., 2010) estimates squared
+population phase locking. Its expectation is 0 under uniform phase, so values
+from different trial counts can be compared.
 
 .. math::
 
    \mathrm{PPC} = \frac{1}{T} \sum_t \left( \frac{2}{N(N - 1)} \sum_{j < k} \cos(\phi_j(t) - \phi_k(t)) \right)
 
-The implementation uses the equivalent form
-:math:`(|\sum_n e^{i\phi_n}|^2 - N) / (N(N - 1))` at each time, then averages
-over time. ITPC is the length of the across-trial mean unit-phase vector, as
-used by Tallon-Baudry, Bertrand, Delpuech, and Pernier (1996) and described in
-Delorme and Makeig (2004).
+**Implementation**
+   The equivalent form :math:`(|\sum_n e^{i\phi_n}|^2 - N) / (N(N - 1))` is
+   used at each time, then averaged over time.
+
+Row layout of ITPC and PPC
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ITPC and PPC have one row per trial group. The same summary copied onto each
-member epoch would repeat one number across rows. :func:`~eegfeat.itpc` and
-:func:`~eegfeat.ppc` return ``row_labels``. :func:`~eegfeat.concat` rejects a
-join of group rows with per-epoch rows. Pass ``trials`` to compute the measure
-inside groups such as experimental condition.
+member epoch would repeat one number across rows.
+
+- :func:`~eegfeat.itpc` and :func:`~eegfeat.ppc` return ``row_labels``.
+- :func:`~eegfeat.concat` rejects a join of group rows with per-epoch rows.
+- Pass ``trials`` to compute the measure inside groups such as experimental
+  condition.
 
 Phase-Amplitude Coupling
 ------------------------
 
-Mean vector length (Canolty et al., 2006) is the modulus of the mean of
+Mean vector length (MVL; Canolty et al., 2006) is the modulus of the mean of
 :math:`A(t)e^{i\phi(t)}`, where :math:`\phi` is the phase of the slower band.
 That raw form is ``normalize=False``. The default divides by the summed
 amplitude instead of the sample count, which bounds the value in
@@ -62,53 +84,91 @@ amplitude instead of the sample count, which bounds the value in
 
    \mathrm{MVL} = \frac{\left| \sum_t A(t) e^{i \phi(t)} \right|}{\sum_t A(t)}
 
-Division by the summed amplitude removes the scale of the envelope. Canolty
-et al. instead z-scored the raw value against surrogates. ``normalize=True``
-uses that denominator, and returns NaN when it is at most :math:`10^{-20}`. ``normalize=False`` divides the modulus of the weighted sum
-by the number of finite samples. It returns that real mean, not the unscaled
-complex sum.
+**Normalization**
+   Division by the summed amplitude removes the scale of the envelope.
+   Canolty et al. instead z-scored the raw value against surrogates.
 
-The measure is computed inside each trial, so the table has one row per epoch.
-No surrogate distribution is computed. Autocorrelation in amplitude and in
-phase biases the raw value upward. Tort, Komorowski, Eichenbaum, and Kopell
-(2010) compare coupling estimators and note that raw mean vector length depends
-on the amplitude of the modulated band, so it should not be read as a coupling
-strength without normalization against surrogates. A null for this value can be built from circular time shifts
-inside the trial, which keep the single-trial spectrum.
+**Flags**
+   - ``normalize=True`` uses the summed-amplitude denominator. It returns NaN
+     when that denominator is at most :math:`10^{-20}`.
+   - ``normalize=False`` divides the modulus of the weighted sum by the number
+     of finite samples. It returns that real mean, not the unscaled complex
+     sum.
+
+**Rows**
+   The measure is computed inside each trial, so the table has one row per
+   epoch.
+
+**Notes**
+   - No surrogate distribution is computed.
+   - Autocorrelation in amplitude and in phase biases the raw value upward.
+   - A null for this value can be built from circular time shifts inside the
+     trial, which keep the single-trial spectrum.
+
+**Reference**
+   Tort, Komorowski, Eichenbaum, and Kopell (2010) compare coupling estimators
+   and note that raw mean vector length depends on the amplitude of the
+   modulated band. It should therefore not be read as a coupling strength
+   without normalization against surrogates.
 
 Connectivity
 ------------
 
-``envelope_correlation`` correlates band envelopes between every pair of
-nodes. By default each envelope is first orthogonalized against the other node
-(``orthogonalize="pairwise"``) and the magnitude is taken (``absolute=True``).
-``orthogonalize=None`` gives the plain Pearson correlation. ``spectral_connectivity`` calls
-``mne_connectivity.spectral_connectivity_epochs`` for coherence, imaginary
-coherency, the phase-locking value, pairwise phase consistency, the
-phase-lag index, and wPLI. ``wpli`` is the weighted phase-lag index, which
-down-weights zero-lag coupling and therefore reduces the contribution of volume
-conduction (Vinck et al., 2011).
+Two families of coupling between nodes are provided: amplitude-envelope
+correlation and spectral connectivity. Nodes are channels, or ROIs when
+``groups`` is given.
 
-Spectral connectivity requires the ``connectivity`` extra
-(``pip install eegfeat[connectivity]``). At low trial counts,
-``method="wpli2_debiased"`` applies the sample-size correction in Vinck et al.
-(2011). ``method="wpli"`` does not. Every trial group needs at least two epochs, for
-every spectral connectivity method.
-Warnings raised by the MNE estimator are left visible.
+Functions
+~~~~~~~~~
 
-Nodes are channels, or ROIs when ``groups`` is given. For
-``spectral_connectivity`` and ``wpli``, the channel-level matrix is averaged
-inside each ROI block, and a node's own block excludes the diagonal. For
-``envelope_correlation``, a node's series is the mean complex analytic signal
-of its member channels, and envelopes are taken from that mean. These measures have one row per trial group, as
-:func:`~eegfeat.itpc` does.
+``envelope_correlation``
+   Correlates band envelopes between every pair of nodes. By default each
+   envelope is first orthogonalized against the other node
+   (``orthogonalize="pairwise"``) and the magnitude is taken
+   (``absolute=True``). ``orthogonalize=None`` gives the plain Pearson
+   correlation.
+
+``spectral_connectivity``
+   Calls ``mne_connectivity.spectral_connectivity_epochs`` for coherence,
+   imaginary coherency, the phase-locking value, pairwise phase consistency,
+   the phase-lag index, and wPLI.
+
+``wpli``
+   The weighted phase-lag index. It down-weights zero-lag coupling and
+   therefore reduces the contribution of volume conduction (Vinck et al.,
+   2011).
+
+Requirements and options
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Spectral connectivity requires the ``connectivity`` extra
+  (``pip install eegfeat[connectivity]``).
+- Every trial group needs at least two epochs, for every spectral
+  connectivity method.
+- ``method="wpli2_debiased"`` applies the sample-size correction in Vinck et
+  al. (2011), which matters at low trial counts. ``method="wpli"`` does not.
+- Warnings raised by the MNE estimator are left visible.
+
+Nodes and ROIs
+~~~~~~~~~~~~~~
+
+- For ``spectral_connectivity`` and ``wpli``, the channel-level matrix is
+  averaged inside each ROI block, and a node's own block excludes the
+  diagonal.
+- For ``envelope_correlation``, a node's series is the mean complex analytic
+  signal of its member channels, and envelopes are taken from that mean.
+- These measures have one row per trial group, as :func:`~eegfeat.itpc` does.
+
+Envelope correlation
+~~~~~~~~~~~~~~~~~~~~
 
 Envelope correlation of analytic amplitudes is the approach used by Brookes et
-al. (2011). The default orthogonalization is the pairwise projection of
-Hipp, Hawellek, Corbetta, Siegel, and Engel (2012). It is not the symmetric
+al. (2011). The default orthogonalization is the pairwise projection of Hipp,
+Hawellek, Corbetta, Siegel, and Engel (2012). It is not the symmetric
 multivariate leakage correction of Colclough, Brookes, Smith, and Woolrich
-(2015), which orthogonalizes all nodes jointly. For analytic signals
-:math:`z_i(t)`,
+(2015), which orthogonalizes all nodes jointly.
+
+For analytic signals :math:`z_i(t)`,
 
 .. math::
 
@@ -116,25 +176,18 @@ multivariate leakage correction of Colclough, Brookes, Smith, and Woolrich
    \frac{\overline{z_j(t)}}{|z_j(t)|}\right)\right|,
    \qquad r_{i\perp j} = \operatorname{corr}(a_{i\perp j}, |z_j|)
 
-The implementation averages :math:`r_{i\perp j}` with its transpose. It can
-take the absolute value before that average. Trials are combined by a Fisher
-transform. Correlations are clipped to :math:`[-0.999999, 0.999999]` before
-:math:`\operatorname{arctanh}`.
+- The orthogonalized branch replaces one envelope with the projected envelope
+  and then symmetrizes.
+- The implementation averages :math:`r_{i\perp j}` with its transpose. It can
+  take the absolute value before that average.
+- Trials are combined by a Fisher transform. Correlations are clipped to
+  :math:`[-0.999999, 0.999999]` before :math:`\operatorname{arctanh}`.
 
 .. code-block:: python
 
    trial_r = np.stack([np.corrcoef(np.abs(trial)) for trial in analytic])
    bounded = np.clip(trial_r, -0.999999, 0.999999)
    envelope_correlation = np.tanh(np.nanmean(np.arctanh(bounded), axis=0))
-
-The orthogonalized branch replaces one envelope with the projected envelope and
-then symmetrizes.
-
-The phase-locking value is Lachaux, Rodriguez, Martinerie, and Varela (1999).
-Imaginary coherency is Nolte et al. (2004). The corrected imaginary
-phase-locking value is Bruña, Maestú, and Pereda (2018). Parameter names and
-cross-spectral accumulation are those of
-`MNE-Connectivity <https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html>`__.
 
 Spectral estimator formulas
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -158,12 +211,15 @@ estimators are
       {\langle|\operatorname{Im}S_{xy}|\rangle_e}.
    \end{aligned}
 
-PPC in this list is the unbiased estimator of squared PLV given in the ITPC
-section. ``wpli2_debiased`` is MNE-Connectivity's debiased estimator of squared
-WPLI. Cross-spectral accumulation is computed by MNE-Connectivity. MNE returns
-a signed imaginary coherency. This package takes the absolute value before the
-frequency average, because the published pairs are unordered and the sign would
-flip if the node order were swapped.
+**Notes**
+   - PPC in this list is the unbiased estimator of squared PLV given in the
+     ITPC section.
+   - ``wpli2_debiased`` is MNE-Connectivity's debiased estimator of squared
+     WPLI.
+   - Cross-spectral accumulation is computed by MNE-Connectivity.
+   - MNE returns a signed imaginary coherency. This package takes the absolute
+     value before the frequency average, because the published pairs are
+     unordered and the sign would flip if the node order were swapped.
 
 The band reduction applied afterwards is
 
@@ -175,28 +231,54 @@ The band reduction applied afterwards is
    band_matrix = selected.mean(axis=-1)
    band_matrix = band_matrix + band_matrix.T
 
-The phase-lag index is Stam, Nolte, and Daffertshofer (2007). ``wpli`` is the
-Vinck et al. (2011) estimator. ``spectral_connectivity`` is the common wrapper
-around the estimators above.
+**References**
+   - The phase-locking value is Lachaux, Rodriguez, Martinerie, and Varela
+     (1999).
+   - Imaginary coherency is Nolte et al. (2004).
+   - The corrected imaginary phase-locking value is Bruña, Maestú, and Pereda
+     (2018).
+   - The phase-lag index is Stam, Nolte, and Daffertshofer (2007).
+   - ``wpli`` is the Vinck et al. (2011) estimator.
+   - Parameter names and cross-spectral accumulation are those of
+     `MNE-Connectivity <https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html>`__.
+   - ``spectral_connectivity`` is the common wrapper around the estimators
+     above.
 
 Common Spatial Patterns
 -----------------------
 
 :class:`~eegfeat.CommonSpatialPattern` finds spatial filters that maximize the
 variance ratio between two classes (Ramoser, Müller-Gerking, and Pfurtscheller,
-2000). The labels determine the filters. :func:`~eegfeat.csp_features` fits on
-each training fold and transforms the held-out rows of that fold. The resulting
-table is a description of those held-out rows. Reusing the same folds as a
-classifier's outer split still leaks. A fold's filters are estimated with
-labels from epochs that fall in the classifier's training set through another
-fold. :func:`eegfeat.model.build_design` rejects these columns.
+2000). The labels determine the filters.
 
-To use CSP as a predictor, fit it inside each training fold and transform the
-training rows and the test rows with that fit. Repeat the fit inside inner
-tuning. In a scikit-learn pipeline, put ``mne.decoding.CSP`` in the pipeline.
-The split that produced a column is stored in its computation metadata. Input
-should be band-limited. The number of components must be even. There must be two
-classes.
+Requirements
+~~~~~~~~~~~~
+
+- Input should be band-limited.
+- The number of components must be even.
+- There must be two classes.
+
+Cross-fitting and leakage
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- :func:`~eegfeat.csp_features` fits on each training fold and transforms the
+  held-out rows of that fold. The resulting table is a description of those
+  held-out rows.
+- Reusing the same folds as a classifier's outer split still leaks. A fold's
+  filters are estimated with labels from epochs that fall in the classifier's
+  training set through another fold.
+- :func:`eegfeat.model.build_design` rejects these columns.
+- The split that produced a column is stored in its computation metadata.
+
+To use CSP as a predictor:
+
+- Fit it inside each training fold, and transform the training rows and the
+  test rows with that fit.
+- Repeat the fit inside inner tuning.
+- In a scikit-learn pipeline, put ``mne.decoding.CSP`` in the pipeline.
+
+Covariance and filters
+~~~~~~~~~~~~~~~~~~~~~~
 
 For class :math:`c`, each finite epoch is centered in time and its covariance
 is normalized by the trace.
@@ -210,23 +292,31 @@ is normalized by the trace.
 With ``regularization`` :math:`\rho > 0`, :math:`C_c` is shrunk to
 :math:`(1-\rho)C_c + \rho\,\operatorname{tr}(C_c)I/n` for :math:`n` channels.
 
-The filters solve :math:`C_0 w = \lambda(C_0+C_1)w`. An average reference or removed ICA
-components make :math:`C_0+C_1` singular; the problem is then solved in the span of its
-non-null eigenvectors, as MNE's CSP does, and at most that many components exist.
-Components are taken alternately from the largest and the smallest eigenvalues. The feature is the
-log of relative projected variance. Trace normalization, component order, and
-the cross-fitting split are stored with the column.
-`mne.decoding.CSP <https://mne.tools/stable/generated/mne.decoding.CSP.html>`__
-with ``cov_est="epoch"``, ``norm_trace=True``, and
-``component_order="alternate"`` should give the same filters up to sign and
-scale. Its features are log mean power, not the log relative variance used
-here.
+The filters solve :math:`C_0 w = \lambda(C_0+C_1)w`.
+
+- An average reference or removed ICA components make :math:`C_0+C_1`
+  singular. The problem is then solved in the span of its non-null
+  eigenvectors, as MNE's CSP does, and at most that many components exist.
+- Components are taken alternately from the largest and the smallest
+  eigenvalues.
+- The feature is the log of relative projected variance.
+- Trace normalization, component order, and the cross-fitting split are stored
+  with the column.
 
 .. code-block:: python
 
    projected = filters @ epoch
    variance = np.nanvar(projected, axis=-1)
    csp_log_power = np.log(variance / np.sum(variance))
+
+Comparison with MNE
+~~~~~~~~~~~~~~~~~~~
+
+`mne.decoding.CSP <https://mne.tools/stable/generated/mne.decoding.CSP.html>`__
+with ``cov_est="epoch"``, ``norm_trace=True``, and
+``component_order="alternate"`` should give the same filters up to sign and
+scale. Its features are log mean power, not the log relative variance used
+here.
 
 Graph Measures
 --------------
@@ -235,10 +325,17 @@ Graph Measures
 one value per band and window, in the same way :func:`~eegfeat.band_ratio`
 reduces a power table. Both are computed in this package.
 
-Global efficiency (Latora and Marchiori, 2001) turns a nonzero weight
-:math:`w_{ij}` into a distance :math:`L_{ij} = 1/|w_{ij}|`, treats a zero
-weight as a missing edge, and runs Floyd–Warshall. A disconnected pair
-contributes 0.
+Global efficiency
+~~~~~~~~~~~~~~~~~
+
+Global efficiency (Latora and Marchiori, 2001) is the mean inverse shortest-path
+distance over node pairs.
+
+- A nonzero weight :math:`w_{ij}` becomes a distance
+  :math:`L_{ij} = 1/|w_{ij}|`.
+- A zero weight is treated as a missing edge.
+- Shortest paths are found with Floyd–Warshall.
+- A disconnected pair contributes 0.
 
 .. math::
 
@@ -246,14 +343,13 @@ contributes 0.
 
 :math:`N` is the number of nodes. The sum is over unordered pairs.
 
-A non-finite edge makes either summary NaN, with output coverage 0. It is not
-entered as a zero-weight disconnection. A pair absent from the table raises
-``ValueError``, because the edge set must be complete.
+Clustering coefficient
+~~~~~~~~~~~~~~~~~~~~~~
 
-The clustering coefficient binarizes at ``threshold`` :math:`\theta`
-(:math:`A_{ij} = 1` when :math:`|w_{ij}| > \theta`) and averages the local
-clustering of Watts and Strogatz (1998) over nodes with degree
-:math:`k_i \ge 2`.
+The clustering coefficient averages the local clustering of Watts and
+Strogatz (1998) over nodes with degree :math:`k_i \ge 2`. The graph is
+binarized at ``threshold`` :math:`\theta` (:math:`A_{ij} = 1` when
+:math:`|w_{ij}| > \theta`).
 
 .. math::
 
@@ -263,11 +359,26 @@ clustering of Watts and Strogatz (1998) over nodes with degree
    \end{aligned}
 
 :math:`(A^3)_{ii}` is twice the number of triangles at node :math:`i`, and
-:math:`k_i = \sum_j A_{ij}`. Nodes with :math:`k_i < 2` are omitted. The result
-is NaN when no node has two neighbours. An eligible node with no triangles
-contributes 0. networkx and the Brain Connectivity Toolbox instead average over
-all nodes and count those with :math:`k_i < 2` as 0, so the values are not
-directly comparable.
+:math:`k_i = \sum_j A_{ij}`.
+
+- Nodes with :math:`k_i < 2` are omitted.
+- An eligible node with no triangles contributes 0.
+
+**Comparability**
+   networkx and the Brain Connectivity Toolbox instead average over all nodes
+   and count those with :math:`k_i < 2` as 0, so the values are not directly
+   comparable.
+
+Missing values
+~~~~~~~~~~~~~~
+
+These rules apply to both graph measures unless stated otherwise.
+
+- A non-finite edge makes either summary NaN, with output coverage 0. It is
+  not entered as a zero-weight disconnection.
+- A pair absent from the table raises ``ValueError``, because the edge set must
+  be complete.
+- The clustering coefficient is NaN when no node has two neighbours.
 
 References
 ----------

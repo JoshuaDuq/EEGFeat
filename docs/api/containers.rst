@@ -46,6 +46,9 @@ Bands and windows
    :members:
    :show-inheritance:
 
+.. autodata:: eegfeat.BANDS_STANDARD
+   :no-value:
+
 .. autofunction:: eegfeat.passband_fraction
 
 .. autofunction:: eegfeat.check_passband

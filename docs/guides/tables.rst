@@ -31,9 +31,13 @@ Querying a table
    # eeg_band-power_alpha_cz_all_raw_p<hash>
    # eeg_peak-freq-adjusted_alpha_cz_all_raw_p<hash>
 
-``select`` matches :class:`~eegfeat.FeatureMeta` fields. ``take`` keeps rows by
-position or mask, in the order given, with their identities and flags.
-``drop_missing`` keeps the columns missing in at most a given fraction of rows.
+Three methods narrow a table further:
+
+- ``select`` matches :class:`~eegfeat.FeatureMeta` fields.
+- ``take`` keeps rows by position or mask, in the order given, with their
+  identities and flags.
+- ``drop_missing`` keeps the columns missing in at most a given fraction of
+  rows.
 
 .. code-block:: python
 
@@ -43,12 +47,8 @@ position or mask, in the order given, with their identities and flags.
 Writing and reading
 -------------------
 
-:func:`eegfeat.io.write_table` writes a TSV of values, a ``_coverage.tsv`` of
-the same shape, and a JSON sidecar. The filenames follow BIDS TSV and JSON
-sidecar conventions. The layout is not a validated BIDS derivative.
-:func:`eegfeat.io.read_table` restores metadata, flags, and row identity.
-:func:`eegfeat.io.read_dataset` stacks per-epoch tables and returns descriptor
-columns separately from features.
+``eegfeat.io`` writes a table to TSV and JSON, reads it back, and stacks
+per-epoch tables into a dataset.
 
 .. code-block:: python
 
@@ -60,18 +60,36 @@ columns separately from features.
        ["sub-01_features.tsv", "sub-02_features.tsv", "sub-03_features.tsv"]
    )
 
+The functions:
+
+- :func:`eegfeat.io.write_table` writes a TSV of values, a ``_coverage.tsv`` of
+  the same shape, and a JSON sidecar.
+- :func:`eegfeat.io.read_table` restores metadata, flags, and row identity.
+- :func:`eegfeat.io.read_dataset` stacks per-epoch tables and returns descriptor
+  columns separately from features.
+
+**File layout.** The filenames follow BIDS TSV and JSON sidecar conventions. The
+layout is not a validated BIDS derivative.
+
 :doc:`/examples` shows the files the runner writes for a five-subject simulated
 cohort.
 
 Building a cohort
 -----------------
 
-:func:`eegfeat.stack_rows` concatenates per-epoch tables in input order. It
-rejects duplicate row identities and cross-trial group tables.
-``columns="union"`` keeps every column any recording measured. A recording that
-did not measure a column gets ``NaN`` and zero coverage there. The default,
-``columns="identical"``, requires one schema, and a mismatch names the columns
-that differ.
+:func:`eegfeat.stack_rows` concatenates per-epoch tables in input order.
+
+**Refusals.**
+
+- Duplicate row identities.
+- Cross-trial group tables.
+
+**Column handling** (``columns``):
+
+- ``columns="union"`` keeps every column any recording measured. A recording
+  that did not measure a column gets ``NaN`` and zero coverage there.
+- ``columns="identical"`` (the default) requires one schema. A mismatch names
+  the columns that differ.
 
 .. code-block:: python
 
@@ -79,6 +97,6 @@ that differ.
        [sub_01_features, sub_02_features, sub_03_features], columns="union"
    )
 
-The frame passed to :func:`eegfeat.model.build_design` needs matching
-``recording``, ``epoch``, and ``event`` keys, plus the target and grouping
-columns. The cross-fitting workflow is in :doc:`/guides/modeling`.
+**Modeling input.** The frame passed to :func:`eegfeat.model.build_design` needs
+matching ``recording``, ``epoch``, and ``event`` keys, plus the target and
+grouping columns. The cross-fitting workflow is in :doc:`/guides/modeling`.
