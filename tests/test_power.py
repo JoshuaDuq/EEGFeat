@@ -145,6 +145,61 @@ def test_percent_is_change_from_the_baseline_window(
     assert stimulus.meta[0].unit == "%"
 
 
+def _tfr_baseline_and_stimulus(stimulus_over_baseline: list[float], scale: float) -> Spectra:
+    # Morlet power of an EEG channel near 1e-12 V^2/Hz; the baseline window holds 2e-12,
+    # and each epoch's stimulus window the given multiple of it.
+    freqs = np.arange(8.0, 13.5, 0.5)
+    ratios = np.array(stimulus_over_baseline)
+    data = scale * 2e-12 * np.ones((ratios.size, 1, 2, freqs.size))
+    data[:, :, 1] *= ratios[:, np.newaxis, np.newaxis]
+    return replace(
+        _spectra(np.ones(freqs.size), freqs),
+        data=data,
+        windows=(Window("baseline", -1.0, 0.0), Window("stimulus", 0.0, 1.0)),
+        coverage=np.ones(data.shape),
+        support=np.ones(data.shape),
+        representation="time_frequency_power",
+        row_ids=tuple(("test", index, "event") for index in range(ratios.size)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("normalize", "expected"),
+    [
+        ("log_ratio", np.log10([0.5, 1.5, 3.0])),
+        ("db", 10.0 * np.log10([0.5, 1.5, 3.0])),
+        ("percent", [-50.0, 50.0, 200.0]),
+    ],
+)
+@pytest.mark.parametrize("scale", [1.0, 1e-12])
+def test_normalized_tfr_power_does_not_depend_on_the_power_unit(
+    normalize: str, expected: list[float], scale: float
+) -> None:
+    # eLORETA source power in A.m arrives near 1e-21, under the old absolute floor of
+    # 1e-20: every trial came out the same constant, and a variance filter downstream
+    # found no usable feature.
+    spectra = _tfr_baseline_and_stimulus([0.5, 1.5, 3.0], scale)
+    table = mean_tfr_power(
+        spectra, bands=(ALPHA,), include_global=False, baseline="baseline", normalize=normalize
+    )
+    np.testing.assert_allclose(table.values[:, 0], expected, rtol=1e-12)
+
+
+def test_log10_tfr_power_moves_by_the_log_of_the_unit_and_keeps_its_name() -> None:
+    native, rescaled = (
+        mean_tfr_power(
+            _tfr_baseline_and_stimulus([0.5, 1.5, 3.0], scale),
+            bands=(ALPHA,),
+            include_global=False,
+            normalize="log10",
+        )
+        for scale in (1.0, 1e-12)
+    )
+    np.testing.assert_allclose(rescaled.values, native.values - 12.0, rtol=1e-12)
+    # The floor follows the data, so nothing about it belongs in a column's identity.
+    assert rescaled.names == native.names
+
+
 @pytest.mark.parametrize("normalize", ["log_ratio", "db", "percent"])
 def test_baseline_quality_is_carried_into_normalized_power(normalize):
     freqs = np.arange(8.0, 14.0)

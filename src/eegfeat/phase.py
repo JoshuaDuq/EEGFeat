@@ -8,7 +8,6 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import expand_signal
-from eegfeat.baseline import EPS
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
@@ -343,5 +342,7 @@ def _mean_vector_length(
         total = finite.sum(axis=2)
         return np.where(total > 0, resultant / np.maximum(total, 1), np.nan)
     weight = np.where(finite, amplitude, 0.0).sum(axis=2)
+    # Any positive sum is usable: the ratio is dimensionless, so an absolute threshold
+    # would withhold a small envelope for its unit alone.
     with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(weight > EPS, resultant / weight, np.nan)
+        return np.where(weight > 0.0, resultant / weight, np.nan)

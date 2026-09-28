@@ -4,6 +4,7 @@ import pytest
 import eegfeat as ef
 from eegfeat.bands import Band
 from eegfeat.erds import (
+    ErdsScale,
     erd_duration,
     erd_magnitude,
     erds_mean,
@@ -282,6 +283,27 @@ def test_a_low_amplitude_band_is_not_withheld_for_being_small() -> None:
     assert volts.values.item() == pytest.approx(-50.0)
     assert volts.values.item() == pytest.approx(micro.values.item())
     assert not volts.flags["baseline_degenerate"].any()
+
+
+@pytest.mark.parametrize(
+    ("normalize", "expected"), [("percent", -50.0), ("db", 10.0 * np.log10(0.5))]
+)
+def test_a_source_estimate_in_ampere_metres_is_not_flattened(
+    normalize: ErdsScale, expected: float
+) -> None:
+    # eLORETA amplitude near 3e-11 A.m: power 9e-22, under the old absolute floor of
+    # 1e-20, so decibels read 0 and percent was measured against the floor.
+    n = 201
+    envelope = np.full((1, 1, n), 3e-11)
+    envelope[:, :, n // 2 :] = 3e-11 * np.sqrt(0.5)
+    table = erds_mean(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        include_global=False,
+        normalize=normalize,
+    )
+    assert table.values.item() == pytest.approx(expected)
 
 
 def test_a_baseline_with_no_signal_at_all_is_withheld_and_flagged() -> None:

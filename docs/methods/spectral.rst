@@ -59,10 +59,14 @@ value is the mean of the per-channel normalized values.
 - **db**: :math:`10 \log_{10}\left(\frac{\max(P, \epsilon)}{\max(B, \epsilon)}\right)`
 - **percent**: :math:`\frac{P - \max(B, \epsilon)}{\max(B, \epsilon)} \cdot 100`
 
-:math:`B` is the same measure computed in the named baseline window, and
-:math:`\epsilon = 10^{-20}`. Logarithmic forms floor the numerator and the
-denominator. Percent floors the denominator only, so zero power is an exact
-:math:`-100\%` change.
+:math:`B` is the same measure computed in the named baseline window.
+:math:`\epsilon` is :math:`10^{-12}` of the largest finite power of that epoch
+and channel, over every window and the baseline. The floor is relative, so it
+does not depend on the recording units. A fixed floor would flatten a source
+estimate in A·m, whose power sits many decades below EEG in V². An epoch and
+channel with no positive power has no floor, and every value is NaN.
+Logarithmic forms floor the numerator and the denominator. Percent floors the
+denominator only, so zero power is an exact :math:`-100\%` change.
 
 **percent** is ERD/ERS% in the sense of Pfurtscheller and Lopes da Silva
 (1999), where a negative value is desynchronization. ``log_ratio`` and ``db``

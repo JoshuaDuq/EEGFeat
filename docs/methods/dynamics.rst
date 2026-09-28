@@ -22,7 +22,9 @@ ERDS is the change in band-limited power relative to a baseline window
    \end{aligned}
 
 :math:`P(t)` is instantaneous power :math:`|z(t)|^2` from the Hilbert envelope,
-:math:`B` is mean baseline power, and :math:`\epsilon = 10^{-20}`. The percent
+:math:`B` is mean baseline power, and :math:`\epsilon` is :math:`10^{-12}` of the
+largest finite power of that epoch and channel. The floor is relative, so it
+does not depend on the recording units. The percent
 numerator is unfloored, so zero power is an exact :math:`-100\%` change. A
 baseline is rejected when it is non-finite, non-positive, or no greater than
 :math:`10^{-6}` of that channel's mean power over the epoch. The
@@ -38,9 +40,10 @@ The trace is
    power = np.where(np.isfinite(signal.power), signal.power, np.nan)
    baseline_power = np.nanmean(power[..., baseline_mask], axis=-1)
    baseline_power = np.where(degenerate, np.nan, baseline_power)
-   baseline_power = np.maximum(baseline_power, 1e-20)
+   floor = 1e-12 * np.nanmax(power, axis=-1)
+   baseline_power = np.maximum(baseline_power, floor)
    percent = (power - baseline_power[..., None]) / baseline_power[..., None] * 100.0
-   decibels = 10.0 * np.log10(np.maximum(power, 1e-20) / baseline_power[..., None])
+   decibels = 10.0 * np.log10(np.maximum(power, floor[..., None]) / baseline_power[..., None])
 
 Summaries use the finite samples :math:`\{t_k\}` inside the analysis window.
 

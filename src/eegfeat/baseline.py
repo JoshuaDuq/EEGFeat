@@ -5,12 +5,27 @@ import numpy.typing as npt
 
 from eegfeat.table import Normalization
 
-EPS = 1e-20
-"""Power floor applied to both sides of a ratio.
+FLOOR_FRACTION = 1e-12
+"""Power floor, as a fraction of the largest power the same cell reaches.
 
-Flooring only the numerator would bias every value computed against a small
-baseline, so both sides get the same floor.
+The floor exists so a zero takes a logarithm and anchors a ratio. It is relative
+because absolute power is a property of the unit, not of the data being valid:
+EEG sits near 1e-12 V², an eLORETA source estimate in A·m near 1e-21, and a
+fixed floor of 1e-20 turned every ratio of the latter into 1. Twelve decades
+under the cell's own peak is a dropout at any unit, never a measurement.
+
+The peak is taken within one epoch and channel, so no trial's floor depends on
+another trial's power. Both sides of a ratio get the same floor, because
+flooring only the numerator would bias every value computed against a small
+baseline.
 """
+
+
+def power_floor(peak: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """Floor under power whose largest finite value is ``peak``, NaN where that is not positive."""
+    # With no positive power there is no scale to floor against, so any finite
+    # value would be the floor's choice rather than a measurement.
+    return np.where(peak > 0.0, peak * FLOOR_FRACTION, np.nan)
 
 
 def normalize(
@@ -36,7 +51,10 @@ def normalize(
     Returns
     -------
     ndarray
-        Normalized values, shaped like ``values``.
+        Normalized values, shaped like ``values``. Power is floored at
+        :data:`FLOOR_FRACTION` of the largest finite power of its epoch and
+        channel, over every window and the baseline. An epoch and channel with
+        no positive power is NaN.
     """
     needs_baseline = mode in ("log_ratio", "db", "percent")
     if needs_baseline and baseline is None:
@@ -46,12 +64,16 @@ def normalize(
 
     if mode == "raw":
         return values
-    floored = np.maximum(values, EPS)
+    peak = np.max(np.where(np.isfinite(values), values, -np.inf), axis=2, initial=-np.inf)
+    if baseline is not None:
+        peak = np.maximum(peak, np.where(np.isfinite(baseline), baseline, -np.inf))
+    floor = power_floor(peak)
+    floored = np.maximum(values, floor[:, :, np.newaxis])
     if mode == "log10":
         return np.log10(floored)
 
     assert baseline is not None  # narrowed by the guard above
-    base = np.where(np.isfinite(baseline), np.maximum(baseline, EPS), np.nan)
+    base = np.where(np.isfinite(baseline), np.maximum(baseline, floor), np.nan)
     if mode == "percent":
         # Not floored in the numerator: a genuine zero is a real 100% decrease.
         return (values - base[:, :, np.newaxis]) / base[:, :, np.newaxis] * 100.0

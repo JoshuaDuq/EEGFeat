@@ -261,6 +261,16 @@ def test_smoothing_bandwidth_is_constant_in_hertz_on_a_log_grid() -> None:
     assert affected.max() - affected.min() <= 10.0 + np.max(np.diff(freqs))
 
 
+@pytest.mark.parametrize("scale", [1.0, 1e-24])
+def test_the_prominence_guard_does_not_depend_on_the_power_unit(scale: float) -> None:
+    # Scaled into the range of a source estimate in A.m, every bin fell under the old
+    # absolute floor, the log spectrum went flat, and every cell took the fallback.
+    power = scale * 10.0 * WIDE**-1.0 * (1.0 + 2.0 * np.exp(-0.5 * ((WIDE - 10.5) / 0.6) ** 2))
+    table = peak_frequency(_wide(power), band=ALPHA, aperiodic_adjusted=False, include_global=False)
+    assert not table.flags["cog_fallback"].any()
+    assert table.values.item() == pytest.approx(10.5, abs=0.1)
+
+
 def test_a_spectrum_with_no_oscillation_falls_back_to_centre_of_gravity() -> None:
     table = peak_frequency(_wide(10.0 * WIDE**-2.2), band=ALPHA, include_global=False)
     assert table.flags["cog_fallback"].all()

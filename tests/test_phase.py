@@ -152,6 +152,24 @@ def _coupled(strength: float, n_epochs: int = 6, n_times: int = 401) -> tuple:
     return slow, fast
 
 
+def test_normalized_coupling_does_not_depend_on_the_amplitude_unit() -> None:
+    # Normalized by the summed amplitude, the value is dimensionless; an absolute
+    # threshold on that sum withheld an envelope this small instead.
+    slow, fast = _coupled(0.5)
+    tiny = BandSignal.from_arrays(
+        analytic=fast.analytic * 1e-25,
+        times=fast.times,
+        ch_names=fast.ch_names,
+        band=GAMMA,
+        sfreq=SFREQ,
+        row_ids=fast.row_ids,
+    )
+    native, rescaled = (
+        pac(slow, amplitude, windows=[WINDOW], include_global=False) for amplitude in (fast, tiny)
+    )
+    np.testing.assert_allclose(rescaled.values, native.values, rtol=1e-12)
+
+
 def test_coupling_is_higher_when_amplitude_tracks_phase() -> None:
     weak = pac(*_coupled(0.0), windows=[WINDOW], include_global=False)
     strong = pac(*_coupled(0.8), windows=[WINDOW], include_global=False)

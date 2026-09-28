@@ -10,10 +10,9 @@ import numpy.typing as npt
 from eegfeat._expand import Kernel, expand
 from eegfeat.aperiodic import aperiodic_ratio
 from eegfeat.bands import Band
+from eegfeat.baseline import power_floor
 from eegfeat.spectra import Spectra, band_integration_weights
 from eegfeat.table import FeatureTable
-
-_POWER_FLOOR = 1e-20
 
 
 def peak_frequency(
@@ -166,8 +165,9 @@ def _find_peak(
     present = np.where(finite, data, np.nan)
 
     power = _smooth(present, freqs, smoothing_hz)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        residual = _smooth(np.log10(np.maximum(present, _POWER_FLOOR)), freqs, smoothing_hz)
+    # np.fmax skips the NaN of a missing bin, so an all-missing cell leaves a NaN peak.
+    floor = power_floor(np.fmax.reduce(present, axis=3, keepdims=True))
+    residual = _smooth(np.log10(np.maximum(present, floor)), freqs, smoothing_hz)
 
     filled = np.where(np.isfinite(power), power, -np.inf)
     index = np.argmax(filled, axis=3)
