@@ -25,6 +25,20 @@ def _predictions(per_subject: dict[str, tuple[list[float], list[float]]]) -> pd.
     return pd.DataFrame(rows)
 
 
+@pytest.mark.parametrize("function", [subject_level_r, subject_level_errors])
+@pytest.mark.parametrize("missing", [None, np.nan, pd.NA])
+def test_subject_aggregates_reject_missing_subject_labels(function, missing) -> None:
+    frame = pd.DataFrame(
+        {
+            "subject_id": ["s1"] * 3 + [missing] * 3,
+            "y_true": [1.0, 2.0, 3.0] * 2,
+            "y_pred": [1.0, 2.0, 3.0, 3.0, 2.0, 1.0],
+        }
+    )
+    with pytest.raises(ValueError, match="subject_id label for every trial"):
+        function(frame)
+
+
 def test_each_subject_counts_once_regardless_of_trial_count() -> None:
     # A subject with forty trials and one with four contribute equally. Pooling instead
     # would let the largest subject decide the cohort result.

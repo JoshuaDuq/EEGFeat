@@ -183,6 +183,27 @@ def test_rejects_descriptor_rows_of_the_wrong_length(tmp_path) -> None:
         write_table(_epoch_table(), tmp_path / "t.tsv", rows=pd.DataFrame({"event": ["a"]}))
 
 
+@pytest.mark.parametrize("columns", [["rating", "rating"], ["", "rating"], [1, "rating"]])
+def test_rejects_descriptor_names_that_cannot_round_trip(tmp_path, columns) -> None:
+    rows = pd.DataFrame([[1, 10], [2, 20], [3, 30]], columns=columns)
+
+    with pytest.raises(ValueError, match="descriptor columns"):
+        write_table(_epoch_table(), tmp_path / "t.tsv", rows=rows)
+
+    assert not list(tmp_path.iterdir())
+
+
+def test_read_dataset_rejects_duplicate_descriptor_names_in_sidecar(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path, rows=pd.DataFrame({"rating": [1, 2, 3]}))
+    sidecar = json.loads(path.with_suffix(".json").read_text())
+    sidecar["row_columns"].append("rating")
+    path.with_suffix(".json").write_text(json.dumps(sidecar))
+
+    with pytest.raises(ValueError, match="descriptor columns"):
+        io_module.read_dataset([path])
+
+
 def test_rejects_a_descriptor_that_shadows_the_row_key(tmp_path) -> None:
     rows = pd.DataFrame({"epoch": [7, 8, 9]})
     with pytest.raises(ValueError, match="epoch"):

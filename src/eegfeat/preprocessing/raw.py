@@ -31,17 +31,23 @@ def good_eeg_names(raw: Any) -> list[str]:
     return result
 
 
-def validate_raw(raw: Any) -> None:
+def validate_source_raw(raw: Any) -> None:
     if not isinstance(raw, mne.io.BaseRaw):
         raise TypeError("raw: expected MNE BaseRaw")
     if not np.isfinite(raw.info["sfreq"]) or raw.info["sfreq"] <= 0 or raw.n_times == 0:
         raise ValueError("raw: positive sample rate and nonempty data required")
-    good_eeg_names(raw)
     picks = physiology_names(raw)
+    if not picks:
+        return
     for start in range(0, raw.n_times, 100_000):
         data = raw.get_data(picks=picks, start=start, stop=min(start + 100_000, raw.n_times))
         if not np.isfinite(data).all():
             raise ValueError("raw: nonfinite physiology samples")
+
+
+def validate_raw(raw: Any) -> None:
+    validate_source_raw(raw)
+    good_eeg_names(raw)
 
 
 def require_names(raw: Any, requested: tuple[str, ...] | list[str], path: str) -> None:

@@ -815,6 +815,7 @@ def _zero_crossing_kernel(
         moved = np.isfinite(current) & (current != 0.0)
         crossings += moved & (previous != 0.0) & (current != previous)
         previous = np.where(moved, current, previous)
+        previous = np.where(finite[:, :, index], previous, 0.0)
     seconds = float(trace.shape[2]) / series.sfreq
     usable = finite.any(axis=2) & (seconds > 0)
     return {"zero_crossing_rate": np.where(usable, crossings / seconds, np.nan)}

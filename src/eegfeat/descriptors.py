@@ -179,15 +179,17 @@ def _find_peak(
 
     if interpolate:
         left, centre, right = (_at(filled, np.clip(safe + o, 0, last)) for o in (-1, 0, 1))
+        left_step = freqs[safe] - freqs[safe - 1]
+        right_step = freqs[safe + 1] - freqs[safe]
         with np.errstate(invalid="ignore", divide="ignore"):
-            # An all-NaN slice leaves -inf on every side, so these subtractions are
-            # inf - inf by design; the usable mask discards the result below.
-            denominator = left - 2.0 * centre + right
-            delta = np.where(denominator != 0.0, 0.5 * (left - right) / denominator, 0.0)
-        delta = np.where(np.isfinite(delta), np.clip(delta, -0.5, 0.5), 0.0)
-        # Local half-spacing, so interpolation is correct on a non-uniform grid too.
-        spacing = (freqs[np.clip(safe + 1, 0, last)] - freqs[np.clip(safe - 1, 0, last)]) / 2.0
-        peak = peak + np.where(interior, delta * spacing, 0.0)
+            # Fit around the centre using divided differences on the actual frequency grid.
+            left_slope = (centre - left) / left_step
+            right_slope = (right - centre) / right_step
+            quadratic = (right_slope - left_slope) / (left_step + right_step)
+            linear = left_slope + quadratic * left_step
+            delta = -linear / (2.0 * quadratic)
+        delta = np.where(np.isfinite(delta), np.clip(delta, -left_step / 2, right_step / 2), 0.0)
+        peak = peak + np.where(interior, delta, 0.0)
 
     use_cog = np.zeros(usable.shape, dtype=bool)
     if min_prominence > 0.0:

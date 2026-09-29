@@ -34,7 +34,7 @@ def validate_events(raw: Any, events: NDArray[Any], event_id: dict[str, int]) ->
         or events.dtype.kind not in "iu"
     ):
         raise ValueError("events: expected nonempty integer (n, 3) array")
-    if np.any(np.diff(events[:, 0]) <= 0):
+    if np.any(events[1:, 0] <= events[:-1, 0]):
         raise ValueError("events: samples must be strictly increasing and unique")
     if events[0, 0] < raw.first_samp or events[-1, 0] >= raw.first_samp + raw.n_times:
         raise ValueError("events: sample outside recording")

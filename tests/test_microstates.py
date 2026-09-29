@@ -5,6 +5,7 @@ from eegfeat.microstates import (
     _coverage,
     _duration,
     _occurrence,
+    _peak_topographies,
     _runs,
     _smooth,
     _transitions,
@@ -52,6 +53,21 @@ def _planted(n_epochs: int = 6, n_times: int = 400, noise: float = 0.05) -> tupl
         row_ids=tuple(("test", index, "event") for index in range(n_epochs)),
     )
     return signal, truth
+
+
+@requires_sklearn
+def test_segmentation_respects_fractional_sample_minimum_duration() -> None:
+    signal, _ = _planted(noise=0.0)
+    result = segment(signal, min_duration_ms=254.0)
+    for states in result.states:
+        assert all(stop - start >= 26 for start, stop, _ in _runs(states))
+
+
+def test_peak_separation_is_not_rounded_down() -> None:
+    strength = np.array([0.0, 1.0, 0.0, 2.0, 0.0])
+    epoch = np.array([-1.0, 1.0])[:, None] * strength
+    maps = _peak_topographies(epoch, 100.0, 24.0, 10, None)
+    assert maps.shape[0] == 1
 
 
 @requires_sklearn

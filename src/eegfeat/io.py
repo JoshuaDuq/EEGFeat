@@ -26,6 +26,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from eegfeat._validation import validate_names
 from eegfeat.bands import Band
 from eegfeat.table import (
     ComputationSpec,
@@ -248,7 +249,8 @@ def _read_targets(
     table: FeatureTable,
     sidecar: Mapping[str, Any],
 ) -> pd.DataFrame:
-    row_columns = [str(column) for column in sidecar["row_columns"]]
+    row_columns: list[str] = sidecar["row_columns"]
+    validate_names(row_columns, "descriptor columns")
     if not row_columns or row_columns[0] != _EPOCH_KEY:
         raise ValueError(f"{source.name} sidecar does not declare an epoch row key.")
     descriptor_columns = row_columns[1:]
@@ -320,6 +322,7 @@ def _descriptors(rows: pd.DataFrame | None, table: FeatureTable, key: str) -> pd
         return pd.DataFrame(index=range(table.n_rows))
     if len(rows) != table.n_rows:
         raise ValueError(f"rows has {len(rows)} entries but the table has {table.n_rows} rows.")
+    validate_names(list(rows.columns), "descriptor columns")
     reserved = {key, _ROW_UID, *table.names}
     clashes = sorted(str(column) for column in rows.columns if column in reserved)
     if clashes:

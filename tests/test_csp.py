@@ -196,10 +196,24 @@ def test_on_an_average_reference_the_informative_components_agree_with_mne() -> 
         assert abs(np.corrcoef(ours[:, component], reference[:, component])[0, 1]) > 0.99
 
 
-def test_more_components_than_the_data_rank_raises() -> None:
+@pytest.mark.parametrize("regularization", [0.0, 0.1, 0.5])
+def test_more_components_than_the_data_rank_raises(regularization) -> None:
     signal, y = _lateralised(n_per_class=6)
     with pytest.raises(ValueError, match="rank"):
-        ef.CommonSpatialPattern.fit(_average_referenced(signal), y, n_components=N_CHANNELS)
+        ef.CommonSpatialPattern.fit(
+            _average_referenced(signal),
+            y,
+            n_components=N_CHANNELS,
+            regularization=regularization,
+        )
+
+
+def test_regularized_filters_stay_in_the_data_subspace() -> None:
+    signal, y = _lateralised(n_per_class=6)
+    fitted = ef.CommonSpatialPattern.fit(
+        _average_referenced(signal), y, n_components=4, regularization=0.1
+    )
+    np.testing.assert_allclose(fitted.filters.sum(axis=1), 0.0, atol=1e-12)
 
 
 # --- cross-fitting --------------------------------------------------------------------

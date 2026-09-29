@@ -11,6 +11,12 @@ import numpy.typing as npt
 MULTITAPER_MIN_BINS = 1.35
 
 
+def minimum_sample_count(duration_seconds: float, sfreq: float) -> int:
+    """Round a minimum duration up, allowing one ULP of conversion roundoff."""
+    samples = np.nextafter(duration_seconds * sfreq, -np.inf)
+    return max(1, int(np.ceil(samples)))
+
+
 def validate_fraction_array(values: npt.NDArray[np.float64], name: str) -> None:
     """Require finite fractions on the closed unit interval."""
     if not np.isfinite(values).all() or np.any((values < 0.0) | (values > 1.0)):

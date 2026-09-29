@@ -10,6 +10,7 @@ import numpy.typing as npt
 from scipy.signal import find_peaks
 
 from eegfeat._expand import window_mask
+from eegfeat._validation import minimum_sample_count
 from eegfeat.signal import Signal
 from eegfeat.spectra import Window
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, RowId
@@ -144,7 +145,7 @@ def segment(
     model.fit(stacked)
     templates = _modified_kmeans(stacked, np.asarray(model.cluster_centers_, dtype=float))
 
-    min_samples = max(1, int(round(min_duration_ms * signal.sfreq / 1000.0)))
+    min_samples = minimum_sample_count(min_duration_ms / 1000.0, signal.sfreq)
     states = np.stack(
         [_smooth(_assign(data[epoch], templates), min_samples) for epoch in range(data.shape[0])]
     )
@@ -405,7 +406,7 @@ def _peak_topographies(
     strength = _gfp(epoch)
     if not np.isfinite(strength).any():
         return np.empty((0, epoch.shape[0]), dtype=float)
-    distance = max(1, int(round(min_peak_distance_ms * sfreq / 1000.0)))
+    distance = minimum_sample_count(min_peak_distance_ms / 1000.0, sfreq)
     peaks, _ = find_peaks(strength, distance=distance, prominence=prominence)
     if peaks.size == 0:
         peaks = np.array([int(np.nanargmax(strength))], dtype=int)

@@ -289,8 +289,11 @@ is normalized by the trace.
    \frac{(X_e-\bar X_e)(X_e-\bar X_e)^\mathsf{T}}
    {\operatorname{tr}\left((X_e-\bar X_e)(X_e-\bar X_e)^\mathsf{T}\right)}.
 
-With ``regularization`` :math:`\rho > 0`, :math:`C_c` is shrunk to
-:math:`(1-\rho)C_c + \rho\,\operatorname{tr}(C_c)I/n` for :math:`n` channels.
+The data rank is determined before regularization. Covariances are projected
+into the non-null subspace of :math:`C_0+C_1`. With ``regularization``
+:math:`\rho > 0`, each projected covariance :math:`\widetilde C_c` is shrunk to
+:math:`(1-\rho)\widetilde C_c + \rho\,\operatorname{tr}(\widetilde C_c)I/r`
+for data rank :math:`r`. Shrinkage cannot restore removed dimensions.
 
 The filters solve :math:`C_0 w = \lambda(C_0+C_1)w`.
 

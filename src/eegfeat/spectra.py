@@ -466,8 +466,8 @@ def support_restricted_mask(
     MNE constructs a Morlet wavelet to five Gaussian standard deviations in
     either direction. With ``sigma_t = n_cycles / (2*pi*f)``, its temporal
     half-support is therefore ``5*n_cycles / (2*pi*f)`` seconds. Only
-    coefficients whose complete wavelet lies inside the window are attributable
-    to it.
+    coefficients whose complete wavelet lies inside both the window and the
+    available time range are attributable to it.
 
     Parameters
     ----------
@@ -489,9 +489,10 @@ def support_restricted_mask(
     f = np.asarray(freqs, dtype=float)
     cycles = np.broadcast_to(np.asarray(n_cycles, dtype=float), f.shape)
     half_support = 5.0 * cycles / (2.0 * np.pi * f)
-    lower = window.tmin + half_support
-    upper = window.tmax - half_support
-    t = np.asarray(times, dtype=float)[np.newaxis, :]
+    axis = np.asarray(times, dtype=float)
+    lower = max(window.tmin, float(axis[0])) + half_support
+    upper = min(window.tmax, float(axis[-1])) - half_support
+    t = axis[np.newaxis, :]
     return (t >= lower[:, np.newaxis]) & (t <= upper[:, np.newaxis])
 
 

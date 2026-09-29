@@ -162,6 +162,7 @@ correlation.
 **Short segments**
    Segments shorter than ``min_duration_ms`` are absorbed into the longer
    neighbouring state, or split between the two neighbours on a tie.
+   Minimum segment duration and peak separation are rounded up to whole samples.
 
 .. code-block:: python
 

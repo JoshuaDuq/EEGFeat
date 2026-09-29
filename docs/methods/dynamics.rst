@@ -105,6 +105,7 @@ Onset rule
 
 - The run must last at least ``min_duration_cycles`` cycles of the band's low
   edge (default 6), or ``min_duration_ms`` when that is given.
+  The required duration is rounded up to whole samples.
 - :math:`\sigma_B` is the population standard deviation (divisor :math:`n`) of
   baseline power.
 - A non-finite sample breaks the run.
@@ -220,18 +221,21 @@ Detection
 2. **Runs.** Contiguous runs are found by differencing. A run that touches the
    window edge is kept.
 3. **Minimum duration.** Runs shorter than ``min_duration_ms`` (default
-   100 ms, rounded to whole samples, minimum one) are dropped.
+   100 ms, rounded up to whole samples, minimum one) are dropped.
 
 .. code-block:: python
 
    threshold = np.nanquantile(envelope[..., calibration_mask], q, axis=-1)
    above = envelope > threshold[..., None]
-   min_samples = max(1, round(min_duration_ms * sfreq / 1000.0))
+   min_samples = max(1, int(np.ceil(min_duration_ms * sfreq / 1000.0)))
    runs = contiguous_true_runs(above)
    retained = [run for run in runs if len(run) >= min_samples]
    count = len(retained)
    rate = count / (n_times / sfreq)
    fraction_above = np.count_nonzero(above) / np.count_nonzero(np.isfinite(envelope))
+
+The sample conversion allows one floating-point ULP of roundoff at exact
+boundaries, so a 140 ms minimum at 100 Hz requires 14 samples, not 15.
 
 An externally supplied threshold array is broadcast to
 ``(n_epochs, n_channels)`` and used in place of the quantile.
@@ -342,8 +346,9 @@ Zero-crossing rate
 ~~~~~~~~~~~~~~~~~~
 
 ``zero_crossing_rate`` counts sign changes between successive nonzero finite
-samples and divides by the window length in seconds (Rice, 1944, 1945). Zeros
-and gaps keep the previous sign and do not add a crossing.
+samples within each contiguous finite segment and divides by the window length
+in seconds (Rice, 1944, 1945). Zeros keep the previous sign. Missing samples
+reset it, so a sign difference across a gap is not counted as a crossing.
 
 Hjorth parameters
 ~~~~~~~~~~~~~~~~~

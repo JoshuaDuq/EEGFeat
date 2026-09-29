@@ -11,6 +11,7 @@ from eegfeat.temporal import (
     peak_latency,
     peak_to_peak,
     variance,
+    zero_crossing_rate,
 )
 
 SFREQ = 100.0
@@ -26,6 +27,13 @@ def _signal(data: np.ndarray) -> Signal:
         sfreq=SFREQ,
         row_ids=tuple(("test", index, "event") for index in range(data.shape[0])),
     )
+
+
+@pytest.mark.parametrize("gap", [np.nan, np.inf, -np.inf])
+def test_zero_crossings_do_not_bridge_missing_samples(gap) -> None:
+    values = np.array([-1.0, -1.0, gap, 0.0, 1.0, -1.0]).reshape(1, 1, -1)
+    table = zero_crossing_rate([_signal(values)], windows=[WINDOW], include_global=False)
+    assert table.values.item() == pytest.approx(SFREQ / values.size)
 
 
 def test_variance_of_a_known_series() -> None:

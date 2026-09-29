@@ -49,6 +49,14 @@ def test_recovers_a_known_peak_to_better_than_the_bin_spacing() -> None:
     assert table.values.item() == pytest.approx(10.2, abs=0.1)
 
 
+@pytest.mark.parametrize("centre", [9.5, 10.0, 10.25])
+def test_peak_interpolation_uses_actual_frequency_spacing(centre) -> None:
+    freqs = np.array([8.0, 10.0, 11.0, 12.0])
+    power = 10.0 - (freqs - centre) ** 2
+    table = peak_frequency(_spectra(power, freqs), band=ALPHA, include_global=False, **PLAIN)
+    assert table.values.item() == pytest.approx(centre)
+
+
 def test_peak_on_a_band_edge_is_flagged() -> None:
     freqs = np.arange(8.0, 13.0, 0.5)
     rising = _spectra(np.linspace(1.0, 5.0, freqs.size), freqs)

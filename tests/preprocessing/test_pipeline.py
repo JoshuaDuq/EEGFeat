@@ -129,3 +129,55 @@ def test_missing_review_decision_is_refused(raw):
     artifact = ArtifactSettings("regression", RegressionSettings(("VEOG",)), "average")
     with pytest.raises(ValueError, match="review-artifact"):
         preprocess(raw, ProcessingSettings(FixedEpochSettings(2), artifact=artifact))
+
+
+@pytest.mark.parametrize("execution", ["memory", "checkpoint"])
+def test_configured_eeg_types_are_applied_before_requiring_eeg(raw, tmp_path, execution):
+    from dataclasses import replace
+
+    from eegfeat.preprocessing.config import ChannelSettings
+
+    names = raw.ch_names[:2]
+    source = mne.io.RawArray(
+        raw.get_data(picks=names), mne.create_info(names, raw.info["sfreq"], "misc")
+    )
+    settings = ProcessingSettings(
+        FixedEpochSettings(2), channels=ChannelSettings(types=dict.fromkeys(names, "eeg"))
+    )
+    if execution == "memory":
+        epochs = preprocess(source, settings).epochs
+    else:
+        config = replace(config_for(source, tmp_path), processing=settings)
+        workflow = open_workflow(config)
+        run_until(workflow, "epoch")
+        epochs = read_checkpoint(workflow, "epoch").state.epochs
+    assert epochs.get_channel_types() == ["eeg", "eeg"]
+    assert source.get_channel_types() == ["misc", "misc"]
+
+
+@pytest.mark.parametrize("invalid", ["type", "sampling", "empty", "nonfinite", "no_eeg"])
+def test_load_and_prepare_reject_invalid_recordings(invalid):
+    from eegfeat.preprocessing.config import ChannelSettings
+
+    source = mne.io.RawArray(np.zeros((1, 100)), mne.create_info(["Cz"], 100, "misc"))
+    settings = ProcessingSettings(
+        FixedEpochSettings(0.5), channels=ChannelSettings(types={"Cz": "eeg"})
+    )
+    if invalid == "type":
+        source = np.zeros((1, 100))
+        error, message = TypeError, "expected MNE BaseRaw"
+    elif invalid == "sampling":
+        with source.info._unlock():
+            source.info["sfreq"] = 0
+        error, message = ValueError, "positive sample rate and nonempty data"
+    elif invalid == "empty":
+        source._last_samps[0] = source.first_samp - 1
+        error, message = ValueError, "positive sample rate and nonempty data"
+    elif invalid == "nonfinite":
+        source._data[0, 0] = np.nan
+        error, message = ValueError, "nonfinite physiology samples"
+    else:
+        settings = ProcessingSettings(FixedEpochSettings(0.5))
+        error, message = ValueError, "at least one good EEG channel"
+    with pytest.raises(error, match=message):
+        preprocess(source, settings)

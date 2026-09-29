@@ -136,7 +136,11 @@ Wavelet Support Restriction
 ---------------------------
 
 Only Morlet coefficients whose full wavelet support lies inside the analysis
-window enter the window mean.
+window and the available TFR time range enter the window mean. Requested bounds
+outside that range, including infinite whole-segment bounds, are intersected
+with the available range before restricting wavelet support. Keep any padding
+in the TFR passed to ``Spectra.from_tfr``; cropped-away padding cannot establish
+support for the remaining coefficients.
 
 A Morlet wavelet at frequency :math:`f` with :math:`n_{\text{cycles}}` cycles
 has temporal half-support
@@ -146,8 +150,8 @@ has temporal half-support
    \tau(f) = \frac{5 n_{\text{cycles}}}{2 \pi f}
 
 The coefficient at time :math:`t` uses samples in
-:math:`[t - \tau(f), t + \tau(f)]`. It belongs to an analysis window
-:math:`[t_{\min}, t_{\max}]` when that support lies inside the window.
+:math:`[t - \tau(f), t + \tau(f)]`. For the intersected window
+:math:`[t_{\min}, t_{\max}]`, its support must satisfy
 
 .. math::
 
@@ -211,13 +215,16 @@ Parabolic Interpolation
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 The retained maximum is refined by parabolic interpolation through the peak bin
-and its two neighbours.
+and its two neighbours, using their actual frequency coordinates. Let
+:math:`h_L=f_k-f_{k-1}` and :math:`h_R=f_{k+1}-f_k`.
 
 .. math::
 
    \begin{aligned}
-   \delta &= \frac{1}{2} \frac{P(f_{k-1}) - P(f_{k+1})}{P(f_{k-1}) - 2 P(f_k) + P(f_{k+1})} \\[6pt]
-   f_{\text{peak}} &= f_k + \delta \cdot \frac{f_{k+1} - f_{k-1}}{2}
+   s_L &= \frac{P(f_k)-P(f_{k-1})}{h_L}, \qquad
+   s_R = \frac{P(f_{k+1})-P(f_k)}{h_R} \\[6pt]
+   a &= \frac{s_R-s_L}{h_L+h_R}, \qquad b = s_L + a h_L \\[6pt]
+   \delta &= -\frac{b}{2a}, \qquad f_{\text{peak}} = f_k + \delta
    \end{aligned}
 
 :math:`k` is the discrete argmax.
@@ -225,11 +232,11 @@ and its two neighbours.
 - **Minimum bins**: interpolation needs at least three bins, which is also the
   requirement for an interior maximum. Narrower bands raise.
 - **Disabling**: ``interpolate=False`` returns the bin frequency.
-- **Accuracy**: the vertex is exact on a uniform grid. On a non-uniform grid the
-  half-spacing step is an approximation.
+- **Accuracy**: the fitted parabola's vertex is exact on both uniform and
+  non-uniform grids; the offset is bounded by the midpoints to neighbouring bins.
 - **Degenerate cases**: a zero denominator, or a non-finite :math:`\delta`, is
   treated as :math:`\delta = 0`.
-- **Clipping**: :math:`\delta` is clipped to :math:`[-0.5, 0.5]`.
+- **Clipping**: :math:`\delta` is clipped to :math:`[-h_L/2, h_R/2]` in Hz.
 - **Flags**: a maximum on the first or last bin of the band is not interpolated,
   and ``edge_hit`` is set unless the centre-of-gravity fallback applies.
 - **Stored resolution**: every column also stores ``freq_resolution_hz``, the

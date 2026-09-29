@@ -220,7 +220,7 @@ def fold_results(
 _PREDICTION_COLUMNS = ("subject_id", "y_true", "y_pred")
 
 
-def _check_prediction_columns(predictions: pd.DataFrame, function: str) -> None:
+def _validate_predictions(predictions: pd.DataFrame, function: str) -> None:
     missing = [column for column in _PREDICTION_COLUMNS if column not in predictions.columns]
     if missing:
         msg = (
@@ -228,6 +228,8 @@ def _check_prediction_columns(predictions: pd.DataFrame, function: str) -> None:
             f"{list(_PREDICTION_COLUMNS)}; missing {missing}."
         )
         raise ValueError(msg)
+    if predictions["subject_id"].isna().any():
+        raise ValueError(f"{function} needs a subject_id label for every trial.")
 
 
 def subject_level_r(
@@ -253,7 +255,7 @@ def subject_level_r(
         varies. ``"raise"``, the default, refuses; ``"zero"`` scores it as no
         linear association.
     """
-    _check_prediction_columns(predictions, "subject_level_r")
+    _validate_predictions(predictions, "subject_level_r")
     if undefined not in ("raise", "zero"):
         raise ValueError(f"undefined must be 'raise' or 'zero', got {undefined!r}")
     has_folds = "fold" in predictions.columns
@@ -469,7 +471,7 @@ def subject_level_errors(
     config : AggregationConfig
         Subject weighting, confidence-interval method and bootstrap settings.
     """
-    _check_prediction_columns(predictions, "subject_level_errors")
+    _validate_predictions(predictions, "subject_level_errors")
     per_subject_mae: list[float] = []
     per_subject_rmse: list[float] = []
     per_subject_n: list[int] = []

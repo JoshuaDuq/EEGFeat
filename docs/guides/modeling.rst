@@ -342,6 +342,8 @@ Classification details
 Defined values
 ~~~~~~~~~~~~~~
 
+- Subject-level regression summaries require a ``subject_id`` for every trial;
+  missing labels raise instead of silently dropping trials during grouping.
 - Pearson correlation and centered ``R²`` use no absolute variance floor, so
   whether they are defined does not depend on the units of the target.
 - Classification probabilities and the predictions used for model selection must

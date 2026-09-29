@@ -233,6 +233,10 @@ def spectral_connectivity(
         )
     estimator = _require_mne_connectivity()
     node_names, picks = _nodes(signal.ch_names, groups)
+    nodes = {
+        name: sorted(signal.ch_names[i] for i in members)
+        for name, members in zip(node_names, picks, strict=True)
+    }
 
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
     for band in bands:
@@ -262,7 +266,7 @@ def spectral_connectivity(
             columns.extend(
                 _pair_columns(
                     np.stack([_reduce_to_nodes(m, picks) for m in matrices]),
-                    node_names,
+                    nodes,
                     band,
                     window,
                     method,
@@ -529,7 +533,7 @@ def _band_mean(result: Any, band: Band, *, rectify: bool = False) -> npt.NDArray
 
 def _pair_columns(
     matrices: npt.NDArray[np.float64],
-    node_names: tuple[str, ...],
+    nodes: Mapping[str, Sequence[str]],
     band: Band | None,
     window: Window,
     measure: str,
@@ -537,6 +541,7 @@ def _pair_columns(
     signal: BandSignal | Signal,
     estimator_parameters: Mapping[str, object],
 ) -> list[tuple[FeatureMeta, npt.NDArray[np.float64]]]:
+    node_names = tuple(nodes)
     computation = ComputationSpec.create(
         measure,
         estimator=("per-trial-fisher-z-mean" if measure == "aec" else "mne-connectivity"),
@@ -549,6 +554,7 @@ def _pair_columns(
         # estimates of the same band and window are otherwise indistinguishable,
         # and a graph built from their union is a graph of neither.
         nodes=list(node_names),
+        node_channels=nodes,
     )
     columns = []
     for i in range(len(node_names)):
@@ -597,6 +603,10 @@ def _pairwise(
     check_signals(signals, windows)
     row_groups, labels = _resolve_rows(trials, signals[0].n_epochs)
     node_names, picks = _nodes(signals[0].ch_names, groups)
+    nodes = {
+        name: sorted(signals[0].ch_names[i] for i in members)
+        for name, members in zip(node_names, picks, strict=True)
+    }
 
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
     for signal in signals:
@@ -612,7 +622,7 @@ def _pairwise(
             columns.extend(
                 _pair_columns(
                     stacked,
-                    node_names,
+                    nodes,
                     signal.band,
                     window,
                     measure,

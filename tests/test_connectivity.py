@@ -188,6 +188,32 @@ def test_groups_make_rois_the_nodes() -> None:
     assert [m.space for m in table.meta] == ["front-back"]
 
 
+@pytest.mark.parametrize("method", ["aec", "coh"])
+def test_roi_identity_records_members_independent_of_order(method) -> None:
+    signal = _shared_driver(1.0)
+
+    def extract(members):
+        groups = {"front": members, "back": ["P3", "P4"]}
+        if method == "aec":
+            return envelope_correlation([signal], windows=[WINDOW], groups=groups)
+        pytest.importorskip("mne_connectivity")
+        broadband = Signal.from_arrays(
+            data=signal.analytic.real,
+            times=signal.times,
+            ch_names=signal.ch_names,
+            sfreq=signal.sfreq,
+            row_ids=signal.row_ids,
+        )
+        return ef.spectral_connectivity(
+            broadband, method=method, bands=[ALPHA], windows=[WINDOW], groups=groups
+        )
+
+    assert extract(["C3"]).names != extract(["C4"]).names
+    first, reversed_members = extract(["C3", "C4"]), extract(["C4", "C3"])
+    assert first.names == reversed_members.names
+    np.testing.assert_allclose(first.values, reversed_members.values)
+
+
 def test_an_unknown_channel_in_a_group_raises() -> None:
     with pytest.raises(KeyError, match="Fz"):
         envelope_correlation([_shared_driver(1.0)], windows=[WINDOW], groups={"front": ["Fz"]})

@@ -88,6 +88,20 @@ def test_duration_filter_discards_short_bursts() -> None:
     assert table.select(measure="fraction_above").values.item() == pytest.approx(0.5)
 
 
+@pytest.mark.parametrize("minimum, expected", [(100.0, 1.0), (104.0, 0.0), (106.0, 0.0)])
+def test_minimum_burst_duration_is_not_rounded_down(minimum, expected) -> None:
+    envelope = np.zeros((1, 1, 100))
+    envelope[:, :, 10:20] = 1.0
+    table = burst_count(
+        [_signal(envelope)],
+        windows=[WINDOW],
+        threshold=np.array([[0.5]]),
+        min_duration_ms=minimum,
+        include_global=False,
+    )
+    assert table.values.item() == expected
+
+
 def test_no_burst_survives_duration_filter() -> None:
     envelope = np.zeros((1, 1, 100))
     envelope[:, :, 10:30] = 1.0

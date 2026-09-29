@@ -1,6 +1,16 @@
 import numpy as np
+import pytest
 
 from eegfeat.preprocessing.config import EventSettings, FixedEpochSettings
+
+
+@pytest.mark.parametrize("dtype", [np.int64, np.uint64])
+def test_events_reject_decreasing_samples(raw, dtype):
+    from eegfeat.preprocessing.events import validate_events
+
+    events = np.array([[raw.first_samp + 20, 0, 1], [raw.first_samp + 10, 0, 1]], dtype=dtype)
+    with pytest.raises(ValueError, match="strictly increasing"):
+        validate_events(raw, events, {"stimulus": 1})
 
 
 def test_original_sample_identity(raw):

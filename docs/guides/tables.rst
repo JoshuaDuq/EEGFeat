@@ -60,6 +60,10 @@ per-epoch tables into a dataset.
        ["sub-01_features.tsv", "sub-02_features.tsv", "sub-03_features.tsv"]
    )
 
+Descriptor column names must be unique, nonempty strings. Invalid names raise
+before any files are written, preventing ambiguous targets when the bundle is
+read back.
+
 The functions:
 
 - :func:`eegfeat.io.write_table` writes a TSV of values, a ``_coverage.tsv`` of

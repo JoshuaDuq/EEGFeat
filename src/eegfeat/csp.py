@@ -63,7 +63,7 @@ def _row_indices(rows: npt.NDArray[np.intp] | None, n_epochs: int) -> npt.NDArra
     return indices.astype(np.intp)
 
 
-def _covariance(epochs: npt.NDArray[np.float64], regularization: float) -> npt.NDArray[np.float64]:
+def _covariance(epochs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Trace-normalized covariance, averaged over epochs.
 
     Normalizing each epoch by its own trace before averaging is the original
@@ -85,14 +85,18 @@ def _covariance(epochs: npt.NDArray[np.float64], regularization: float) -> npt.N
         used += 1
     if used == 0:
         raise ValueError("no epoch in this class had finite data with non-zero variance.")
-    mean = total / used
-    if regularization > 0.0:
-        # Shrink toward a sphere: with few epochs per channel the class covariance is a
-        # noisy estimate, and shrinkage steadies the filters fitted from it.
-        mean = (1.0 - regularization) * mean + regularization * np.trace(
-            mean
-        ) / n_channels * np.eye(n_channels)
-    return mean
+    return total / used
+
+
+def _shrink_covariance(
+    covariance: npt.NDArray[np.float64], regularization: float
+) -> npt.NDArray[np.float64]:
+    rank = covariance.shape[0]
+    return np.asarray(
+        (1.0 - regularization) * covariance
+        + regularization * np.trace(covariance) / rank * np.eye(rank),
+        dtype=float,
+    )
 
 
 @dataclass(frozen=True, eq=False)
@@ -185,8 +189,7 @@ class CommonSpatialPattern:
         first, second = (int(present[0]), int(present[1]))
 
         covariances = [
-            _covariance(signal.data[selected[y[selected] == label]], regularization)
-            for label in (first, second)
+            _covariance(signal.data[selected[y[selected] == label]]) for label in (first, second)
         ]
         pooled = covariances[0] + covariances[1]
         # An average reference, or ICA components removed, leaves the pooled covariance
@@ -200,7 +203,15 @@ class CommonSpatialPattern:
                 "epochs' covariance; a reference or removed ICA components take dimensions "
                 "away that no spatial filter can recover."
             )
-        values, reduced = eigh(basis.T @ covariances[0] @ basis, basis.T @ pooled @ basis)
+        # Shrink only within the measured subspace; regularization cannot restore
+        # dimensions removed by referencing or artifact correction.
+        reduced_covariances = [
+            _shrink_covariance(basis.T @ covariance @ basis, regularization)
+            for covariance in covariances
+        ]
+        values, reduced = eigh(
+            reduced_covariances[0], reduced_covariances[0] + reduced_covariances[1]
+        )
         vectors = basis @ reduced
 
         order = np.argsort(values)[::-1]

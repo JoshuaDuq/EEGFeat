@@ -283,6 +283,24 @@ def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
     np.testing.assert_allclose(spectra.data[:, :, 0, :], expected)
 
 
+@pytest.mark.parametrize(
+    ("tmin", "tmax"),
+    [(-np.inf, np.inf), (-10.0, 10.0), (-np.inf, 1.0), (-1.0, np.inf)],
+)
+def test_from_tfr_limits_wavelet_support_to_available_times(tmin: float, tmax: float) -> None:
+    tfr = _toy_tfr()
+    window = Window("requested", tmin, tmax)
+    intersection = Window("available", max(tmin, tfr.times[0]), min(tmax, tfr.times[-1]))
+    spectra = Spectra.from_tfr(
+        tfr, (window, intersection), recording="test", n_cycles=3.0, sfreq=200.0
+    )
+
+    np.testing.assert_allclose(spectra.data[:, :, 0], spectra.data[:, :, 1])
+    np.testing.assert_array_equal(spectra.coverage[:, :, 0], spectra.coverage[:, :, 1])
+    np.testing.assert_array_equal(spectra.support[:, :, 0], spectra.support[:, :, 1])
+    assert np.all(spectra.support < 1.0)
+
+
 def _noise_tfr(burst: bool):
     # White noise in 20 epochs, optionally with a 0.2 s burst at ten times the noise
     # amplitude inside the window: 3% of it, or up to 9% once the wavelet smears it.

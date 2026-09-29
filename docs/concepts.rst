@@ -132,6 +132,12 @@ arguments passed to the extractor. Two columns that differ only in a parameter
 such as ``fit_range`` or a burst threshold share the six readable fields and
 differ in the hash. Both can sit in one table.
 
+Spatial aggregation records the sorted member channels in the computation
+specification. Changing an ROI's membership, or the channels entering a global
+mean, changes its feature identity even when the spatial label stays the same.
+Connectivity records the member channels of every node as well. Reordering
+members within an ROI does not change its identity.
+
 .. _concepts-row-kinds:
 
 Epoch rows and group rows

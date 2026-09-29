@@ -16,10 +16,16 @@ import numpy as np
 from ._deps import require
 from .checkpoints import Checkpoint, load_checkpoint, publish_checkpoint, write_pointer
 from .checks import validate_source_destinations
-from .config import PreprocessingConfig, WorkflowSettings, read_yaml
+from .config import (
+    EventEpochSettings,
+    PreprocessingConfig,
+    ProcessingSettings,
+    WorkflowSettings,
+    read_yaml,
+)
 from .io import validate_bundle, write_result
 from .pipeline import StageData, execute_numeric, result_from_state
-from .provenance import fingerprint, identity
+from .provenance import file_hash, fingerprint, identity
 from .stages import STAGES, enabled, get_stage, stage_settings
 
 POLICIES = {"review-raw": "raw_review", "review-artifact": "artifact_review"}
@@ -125,6 +131,18 @@ def _reset_tokens(workflow: Workflow) -> dict[str, str]:
     return json.loads(path.read_text()) if path.exists() else {}
 
 
+def _external_file_hashes(stage: str, settings: ProcessingSettings) -> dict[str, str]:
+    paths: dict[str, Path] = {}
+    if stage == "prepare" and isinstance(settings.channels.montage, Path):
+        paths["channels.montage"] = settings.channels.montage
+    if stage == "events" and isinstance(settings.epochs, EventEpochSettings):
+        if settings.epochs.events.path is not None:
+            paths["epochs.events.path"] = settings.epochs.events.path
+        if settings.epochs.metadata is not None:
+            paths["epochs.metadata"] = settings.epochs.metadata
+    return {name: file_hash(path) for name, path in paths.items()}
+
+
 def stage_identities(workflow: Workflow, source_id: str) -> dict[str, str]:
     reset = _reset_tokens(workflow)
     resolved: dict[str, str] = {}
@@ -132,6 +150,9 @@ def stage_identities(workflow: Workflow, source_id: str) -> dict[str, str]:
     for stage in STAGES:
         parents = {name: resolved[name] for name in stage.parents}
         settings = stage_settings(stage, workflow.config.processing)
+        files = _external_file_hashes(stage.name, workflow.config.processing)
+        if files:
+            settings["external_files"] = files
         path = decision_path(workflow, stage.name)
         decision = read_yaml(path) if stage.review and path.exists() else None
         resolved[stage.name] = identity(

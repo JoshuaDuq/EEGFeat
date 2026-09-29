@@ -122,6 +122,11 @@ A later ``run`` reuses a checkpoint whose recipe and parents still match.
 - **status --verify**: re-reads every completed checkpoint of one recording
   (``--recording``), or of every recording with ``--json``.
 - **Source recording**: read and hashed once per ``run``.
+- **External inputs**: montage, event, and metadata files are hashed when
+  checking checkpoint identities. Editing a file in place makes its stage
+  (``prepare`` for montages, ``events`` for events or metadata) and dependent
+  checkpoints stale; reset from that stage before running again. Missing
+  files raise an error. Rewriting identical contents preserves reuse.
 - **Pending review file**: a file the run already wrote is kept, with any edits
   in it.
 - **next**: runs one pending stage.

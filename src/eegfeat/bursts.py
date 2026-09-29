@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import expand_signal, window_mask
-from eegfeat._validation import blank_non_finite
+from eegfeat._validation import blank_non_finite, minimum_sample_count
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
 from eegfeat.table import FeatureTable
@@ -392,7 +392,7 @@ def _measures(
     min_duration_ms: float,
 ) -> dict[str, npt.NDArray[np.float64]]:
     n_epochs, n_channels, n_times = trace.shape
-    min_samples = max(1, int(round(min_duration_ms * sfreq / 1000.0))) if sfreq > 0 else 1
+    min_samples = minimum_sample_count(min_duration_ms / 1000.0, sfreq)
     duration_sec = n_times / sfreq if sfreq > 0 else np.nan
 
     counts = np.full((n_epochs, n_channels), np.nan)

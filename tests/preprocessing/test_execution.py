@@ -233,3 +233,83 @@ def test_missing_payload_names_the_reset(raw, tmp_path):
     shutil.rmtree(workflow.workspace / "prepare")
     with pytest.raises(ValueError, match="prepare: checkpoint payload missing; reset CONFIG"):
         run_until(workflow, "events")
+
+
+@pytest.fixture(params=["events", "metadata", "montage"])
+def external_input_workflow(request, raw, tmp_path):
+    from dataclasses import replace
+
+    from eegfeat.preprocessing import open_workflow
+    from eegfeat.preprocessing.config import ChannelSettings, EventEpochSettings, EventSettings
+
+    config = config_for(raw, tmp_path)
+    if request.param == "montage":
+        path = tmp_path / "montage.sfp"
+        positions = raw.get_montage().get_positions()["ch_pos"]
+        path.write_text("".join(f"{name} {x} {y} {z}\n" for name, (x, y, z) in positions.items()))
+        processing = replace(config.processing, channels=ChannelSettings(montage=path))
+        stage = "prepare"
+    else:
+        events = tmp_path / "events-eve.txt"
+        events.write_text("2250 0 1\n3500 0 1\n")
+        metadata = tmp_path / "metadata.tsv"
+        metadata.write_text("condition\nold\nold\n")
+        processing = ProcessingSettings(
+            EventEpochSettings(
+                EventSettings("file", {"stimulus": 1}, path=events),
+                0,
+                0.1,
+                metadata=metadata,
+            )
+        )
+        path = events if request.param == "events" else metadata
+        stage = "events"
+    return open_workflow(replace(config, processing=processing)), path, stage
+
+
+def test_external_input_change_invalidates_owning_stage(external_input_workflow):
+    from eegfeat.preprocessing import list_steps, run_until
+
+    workflow, path, stage = external_input_workflow
+    run_until(workflow, "epoch")
+    if path.suffix == ".sfp":
+        lines = path.read_text().splitlines()
+        name, x, y, z = lines[0].split()
+        lines[0] = f"{name} {float(x) + 0.01} {y} {z}"
+        path.write_text("\n".join(lines) + "\n")
+    elif path.suffix == ".tsv":
+        path.write_text("condition\nnew\nnew\n")
+    else:
+        path.write_text("2500 0 1\n3750 0 1\n")
+
+    states = {status.stage: status.state for status in list_steps(workflow)}
+    assert states["load"] == "completed"
+    if stage == "events":
+        assert states["prepare"] == "completed"
+    assert states[stage] == "stale"
+    assert states["epoch"] == "stale"
+    with pytest.raises(ValueError, match=f"{stage}: stale checkpoint"):
+        run_until(workflow, "epoch")
+
+
+def test_unchanged_external_input_reuses_checkpoints(external_input_workflow):
+    from eegfeat.preprocessing import read_checkpoint, run_until
+
+    workflow, path, _ = external_input_workflow
+    run_until(workflow, "epoch")
+    original = read_checkpoint(workflow, "epoch").artifact_id
+    path.write_bytes(path.read_bytes())
+    assert run_until(workflow, "epoch").state == "completed"
+    assert read_checkpoint(workflow, "epoch").artifact_id == original
+
+
+def test_missing_external_input_surfaces(external_input_workflow):
+    from eegfeat.preprocessing import list_steps, run_until
+
+    workflow, path, _ = external_input_workflow
+    run_until(workflow, "epoch")
+    path.unlink()
+    with pytest.raises(FileNotFoundError):
+        list_steps(workflow)
+    with pytest.raises(FileNotFoundError):
+        run_until(workflow, "epoch")

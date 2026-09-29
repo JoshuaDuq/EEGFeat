@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from eegfeat._expand import expand_signal, window_mask
-from eegfeat._validation import blank_non_finite
+from eegfeat._validation import blank_non_finite, minimum_sample_count
 from eegfeat.baseline import normalize as _normalize
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
@@ -674,15 +674,16 @@ def _erds_measure(
         times: npt.NDArray[np.float64],
         mask: npt.NDArray[np.bool_],
     ) -> dict[str, npt.NDArray[np.float64]]:
+        if measure != "erds_onset_latency":
+            return {measure: _measures(signal, trace, times)[measure]}
         power, reference, deviation, _ = prepared(signal)
         # The expander's own selector, not one recovered from the time values. A missing
         # sample or baseline is NaN here, and NaN never crosses.
         departure = np.abs(power[:, :, mask] - reference[:, :, np.newaxis])
         onset_crossing = departure > deviation[:, :, np.newaxis]
-        onset_samples = max(1, int(round(onset_seconds(signal) * signal.sfreq)))
-        # Every measure derives from the same trace, so computing the set and
-        # taking one is cheaper than it looks and keeps the definitions together.
-        return {measure: _measures(signal, trace, times, onset_crossing, onset_samples)[measure]}
+        onset_samples = minimum_sample_count(onset_seconds(signal), signal.sfreq)
+        usable = np.asarray(np.isfinite(trace).any(axis=2), dtype=np.bool_)
+        return {measure: _onset(times, usable, onset_crossing, onset_samples)}
 
     def flags_of(signal: BandSignal) -> dict[str, npt.NDArray[np.bool_]]:
         power, reference, _, degenerate = prepared(signal)
@@ -761,8 +762,6 @@ def _measures(
     signal: BandSignal,
     trace: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
-    onset_crossing: npt.NDArray[np.bool_],
-    onset_samples: int = 1,
 ) -> dict[str, npt.NDArray[np.float64]]:
     finite = np.isfinite(trace)
     usable: npt.NDArray[np.bool_] = np.asarray(finite.any(axis=2), dtype=np.bool_)
@@ -778,7 +777,6 @@ def _measures(
         "ers_magnitude": _signed_magnitude(trace, finite, usable, negative=False),
         "ers_duration": _signed_duration(trace, finite, usable, signal.sfreq, negative=False),
         "erds_peak_latency": np.where(usable, times[peak_index], np.nan),
-        "erds_onset_latency": _onset(times, usable, onset_crossing, onset_samples),
         "erds_rebound_latency": _rebound(trace, times, finite, usable, peak_index),
     }
 

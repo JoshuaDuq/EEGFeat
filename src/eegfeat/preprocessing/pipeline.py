@@ -57,7 +57,7 @@ from .raw import (
     filter_raw,
     notch_raw,
     prepare_channels,
-    validate_raw,
+    validate_source_raw,
 )
 from .rejection import (
     RejectionModel,
@@ -149,7 +149,7 @@ def _stage_load(
     state: StageData, settings: ProcessingSettings, decision: Any, n_jobs: int
 ) -> StageData:
     raw = state.raw
-    validate_raw(raw)
+    validate_source_raw(raw)
     return replace(
         state,
         raw=raw.copy(),

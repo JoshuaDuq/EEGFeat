@@ -65,6 +65,43 @@ def _step(baseline_amp: float, active_amp: float, n: int = 201) -> BandSignal:
     return _signal(envelope)
 
 
+@pytest.mark.parametrize(
+    "measure", [fn for name, fn in ERDS_FUNCTIONS.items() if name != "erds_onset_latency"]
+)
+def test_non_onset_measures_accept_a_band_starting_at_zero(measure) -> None:
+    from dataclasses import replace
+
+    signal = replace(_step(1.0, 2.0), band=Band("lowpass", 0.0, 4.0))
+    result = measure([signal], baseline=BASE, windows=[STIM], include_global=False)
+    assert np.isfinite(result.values).all()
+
+
+def test_onset_requires_the_full_minimum_duration() -> None:
+    envelope = np.ones((1, 1, 201))
+    envelope[:, :, 110:120] = 2.0
+    result = erds_onset_latency(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        min_duration_ms=104.0,
+        include_global=False,
+    )
+    assert np.isnan(result.values).all()
+
+
+def test_onset_accepts_an_exact_duration_despite_roundoff() -> None:
+    envelope = np.ones((1, 1, 201))
+    envelope[:, :, 110:124] = 2.0
+    result = erds_onset_latency(
+        [_signal(envelope)],
+        baseline=BASE,
+        windows=[STIM],
+        min_duration_ms=140.0,
+        include_global=False,
+    )
+    assert result.values.item() == pytest.approx(0.1)
+
+
 def test_a_halved_power_gives_minus_fifty_percent() -> None:
     # amplitude 1 -> power 1 in baseline; amplitude sqrt(0.5) -> power 0.5 active
     table = erds(
