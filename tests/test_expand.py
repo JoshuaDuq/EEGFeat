@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -72,6 +74,38 @@ def test_metadata_records_the_in_band_resolution() -> None:
     )
     assert table.meta[0].freq_resolution_hz == pytest.approx(1.0)
     assert table.meta[0].source == "test"
+
+
+def test_spectral_roi_identity_records_members_independent_of_order() -> None:
+    from eegfeat import mean_psd
+
+    def names(members):
+        return mean_psd(_spectra(), bands=[ALPHA], groups={"central": members}).names
+
+    assert names(["C3"]) != names(["C4"])
+    assert names(["C3", "C4"]) == names(["C4", "C3"])
+
+
+def test_global_identity_depends_only_on_its_member_channels() -> None:
+    from eegfeat import mean_psd
+
+    spectra = _spectra()
+    first = mean_psd(spectra, bands=[ALPHA])
+    renamed = mean_psd(replace(spectra, ch_names=("C3", "P4")), bands=[ALPHA])
+    reordered = mean_psd(
+        replace(
+            spectra,
+            data=spectra.data[:, ::-1],
+            coverage=spectra.coverage[:, ::-1],
+            support=spectra.support[:, ::-1],
+            ch_names=spectra.ch_names[::-1],
+        ),
+        bands=[ALPHA],
+    )
+
+    assert first.select(space_kind="global").names != renamed.select(space_kind="global").names
+    assert first.select(space="C3").names == renamed.select(space="C3").names
+    assert first.select(space_kind="global").names == reordered.select(space_kind="global").names
 
 
 def test_baseline_window_is_consumed_and_not_emitted() -> None:

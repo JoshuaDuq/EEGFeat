@@ -368,8 +368,7 @@ def test_log_frequency_grid_is_correctly_rounded() -> None:
 
 
 def test_default_spectral_recipes_keep_their_column_names(tmp_path) -> None:
-    # Pinned before window_statistic existed: a new setting left at its default must not
-    # rename the columns of tables computed without it.
+    # Names include the global mean's member channels and the exact frequency grid.
     welch = features(
         tmp_path,
         "[windows]\nbase = [-0.5, 0.0]\nstim = [0.0, 1.0]\n\n"
@@ -385,14 +384,20 @@ def test_default_spectral_recipes_keep_their_column_names(tmp_path) -> None:
 
     assert welch.epochs is not None and morlet.epochs is not None
     assert list(welch.epochs.to_dataframe().columns) == [
-        "eeg_band-power_alpha_global_base_raw_pada66ace3048",
-        "eeg_band-power_alpha_global_stim_raw_pb56764cacd5a",
+        "eeg_band-power_alpha_global_base_raw_p763e6435f03b",
+        "eeg_band-power_alpha_global_stim_raw_p6708c176f841",
     ]
-    # Re-pinned when the log grid became correctly rounded: the earlier value held the
-    # macOS libm bits of np.geomspace and never matched on Linux.
     assert list(morlet.epochs.to_dataframe().columns) == [
-        "eeg_mean-tfr-power_alpha_global_stim_raw_pdeb0c6888a55"
+        "eeg_mean-tfr-power_alpha_global_stim_raw_p8b079340cb80"
     ]
+    for table in (welch.epochs, morlet.epochs):
+        assert table.meta[0].computation.parameters["spatial_channels"] == [
+            "Cz",
+            "F3",
+            "F4",
+            "Fz",
+            "Pz",
+        ]
 
 
 def _burst_epochs() -> mne.EpochsArray:

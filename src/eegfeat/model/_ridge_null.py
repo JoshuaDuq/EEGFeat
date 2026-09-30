@@ -64,10 +64,13 @@ def _label_free(step: object) -> bool:
     # of the exact types above.
     if isinstance(step, str):
         return step in ("drop", "passthrough")
-    if isinstance(step, Pipeline):
-        return all(_label_free(inner) for _, inner in step.steps)
-    if isinstance(step, ColumnTransformer):
-        return all(_label_free(inner) for _, inner, _ in step.transformers)
+    if type(step) is Pipeline:
+        return all(_label_free(inner) for _, inner in cast(Pipeline, step).steps)
+    if type(step) is ColumnTransformer:
+        transformer = cast(ColumnTransformer, step)
+        return _label_free(transformer.remainder) and all(
+            _label_free(inner) for _, inner, _ in transformer.transformers
+        )
     return type(step) in _LABEL_FREE
 
 
@@ -79,7 +82,11 @@ def ridge_penalty(
     metric_fn: object,
 ) -> str | None:
     """The grid key of the ridge penalty when the null has a closed form, else None."""
-    if metric_fn is not None or not isinstance(_chosen_scorer(scoring, refit), _SubjectRScorer):
+    if (
+        type(pipeline) is not Pipeline
+        or metric_fn is not None
+        or not isinstance(_chosen_scorer(scoring, refit), _SubjectRScorer)
+    ):
         return None
     name, regressor = pipeline.steps[-1]
     if (

@@ -478,7 +478,7 @@ def support_restricted_mask(
     window : Window
         The window to restrict to.
     n_cycles : float or ndarray
-        Cycle count, scalar or one value per frequency.
+        Finite positive cycle count, scalar or one value per frequency.
 
     Returns
     -------
@@ -487,7 +487,14 @@ def support_restricted_mask(
         False when no coefficient at that frequency fits.
     """
     f = np.asarray(freqs, dtype=float)
-    cycles = np.broadcast_to(np.asarray(n_cycles, dtype=float), f.shape)
+    if f.ndim != 1 or f.size == 0 or not np.isfinite(f).all() or np.any(f <= 0.0):
+        raise ValueError("freqs must be a non-empty 1-D array of finite positive values.")
+    cycles = np.asarray(n_cycles, dtype=float)
+    if cycles.ndim != 0 and cycles.shape != f.shape:
+        raise ValueError("n_cycles must be a scalar or one value per frequency.")
+    if not np.isfinite(cycles).all() or np.any(cycles <= 0.0):
+        raise ValueError("n_cycles must contain finite positive values.")
+    cycles = np.broadcast_to(cycles, f.shape)
     half_support = 5.0 * cycles / (2.0 * np.pi * f)
     axis = np.asarray(times, dtype=float)
     lower = max(window.tmin, float(axis[0])) + half_support

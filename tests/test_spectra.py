@@ -440,6 +440,48 @@ def test_support_restriction_narrows_low_frequencies_more_than_high_ones() -> No
     assert times[mask[1]].max() == pytest.approx(1.0 - expected_half_support, abs=0.01)
 
 
+@pytest.mark.parametrize("n_cycles", [0.0, -3.0, np.nan, np.inf, np.array([3.0, -1.0])])
+def test_morlet_support_requires_finite_positive_cycles(n_cycles) -> None:
+    with pytest.raises(ValueError, match="n_cycles.*finite.*positive"):
+        support_restricted_mask(
+            np.linspace(-2.0, 2.0, 401),
+            np.array([4.0, 40.0]),
+            Window("all", -np.inf, np.inf),
+            n_cycles,
+        )
+
+
+@pytest.mark.parametrize("n_cycles", [np.array([3.0]), np.ones((2, 1))])
+def test_morlet_support_requires_a_scalar_or_one_cycle_count_per_frequency(n_cycles) -> None:
+    with pytest.raises(ValueError, match="n_cycles.*scalar.*frequency"):
+        support_restricted_mask(
+            np.linspace(-2.0, 2.0, 401), np.array([4.0, 40.0]), Window("stim", 0.0, 1.0), n_cycles
+        )
+
+
+@pytest.mark.parametrize("frequency", [0.0, -1.0, np.nan, np.inf])
+def test_morlet_support_requires_finite_positive_frequencies(frequency) -> None:
+    with pytest.raises(ValueError, match="freqs.*finite.*positive"):
+        support_restricted_mask(
+            np.linspace(-2.0, 2.0, 401),
+            np.array([frequency, 40.0]),
+            Window("all", -np.inf, np.inf),
+            3.0,
+        )
+
+
+@pytest.mark.parametrize("n_cycles", [0.0, -3.0])
+def test_from_tfr_refuses_invalid_cycles_for_a_whole_epoch_window(n_cycles) -> None:
+    with pytest.raises(ValueError, match="n_cycles.*positive"):
+        Spectra.from_tfr(
+            _toy_tfr(),
+            (Window("all", -np.inf, np.inf),),
+            recording="test",
+            n_cycles=n_cycles,
+            sfreq=200.0,
+        )
+
+
 def test_a_frequency_whose_support_never_fits_drops_out_entirely() -> None:
     times = np.linspace(-2.0, 2.0, 401)
     freqs = np.array([1.0, 40.0])

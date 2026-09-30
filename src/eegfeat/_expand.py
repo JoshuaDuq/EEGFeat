@@ -80,6 +80,14 @@ def _assemble(
     )
 
 
+def _members(ch_names: Sequence[str], spatial: SpatialUnit) -> list[str] | None:
+    # A single channel is already named by its space; recording it would stop
+    # channel pairs from matching for asymmetry.
+    if spatial.space_kind == "channel":
+        return None
+    return sorted(ch_names[i] for i in spatial.picks)
+
+
 def expand(
     spectra: Spectra,
     kernel: Kernel,
@@ -174,6 +182,7 @@ def expand(
                     minimum_bins=min_bins,
                     weighting=weighting,
                     spatial_aggregation="arithmetic_mean_of_channel_features",
+                    spatial_channels=_members(spectra.ch_names, spatial),
                     parameters=parameters,
                     **baseline_parameters,
                 ),
@@ -328,6 +337,7 @@ def expand_signal(
                         input_computation=_s.computation.record(),
                         normalization=mode,
                         spatial_aggregation="arithmetic_mean_of_channel_features",
+                        spatial_channels=_members(_s.ch_names, spatial),
                         parameters=parameters,
                     ),
                     freq_resolution_hz=None,

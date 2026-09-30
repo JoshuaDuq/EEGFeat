@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from sklearn.compose import ColumnTransformer
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 import eegfeat.model.nulls as nulls
 from eegfeat.model import _ridge_null
@@ -64,6 +69,21 @@ def _case(name: str) -> dict[str, object]:
         )
     elif name == "untuned":
         case["grid"] = {}
+    elif name == "supervised_remainder":
+        case["pipeline"] = Pipeline(
+            [
+                (
+                    "columns",
+                    ColumnTransformer(
+                        [("scale", StandardScaler(), [0])],
+                        remainder=SelectKBest(f_regression, k=1),
+                    ),
+                ),
+                ("regressor", Ridge()),
+            ]
+        )
+        case["grid"] = {}
+        case["config"] = NullConfig(n_permutations=3)
     return case
 
 
@@ -109,6 +129,7 @@ CASES = [
     "trial_count",
     "deconfounded",
     "untuned",
+    "supervised_remainder",
 ]
 
 

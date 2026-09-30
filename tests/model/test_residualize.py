@@ -242,11 +242,27 @@ def _within(values, nuisance=NUISANCE, columns=("n",)):
     )
 
 
-def test_a_subject_with_training_rows_never_sees_its_held_out_targets() -> None:
-    y = np.random.default_rng(0).normal(size=18)
-    changed = y.copy()
-    changed[8:10] += 100.0
-    np.testing.assert_array_equal(_within(y)[0], _within(changed)[0])
+@pytest.mark.parametrize("shape", [(18,), (18, 2)])
+def test_a_subject_with_training_rows_never_sees_its_held_out_values(shape) -> None:
+    values = np.random.default_rng(0).normal(size=shape)
+    changed = values.copy()
+    changed[8:10] += 1e14
+    np.testing.assert_array_equal(_within(values)[0], _within(changed)[0])
+
+
+@pytest.mark.parametrize("missing", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("row", [0, 8])
+def test_nonfinite_features_stay_missing_without_erasing_finite_residuals(missing, row) -> None:
+    values = np.random.default_rng(2).normal(size=(18, 2))
+    values[row, 1] = missing
+    expected = values.copy()
+    expected[row, 1] = np.nan
+
+    actual = np.concatenate(_within(values))
+    reference = np.concatenate(_within(expected))
+
+    assert np.isnan(actual[row, 1])
+    np.testing.assert_allclose(actual, reference, equal_nan=True)
 
 
 def test_a_subject_held_out_whole_is_fitted_on_its_own_rows() -> None:

@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from eegfeat._validation import blank_non_finite
 from eegfeat.model import _deps as _deps
 from eegfeat.model.transformers import PreprocessingConfig, validate_subject_missingness
 
@@ -340,7 +341,7 @@ def _subject_residual(
             if extrapolate
             else np.linalg.lstsq(fit_design / scales, target, rcond=None)[0] / scales
         )
-        return _without_rounding(data[rows] - design @ coefficients, data[rows])
+        return _without_rounding(data[rows] - design @ coefficients, target)
 
     # Feature columns are fitted on the rows where they are finite, one missingness pattern
     # at a time; a column left with no residual degrees of freedom is missing.
@@ -356,18 +357,18 @@ def _subject_residual(
         fitted = data[fit_rows[pattern]][:, kept]
         coefficients = np.linalg.lstsq(pattern_design, fitted, rcond=None)[0] / scales[:, None]
         residual[:, kept] = data[rows][:, kept] - design @ coefficients
-    return _without_rounding(residual, data[rows])
+    return _without_rounding(residual, data[fit_rows])
 
 
 def _without_rounding(
-    residual: npt.NDArray[np.float64], values: npt.NDArray[np.float64]
+    residual: npt.NDArray[np.float64], fitted_values: npt.NDArray[np.float64]
 ) -> npt.NDArray[np.float64]:
     # A value the nuisance design explains exactly, such as a feature constant within a
     # subject, leaves rounding error of about 1e-15 rather than zero, and anything downstream
     # reads that as variation: a correlation, or a unit-variance column after scaling.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        scale = np.nanmax(np.abs(values), axis=0)
+    # The rounding scale is fitted too: held-out values must not erase training variation.
+    scale = np.max(np.where(np.isfinite(fitted_values), np.abs(fitted_values), 0.0), axis=0)
+    residual = blank_non_finite(residual)
     return np.where(np.abs(residual) <= _ROUNDING * scale, 0.0, residual)
 
 

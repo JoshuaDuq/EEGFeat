@@ -81,6 +81,13 @@ def test_groups_aggregate_the_channel_axis() -> None:
     assert {m.space for m in table.meta} == {"central", "global"}  # type: ignore[attr-defined]
 
 
+def test_signal_roi_identity_records_members_independent_of_order() -> None:
+    assert _run(groups={"central": ["C3"]}).names != _run(groups={"central": ["C4"]}).names
+    assert (
+        _run(groups={"central": ["C3", "C4"]}).names == _run(groups={"central": ["C4", "C3"]}).names
+    )
+
+
 def test_a_window_outside_the_time_axis_raises() -> None:
     with pytest.raises(ValueError, match="no samples"):
         _run(windows=[Window("late", 30.0, 40.0)])

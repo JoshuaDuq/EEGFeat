@@ -57,7 +57,9 @@ autodoc_member_order = "bysource"
 autodoc_mock_imports = ["mne_connectivity", "shap"]
 # Numpydoc type words that name no class, so nitpicky mode reports only real
 # dangling references.
-nitpick_ignore = [("py:class", n) for n in ("sequence", "mapping", "optional", "array-like", "BANDS_STANDARD")]
+nitpick_ignore = [
+    ("py:class", n) for n in ("sequence", "mapping", "optional", "array-like", "BANDS_STANDARD")
+]
 nitpick_ignore_regex = [("py:class", r"\(?-?\d+(\.\d+)?\)?")]
 
 # Keep the name written in the source (`BANDS_STANDARD`) instead of its repr.

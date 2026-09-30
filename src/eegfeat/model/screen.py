@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Sequence
 
 import numpy as np
@@ -43,7 +42,8 @@ def univariate_screen(
 
     Returns one row per feature: ``r`` (the mean z back in r units), ``t``,
     ``n_subjects``, ``p``, ``q`` and ``p_fwer``. A feature measured in fewer than 3
-    subjects has no spread across subjects to test and is NaN.
+    subjects is not tested. Zero mean and zero between-subject variance leave
+    ``t``, ``p``, ``q`` and ``p_fwer`` undefined (NaN).
     """
     values = np.asarray(X, dtype=np.float64)
     target = np.asarray(y, dtype=np.float64)
@@ -77,13 +77,13 @@ def univariate_screen(
     n_subjects = measured.sum(axis=0)
     testable = n_subjects >= 3
     z = np.where(measured, z, 0.0)
-    t = _group_t(z, np.ones(z.shape[0]), n_subjects, testable)
+    t = _group_t(z, np.ones(z.shape[0]), measured)
 
     # The null of the largest |t| over the family, one sign per subject for every feature.
     rng = np.random.default_rng(seed)
     largest = np.concatenate(
         [
-            np.nanmax(np.abs(_group_t(z, signs, n_subjects, testable)), axis=1, initial=0.0)
+            np.nanmax(np.abs(_group_t(z, signs, measured)), axis=1, initial=0.0)
             for signs in np.array_split(
                 rng.choice([-1.0, 1.0], size=(n_flips, z.shape[0])),
                 max(1, n_flips // _BLOCK),
@@ -93,10 +93,10 @@ def univariate_screen(
     exceeding = n_flips - np.searchsorted(np.sort(largest), np.abs(t), side="left")
     p = np.where(testable, 2.0 * stats.t.sf(np.abs(t), np.maximum(n_subjects - 1, 1)), np.nan)
     q = np.full_like(p, np.nan)
-    if testable.any():
-        q[testable] = stats.false_discovery_control(p[testable])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
+    defined = np.isfinite(p)
+    if defined.any():
+        q[defined] = stats.false_discovery_control(p[defined])
+    with np.errstate(invalid="ignore", divide="ignore"):
         mean_z = z.sum(axis=0) / n_subjects
     return pd.DataFrame(
         {
@@ -105,7 +105,7 @@ def univariate_screen(
             "n_subjects": n_subjects,
             "p": p,
             "q": q,
-            "p_fwer": np.where(testable, (1 + exceeding) / (n_flips + 1), np.nan),
+            "p_fwer": np.where(defined, (1 + exceeding) / (n_flips + 1), np.nan),
         },
         index=pd.Index(names, name="feature"),
     )
@@ -140,12 +140,23 @@ def _spread(values: npt.NDArray[np.float64]) -> npt.NDArray[np.bool_]:
 def _group_t(
     z: npt.NDArray[np.float64],
     signs: npt.NDArray[np.float64],
-    n_subjects: npt.NDArray[np.intp],
-    testable: npt.NDArray[np.bool_],
+    measured: npt.NDArray[np.bool_],
 ) -> npt.NDArray[np.float64]:
-    # One-sample t of the (sign-flipped) subject z's; a flip leaves the sum of squares alone.
+    # Center before squaring: subtracting second moments can give negative variance.
+    # Process each flip separately to avoid a flips-by-subjects-by-features allocation.
+    flips = np.atleast_2d(signs)
+    n_subjects = measured.sum(axis=0)
+    first_subject = measured.argmax(axis=0)
+    features = np.arange(z.shape[1])
+    statistics = np.empty((flips.shape[0], z.shape[1]))
     with np.errstate(invalid="ignore", divide="ignore"):
-        mean = (signs @ z) / n_subjects
-        variance = ((z * z).sum(axis=0) - n_subjects * mean**2) / (n_subjects - 1)
-        t = mean / np.sqrt(variance / n_subjects)
-    return np.asarray(np.where(testable, t, np.nan))
+        for row, sign in enumerate(flips):
+            flipped = sign[:, None] * z
+            reference = flipped[first_subject, features]
+            shifted = np.where(measured, flipped - reference, 0.0)
+            mean_shift = shifted.sum(axis=0) / n_subjects
+            centered = np.where(measured, shifted - mean_shift, 0.0)
+            variance = (centered * centered).sum(axis=0) / (n_subjects - 1)
+            t = (reference + mean_shift) / np.sqrt(variance / n_subjects)
+            statistics[row] = np.where(n_subjects >= 3, t, np.nan)
+    return statistics[0] if signs.ndim == 1 else statistics

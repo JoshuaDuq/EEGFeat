@@ -2,10 +2,59 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from scipy import stats
 
 from eegfeat.model.screen import univariate_screen
 
 GROUPS = np.repeat([f"s{i:02d}" for i in range(12)], 30).astype(object)
+
+
+@pytest.mark.parametrize("n_subjects", [5, 10, 11])
+@pytest.mark.parametrize("direction", [-1.0, 1.0])
+def test_identical_subject_effects_have_valid_significance(n_subjects, direction) -> None:
+    target = np.tile(np.arange(4.0), n_subjects)
+    groups = np.repeat(np.arange(n_subjects), 4)
+
+    screen = univariate_screen(
+        direction * target[:, None], target, groups, n_flips=31, seed=0
+    ).iloc[0]
+
+    assert direction * screen["t"] > 1e12
+    assert screen["p"] == 0.0 and screen["q"] == 0.0
+    assert 0.0 < screen["p_fwer"] <= 1.0
+
+
+def test_nearly_identical_subject_effects_match_scipy_ttest() -> None:
+    n_subjects = 5
+    target = np.tile(np.arange(4.0), n_subjects)
+    values = np.tile([0.0, 2.0, 1.0, 3.0], n_subjects)
+    values[::4] += np.arange(n_subjects) * 1e-7
+    groups = np.repeat(np.arange(n_subjects), 4)
+    correlations = [
+        np.corrcoef(values[groups == subject], target[groups == subject])[0, 1]
+        for subject in range(n_subjects)
+    ]
+    reference = stats.ttest_1samp(np.arctanh(correlations), 0.0)
+
+    screen = univariate_screen(values[:, None], target, groups, n_flips=31, seed=0).iloc[0]
+
+    assert screen["t"] == pytest.approx(reference.statistic, rel=1e-7)
+    assert screen["p"] == pytest.approx(reference.pvalue, rel=1e-6)
+    assert np.isfinite(screen["q"])
+
+
+def test_zero_subject_effects_have_undefined_inference_without_breaking_the_family() -> None:
+    target = np.tile([-1.0, 0.0, 1.0], 5)
+    orthogonal = np.tile([1.0, -2.0, 1.0], 5)
+    groups = np.repeat(np.arange(5), 3)
+    values = np.column_stack([target, orthogonal])
+
+    screen = univariate_screen(values, target, groups, n_flips=31, seed=0)
+
+    assert screen["p"].iloc[0] == 0.0
+    assert screen["q"].iloc[0] == 0.0
+    assert screen["r"].iloc[1] == 0.0
+    assert screen.iloc[1][["t", "p", "q", "p_fwer"]].isna().all()
 
 
 def _noise(seed: int, n_features: int = 40) -> tuple[np.ndarray, np.ndarray]:

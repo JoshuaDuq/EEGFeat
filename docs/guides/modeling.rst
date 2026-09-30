@@ -293,7 +293,9 @@ instead.
 
 - It applies the model to the features as well as to the target. The features'
   residuals use no target.
-- A subject with training rows is fitted on them alone.
+- A subject with training rows is fitted on them alone, including the scale
+  used to remove numerical rounding from residuals. Non-finite feature values
+  remain missing.
 - A held-out subject, as in leave-one-subject-out folds, is fitted on its own
   rows. That defines the subject's residual target without informing any model.
 - The estimand becomes the within-subject association beyond the nuisance.
@@ -455,7 +457,7 @@ Closed-form draws
 A ridge pipeline gets every draw in closed form when all of these hold:
 
 - its preprocessing never sees the target, as in the default
-  ``ridge_pipeline``;
+  ``ridge_pipeline``, including any ``ColumnTransformer`` remainder;
 - it is tuned on the subject-level ``r`` and scored with it.
 
 Its preprocessing, ridge predictions, target residualization and the
@@ -465,9 +467,9 @@ rounding error, at the cost of one cross-fit.
 
 - **Speed**: on 12 subjects, 720 trials and 2,000 features a draw took about a
   thousandth of the time a refit took.
-- **Fallback**: any other pipeline, a target-driven step such as
-  ``feature_selection_percentile``, a ``metric_fn`` or another ``scoring``
-  falls back to refitting every draw.
+- **Full refitting**: other pipelines, custom container subclasses, a
+  target-driven step such as ``feature_selection_percentile``, a ``metric_fn``
+  or another ``scoring`` refit every draw.
 
 .. code-block:: python
 
@@ -506,6 +508,12 @@ target within subjects.
 - ``q``: the Benjamini-Hochberg adjustment of ``p``.
 - ``residualize_on``: removes each subject's own nuisance design from both sides
   first.
+
+Statistics use centered sums of squares so identical or nearly identical
+subject effects do not produce negative variances through numerical
+cancellation. If both the mean effect and its between-subject variance are
+zero, ``t``, ``p``, ``q`` and ``p_fwer`` are undefined (NaN). Such features do
+not enter the Benjamini-Hochberg adjustment.
 
 .. code-block:: python
 
