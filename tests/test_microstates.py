@@ -390,3 +390,103 @@ def test_no_two_templates_are_the_same_topography_inverted() -> None:
 def test_an_ambiguous_dipole_does_not_cost_explained_variance() -> None:
     seg = segment(_ambiguous_polarity(), n_states=2, random_state=0)
     assert seg.global_explained_variance > 0.95
+
+
+@requires_sklearn
+def test_fitted_microstate_model_segments_a_new_recording_without_refitting() -> None:
+    from dataclasses import replace
+
+    from eegfeat import microstates
+
+    training, _ = _planted(n_epochs=3)
+    held_out, _ = _planted(n_epochs=2)
+    held_out = replace(held_out, row_ids=(("new", 0, "event"), ("new", 1, "event")))
+    model = microstates.MicrostateModel.fit(training)
+    templates = model.templates.copy()
+    result = model.segment(held_out)
+
+    np.testing.assert_array_equal(model.templates, templates)
+    assert result.row_ids == held_out.row_ids
+    assert result.states.shape == held_out.data.shape[::2]
+    np.testing.assert_array_equal(result.templates, templates)
+    with pytest.raises(ValueError, match="read-only"):
+        model.templates[0, 0] = 0.0
+
+
+@requires_sklearn
+def test_microstate_model_fits_only_selected_rows() -> None:
+    from dataclasses import replace
+
+    from eegfeat import microstates
+
+    signal, _ = _planted(n_epochs=6)
+    rows = np.arange(3)
+    first = microstates.MicrostateModel.fit(signal, rows=rows)
+    altered = signal.data.copy()
+    altered[3:] = np.nan
+    second = microstates.MicrostateModel.fit(replace(signal, data=altered), rows=rows)
+    np.testing.assert_array_equal(first.templates, second.templates)
+
+
+@requires_sklearn
+def test_reference_matching_reorders_states_and_carries_identified_labels() -> None:
+    from eegfeat import microstates
+
+    signal, _ = _planted()
+    model = microstates.MicrostateModel.fit(signal)
+    order = np.array([2, 0, 3, 1])
+    reference = microstates.MicrostateModel.from_templates(
+        -model.templates[order],
+        ch_names=signal.ch_names,
+        labels=("A", "B", "C", "D"),
+        reference_name="identified-reference",
+    )
+    matched = model.match_reference(reference)
+    result = matched.segment(signal, min_duration_ms=0.0)
+    original = model.segment(signal, min_duration_ms=0.0)
+    expected = np.argsort(order)[original.states]
+
+    np.testing.assert_array_equal(result.states, expected)
+    assert result.labels == reference.labels
+    assert matched.computation.parameters["reference_name"] == "identified-reference"
+    assert model.labels == ("state1", "state2", "state3", "state4")
+
+
+@requires_sklearn
+def test_shared_templates_reject_reordered_channels() -> None:
+    from dataclasses import replace
+
+    from eegfeat import microstates
+
+    signal, _ = _planted()
+    model = microstates.MicrostateModel.fit(signal)
+    with pytest.raises(ValueError, match="channels.*order"):
+        model.segment(replace(signal, ch_names=signal.ch_names[::-1]))
+
+
+def test_reference_templates_are_owned_and_spatially_validated() -> None:
+    from eegfeat import microstates
+
+    templates = np.array([[1.0, -1.0, 0.0], [1.0, 1.0, -2.0]])
+    model = microstates.MicrostateModel.from_templates(
+        templates,
+        ch_names=("F3", "F4", "Cz"),
+        labels=("A", "B"),
+        reference_name="external-study",
+    )
+    templates[:] = 0.0
+    np.testing.assert_allclose(np.linalg.norm(model.templates, axis=1), 1.0)
+    with pytest.raises(ValueError, match="spatial variance"):
+        microstates.MicrostateModel.from_templates(
+            templates,
+            ch_names=("F3", "F4", "Cz"),
+            labels=("A", "B"),
+            reference_name="external-study",
+        )
+
+
+@requires_sklearn
+def test_segmentation_rejects_negative_peak_separation() -> None:
+    signal, _ = _planted()
+    with pytest.raises(ValueError, match="min_peak_distance_ms.*non-negative"):
+        segment(signal, min_peak_distance_ms=-1.0)

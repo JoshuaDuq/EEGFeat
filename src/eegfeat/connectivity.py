@@ -14,7 +14,7 @@ from eegfeat.bands import Band, check_passband
 from eegfeat.phase import _resolve_rows
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Window
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, RowId
 
 Orthogonalization = Literal["pairwise"] | None
 
@@ -338,6 +338,197 @@ def wpli(
     )
 
 
+TimeConnectivityMethod = Literal["coh", "imcoh", "plv", "ciplv", "pli", "wpli"]
+
+
+def _time_connectivity_padding(
+    signal: Signal,
+    frequencies: npt.NDArray[np.float64],
+    n_cycles: float,
+    smoothing_seconds: float,
+) -> float:
+    from mne.time_frequency import morlet  # type: ignore[import-untyped]
+
+    if frequencies.ndim != 1 or frequencies.size == 0:
+        raise ValueError("freqs must be a non-empty, one-dimensional frequency sequence.")
+    if not np.isfinite(frequencies).all() or np.any(frequencies <= 0):
+        raise ValueError("freqs must contain finite positive frequencies.")
+    if np.any(np.diff(frequencies) <= 0):
+        raise ValueError("freqs must be strictly increasing.")
+    if np.any(frequencies > signal.sfreq / 2):
+        raise ValueError("freqs cannot exceed the signal's Nyquist frequency.")
+    if not np.isfinite(n_cycles) or n_cycles <= 0:
+        raise ValueError("n_cycles must be finite and positive.")
+    if not np.isfinite(smoothing_seconds) or smoothing_seconds < 0:
+        raise ValueError("smoothing_seconds must be finite and non-negative.")
+    smoothing_samples = int(np.round(smoothing_seconds * signal.sfreq))
+    if smoothing_samples == 2:
+        raise ValueError(
+            "the Hanning smoother is undefined for two samples; "
+            "choose zero smoothing or a duration that rounds to at least three samples."
+        )
+    wavelets = morlet(signal.sfreq, frequencies, n_cycles=n_cycles, zero_mean=False)
+    half_support = max(len(wavelet) // 2 for wavelet in wavelets)
+    return float(np.nextafter(half_support / signal.sfreq, np.inf)) if half_support else 0.0
+
+
+def _time_connectivity_coverage(
+    signal: Signal, mask: npt.NDArray[np.bool_], picks: list[list[int]]
+) -> npt.NDArray[np.float64]:
+    coverage = signal.coverage[:, :, mask]
+    pairs = np.empty((*coverage.shape[:2], coverage.shape[1]))
+    for channel in range(coverage.shape[1]):
+        pairs[:, channel] = np.minimum(coverage[:, channel : channel + 1], coverage).mean(axis=-1)
+    return np.stack([_reduce_to_nodes(matrix, picks) for matrix in pairs])
+
+
+def spectral_connectivity_time(
+    signal: Signal,
+    *,
+    method: TimeConnectivityMethod,
+    bands: Sequence[Band],
+    windows: Sequence[Window],
+    freqs: Sequence[float],
+    n_cycles: float = 7.0,
+    smoothing_seconds: float = 0.0,
+    groups: Mapping[str, Sequence[str]] | None = None,
+) -> FeatureTable:
+    """Spectral connectivity averaged over time separately within each epoch.
+
+    Delegates to :func:`mne_connectivity.spectral_connectivity_time` with
+    ``average=False`` and a Morlet decomposition. Returned rows retain the
+    signal's exact epoch identities and can be concatenated with per-epoch
+    measures. Each requested window is decomposed independently.
+
+    ``freqs`` is an explicit increasing, positive grid in Hz; ``bands`` use
+    half-open frequency boundaries. ``n_cycles`` controls every wavelet's
+    duration. The complete support of the longest wavelet is discarded at
+    both window edges. A window must leave at least two retained samples
+    and one cycle at the lowest selected frequency; short windows raise.
+
+    Supports coherence, magnitude imaginary coherency, PLV, ciPLV, PLI and
+    wPLI. PPC and debiased squared wPLI are available through the cross-trial
+    :func:`spectral_connectivity` instead. ``smoothing_seconds`` adds the
+    MNE temporal Hanning smoother; zero applies no smoothing. A duration that
+    rounds to two samples raises because that Hanning kernel has zero weight.
+    Every channel must vary inside each window; constant traces and undefined
+    backend estimates raise before spatial averaging.
+    ROI edges average channel-level connectivity within each ROI block.
+    Coverage is the window mean of the minimum input coverage for each channel
+    pair; ROI edge coverage averages the corresponding channel-pair coverages.
+    Requires the ``connectivity`` extra.
+    """
+    if method not in ("coh", "imcoh", "plv", "ciplv", "pli", "wpli"):
+        raise ValueError(f"unsupported per-epoch connectivity method {method!r}.")
+    if not bands or not windows:
+        raise ValueError("bands and windows must be non-empty.")
+    frequencies = np.asarray(freqs, dtype=float)
+    padding = _time_connectivity_padding(signal, frequencies, n_cycles, smoothing_seconds)
+    for band in bands:
+        if band.fmax > signal.sfreq / 2:
+            raise ValueError(f"band {band.name!r} exceeds the signal's Nyquist frequency.")
+        if signal.passband is not None:
+            check_passband(band, *signal.passband, source=method)
+        if not band.mask(frequencies).any():
+            raise ValueError(f"band {band.name!r} contains none of the requested frequencies.")
+    node_names, picks = _nodes(signal.ch_names, groups)
+    nodes = {
+        name: sorted(signal.ch_names[index] for index in members)
+        for name, members in zip(node_names, picks, strict=True)
+    }
+    try:
+        from mne_connectivity import spectral_connectivity_time as estimator
+    except ImportError as exc:
+        raise ImportError(
+            "spectral_connectivity_time needs mne-connectivity; install it with: "
+            "pip install eegfeat[connectivity]"
+        ) from exc
+    matrices_by_window = []
+    coverages_by_window = []
+    for window in windows:
+        mask = window_mask(signal.times, window)
+        data = signal.data[:, :, mask]
+        retained = int(mask.sum()) - 2 * int(round(padding * signal.sfreq))
+        minimum_retained = max(2, int(np.ceil(signal.sfreq / frequencies[0])))
+        if retained < minimum_retained:
+            raise ValueError(
+                f"window {window.name!r} is too short for full Morlet wavelet support: "
+                f"after removing {padding:g} s at each edge it must retain at least "
+                f"{minimum_retained} samples. Use fewer cycles or a longer window."
+            )
+        if smoothing_seconds > retained / signal.sfreq:
+            raise ValueError("smoothing_seconds exceeds the retained window duration.")
+        if not np.isfinite(data).all():
+            raise ValueError("per-epoch spectral connectivity requires finite samples.")
+        if np.any(data.max(axis=-1) == data.min(axis=-1)):
+            raise ValueError(
+                "per-epoch spectral connectivity requires nonconstant traces "
+                "in every channel and window."
+            )
+        result = estimator(
+            data,
+            freqs=frequencies,
+            method=method,
+            sfreq=signal.sfreq,
+            average=False,
+            n_cycles=n_cycles,
+            sm_times=smoothing_seconds,
+            padding=padding,
+            faverage=False,
+            mode="cwt_morlet",
+            verbose=False,
+        )
+        dense = np.asarray(result.get_data(output="dense"), dtype=float)
+        if dense.ndim != 4:
+            raise ValueError(
+                f"expected an (epochs, nodes, nodes, freqs) result, got {dense.shape}."
+            )
+        if not np.isfinite(dense).all():
+            raise ValueError("MNE did not produce finite per-epoch connectivity estimates.")
+        matrices_by_window.append(dense)
+        coverages_by_window.append(_time_connectivity_coverage(signal, mask, picks))
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
+    coverage_columns = []
+    edges = np.triu_indices(len(node_names), 1)
+    for band in bands:
+        for window, dense, coverage in zip(
+            windows, matrices_by_window, coverages_by_window, strict=True
+        ):
+            selected = dense[..., band.mask(frequencies)]
+            if method in _RECTIFIED:
+                selected = np.abs(selected)
+            matrices = selected.mean(axis=-1)
+            matrices = matrices + matrices.transpose(0, 2, 1)
+            reduced = np.stack([_reduce_to_nodes(matrix, picks) for matrix in matrices])
+            columns.extend(
+                _pair_columns(
+                    reduced,
+                    nodes,
+                    band,
+                    window,
+                    method,
+                    _METHOD_UNITS[method],
+                    signal,
+                    {
+                        "mode": "cwt_morlet",
+                        "frequencies_hz": frequencies.tolist(),
+                        "n_cycles": n_cycles,
+                        "smoothing_seconds": smoothing_seconds,
+                        "padding_seconds": padding,
+                        "averaging": "time",
+                        "band_edges": "half_open",
+                        "frequency_reduction": "mean",
+                        "rectified": method in _RECTIFIED,
+                        "coverage": "mean_of_pairwise_minimum_input_sample_coverage",
+                    },
+                )
+            )
+            coverage_columns.append(coverage[:, edges[0], edges[1]])
+    return replace(
+        _table(columns, None, signal.row_ids), coverage=np.concatenate(coverage_columns, axis=1)
+    )
+
+
 def global_efficiency(pairs: FeatureTable) -> FeatureTable:
     """Average inverse shortest path length over the network.
 
@@ -597,7 +788,9 @@ def _pair_columns(
 
 
 def _table(
-    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]], labels: tuple[str, ...]
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]],
+    labels: tuple[str, ...] | None,
+    row_ids: tuple[RowId, ...] | None = None,
 ) -> FeatureTable:
     values = np.stack([column for _, column in columns], axis=1)
     return FeatureTable(
@@ -605,6 +798,7 @@ def _table(
         coverage=np.isfinite(values).astype(float),
         meta=tuple(meta for meta, _ in columns),
         row_labels=labels,
+        row_ids=row_ids,
     )
 
 
@@ -694,7 +888,7 @@ def _graph_measure(
                 values,
             )
         )
-    return _table(columns, pairs.row_labels or ("all",))
+    return _table(columns, pairs.row_labels, pairs.row_ids)
 
 
 def _by_estimator(pairs: FeatureTable) -> dict[str, list[int]]:

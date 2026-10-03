@@ -11,10 +11,18 @@ def test_packaging_only_advertises_implemented_features() -> None:
     configuration = tomllib.loads((ROOT / "pyproject.toml").read_text())
     optional_dependencies = configuration["project"]["optional-dependencies"]
 
-    assert "knee" not in optional_dependencies
-    assert "specparam" not in (ROOT / "pyproject.toml").read_text()
-    assert "specparam" not in (ROOT / "README.md").read_text().lower()
-    assert "specparam" not in (ROOT / "docs" / "install.rst").read_text().lower()
+    capabilities = {
+        "spectral-model": "specparam",
+        "irasa": "neurodsp",
+        "cycles": "bycycle",
+        "complexity": "antropy",
+        "pac": "tensorpac",
+        "riemann": "pyriemann",
+    }
+    for extra, package in capabilities.items():
+        assert any(package in requirement for requirement in optional_dependencies[extra])
+        assert package in (ROOT / "README.md").read_text().lower()
+        assert package in (ROOT / "docs" / "install.rst").read_text().lower()
 
 
 def test_package_description_represents_the_full_feature_scope() -> None:
@@ -30,7 +38,7 @@ def test_ci_covers_supported_endpoints_optional_integrations_and_the_wheel() -> 
 
     assert 'python-version: ["3.11", "3.14"]' in workflow
     assert (
-        ".[dev,model,connectivity,microstates,importance,references,preprocessing,preprocessing-auto,bids]"
+        ".[dev,model,connectivity,microstates,importance,references,preprocessing,preprocessing-auto,bids,spectral-model,irasa,cycles,complexity,pac,riemann]"
         in workflow
     )
     # Every cross-check against a third-party implementation is guarded by
@@ -38,12 +46,17 @@ def test_ci_covers_supported_endpoints_optional_integrations_and_the_wheel() -> 
     # is what makes a missing one fail the build instead of quietly passing.
     assert (
         'python -c "import antropy, shap, mne_connectivity, sklearn, yaml, autoreject, pyprep, '
-        'mne_bids"' in workflow
+        'mne_bids, specparam, neurodsp, bycycle, tensorpac, pyriemann"' in workflow
     )
     for suite in (
         "tests/test_complexity.py",
         "tests/test_higuchi.py",
         "tests/model/test_importance.py",
+        "tests/test_spectral_model.py",
+        "tests/test_irasa.py",
+        "tests/test_cycles.py",
+        "tests/model/test_learned.py",
+        "tests/test_bids.py",
     ):
         assert suite in workflow
     assert "python -m build" in workflow

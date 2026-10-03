@@ -3,14 +3,17 @@ from __future__ import annotations
 import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
+from scipy.stats import false_discovery_control
 
 from eegfeat._expand import expand_signal
+from eegfeat.groups import aggregate
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
-from eegfeat.table import FeatureTable
+from eegfeat.table import ComputationSpec, FeatureTable
 
 
 def itpc(
@@ -268,6 +271,273 @@ def pac(
     return replace(
         table,
         meta=tuple(replace(meta, phase_band=slow, amplitude_band=fast) for meta in table.meta),
+    )
+
+
+def _validate_pac_inference(
+    n_surrogates: int,
+    surrogate: str,
+    random_state: int,
+    min_shift_seconds: float,
+    correction: str,
+) -> None:
+    if isinstance(n_surrogates, bool) or not isinstance(n_surrogates, int) or n_surrogates < 2:
+        raise ValueError("n_surrogates must be an integer of at least 2.")
+    if surrogate not in ("blocks", "circular"):
+        raise ValueError("surrogate must be 'blocks' or 'circular'.")
+    if isinstance(random_state, bool) or not isinstance(random_state, int) or random_state < 0:
+        raise ValueError("random_state must be a non-negative integer.")
+    if not np.isfinite(min_shift_seconds) or min_shift_seconds < 0:
+        raise ValueError("min_shift_seconds must be finite and non-negative.")
+    if correction not in ("none", "fdr", "bonferroni", "maxstat"):
+        raise ValueError("correction must be 'none', 'fdr', 'bonferroni', or 'maxstat'.")
+
+
+def _pac_observed_and_null(
+    phase_signal: BandSignal,
+    amplitude_signal: BandSignal,
+    windows: Sequence[Window],
+    *,
+    n_surrogates: int,
+    surrogate: str,
+    random_state: int,
+    min_shift_seconds: float,
+    normalize: bool,
+    groups: Mapping[str, Sequence[str]] | None,
+    include_global: bool,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    from eegfeat._expand import window_mask
+
+    try:
+        from tensorpac.methods import (  # type: ignore[import-untyped]
+            mean_vector_length,
+            swap_blocks,
+            time_lag,
+        )
+    except ImportError as exc:
+        raise ImportError(
+            "pac_surrogates needs tensorpac; install it with: pip install eegfeat[pac]"
+        ) from exc
+
+    n_epochs, n_channels, _ = phase_signal.analytic.shape
+    estimates = np.empty((n_surrogates + 1, n_epochs, n_channels, len(windows)))
+    coverage = np.ones((n_epochs, n_channels, len(windows)))
+    rng = np.random.default_rng(random_state)
+    shift_minimum = max(1, int(np.ceil(min_shift_seconds * phase_signal.sfreq)))
+    for index, window in enumerate(windows):
+        mask = window_mask(phase_signal.times, window)
+        phase = np.ascontiguousarray(phase_signal.phase[:, :, mask])
+        amplitude = np.ascontiguousarray(amplitude_signal.envelope[:, :, mask])
+        n_times = int(mask.sum())
+        if 2 * shift_minimum > n_times:
+            raise ValueError(
+                f"window {window.name!r} is too short for min_shift_seconds="
+                f"{min_shift_seconds}; both surrogate blocks must contain at least "
+                f"{shift_minimum} samples."
+            )
+        if not np.isfinite(phase).all() or not np.isfinite(amplitude).all():
+            raise ValueError("PAC surrogate inference requires finite samples in every window.")
+        if np.any(amplitude.sum(axis=-1) == 0):
+            raise ValueError("PAC surrogate inference requires a positive amplitude envelope.")
+        if normalize:
+            amplitude = amplitude / amplitude.mean(axis=-1, keepdims=True)
+        estimates[0, :, :, index] = mean_vector_length(phase[None], amplitude[None])[0, 0]
+        for permutation in range(n_surrogates):
+            # Tensorpac permits an identity circular lag. Exclude it, and shifts
+            # closer to an edge than the prespecified autocorrelation exclusion.
+            while True:
+                seed = int(rng.integers(0, 2**32 - 1))
+                seed_rng = np.random.RandomState(seed)
+                shift = (
+                    seed_rng.randint(1, n_times)
+                    if surrogate == "blocks"
+                    else (seed_rng.randint(n_times))
+                )
+                if shift_minimum <= shift <= n_times - shift_minimum:
+                    break
+            shifted_phase, shifted_amplitude = (swap_blocks if surrogate == "blocks" else time_lag)(
+                phase, amplitude, random_state=seed
+            )
+            estimates[permutation + 1, :, :, index] = mean_vector_length(
+                shifted_phase[None], shifted_amplitude[None]
+            )[0, 0]
+    spatial_units = aggregate(
+        estimates.reshape((n_surrogates + 1) * n_epochs, n_channels, len(windows)),
+        np.broadcast_to(coverage, estimates.shape).reshape(
+            (n_surrogates + 1) * n_epochs, n_channels, len(windows)
+        ),
+        phase_signal.ch_names,
+        groups,
+        include_global,
+    )
+    spatial_estimates = np.concatenate([unit.values for unit in spatial_units], axis=1).reshape(
+        n_surrogates + 1, n_epochs, -1
+    )
+    return spatial_estimates[0], spatial_estimates[1:]
+
+
+def _pac_upper_tail_pvalues(
+    observed: npt.NDArray[np.float64], null: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
+    # Match scipy.stats.permutation_test: numerically equal statistics count as
+    # upper-tail ties, avoiding false significance from summation roundoff.
+    tolerance = 100 * np.finfo(observed.dtype).eps * np.abs(observed)
+    return np.asarray(
+        (1.0 + (null >= observed - tolerance).sum(axis=0)) / (null.shape[0] + 1), dtype=float
+    )
+
+
+def _adjust_pac_pvalues(
+    observed: npt.NDArray[np.float64],
+    null: npt.NDArray[np.float64],
+    pvalues: npt.NDArray[np.float64],
+    correction: str,
+) -> npt.NDArray[np.float64]:
+    if correction == "fdr":
+        return np.asarray(false_discovery_control(pvalues, axis=1), dtype=float)
+    if correction == "bonferroni":
+        return np.asarray(np.minimum(1.0, pvalues * pvalues.shape[1]), dtype=float)
+    if correction == "maxstat":
+        maxima = null.max(axis=2, keepdims=True)
+        return _pac_upper_tail_pvalues(observed, maxima)
+    return pvalues.copy()
+
+
+def pac_surrogates(
+    phase_signal: BandSignal,
+    amplitude_signal: BandSignal,
+    *,
+    windows: Sequence[Window],
+    n_surrogates: int = 200,
+    surrogate: Literal["blocks", "circular"] = "blocks",
+    random_state: int = 0,
+    min_shift_seconds: float = 0.1,
+    correction: Literal["none", "fdr", "bonferroni", "maxstat"] = "fdr",
+    normalize: bool = True,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+    allow_overlap: bool = False,
+) -> FeatureTable:
+    """Within-epoch PAC with a seeded, temporally shifted surrogate null.
+
+    Returns observed ``pac``, ``pac_null_mean``, ``pac_null_std``,
+    ``pac_corrected`` (observed minus null mean), ``pac_zscore``,
+    ``pac_pvalue``, and ``pac_pvalue_adjusted``. The standard deviation uses
+    Tensorpac's population convention (``ddof=0``). P values are upper-tail
+    empirical probabilities ``(1 + count(null >= observed)) / (n_surrogates + 1)``.
+    Observed and surrogate estimates share Tensorpac's MVL arithmetic. Ties
+    include values within ``100 * eps * abs(observed)``, following SciPy's
+    permutation-test convention. A null whose range is within this relative
+    roundoff scale has zero deviation and an undefined, flagged z score.
+    Corrected estimates within the observed tie tolerance are reported as zero.
+
+    Tensorpac constructs the surrogates: ``blocks`` swaps the two amplitude
+    blocks around a random cut, while ``circular`` circularly shifts phase.
+    Shifts stay within each analysis window and never combine epochs. Both
+    blocks must be at least ``min_shift_seconds`` long, with a minimum of one
+    sample. Choose that exclusion from the signal's autocorrelation timescale.
+    A stationary sinusoidal modulator can retain the same MVL after a shift;
+    these nulls do not guarantee destruction of every kind of coupling.
+
+    ROI/global estimates and their surrogate distributions are averaged before
+    inference. Adjustment controls the family of returned spatial units and
+    windows separately within each epoch and this phase/amplitude band pair.
+    ``fdr`` is Benjamini-Hochberg, ``bonferroni`` multiplies by family size,
+    and ``maxstat`` compares each observed estimate to each permutation's
+    family maximum. Requires finite samples and the ``pac`` extra.
+    """
+    _validate_pac_inference(n_surrogates, surrogate, random_state, min_shift_seconds, correction)
+    observed = pac(
+        phase_signal,
+        amplitude_signal,
+        windows=windows,
+        normalize=normalize,
+        groups=groups,
+        include_global=include_global,
+        allow_overlap=allow_overlap,
+    )
+    observed_values, null = _pac_observed_and_null(
+        phase_signal,
+        amplitude_signal,
+        windows,
+        n_surrogates=n_surrogates,
+        surrogate=surrogate,
+        random_state=random_state,
+        min_shift_seconds=min_shift_seconds,
+        normalize=normalize,
+        groups=groups,
+        include_global=include_global,
+    )
+    observed = replace(observed, values=observed_values)
+    tie_relative_tolerance = 100 * np.finfo(null.dtype).eps
+    null_scale = np.max(np.abs(null), axis=0)
+    degenerate_null = np.ptp(null, axis=0) <= tie_relative_tolerance * null_scale
+    null_mean = null.mean(axis=0)
+    null_std = np.where(degenerate_null, 0.0, null.std(axis=0))
+    corrected = observed.values - null_mean
+    corrected = np.where(
+        np.abs(corrected) <= tie_relative_tolerance * np.abs(observed.values), 0.0, corrected
+    )
+    zscore = np.divide(corrected, null_std, out=np.full_like(corrected, np.nan), where=null_std > 0)
+    pvalues = _pac_upper_tail_pvalues(observed.values, null)
+    results = {
+        "pac": observed.values,
+        "pac_null_mean": null_mean,
+        "pac_null_std": null_std,
+        "pac_corrected": corrected,
+        "pac_zscore": zscore,
+        "pac_pvalue": pvalues,
+        "pac_pvalue_adjusted": _adjust_pac_pvalues(observed.values, null, pvalues, correction),
+    }
+    inference = dict(
+        estimator="tensorpac",
+        n_surrogates=n_surrogates,
+        surrogate=surrogate,
+        random_state=random_state,
+        min_shift_seconds=min_shift_seconds,
+        correction=correction,
+        correction_family="nodes_and_windows_within_each_epoch",
+        null_standard_deviation_ddof=0,
+        empirical_pvalue="plus_one_upper_tail",
+        floating_point_tie_relative_tolerance=tie_relative_tolerance,
+        constant_null_detection="range_within_relative_roundoff_scale",
+        corrected_roundoff="zero_within_observed_relative_tie_tolerance",
+    )
+    return FeatureTable(
+        values=np.concatenate(list(results.values()), axis=1),
+        coverage=np.tile(observed.coverage, (1, len(results))),
+        meta=tuple(
+            replace(
+                meta,
+                measure=measure,
+                unit=(
+                    "a.u."
+                    if measure in ("pac_zscore", "pac_pvalue", "pac_pvalue_adjusted")
+                    else meta.unit
+                ),
+                computation=ComputationSpec.create(
+                    measure,
+                    input_computation=meta.computation.record(),
+                    inference=inference,
+                ),
+            )
+            for measure in results
+            for meta in observed.meta
+        ),
+        flags={
+            "degenerate_null": np.concatenate(
+                [
+                    (
+                        null_std == 0
+                        if measure == "pac_zscore"
+                        else np.zeros_like(null_std, dtype=bool)
+                    )
+                    for measure in results
+                ],
+                axis=1,
+            ),
+        },
+        row_ids=observed.row_ids,
     )
 
 

@@ -864,3 +864,237 @@ def test_multitaper_bandwidth_is_fixed_in_hertz_and_recorded() -> None:
     # 1.2 frequency bins: MNE would fall back to one leaky taper; the window is named.
     with pytest.raises(ValueError, match="window 'all'"):
         spectral_connectivity(signal, method="coh", bands=[ALPHA], windows=[window], bandwidth=0.6)
+
+
+@pytest.mark.parametrize("method", ["coh", "imcoh", "plv", "ciplv", "pli", "wpli"])
+def test_time_connectivity_matches_mne_per_epoch_and_preserves_row_identity(method) -> None:
+    pytest.importorskip("mne_connectivity")
+    from mne.time_frequency import morlet
+    from mne_connectivity import spectral_connectivity_time as reference
+
+    import eegfeat.connectivity as connectivity_methods
+
+    signal = _coupled_broadband(n_epochs=3)
+    freqs = np.array([8.0, 9.0, 10.0, 11.0, 12.0, 13.0])
+    n_cycles = 3.0
+    padding = np.nextafter(
+        max(
+            len(wavelet) // 2
+            for wavelet in morlet(
+                SFREQ,
+                freqs,
+                n_cycles=n_cycles,
+                zero_mean=True,
+            )
+        )
+        / SFREQ,
+        np.inf,
+    )
+    expected = reference(
+        signal.data,
+        freqs=freqs,
+        method=method,
+        sfreq=SFREQ,
+        n_cycles=n_cycles,
+        padding=padding,
+        average=False,
+        verbose=False,
+    )
+    dense = expected.get_data(output="dense")
+    selected = dense[..., freqs < 13]
+    if method == "imcoh":
+        selected = np.abs(selected)
+    matrices = selected.mean(axis=-1)
+    matrices = matrices + matrices.transpose(0, 2, 1)
+    table = connectivity_methods.spectral_connectivity_time(
+        signal,
+        method=method,
+        freqs=freqs,
+        n_cycles=n_cycles,
+        bands=[ALPHA],
+        windows=[WINDOW],
+    )
+    indices = np.triu_indices(len(CHANNELS), 1)
+    np.testing.assert_allclose(table.values, matrices[:, indices[0], indices[1]])
+    assert table.row_labels is None
+    assert table.row_ids == signal.row_ids
+    assert table.meta[0].computation.parameters["estimator_parameters"]["averaging"] == "time"
+    graph = global_efficiency(table)
+    assert graph.row_ids == signal.row_ids
+    assert graph.row_labels is None
+    assert graph.n_rows == signal.data.shape[0]
+
+
+def test_time_connectivity_rejects_a_wavelet_longer_than_the_window() -> None:
+    pytest.importorskip("mne_connectivity")
+    import eegfeat.connectivity as connectivity_methods
+
+    with pytest.raises(ValueError, match="wavelet|support"):
+        connectivity_methods.spectral_connectivity_time(
+            _coupled_broadband(),
+            method="coh",
+            freqs=[8.0, 10.0, 12.0],
+            bands=[ALPHA],
+            windows=[Window("short", 0.0, 0.2)],
+        )
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"freqs": [10.0, 8.0]}, "increasing"),
+        ({"freqs": [0.0, 8.0]}, "positive"),
+        ({"freqs": [8.0, 60.0]}, "Nyquist"),
+        ({"n_cycles": 0.0}, "n_cycles"),
+        ({"method": "ppc"}, "method"),
+        ({"smoothing_seconds": -1.0}, "smoothing"),
+    ],
+)
+def test_time_connectivity_validates_estimator_inputs(kwargs, message) -> None:
+    import eegfeat.connectivity as connectivity_methods
+
+    parameters = {"method": "coh", "freqs": [8.0, 10.0, 12.0], "n_cycles": 3.0, **kwargs}
+    with pytest.raises(ValueError, match=message):
+        connectivity_methods.spectral_connectivity_time(
+            _coupled_broadband(),
+            bands=[ALPHA],
+            windows=[WINDOW],
+            **parameters,
+        )
+
+
+@pytest.mark.parametrize("smoothing_seconds", [0.015, 0.02, 0.024])
+def test_time_connectivity_rejects_an_undefined_two_sample_hann_smoother(
+    smoothing_seconds,
+) -> None:
+    import eegfeat.connectivity as connectivity_methods
+
+    with pytest.raises(ValueError, match="Hanning.*two samples"):
+        connectivity_methods.spectral_connectivity_time(
+            _coupled_broadband(),
+            method="coh",
+            freqs=[8.0, 10.0, 12.0],
+            n_cycles=3.0,
+            smoothing_seconds=smoothing_seconds,
+            bands=[ALPHA],
+            windows=[WINDOW],
+        )
+
+
+@pytest.mark.parametrize("method", ["coh", "imcoh", "plv", "ciplv", "wpli"])
+def test_time_connectivity_surfaces_undefined_backend_estimates(method) -> None:
+    pytest.importorskip("mne_connectivity")
+    import eegfeat.connectivity as connectivity_methods
+
+    signal = _coupled_broadband()
+    data = signal.data.copy()
+    data *= 1e-200
+    signal = replace(signal, data=data)
+    with (
+        np.errstate(divide="ignore", invalid="ignore"),
+        pytest.raises(ValueError, match="finite.*connectivity"),
+    ):
+        connectivity_methods.spectral_connectivity_time(
+            signal,
+            method=method,
+            freqs=[8.0, 10.0, 12.0],
+            n_cycles=3.0,
+            bands=[ALPHA],
+            windows=[WINDOW],
+            groups={"left": ["C3", "P3"], "right": ["C4", "P4"]},
+        )
+
+
+@pytest.mark.parametrize("groups", [None, {"left": ["C3", "P3"], "right": ["C4", "P4"]}])
+def test_time_connectivity_retains_pairwise_input_coverage_for_quality(groups) -> None:
+    from eegfeat.connectivity import spectral_connectivity_time
+    from eegfeat.quality import QualityPolicy, apply_quality
+
+    signal = _coupled_broadband()
+    coverage = np.ones_like(signal.coverage)
+    coverage[:, 0, ::2] = 0.2
+    coverage[:, 1, 1::2] = 0.4
+    signal = replace(signal, coverage=coverage)
+    table = spectral_connectivity_time(
+        signal,
+        method="coh",
+        freqs=[8.0, 10.0, 12.0],
+        n_cycles=3.0,
+        bands=[ALPHA],
+        windows=[WINDOW],
+        groups=groups,
+    )
+    mask = (signal.times >= WINDOW.tmin) & (signal.times <= WINDOW.tmax)
+    memberships = {name: [name] for name in signal.ch_names} if groups is None else groups
+    expected = np.column_stack(
+        [
+            np.mean(
+                [
+                    np.minimum(
+                        coverage[:, signal.ch_names.index(left), mask],
+                        coverage[:, signal.ch_names.index(right), mask],
+                    ).mean(axis=-1)
+                    for left in memberships[meta.nodes[0]]
+                    for right in memberships[meta.nodes[1]]
+                ],
+                axis=0,
+            )
+            for meta in table.meta
+        ]
+    )
+    np.testing.assert_allclose(table.coverage, expected)
+    retained = apply_quality(table, QualityPolicy(min_coverage=0.9)).table
+    np.testing.assert_array_equal(np.isnan(retained.values), expected < 0.9)
+
+
+def test_time_connectivity_padding_discards_the_full_integer_wavelet_support() -> None:
+    from mne.time_frequency import morlet
+    from mne_connectivity import spectral_connectivity_time as reference
+
+    from eegfeat.connectivity import _time_connectivity_padding, spectral_connectivity_time
+
+    signal = _coupled_broadband(n_epochs=2)
+    freqs = np.array([8.0, 10.0, 12.0])
+    half_support = max(
+        len(wavelet) // 2 for wavelet in morlet(SFREQ, freqs, n_cycles=3.0, zero_mean=False)
+    )
+    padding = _time_connectivity_padding(signal, freqs, 3.0, 0.0)
+    assert int(np.floor(padding * SFREQ)) == half_support
+    expected = reference(
+        signal.data,
+        freqs=freqs,
+        method="coh",
+        sfreq=SFREQ,
+        n_cycles=3.0,
+        padding=np.nextafter(half_support / SFREQ, np.inf),
+        average=False,
+        verbose=False,
+    ).get_data(output="dense")
+    matrix = expected.mean(axis=-1)
+    matrix += matrix.transpose(0, 2, 1)
+    table = spectral_connectivity_time(
+        signal, method="coh", freqs=freqs, n_cycles=3.0, bands=[ALPHA], windows=[WINDOW]
+    )
+    indices = np.triu_indices(len(CHANNELS), 1)
+    np.testing.assert_allclose(table.values, matrix[:, indices[0], indices[1]])
+
+
+@pytest.mark.parametrize("method", ["coh", "imcoh", "plv", "ciplv", "pli", "wpli"])
+@pytest.mark.parametrize("constant", [0.0, 1.0])
+def test_time_connectivity_rejects_constant_channels_inside_each_window(method, constant) -> None:
+    from eegfeat.connectivity import spectral_connectivity_time
+
+    signal = _coupled_broadband(n_epochs=2)
+    data = signal.data.copy()
+    data[:, 0, :301] = constant
+    signal = replace(signal, data=data)
+    assert np.all(np.ptp(signal.data[:, 0], axis=-1) > 0)
+    with pytest.raises(ValueError, match="nonconstant.*channel.*window"):
+        spectral_connectivity_time(
+            signal,
+            method=method,
+            freqs=[8.0, 10.0, 12.0],
+            n_cycles=3.0,
+            bands=[ALPHA],
+            windows=[Window("flat", 0.0, 3.0)],
+        )

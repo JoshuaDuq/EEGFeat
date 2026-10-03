@@ -63,6 +63,9 @@ per-epoch tables into a dataset.
 Descriptor column names must be unique, nonempty strings. Invalid names raise
 before any files are written, preventing ambiguous targets when the bundle is
 read back.
+The sidecar records which descriptor columns are text, preserving distinct
+labels such as ``"01"`` and ``"1"`` through epoch and group dataset loading.
+Numeric descriptors retain their numerical values.
 
 The functions:
 
@@ -74,6 +77,13 @@ The functions:
 
 **File layout.** The filenames follow BIDS TSV and JSON sidecar conventions. The
 layout is not a validated BIDS derivative.
+
+Schema 2 sidecars include descriptor types and content checksums of the values
+and coverage files.
+Modified payloads and unsupported schemas raise errors. Regenerate older bundles;
+the reader does not load them through a compatibility path. Extraction sidecars
+also retain resolved defaults, software/source identities and checked upstream
+preprocessing evidence. See :doc:`cohorts` for quality policies and group samples.
 
 :doc:`/examples` shows the files the runner writes for a five-subject simulated
 cohort.

@@ -109,7 +109,7 @@ amplitude instead of the sample count, which bounds the value in
    phase estimator changes the feature identity.
 
 **Notes**
-   - No surrogate distribution is computed.
+   - ``pac`` returns the raw estimate; ``pac_surrogates`` adds null inference.
    - Autocorrelation in amplitude and in phase biases the raw value upward.
    - A null for this value can be built from circular time shifts inside the
      trial, which keep the single-trial spectrum.
@@ -119,6 +119,51 @@ amplitude instead of the sample count, which bounds the value in
    and note that raw mean vector length depends on the amplitude of the
    modulated band. It should therefore not be read as a coupling strength
    without normalization against surrogates.
+
+Surrogate inference
+~~~~~~~~~~~~~~~~~~~
+
+``pac_surrogates`` retains the input epoch identities and returns seven measures:
+observed ``pac``, ``pac_null_mean``, ``pac_null_std``, ``pac_corrected``,
+``pac_zscore``, ``pac_pvalue``, and ``pac_pvalue_adjusted``. The corrected estimate
+subtracts the null mean; the z score divides that difference by the population
+standard deviation (``ddof=0``, matching Tensorpac). A surrogate distribution
+whose range is at most ``100 * eps * max(abs(null))`` is treated as constant
+within floating-point precision. Its deviation is zero, its z score is undefined,
+and ``degenerate_null`` is set. This includes exact constant nulls and variation
+caused solely by summation roundoff.
+
+Surrogates are constructed by
+`Tensorpac <https://etiennecmb.github.io/tensorpac/generated/tensorpac.Pac.html>`__:
+``surrogate="blocks"`` exchanges the two amplitude blocks around a random cut;
+``surrogate="circular"`` shifts phase circularly. Every shift occurs inside its
+analysis window, without exchanging epochs. Both resulting blocks must be at
+least ``min_shift_seconds`` long; identity shifts are excluded. Set that exclusion
+from the autocorrelation timescale, and record ``random_state`` for reproducibility.
+Perfectly stationary sinusoidal coupling can retain the same MVL after shifting,
+so temporal shifts are not a universal coupling null.
+
+ROI and global channel averages are applied to each permutation before computing
+its null statistics. For each epoch, one-sided empirical p values are
+:math:`(1 + \#\{\mathrm{null} \geq \mathrm{observed}\})/(N_\mathrm{surrogates}+1)`.
+Observed and surrogate values share the same Tensorpac MVL arithmetic. Comparisons
+count numerical ties within ``100 * eps * abs(observed)``, including for maxstat,
+following `SciPy's permutation-test convention
+<https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.permutation_test.html>`__.
+Corrected estimates within the same observed tie tolerance are reported as zero.
+``correction`` accepts ``"none"``, Benjamini-Hochberg ``"fdr"``, ``"bonferroni"``,
+or permutation ``"maxstat"``. The correction family consists of all spatial units
+and windows returned by that call, within one epoch and one band pair. Separate
+calls and recipe entries form separate families. The ``pac`` extra is required;
+nonfinite samples and windows too short for the shift exclusion raise errors.
+
+.. code-block:: python
+
+   inferred = ef.pac_surrogates(
+       theta_signal, gamma_signal, windows=[response],
+       n_surrogates=999, surrogate="blocks", min_shift_seconds=0.5,
+       random_state=42, correction="maxstat",
+   )
 
 Connectivity
 ------------
@@ -147,13 +192,19 @@ Functions
    therefore reduces the contribution of volume conduction (Vinck et al.,
    2011).
 
+``spectral_connectivity_time``
+   Calls ``mne_connectivity.spectral_connectivity_time`` with ``average=False``
+   to estimate coherence, magnitude imaginary coherency, PLV, ciPLV, PLI or wPLI
+   over time separately within each epoch. Rows retain their epoch identities and
+   can be joined to other per-epoch features and graph summaries.
+
 Requirements and options
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Spectral connectivity requires the ``connectivity`` extra
   (``pip install eegfeat[connectivity]``).
-- Every trial group needs at least two epochs, for every spectral
-  connectivity method.
+- Every trial group needs at least two epochs for ``spectral_connectivity`` and
+  ``wpli``. ``spectral_connectivity_time`` can estimate a single epoch.
 - A spectral band must lie at or below the signal's Nyquist frequency;
   unavailable high frequencies raise an error rather than truncating the band.
 - ``method="wpli2_debiased"`` applies the sample-size correction in Vinck et
@@ -170,7 +221,35 @@ Nodes and ROIs
   signal of its member channels, and envelopes are taken from that mean.
 - Repeated channels within an ROI raise ``ValueError``; members have equal
   weight and must be unique.
-- These measures have one row per trial group, as :func:`~eegfeat.itpc` does.
+- ``envelope_correlation``, ``spectral_connectivity`` and ``wpli`` have one row
+  per trial group, as :func:`~eegfeat.itpc` does.
+
+Per-epoch time averaging
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``spectral_connectivity_time`` uses an explicit increasing ``freqs`` grid and
+Morlet coefficients controlled by ``n_cycles``. Each analysis window is decomposed
+independently. The complete half-support of the longest wavelet is pruned at both
+edges. A window must then retain at least two samples and one cycle at the lowest
+grid frequency. Short windows, nonfinite samples, and channels that are constant
+inside an analysis window raise errors. This prevents DC leakage and numerical
+noise from being reported as oscillatory coupling. Optional
+``smoothing_seconds`` applies MNE's temporal Hanning smoother; zero leaves the
+coefficients unsmoothed. A duration that rounds to two samples raises because the
+Hanning kernel then has zero total weight. Undefined backend estimates raise
+before ROI averaging. Frequency reduction uses the same half-open bands and
+imaginary-coherency rectification as cross-trial connectivity.
+
+Edge coverage is the mean input coverage across the requested window, taking the
+minimum of the two channels at each sample. ROI coverage averages those
+channel-pair coverages across the same block used for the connectivity estimate.
+
+Time averaging and trial averaging define different estimators. In particular,
+PPC and debiased squared wPLI remain available through the cross-trial API.
+See the official
+`comparison of time and trial connectivity <https://mne.tools/mne-connectivity/stable/auto_examples/compare_connectivity_over_time_over_trial.html>`__
+and
+`time connectivity API <https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_time.html>`__.
 
 Envelope correlation
 ~~~~~~~~~~~~~~~~~~~~

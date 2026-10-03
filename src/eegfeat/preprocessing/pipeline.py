@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -39,7 +39,7 @@ from .epochs import (
     reference_epochs,
     validate_epochs,
 )
-from .events import EventData, resolve_events
+from .events import EventData, attach_bids_metadata, resolve_events
 from .ica import fit_ica
 from .provenance import fingerprint, serializable
 from .quality import (
@@ -127,6 +127,13 @@ def result_from_state(state: StageData) -> PreprocessingResult:
             "drop_reason": [";".join(reasons) for reasons in state.epochs.drop_log],
         }
     )
+    if "bids" in state.provenance and events.metadata is not None:
+        shared = set(ledger).intersection(events.metadata)
+        if shared:
+            raise ValueError(
+                f"BIDS event metadata collides with ledger columns: {sorted(shared, key=str)}."
+            )
+        ledger = pd.concat([ledger, events.metadata.reset_index(drop=True)], axis=1)
     repair = state.provenance.get("repair")
     provenance = {
         **state.provenance,
@@ -186,7 +193,10 @@ def _stage_events(
     source = (
         epoch_settings.events if isinstance(epoch_settings, EventEpochSettings) else epoch_settings
     )
-    return replace(state, events=resolve_events(state.raw, source, metadata=metadata))
+    events = resolve_events(state.raw, source, metadata=metadata)
+    if "bids" in state.provenance:
+        events = attach_bids_metadata(state.raw, events, source, state.provenance["bids"])
+    return replace(state, events=events)
 
 
 def _stage_crop_raw(
@@ -503,6 +513,7 @@ def preprocess(
     *,
     decisions: dict[str, dict[str, Any]] | None = None,
     n_jobs: int = 1,
+    provenance: Mapping[str, Any] | None = None,
 ) -> PreprocessingResult:
     # Same catalog as the checkpointed path; a review stage runs only with its decision.
     reviews = {} if decisions is None else decisions
@@ -513,6 +524,7 @@ def preprocess(
     state = StageData(
         raw,
         provenance={
+            **({} if provenance is None else provenance),
             "settings": serializable(settings),
             "raw_review": workflow.raw_review,
             "artifact_review": workflow.artifact_review,

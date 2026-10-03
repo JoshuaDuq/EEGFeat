@@ -186,7 +186,10 @@ data directory (``MNE_DATA``, default ``~/mne_data``).
 
 **Output.** A run rewrites ``docs/validation/results.json`` and the fragments this page
 includes, so the scorecard and the tables below reflect the last run on the machine that
-built the docs.
+built the docs. Each run also saves an independent snapshot under
+``docs/validation/runs/<run-id>/results.json``, with its software versions and Python
+source identity. A partial run reports only claims observed in that run; it does not
+merge older claims into the new evidence.
 
 **CI.** The ``validation`` GitHub workflow:
 

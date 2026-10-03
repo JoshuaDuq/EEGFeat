@@ -11,6 +11,7 @@ on:
 
 env:
   MNE_DONTWRITE_HOME: "true"
+  MPLBACKEND: "Agg"
   MNE_DATA: ${{ github.workspace }}/mne_data
   EEGFEAT_DATASETS: "1"
 

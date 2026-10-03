@@ -117,6 +117,41 @@ with :math:`x` indexed from 0 and :math:`q_{\max} = \lfloor (N - m - 1) / k \rfl
    - fewer than two strides give a positive :math:`L(k)` (a flat window, for
      example).
 
+Additional AntroPy Complexity Estimators
+----------------------------------------
+
+The following estimators use AntroPy rather than independent reimplementations.
+Install ``eegfeat[complexity]``. They accept broadband signals or band envelopes,
+compute each channel/window independently, and preserve row identity, coverage,
+and computation metadata. ROI and global columns average the channel estimates.
+Non-finite samples raise errors; deleting gaps would change the sequence.
+
+``permutation_entropy`` measures ordinal-pattern diversity for embeddings of
+``order`` samples separated by ``delay`` samples. AntroPy's base-two entropy is
+divided by :math:`\log_2(\mathrm{order}!)`, producing values from zero to one.
+Tie ordering follows the backend. The window must support at least one complete
+embedding. See `AntroPy permutation entropy
+<https://raphaelvallat.com/antropy/generated/antropy.perm_entropy.html>`__.
+
+``lempel_ziv_complexity`` explicitly binarizes each channel/window. Samples at
+or above its selected ``median`` or ``mean`` become 1, and others become 0.
+AntroPy counts newly encountered substrings and divides by
+:math:`N/\log_2(N)`. Both symbols must occur; a one-symbol sequence raises an
+error because binary normalization is undefined for its observed alphabet.
+Finite-length normalized values can exceed one. Threshold choice is stored
+with the feature. See `AntroPy Lempel--Ziv complexity
+<https://raphaelvallat.com/antropy/generated/antropy.lziv_complexity.html>`__.
+
+``detrended_fluctuation`` reports ``dfa_exponent``. AntroPy cumulatively sums
+the demeaned signal, linearly detrends nonoverlapping blocks, and estimates
+scaling from log fluctuation versus log block size. Its block sizes start at
+four samples, grow by 1.2, and reach ten percent of the window. At least 50
+samples are required to support two distinct block sizes; constant windows
+raise an error. Fifty samples is a computational minimum, not evidence of
+reliable long-range scaling. The exponent is interpretable only across a
+suitable scaling range. See `AntroPy DFA
+<https://raphaelvallat.com/antropy/generated/antropy.detrended_fluctuation.html>`__.
+
 Microstates
 -----------
 

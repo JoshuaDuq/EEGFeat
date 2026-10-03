@@ -124,6 +124,10 @@ Build an analysis workflow
    guides/preprocessing
    Cohort runner <guides/runner>
    Predictive modeling <guides/modeling>
+   Learned features <guides/learned_features>
+   Reproducible cohorts <guides/cohorts>
+   Native BIDS input <guides/bids>
+   Modeling recipes <guides/model_recipes>
 
 .. toctree::
    :hidden:

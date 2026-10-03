@@ -1,0 +1,44 @@
+# Relative paths are resolved from this recipe's directory.
+version: 1
+inputs:
+  rows: epochs  # epochs or groups; group samples are never broadcast to epochs
+  paths:
+    - features/sub-01_features.tsv
+    - features/sub-02_features.tsv
+    - features/sub-03_features.tsv
+    - features/sub-04_features.tsv
+  columns: union
+  # Optional external .tsv: exact recording/epoch/event or recording/group keys.
+  # targets: targets.tsv
+analysis:
+  task: regression  # classification requires labels coded 0/1
+  target: score
+  groups: subject_id
+  covariates: []
+selection:
+  # Empty lists match every feature; named fields filter the stored metadata.
+  measure: []
+  band: []
+  space_kind: []
+  window: []
+quality:
+  min_coverage: 0.8
+  rejected_flags: []
+preprocessing:
+  # These transforms are fitted separately inside every inner and outer fold.
+  max_feature_missingness: 0.2
+  max_subject_missingness: 0.5
+  # feature_selection_percentile: 25
+  # pca_components: 0.95
+model:
+  estimator: ridge  # regression: ridge, elasticnet, random_forest
+  # classification: logistic, svm, random_forest; use that estimator's grid names.
+  grid:
+    regressor__alpha: [0.01, 0.1, 1.0, 10.0, 100.0]
+validation:
+  outer: loso  # or group_kfold with outer_splits specified
+  inner_splits: 3
+  scoring: neg_mean_squared_error  # classification default: balanced_accuracy
+  seed: 42
+# Must be a new directory. Completed bundles are never overwritten.
+output: model-results

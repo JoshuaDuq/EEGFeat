@@ -1,0 +1,286 @@
+"""Content identities protect portable feature bundles and resumed runs."""
+
+import json
+import os
+
+import pytest
+
+from eegfeat.io import read_table
+from eegfeat.runner import load_recipe, run, status
+from synthetic import save_epochs
+
+
+def _extract(tmp_path, *, pattern="**/*_epo.fif"):
+    source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
+    save_epochs(source)
+    recipe_path = tmp_path / "recipe.toml"
+    recipe_path.write_text(
+        f'[inputs]\nroot = "data"\npattern = "{pattern}"\n[output]\nroot = "out"\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n'
+    )
+    recipe = load_recipe(recipe_path)
+    assert run(recipe).ok
+    output = tmp_path / "out/sub-01/eeg/sub-01_task-rest_features.tsv"
+    return recipe, source, output
+
+
+def test_extraction_records_portable_identity_and_resolved_computation(tmp_path):
+    _, _, output = _extract(tmp_path)
+    sidecar = json.loads(output.with_suffix(".json").read_text())
+    provenance = sidecar["provenance"]
+    assert provenance["recording"] == "sub-01/eeg/sub-01_task-rest_epo.fif"
+    assert len(provenance["input_sha256"]) == 64
+    assert provenance["software"]["mne"]
+    assert len(provenance["code_sha256"]) == 64
+    assert provenance["resolved_settings"]["spectra"]["method"] == "welch"
+    assert set(sidecar["files"]) == {output.name, output.stem + "_coverage.tsv"}
+    assert read_table(output).row_ids[0][0] == provenance["recording"]
+
+
+def test_changed_input_is_stale_even_when_its_timestamp_is_preserved(tmp_path):
+    recipe, source, _ = _extract(tmp_path)
+    timestamp = source.stat().st_mtime_ns
+    source.write_bytes(source.read_bytes() + b"changed")
+    os.utime(source, ns=(timestamp, timestamp))
+    assert status(recipe)[0].state == "stale"
+
+
+def test_touching_unchanged_input_does_not_invalidate_results(tmp_path):
+    recipe, source, _ = _extract(tmp_path)
+    later = source.stat().st_mtime + 60
+    os.utime(source, (later, later))
+    assert status(recipe)[0].state == "done"
+
+
+def test_renamed_input_is_stale_when_output_stem_and_bytes_match(tmp_path):
+    recipe, source, _ = _extract(tmp_path, pattern="**/*epo.fif")
+    renamed = source.with_name(source.name.replace("_epo.fif", "-epo.fif"))
+    source.rename(renamed)
+    entry = status(recipe)[0]
+    assert entry.state == "stale"
+    assert "recording identity" in entry.reason
+
+
+def test_modified_output_is_rejected_and_reported_as_partial(tmp_path):
+    recipe, _, output = _extract(tmp_path)
+    output.write_text(output.read_text() + "\n")
+    with pytest.raises(ValueError, match="checksum"):
+        read_table(output)
+    entry = status(recipe)[0]
+    assert entry.state == "partial" and "checksum" in entry.reason
+
+
+def test_missing_provenance_manifest_is_not_accepted_as_current(tmp_path):
+    recipe, _, output = _extract(tmp_path)
+    path = output.with_suffix(".json")
+    sidecar = json.loads(path.read_text())
+    del sidecar["provenance"]["input_sha256"]
+    path.write_text(json.dumps(sidecar))
+    assert status(recipe)[0].state == "partial"
+
+
+def test_input_change_during_computation_fails_without_publishing(tmp_path, monkeypatch):
+    import eegfeat.runner.batch as batch
+
+    source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
+    save_epochs(source)
+    recipe_path = tmp_path / "recipe.toml"
+    recipe_path.write_text(
+        '[inputs]\nroot = "data"\n[output]\nroot = "out"\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n'
+    )
+    compute = batch.compute_features
+
+    def modify_input(*args, **kwargs):
+        features = compute(*args, **kwargs)
+        source.write_bytes(source.read_bytes() + b"changed during computation")
+        return features
+
+    monkeypatch.setattr(batch, "compute_features", modify_input)
+    result = run(load_recipe(recipe_path))
+    assert not result.ok
+    assert "input changed during extraction" in result.failed[0].error.lower()
+    assert not result.recordings[0].outputs
+    assert not list((tmp_path / "out").rglob("*_features.tsv"))
+
+
+def _split_recording(tmp_path, split_naming):
+    import mne
+    import numpy as np
+
+    source = tmp_path / "data/sub-01_task-rest_epo.fif"
+    source.parent.mkdir()
+    epochs = mne.EpochsArray(
+        np.random.default_rng(42).normal(scale=1e-5, size=(20, 2, 10_000)),
+        mne.create_info(["C3", "C4"], 1000, "eeg"),
+        verbose="error",
+    )
+    paths = epochs.save(source, split_size="2MB", split_naming=split_naming, verbose="error")
+    assert len(paths) == 2
+    recipe_path = tmp_path / "recipe.toml"
+    recipe_path.write_text(
+        f'[inputs]\nroot = "data"\npattern = "{paths[0].name}"\n'
+        '[output]\nroot = "out"\n[[features]]\n'
+        'measure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
+    )
+    return load_recipe(recipe_path), paths
+
+
+@pytest.mark.parametrize("split_naming", ["neuromag", "bids"])
+def test_changed_split_recording_is_stale_and_recomputed(tmp_path, split_naming):
+    recipe, paths = _split_recording(tmp_path, split_naming)
+    assert run(recipe).ok
+    assert status(recipe)[0].state == "done"
+    paths[1].write_bytes(paths[1].read_bytes() + b"changed")
+    assert status(recipe)[0].state == "stale"
+    resumed = run(recipe, resume=True, overwrite=True)
+    assert resumed.ok and len(resumed.recordings) == 1 and not resumed.skipped
+
+
+def test_split_recording_manifest_is_portable(tmp_path):
+    import shutil
+
+    from eegfeat.provenance import file_hash
+
+    recipe, paths = _split_recording(tmp_path, "neuromag")
+    result = run(recipe)
+    assert result.ok
+    sidecar = result.recordings[0].recording.features_path.with_suffix(".json")
+    provenance = json.loads(sidecar.read_text())["provenance"]
+    assert provenance["input_files"] == {path.name: file_hash(path) for path in paths}
+    moved = tmp_path / "moved"
+    moved.mkdir()
+    for name in ("data", "out"):
+        shutil.move(tmp_path / name, moved / name)
+    shutil.move(recipe.path, moved / recipe.path.name)
+    assert status(load_recipe(moved / recipe.path.name))[0].state == "done"
+
+
+def test_missing_split_recording_is_stale(tmp_path):
+    recipe, paths = _split_recording(tmp_path, "neuromag")
+    assert run(recipe).ok
+    paths[1].unlink()
+    assert status(recipe)[0].state == "stale"
+
+
+@pytest.mark.parametrize("changed", ["edit", "delete"])
+def test_split_change_during_computation_fails_without_publishing(tmp_path, monkeypatch, changed):
+    import eegfeat.runner.batch as batch
+
+    recipe, paths = _split_recording(tmp_path, "neuromag")
+    compute = batch.compute_features
+
+    def modify_split(*args, **kwargs):
+        features = compute(*args, **kwargs)
+        if changed == "edit":
+            paths[1].write_bytes(paths[1].read_bytes() + b"changed")
+        else:
+            paths[1].unlink()
+        return features
+
+    monkeypatch.setattr(batch, "compute_features", modify_split)
+    result = run(recipe)
+    assert not result.ok
+    assert not list((tmp_path / "out").rglob("*_features.tsv"))
+
+
+def test_software_versions_include_installed_preprocessing_dependencies(monkeypatch):
+    import eegfeat.provenance as provenance
+
+    monkeypatch.setattr(provenance, "version", lambda name: "test-version")
+    versions = provenance.software_versions()
+    assert {
+        "PyYAML",
+        "pyprep",
+        "autoreject",
+        "mne-icalabel",
+        "onnxruntime",
+        "python-picard",
+        "h5io",
+        "h5py",
+        "filelock",
+    } <= set(versions)
+
+
+@pytest.mark.parametrize("changed", ["manifest", "payload"])
+def test_upstream_change_during_computation_fails_without_publishing(
+    tmp_path, monkeypatch, changed
+):
+    import mne
+
+    import eegfeat.runner.batch as batch
+    from eegfeat.provenance import file_hash, identity
+
+    source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
+    save_epochs(source)
+    upstream = {"retained": 12, "original_events": 14}
+    epochs = mne.read_epochs(source, preload=True, verbose="error")
+    epochs.info["description"] = f"preprocessing=preprocessing.json; identity={identity(upstream)}"
+    epochs.save(source, overwrite=True, verbose="error")
+    payload = source.parent / "events.tsv"
+    payload.write_text("original_row\tretained\n0\ttrue\n")
+    manifest = source.parent / "preprocessing.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "provenance": upstream,
+                "files": {source.name: file_hash(source), payload.name: file_hash(payload)},
+            }
+        )
+    )
+    recipe_path = tmp_path / "recipe.toml"
+    recipe_path.write_text(
+        '[inputs]\nroot = "data"\n[output]\nroot = "out"\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n'
+    )
+    compute = batch.compute_features
+
+    def modify_upstream(*args, **kwargs):
+        features = compute(*args, **kwargs)
+        path = manifest if changed == "manifest" else payload
+        path.write_bytes(path.read_bytes() + b"\n")
+        return features
+
+    monkeypatch.setattr(batch, "compute_features", modify_upstream)
+    result = run(load_recipe(recipe_path))
+    assert not result.ok
+    assert "preprocessing" in result.failed[0].error.lower()
+    assert not list((tmp_path / "out").rglob("*_features.tsv"))
+
+
+@pytest.mark.parametrize("changed", ["software_versions", "implementation_hash"])
+def test_environment_change_during_computation_fails_without_publishing(
+    tmp_path, monkeypatch, changed
+):
+    import eegfeat.runner.batch as batch
+
+    source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
+    save_epochs(source)
+    recipe_path = tmp_path / "recipe.toml"
+    recipe_path.write_text(
+        '[inputs]\nroot = "data"\n[output]\nroot = "out"\n'
+        '[[features]]\nmeasure = "integrated_band_power"\n'
+        'bands = ["alpha"]\nspatial = ["global"]\n'
+    )
+    original = getattr(batch, changed)
+    compute = batch.compute_features
+
+    def modify_environment(*args, **kwargs):
+        features = compute(*args, **kwargs)
+        monkeypatch.setattr(
+            batch,
+            changed,
+            lambda: {"changed": "version"} if changed == "software_versions" else "changed",
+        )
+        return features
+
+    monkeypatch.setattr(batch, "compute_features", modify_environment)
+    result = run(load_recipe(recipe_path))
+    monkeypatch.setattr(batch, changed, original)
+    assert not result.ok
+    assert "changed during extraction" in result.failed[0].error.lower()
+    assert not list((tmp_path / "out").rglob("*_features.tsv"))

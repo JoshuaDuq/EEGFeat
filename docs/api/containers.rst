@@ -35,6 +35,30 @@ Reading and writing
 
 .. autofunction:: eegfeat.io.write_table
 
+Group samples
+-------------
+
+.. autoclass:: eegfeat.group.GroupDataset
+   :members:
+
+.. autoclass:: eegfeat.group.GroupDesign
+   :members:
+
+Native BIDS input
+-----------------
+
+.. autoclass:: eegfeat.bids.BIDSQuery
+   :members:
+
+.. autoclass:: eegfeat.bids.BIDSRecording
+   :members:
+
+.. autofunction:: eegfeat.bids.discover_bids
+
+.. autofunction:: eegfeat.bids.read_bids
+
+.. autofunction:: eegfeat.bids.preprocess_bids
+
 Bands and windows
 -----------------
 

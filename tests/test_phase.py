@@ -410,3 +410,247 @@ def test_pac_records_the_phase_estimator_as_well_as_the_amplitude_estimator() ->
         second.meta[0].computation.parameters["parameters"]["phase_input_computation"]
         == other.computation.record()
     )
+
+
+def _irregular_coupling() -> tuple[BandSignal, BandSignal]:
+    rng = np.random.default_rng(53)
+    n_times = 601
+    increments = rng.uniform(0.0, 0.8, (3, 2, n_times))
+    phase = np.cumsum(increments, axis=-1)
+    amplitude = 1.0 + 0.8 * np.cos(phase)
+    times = np.arange(n_times) / SFREQ
+    identities = tuple(("test", index, "event") for index in range(3))
+    common = dict(times=times, ch_names=("C3", "C4"), sfreq=SFREQ, row_ids=identities)
+    slow = BandSignal.from_arrays(analytic=np.exp(1j * phase), band=ALPHA, **common)
+    fast = BandSignal.from_arrays(analytic=amplitude.astype(complex), band=GAMMA, **common)
+    return slow, fast
+
+
+def test_pac_surrogates_matches_tensorpac_null_and_preserves_epoch_rows() -> None:
+    pytest.importorskip("tensorpac")
+    from tensorpac.methods import mean_vector_length, swap_blocks
+
+    import eegfeat.phase as phase_methods
+
+    slow, fast = _irregular_coupling()
+    table = phase_methods.pac_surrogates(
+        slow,
+        fast,
+        windows=[WINDOW],
+        n_surrogates=32,
+        surrogate="blocks",
+        random_state=7,
+        min_shift_seconds=0.0,
+        correction="bonferroni",
+        include_global=False,
+    )
+    keep = slow.times <= WINDOW.tmax
+    phase = slow.phase[:, :, keep]
+    amplitude = fast.envelope[:, :, keep]
+    rng = np.random.default_rng(7)
+    null = []
+    for _ in range(32):
+        seed = int(rng.integers(0, 2**32 - 1))
+        shifted_phase, shifted_amplitude = swap_blocks(phase, amplitude, random_state=seed)
+        normalized = shifted_amplitude / shifted_amplitude.mean(axis=-1, keepdims=True)
+        null.append(mean_vector_length(shifted_phase[None], normalized[None])[0, 0])
+    null = np.stack(null)
+    observed = pac(slow, fast, windows=[WINDOW], include_global=False).values
+    np.testing.assert_allclose(table.select(measure="pac").values, observed)
+    np.testing.assert_allclose(table.select(measure="pac_null_mean").values, null.mean(axis=0))
+    np.testing.assert_allclose(table.select(measure="pac_null_std").values, null.std(axis=0))
+    np.testing.assert_allclose(
+        table.select(measure="pac_corrected").values,
+        observed - null.mean(axis=0),
+    )
+    expected_p = (1 + np.sum(null >= observed, axis=0)) / 33
+    np.testing.assert_allclose(table.select(measure="pac_pvalue").values, expected_p)
+    np.testing.assert_allclose(
+        table.select(measure="pac_pvalue_adjusted").values,
+        np.minimum(1, 2 * expected_p),
+    )
+    assert table.row_labels is None
+    assert table.row_ids == slow.row_ids
+    assert all(meta.phase_band == ALPHA and meta.amplitude_band == GAMMA for meta in table.meta)
+
+
+@pytest.mark.parametrize("normalize", [False, True])
+@pytest.mark.parametrize("surrogate", ["blocks", "circular"])
+def test_constant_amplitude_surrogates_do_not_report_significant_pac(normalize, surrogate) -> None:
+    from tensorpac.methods import mean_vector_length
+
+    from eegfeat.phase import pac_surrogates
+
+    times = np.arange(100) / SFREQ
+    phase = np.random.default_rng(0).uniform(-np.pi, np.pi, (1, 1, times.size))
+    common = dict(times=times, ch_names=("C3",), sfreq=SFREQ, row_ids=(("test", 0, "event"),))
+    slow = BandSignal.from_arrays(analytic=np.exp(1j * phase), band=ALPHA, **common)
+    fast = BandSignal.from_arrays(analytic=np.ones_like(phase, dtype=complex), band=GAMMA, **common)
+    table = pac_surrogates(
+        slow,
+        fast,
+        windows=[Window("all", -np.inf, np.inf)],
+        n_surrogates=20,
+        surrogate=surrogate,
+        min_shift_seconds=0.0,
+        include_global=False,
+        normalize=normalize,
+    )
+    expected = mean_vector_length(slow.phase[None], fast.envelope[None])[0, 0]
+    np.testing.assert_array_equal(table.select(measure="pac").values, expected)
+    assert table.select(measure="pac_null_std").values.item() == 0.0
+    assert table.select(measure="pac_corrected").values.item() == 0.0
+    assert table.select(measure="pac_pvalue").values.item() == 1.0
+    assert table.select(measure="pac_pvalue_adjusted").values.item() == 1.0
+    zscore = table.select(measure="pac_zscore")
+    assert np.isnan(zscore.values).all()
+    assert zscore.flags["degenerate_null"].all()
+
+
+def test_pac_maxstat_counts_floating_point_ties_like_scipy() -> None:
+    from eegfeat.phase import _adjust_pac_pvalues
+
+    observed = np.ones((1, 2))
+    null = np.full((20, 1, 2), np.nextafter(1.0, 0.0))
+    adjusted = _adjust_pac_pvalues(observed, null, np.ones_like(observed), "maxstat")
+    np.testing.assert_array_equal(adjusted, 1.0)
+    null[:] = 1.0 - 1e-10
+    adjusted = _adjust_pac_pvalues(observed, null, np.ones_like(observed), "maxstat")
+    np.testing.assert_array_equal(adjusted, 1 / 21)
+
+
+@pytest.mark.parametrize("surrogate", ["blocks", "circular"])
+def test_pac_surrogates_is_seeded_and_handles_spatial_null_before_inference(surrogate) -> None:
+    pytest.importorskip("tensorpac")
+    import eegfeat.phase as phase_methods
+
+    slow, fast = _irregular_coupling()
+    kwargs = dict(
+        windows=[WINDOW],
+        n_surrogates=40,
+        surrogate=surrogate,
+        random_state=11,
+        correction="fdr",
+        groups={"motor": ["C3", "C4"]},
+    )
+    first = phase_methods.pac_surrogates(slow, fast, **kwargs)
+    second = phase_methods.pac_surrogates(slow, fast, **kwargs)
+    np.testing.assert_array_equal(first.values, second.values)
+    assert set(meta.space for meta in first.meta) == {"motor", "global"}
+    adjusted = first.select(measure="pac_pvalue_adjusted").values
+    assert np.all((adjusted >= 1 / 41) & (adjusted <= 1))
+    assert first.meta[0].computation.parameters["inference"]["correction_family"] == (
+        "nodes_and_windows_within_each_epoch"
+    )
+
+
+@pytest.mark.parametrize(
+    "parameters, message",
+    [
+        ({"n_surrogates": 1}, "n_surrogates"),
+        ({"n_surrogates": True}, "n_surrogates"),
+        ({"surrogate": "shuffle"}, "surrogate"),
+        ({"random_state": -1}, "random_state"),
+        ({"min_shift_seconds": 1.1}, "shift"),
+        ({"correction": "wrong"}, "correction"),
+    ],
+)
+def test_pac_surrogates_validates_inference_parameters(parameters, message) -> None:
+    pytest.importorskip("tensorpac")
+    import eegfeat.phase as phase_methods
+
+    slow, fast = _irregular_coupling()
+    with pytest.raises(ValueError, match=message):
+        phase_methods.pac_surrogates(slow, fast, windows=[WINDOW], **parameters)
+
+
+def test_pac_surrogates_refuses_nonfinite_samples() -> None:
+    pytest.importorskip("tensorpac")
+    import eegfeat.phase as phase_methods
+
+    slow, fast = _irregular_coupling()
+    analytic = fast.analytic.copy()
+    analytic[0, 0, 10] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        phase_methods.pac_surrogates(slow, replace(fast, analytic=analytic), windows=[WINDOW])
+
+
+@pytest.mark.parametrize("correction", ["none", "fdr", "maxstat"])
+def test_pac_adjustment_matches_the_prespecified_family(correction) -> None:
+    pytest.importorskip("tensorpac")
+    from scipy.stats import false_discovery_control
+    from tensorpac.methods import mean_vector_length, swap_blocks
+
+    import eegfeat.phase as phase_methods
+
+    slow, fast = _irregular_coupling()
+    table = phase_methods.pac_surrogates(
+        slow,
+        fast,
+        windows=[WINDOW],
+        n_surrogates=24,
+        random_state=13,
+        min_shift_seconds=0.0,
+        include_global=False,
+        correction=correction,
+    )
+    observed = table.select(measure="pac").values
+    pvalues = table.select(measure="pac_pvalue").values
+    if correction == "fdr":
+        expected = false_discovery_control(pvalues, axis=1)
+    elif correction == "none":
+        expected = pvalues
+    else:
+        keep = slow.times <= WINDOW.tmax
+        phase, amplitude = slow.phase[:, :, keep], fast.envelope[:, :, keep]
+        rng = np.random.default_rng(13)
+        maxima = []
+        for _ in range(24):
+            phase_null, amplitude_null = swap_blocks(
+                phase,
+                amplitude,
+                random_state=int(rng.integers(0, 2**32 - 1)),
+            )
+            normalized = amplitude_null / amplitude_null.mean(axis=-1, keepdims=True)
+            maxima.append(mean_vector_length(phase_null[None], normalized[None])[0, 0].max(axis=1))
+        expected = (1 + (np.stack(maxima)[:, :, None] >= observed).sum(axis=0)) / 25
+    np.testing.assert_allclose(table.select(measure="pac_pvalue_adjusted").values, expected)
+
+
+def test_pac_surrogate_inference_computes_roi_null_before_statistics() -> None:
+    pytest.importorskip("tensorpac")
+    from tensorpac.methods import mean_vector_length, swap_blocks
+
+    import eegfeat.phase as phase_methods
+
+    slow, fast = _irregular_coupling()
+    windows = [Window("early", 0.0, 2.0), Window("late", 2.1, 4.0)]
+    table = phase_methods.pac_surrogates(
+        slow,
+        fast,
+        windows=windows,
+        groups={"motor": ["C3", "C4"]},
+        include_global=False,
+        n_surrogates=20,
+        random_state=19,
+        min_shift_seconds=0.0,
+    )
+    rng = np.random.default_rng(19)
+    null = []
+    for window in windows:
+        keep = (slow.times >= window.tmin) & (slow.times <= window.tmax)
+        phase, amplitude = slow.phase[:, :, keep], fast.envelope[:, :, keep]
+        permutations = []
+        for _ in range(20):
+            phase_null, amplitude_null = swap_blocks(
+                phase,
+                amplitude,
+                random_state=int(rng.integers(0, 2**32 - 1)),
+            )
+            normalized = amplitude_null / amplitude_null.mean(axis=-1, keepdims=True)
+            permutations.append(
+                mean_vector_length(phase_null[None], normalized[None])[0, 0].mean(axis=1)
+            )
+        null.append(np.stack(permutations))
+    null = np.stack(null, axis=-1)
+    np.testing.assert_allclose(table.select(measure="pac_null_std").values, null.std(axis=0))

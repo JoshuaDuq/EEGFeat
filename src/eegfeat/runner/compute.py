@@ -125,6 +125,29 @@ def event_names(epochs: Any) -> list[str]:
     return [names[int(code)] for code in epochs.events[:, 2]]
 
 
+def trial_labels(epochs: Any, recipe: Recipe) -> tuple[str, ...] | None:
+    """One trial-group label per epoch; None gives the estimator's ``all`` group."""
+    grouping = recipe.trials
+    if grouping.by == "all":
+        return None
+    if grouping.by == "event":
+        return tuple(event_names(epochs))
+    metadata = epochs.metadata
+    if metadata is None or grouping.column not in metadata.columns:
+        raise ValueError(
+            f"trials are grouped by the metadata column {grouping.column!r}, "
+            "which this recording does not have."
+        )
+    labels = metadata[grouping.column]
+    missing = int(labels.isna().sum())
+    if missing:
+        raise ValueError(
+            f"the metadata column {grouping.column!r} is empty for {missing} epochs, "
+            "and every epoch needs a trial group."
+        )
+    return tuple(str(label) for label in labels)
+
+
 class RecordingInputs:
     """The inputs a recording's measures draw on, each built on first use."""
 
@@ -253,25 +276,7 @@ class RecordingInputs:
 
     def trials(self) -> tuple[str, ...] | None:
         """One group label per epoch for cross-trial measures, or None for one group."""
-        grouping = self.recipe.trials
-        if grouping.by == "all":
-            return None
-        if grouping.by == "event":
-            return tuple(event_names(self.epochs))
-        metadata = self.epochs.metadata
-        if metadata is None or grouping.column not in metadata.columns:
-            raise ValueError(
-                f"trials are grouped by the metadata column {grouping.column!r}, "
-                "which this recording does not have."
-            )
-        labels = metadata[grouping.column]
-        missing = int(labels.isna().sum())
-        if missing:
-            raise ValueError(
-                f"the metadata column {grouping.column!r} is empty for {missing} epochs, "
-                "and every epoch needs a trial group."
-            )
-        return tuple(str(label) for label in labels)
+        return trial_labels(self.epochs, self.recipe)
 
     def segmentation(self) -> MicrostateSegmentation:
         """Microstate templates fitted to this recording, shared by its measures."""
@@ -415,6 +420,8 @@ def _compute(spec: FeatureSpec, inputs: RecordingInputs) -> FeatureTable:
 
     if measure.kind == "series":
         series = [inputs.signal() if b is None else inputs.band_signal(b) for b in spec.series]
+        if measure.takes("bands"):
+            params["bands"] = spec.bands
         return _over_space(
             spec.spatial,
             rois,
@@ -455,8 +462,9 @@ def _compute(spec: FeatureSpec, inputs: RecordingInputs) -> FeatureTable:
             ]
         )
 
-    if measure.kind == "wpli":
-        params["trials"] = inputs.trials()
+    if measure.kind == "connectivity":
+        if measure.takes("trials"):
+            params["trials"] = inputs.trials()
         table = _over_space(
             spec.spatial,
             rois,

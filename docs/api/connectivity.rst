@@ -12,9 +12,13 @@ Measures defined across trials or between sensor pairs. Their definitions are in
 
 .. autofunction:: eegfeat.pac
 
+.. autofunction:: eegfeat.pac_surrogates
+
 .. autofunction:: eegfeat.envelope_correlation
 
 .. autofunction:: eegfeat.spectral_connectivity
+
+.. autofunction:: eegfeat.spectral_connectivity_time
 
 .. autofunction:: eegfeat.wpli
 
@@ -26,4 +30,3 @@ Measures defined across trials or between sensor pairs. Their definitions are in
 .. autofunction:: eegfeat.global_efficiency
 
 .. autofunction:: eegfeat.clustering_coefficient
-

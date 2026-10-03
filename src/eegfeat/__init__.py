@@ -16,15 +16,24 @@ from eegfeat.bursts import (
     burst_rate,
     fraction_above_threshold,
 )
-from eegfeat.complexity import higuchi_fractal_dimension, multiscale_entropy, sample_entropy
+from eegfeat.complexity import (
+    detrended_fluctuation,
+    higuchi_fractal_dimension,
+    lempel_ziv_complexity,
+    multiscale_entropy,
+    permutation_entropy,
+    sample_entropy,
+)
 from eegfeat.connectivity import (
     clustering_coefficient,
     envelope_correlation,
     global_efficiency,
     spectral_connectivity,
+    spectral_connectivity_time,
     wpli,
 )
 from eegfeat.csp import CommonSpatialPattern, csp_features
+from eegfeat.cycles import cycle_features
 from eegfeat.derived import asymmetry, band_ratio
 from eegfeat.descriptors import (
     peak_frequency,
@@ -44,7 +53,9 @@ from eegfeat.erds import (
     ers_duration,
     ers_magnitude,
 )
+from eegfeat.irasa import irasa
 from eegfeat.microstates import (
+    MicrostateModel,
     MicrostateSegmentation,
     microstate_coverage,
     microstate_duration,
@@ -52,10 +63,19 @@ from eegfeat.microstates import (
     microstate_transitions,
     segment,
 )
-from eegfeat.phase import itpc, pac, ppc
+from eegfeat.phase import itpc, pac, pac_surrogates, ppc
 from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power, periodic_power
+from eegfeat.quality import (
+    QualityPolicy,
+    QualityResult,
+    apply_quality,
+    cohort_quality,
+    feature_quality,
+)
+from eegfeat.reliability import intraclass_reliability
 from eegfeat.signal import BandSignal, Signal
 from eegfeat.spectra import Spectra, Window
+from eegfeat.spectral_model import spectral_parameterization
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat, stack_rows
 from eegfeat.temporal import (
     amplitude_quantile,
@@ -77,6 +97,21 @@ from eegfeat.temporal import (
 __version__ = "0.1.0.dev0"
 
 __all__ = [
+    "spectral_parameterization",
+    "irasa",
+    "cycle_features",
+    "permutation_entropy",
+    "lempel_ziv_complexity",
+    "detrended_fluctuation",
+    "pac_surrogates",
+    "spectral_connectivity_time",
+    "MicrostateModel",
+    "QualityPolicy",
+    "QualityResult",
+    "apply_quality",
+    "cohort_quality",
+    "feature_quality",
+    "intraclass_reliability",
     "__version__",
     "aperiodic",
     "aperiodic_ratio",

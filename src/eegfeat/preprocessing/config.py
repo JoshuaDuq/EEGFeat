@@ -590,14 +590,31 @@ class ProcessingSettings:
 
 
 @dataclass(frozen=True)
+class BIDSInputSettings:
+    root: Path
+    canonical_channels: tuple[str, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.root, Path):
+            raise TypeError("input.bids.root: expected Path")
+        if self.canonical_channels is not None:
+            names(self.canonical_channels, "input.canonical_channels")
+            if not self.canonical_channels:
+                raise ValueError("input.canonical_channels: must be nonempty")
+
+
+@dataclass(frozen=True)
 class InputSettings:
     path: Path
+    bids: BIDSInputSettings | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.path, Path):
             raise TypeError("input.path: expected Path")
         if not str(self.path).lower().endswith(SUFFIXES):
             raise ValueError("input.path: unsupported recording suffix")
+        if self.bids is not None and not isinstance(self.bids, BIDSInputSettings):
+            raise TypeError("input.bids: expected BIDSInputSettings")
 
 
 @dataclass(frozen=True)
@@ -825,7 +842,13 @@ def load_recipe(path: str | Path) -> dict[str, PreprocessingConfig]:
         "input output workflow channels annotations filter epochs reference crop artifact "
         "rejection sampling bad_channels bridges stimulation",
     )
-    source = _section(data.pop("input", None), "input", "path root pattern")
+    source = _section(
+        data.pop("input", None),
+        "input",
+        "kind path root pattern subjects sessions tasks acquisitions runs canonical_channels",
+    )
+    kind = source.pop("kind", "files")
+    choice(kind, ("files", "bids"), "input.kind")
     output = _section(data.pop("output", None), "output", "directory name")
     workflow = WorkflowSettings(
         **_section(data.pop("workflow", {}), "workflow", "raw_review artifact_review epoch_review")
@@ -834,14 +857,20 @@ def load_recipe(path: str | Path) -> dict[str, PreprocessingConfig]:
     if "name" in output and "root" in source:
         raise ValueError("output.name: not allowed with input.root; names come from the files")
     configs: dict[str, PreprocessingConfig] = {}
-    for file, relative in _sources(source, base):
+    sources = (
+        _bids_sources(source, base)
+        if kind == "bids"
+        else [(InputSettings(file), relative) for file, relative in _sources(source, base)]
+    )
+    for input_settings, relative in sources:
+        file = input_settings.path
         name = output["name"] if output.get("name") is not None else _derive_name(file)
         bundle = (relative / name).as_posix()
         if bundle in configs:
             other = configs[bundle].input.path.name
             raise ValueError(f"output: {other} and {file.name} write the same bundle {bundle}")
         configs[bundle] = PreprocessingConfig(
-            InputSettings(file),
+            input_settings,
             OutputSettings(directory / relative, name),
             _processing(dict(data), base, {"name": name, "parent": str(file.parent)}),
             workflow,
@@ -858,6 +887,7 @@ def load_config(path: str | Path) -> PreprocessingConfig:
 
 
 def _sources(source: Mapping[str, Any], base: Path) -> list[tuple[Path, Path]]:
+    source = _section(dict(source), "input", "path root pattern")
     # Each recording with its directory relative to the root, which the output tree mirrors.
     if ("path" in source) == ("root" in source):
         raise ValueError("input: expected exactly one of path and root")
@@ -886,6 +916,26 @@ def _sources(source: Mapping[str, Any], base: Path) -> list[tuple[Path, Path]]:
         if not file.name.lower().endswith(SUFFIXES):
             raise ValueError(f"input.pattern: {file.name} is not a recording; narrow the pattern")
     return [(file, file.parent.relative_to(root)) for file in files]
+
+
+def _bids_sources(source: Mapping[str, Any], base: Path) -> list[tuple[InputSettings, Path]]:
+    from eegfeat.bids import BIDSQuery, discover_bids
+
+    source = _section(
+        dict(source), "input", "root subjects sessions tasks acquisitions runs canonical_channels"
+    )
+    root = _path(source.pop("root", None), base, "input.root")
+    canonical = source.pop("canonical_channels", None)
+    canonical_channels = (
+        None if canonical is None else _sequence(canonical, "input.canonical_channels")
+    )
+    bids_settings = BIDSInputSettings(root, canonical_channels)
+    entities = {name: _sequence(value, f"input.{name}") for name, value in source.items()}
+    query = BIDSQuery(root=root, **entities)
+    return [
+        (InputSettings(Path(path.fpath), bids_settings), path.fpath.parent.relative_to(root))
+        for path in discover_bids(query)
+    ]
 
 
 def _derive_name(file: Path) -> str:

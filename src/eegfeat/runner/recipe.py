@@ -521,6 +521,9 @@ class _Parser:
             )
 
         settable = measure.settable
+        for parameter in measure.required:
+            if parameter not in entry:
+                self.problem(f"{where}: {parameter} is required")
         accepted = _entry_keys(measure)
         allowed = accepted | set(settable)
         for key in entry:
@@ -634,6 +637,9 @@ class _Parser:
         if measure.kind != "series":
             return ()
         raw = entry.get("series", [_BROADBAND])
+        if measure.name in ("irasa", "cycle_features") and raw != [_BROADBAND]:
+            self.problem(f"{where}: {measure.name} requires broadband series = ['broadband']")
+            return (None,)
         if not _is_string_list(raw) or not raw:
             self.problem(f"{where}: series must be a list of 'broadband' and band names")
             return (None,)
@@ -897,7 +903,12 @@ def _entry_keys(measure: Measure) -> set[str]:
         keys.add("pairs")
     if measure.name in ("integrated_band_power", "mean_psd", "mean_tfr_power"):
         keys |= {"ratios", "asymmetry"}
-    if measure.name in ("envelope_correlation", "wpli"):
+    if measure.name in (
+        "envelope_correlation",
+        "wpli",
+        "spectral_connectivity",
+        "spectral_connectivity_time",
+    ):
         keys |= {"graph", "clustering_threshold"}
     return keys
 

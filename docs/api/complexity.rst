@@ -13,8 +13,17 @@ Entropy and Fractal Dimension
 
 .. autofunction:: eegfeat.multiscale_entropy
 
+.. autofunction:: eegfeat.permutation_entropy
+
+.. autofunction:: eegfeat.lempel_ziv_complexity
+
+.. autofunction:: eegfeat.detrended_fluctuation
+
 Microstates
 -----------
+
+.. autoclass:: eegfeat.MicrostateModel
+   :members:
 
 .. autofunction:: eegfeat.microstates.segment
 

@@ -407,6 +407,78 @@ The line is the model above. FOOOF (Donoghue et al., 2020) adds a knee parameter
 and a different peak parameterization. Matching those settings is a separate
 analysis.
 
+Full Spectral Parameterization
+------------------------------
+
+``spectral_parameterization`` delegates Gaussian peak fitting and aperiodic
+parameterization to the explicit ``specparam==2.0.0rc7`` API. It leaves the
+existing robust straight-line ``aperiodic`` estimator unchanged.
+
+The fixed model has :math:`A(f)=b-\chi\log_{10}(f)`; the knee model has
+:math:`A(f)=b-\log_{10}(k+f^\chi)`. Offset :math:`b`, positive exponent
+:math:`\chi`, and, for the knee model, denominator parameter :math:`k` are
+reported separately. The knee parameter is not a frequency in Hz.
+
+Each requested half-open band selects the fitted peak with greatest height
+whose center falls in that band. Outputs are center frequency in Hz, height
+above the aperiodic component in log10 power, and bandwidth equal to twice the
+Gaussian standard deviation. Missing peaks produce NaN and
+``spectral_no_peak``; a band with no peak is distinct from a failed model fit.
+
+Fit diagnostics report peak count, squared Pearson correlation between fitted
+and observed log spectra, and mean absolute error in log10 power. Every output,
+including band peaks, inherits coverage and input flags from the entire fitted
+range. Groups average channel parameters after individual fits.
+
+Input must be finite, strictly positive, linear PSD on a uniformly spaced
+frequency axis spanning the full requested fit range. Fitting uses the existing
+half-open frequency convention. The fit range must be inside the recording
+passband. Logged data, aperiodic ratios, and time-frequency power are unsuitable.
+Smooth Welch or multitaper PSD estimates are preferable to raw FFT power.
+``debug=True`` ensures backend fitting errors surface.
+
+See the `official SpectralModel API
+<https://specparam-tools.github.io/generated/specparam.SpectralModel.html>`__
+for the supported backend and its fitting settings. Install
+``eegfeat[spectral-model]``.
+
+IRASA
+------
+
+``irasa`` delegates decomposition to `NeuroDSP compute_irasa
+<https://neurodsp-tools.github.io/neurodsp/generated/neurodsp.aperiodic.irasa.compute_irasa.html>`__.
+Irregular resampling by paired factors :math:`h` and :math:`1/h`, geometric
+means, and a median across factors estimate the aperiodic PSD. The periodic
+component is the signed difference between the original and aperiodic PSD.
+Negative residuals are retained; no clipping or periodic threshold is applied.
+
+The default resampling factors are 1.10--1.90 in steps of 0.05. Factors are
+rounded to four decimals as in NeuroDSP and recorded in provenance. The
+factors must remain strictly between 1 and 2 after rounding. Welch
+spectra use a Hann window, arithmetic averaging, and 50 percent overlap, with
+``segment_seconds`` converted to the nearest integer sample count. The fit
+range is half-open. NeuroDSP's ``fit_irasa`` fits offset and slope in log-log
+space; a typical 1/f slope is negative. These are separate estimators from
+specparam's positive exponent.
+
+Both component band powers integrate the piecewise-linear PSD between exact
+band boundaries and therefore sum to the original band power. The adjacent
+PSD bins bracketing non-grid-aligned boundaries are retained for integration;
+the slope fit still uses only bins in the requested half-open fit range. The original
+amplitude must be in volts for the reported V-squared unit.
+
+Finite broadband ``Signal`` inputs are required. Each analysis window must
+retain a complete Welch segment after the largest downsampling factor.
+For the outward bracketing-bin bounds, the expanded frequency support
+:math:`[f_\mathrm{min}/h_\mathrm{max}, f_\mathrm{max}h_\mathrm{max}]`
+must fit inside the recording passband and below Nyquist. Constant traces and
+non-finite spectra raise errors. Coverage describes input samples in the
+window; it is not a measure of decomposition quality.
+
+The `official IRASA tutorial
+<https://neurodsp-tools.github.io/neurodsp/auto_tutorials/aperiodic/plot_IRASA.html>`__
+explains decomposition and subsequent fits. Install ``eegfeat[irasa]``.
+
 Band Ratio and Asymmetry
 ------------------------
 

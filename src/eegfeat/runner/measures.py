@@ -16,9 +16,15 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import eegfeat as ef
+from eegfeat.complexity import detrended_fluctuation, lempel_ziv_complexity, permutation_entropy
+from eegfeat.connectivity import spectral_connectivity, spectral_connectivity_time
+from eegfeat.cycles import cycle_features
+from eegfeat.irasa import irasa
+from eegfeat.phase import pac_surrogates
+from eegfeat.spectral_model import spectral_parameterization
 from eegfeat.table import FeatureTable
 
-Kind = Literal["spectra", "series", "signals", "pac", "wpli", "microstates"]
+Kind = Literal["spectra", "series", "signals", "pac", "connectivity", "microstates"]
 """What a measure is computed from, named after the input the runner builds."""
 
 SUPPLIED = frozenset(
@@ -46,7 +52,7 @@ _KINDS: dict[str, Kind] = {
     "series": "series",
     "signals": "signals",
     "phase_signal": "pac",
-    "signal": "wpli",
+    "signal": "connectivity",
     "segmentation": "microstates",
 }
 
@@ -95,6 +101,17 @@ class Measure:
             and name not in SUPPLIED
             and describe(hints[name]) is not None
         }
+
+    @property
+    def required(self) -> tuple[str, ...]:
+        """Required keyword parameters a recipe must supply itself."""
+        return tuple(
+            name
+            for name, parameter in self.parameters.items()
+            if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+            and parameter.default is inspect.Parameter.empty
+            and name not in SUPPLIED
+        )
 
 
 def _measures(*names: str) -> dict[str, Measure]:
@@ -153,6 +170,22 @@ MEASURES: dict[str, Measure] = _measures(
     "microstate_occurrence",
     "microstate_transitions",
 )
+MEASURES.update(
+    {
+        function.__name__: Measure(function.__name__, function)
+        for function in (
+            spectral_connectivity,
+            spectral_connectivity_time,
+            pac_surrogates,
+            spectral_parameterization,
+            irasa,
+            permutation_entropy,
+            lempel_ziv_complexity,
+            detrended_fluctuation,
+            cycle_features,
+        )
+    }
+)
 """Every measure a recipe entry can name."""
 
 SEGMENTATION = Measure("segment", ef.segment)
@@ -168,6 +201,7 @@ SPECTRAL_INPUT: dict[str, tuple[str, tuple[str, ...]]] = {
     "mean_psd": ("a power spectral density", ("welch", "multitaper")),
     "integrated_band_power": ("a power spectral density", ("welch", "multitaper")),
     "mean_tfr_power": ("time-frequency power", ("morlet",)),
+    "spectral_parameterization": ("a power spectral density", ("welch", "multitaper")),
 }
 """Measures that read only one kind of spectrum: what they read, and the methods giving it.
 
@@ -177,6 +211,15 @@ different quantities, so no recipe can feed a measure the wrong one.
 
 REQUIRES: dict[str, tuple[str, str]] = {
     "wpli": ("mne_connectivity", "connectivity"),
+    "spectral_connectivity": ("mne_connectivity", "connectivity"),
+    "spectral_connectivity_time": ("mne_connectivity", "connectivity"),
+    "pac_surrogates": ("tensorpac", "pac"),
+    "spectral_parameterization": ("specparam", "spectral-model"),
+    "irasa": ("neurodsp", "irasa"),
+    "cycle_features": ("bycycle", "cycles"),
+    "permutation_entropy": ("antropy", "complexity"),
+    "lempel_ziv_complexity": ("antropy", "complexity"),
+    "detrended_fluctuation": ("antropy", "complexity"),
     "microstate_coverage": ("sklearn", "microstates"),
     "microstate_duration": ("sklearn", "microstates"),
     "microstate_occurrence": ("sklearn", "microstates"),
@@ -223,6 +266,8 @@ def convert(value: object, annotation: Any) -> object:
             return value
         raise Mismatch
     if origin in (typing.Union, types.UnionType):
+        if type(value) in args:
+            return convert(value, type(value))
         for option in args:
             if option is type(None) or describe(option) is None:
                 continue
@@ -243,6 +288,10 @@ def convert(value: object, annotation: Any) -> object:
         if not isinstance(value, list):
             raise Mismatch
         return tuple(convert(item, args[0]) for item in value)
+    if origin in (collections.abc.Mapping, dict):
+        if not isinstance(value, dict):
+            raise Mismatch
+        return {convert(key, args[0]): convert(item, args[1]) for key, item in value.items()}
     raise Mismatch
 
 
@@ -270,6 +319,9 @@ def describe(annotation: Any) -> str | None:
         return None
     if origin in (collections.abc.Sequence, list):
         return _list_of(args[0])
+    if origin in (collections.abc.Mapping, dict):
+        key, value = describe(args[0]), describe(args[1])
+        return f"a table mapping {key} to {value}" if key and value else None
     return None
 
 

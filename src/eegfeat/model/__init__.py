@@ -57,6 +57,15 @@ from eegfeat.model.importance import (
     shap_importance,
     shap_importance_over_folds,
 )
+from eegfeat.model.learned import (
+    CovarianceTransformer,
+    CSPTransformer,
+    MicrostateTransformer,
+    TangentSpaceTransformer,
+    cross_fit_signal_classification,
+    cross_fit_signal_regression,
+    learned_pipeline,
+)
 from eegfeat.model.metrics import (
     ClassificationResult,
     classification_metrics,
@@ -122,6 +131,13 @@ from eegfeat.model.uncertainty import (
 )
 
 __all__ = [
+    "CSPTransformer",
+    "MicrostateTransformer",
+    "CovarianceTransformer",
+    "TangentSpaceTransformer",
+    "learned_pipeline",
+    "cross_fit_signal_classification",
+    "cross_fit_signal_regression",
     "AggregationConfig",
     "ClassificationResult",
     "Deconfounder",

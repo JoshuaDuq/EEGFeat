@@ -143,3 +143,23 @@ Metrics, nulls, uncertainty, and importance
 
 .. autofunction:: eegfeat.model.aggregate_by
 
+Learned signal features
+-----------------------
+
+.. autoclass:: eegfeat.model.CSPTransformer
+   :members:
+
+.. autoclass:: eegfeat.model.MicrostateTransformer
+   :members:
+
+.. autoclass:: eegfeat.model.CovarianceTransformer
+   :members:
+
+.. autoclass:: eegfeat.model.TangentSpaceTransformer
+   :members:
+
+.. autofunction:: eegfeat.model.learned_pipeline
+
+.. autofunction:: eegfeat.model.cross_fit_signal_classification
+
+.. autofunction:: eegfeat.model.cross_fit_signal_regression

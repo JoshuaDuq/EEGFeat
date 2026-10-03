@@ -446,6 +446,7 @@ def test_an_input_rewritten_after_its_results_makes_them_stale(tmp_path) -> None
     run(recipe)
     source = tmp_path / "data/sub-02/eeg/sub-02_task-rest_epo.fif"
     later = _features_path(tmp_path, "sub-02").stat().st_mtime + 60
+    source.write_bytes(source.read_bytes() + b"changed")
     os.utime(source, (later, later))
 
     first, second = status(recipe)
@@ -611,12 +612,14 @@ def _work_or_crash(recording, *args):
     # module level, so spawned workers import it by name, and with it an unpatched batch.
     from eegfeat.runner.batch import _work
 
+    with recording.source.with_suffix(".attempts").open("a") as attempts:
+        attempts.write("attempt\n")
     if recording.label.startswith("sub-02"):
         os._exit(1)
     return _work(recording, *args)
 
 
-def test_a_worker_process_that_dies_fails_its_recording_and_not_the_run(tmp_path, monkeypatch):
+def test_a_worker_process_that_dies_does_not_rerun_submitted_recordings(tmp_path, monkeypatch):
     import eegfeat.runner.batch as batch
 
     _three_recordings(tmp_path)
@@ -624,13 +627,15 @@ def test_a_worker_process_that_dies_fails_its_recording_and_not_the_run(tmp_path
 
     result = run(_recipe(tmp_path, POWER), workers=2)
 
-    # sub-01 was computing beside sub-02 when it died; a broken pool fails every
-    # future in it, so only rerunning the suspects alone can say whose crash it was.
     outcome = {r.label: r for r in result.recordings}
     assert not outcome["sub-02_task-rest"].success
     assert "worker process" in (outcome["sub-02_task-rest"].error or "")
-    assert outcome["sub-01_task-rest"].success and outcome["sub-03_task-rest"].success
-    assert _features_path(tmp_path, "sub-01").exists()
+    assert outcome["sub-03_task-rest"].success
+    attempts = list((tmp_path / "data").rglob("*.attempts"))
+    assert len(attempts) == 3
+    assert all(path.read_text() == "attempt\n" for path in attempts)
+    assert not result.ok
+    assert outcome["sub-02_task-rest"].recording.failure_path.exists()
 
 
 def test_workers_must_be_at_least_one(tmp_path) -> None:

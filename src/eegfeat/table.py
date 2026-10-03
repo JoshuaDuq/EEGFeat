@@ -527,6 +527,15 @@ def _schema_difference(first: FeatureTable, table: FeatureTable, position: int) 
 
 
 def _stack_rows_union(tables: Sequence[FeatureTable], row_ids: tuple[RowId, ...]) -> FeatureTable:
+    return _stack_union(tables, row_ids=row_ids)
+
+
+def _stack_union(
+    tables: Sequence[FeatureTable],
+    *,
+    row_ids: tuple[RowId, ...] | None = None,
+    row_labels: tuple[str, ...] | None = None,
+) -> FeatureTable:
     """Stack tables onto the union of their columns, NaN where a table lacks one."""
     # A column's identity is its whole FeatureMeta, which FeatureTable already
     # requires to be unique within a table, so first-seen order places each one.
@@ -539,7 +548,7 @@ def _stack_rows_union(tables: Sequence[FeatureTable], row_ids: tuple[RowId, ...]
         for table in tables
     ]
 
-    n_rows, n_columns = len(row_ids), len(positions)
+    n_rows, n_columns = sum(table.n_rows for table in tables), len(positions)
     values = np.full((n_rows, n_columns), np.nan)
     # A column a recording never measured had no finite input, so its coverage is 0.
     coverage = np.zeros((n_rows, n_columns))
@@ -561,4 +570,5 @@ def _stack_rows_union(tables: Sequence[FeatureTable], row_ids: tuple[RowId, ...]
         meta=tuple(positions),
         flags=flags,
         row_ids=row_ids,
+        row_labels=row_labels,
     )

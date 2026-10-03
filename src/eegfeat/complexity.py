@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from numbers import Integral, Real
 from typing import Literal
 
@@ -20,6 +20,148 @@ Sample entropy is inherently O(n^2) in the window length. Comparing every pair a
 once would need gigabytes on a multi-second window, so the comparison is chunked;
 this bounds the working set without changing any result.
 """
+
+
+def _antropy_feature(
+    series: Sequence[TimeSeries],
+    windows: Sequence[Window],
+    measure: Callable[[npt.NDArray[np.float64]], float],
+    name: str,
+    minimum_samples: int,
+    parameters: Mapping[str, object],
+    groups: Mapping[str, Sequence[str]] | None,
+    include_global: bool,
+) -> FeatureTable:
+    def kernel(
+        signal: TimeSeries,
+        trace: npt.NDArray[np.float64],
+        times: npt.NDArray[np.float64],
+        mask: npt.NDArray[np.bool_],
+    ) -> dict[str, npt.NDArray[np.float64]]:
+        del signal, times, mask
+        if trace.shape[-1] < minimum_samples:
+            raise ValueError(f"{name} requires at least {minimum_samples} samples per window.")
+        if not np.isfinite(trace).all():
+            raise ValueError(f"{name} requires finite samples; gaps cannot be deleted.")
+        return {name: _per_channel(trace, lambda values: measure(np.ascontiguousarray(values)))}
+
+    return expand_signal(
+        series,
+        trace_of=lambda signal: signal.amplitude,
+        kernel=kernel,
+        units={name: "a.u."},
+        windows=windows,
+        groups=groups,
+        include_global=include_global,
+        mode="raw",
+        parameters={"backend": "antropy", **parameters},
+    )
+
+
+def permutation_entropy(
+    series: Sequence[TimeSeries],
+    *,
+    windows: Sequence[Window],
+    order: int = 3,
+    delay: int = 1,
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """Normalized ordinal-pattern entropy using AntroPy.
+
+    Embeddings use ``order`` samples separated by ``delay`` samples. Entropy
+    is divided by ``log2(order!)``. Ties follow AntroPy's deterministic ordinal
+    ordering. Non-finite or unembeddable windows raise ``ValueError``.
+    """
+    import antropy  # type: ignore[import-untyped]
+
+    for name, value, minimum in (("order", order, 2), ("delay", delay, 1)):
+        if isinstance(value, bool) or not isinstance(value, Integral) or value < minimum:
+            raise ValueError(f"{name} must be an integer of at least {minimum}.")
+    return _antropy_feature(
+        series,
+        windows,
+        lambda values: float(antropy.perm_entropy(values, order, delay, normalize=True)),
+        "permutation_entropy",
+        (order - 1) * delay + 1,
+        {"order": order, "delay": delay, "normalize": True},
+        groups,
+        include_global,
+    )
+
+
+def lempel_ziv_complexity(
+    series: Sequence[TimeSeries],
+    *,
+    windows: Sequence[Window],
+    symbolization: Literal["median", "mean"] = "median",
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """Normalized Lempel--Ziv complexity of an explicitly binary signal.
+
+    Samples at or above each channel/window's median or mean become 1; the
+    others become 0. AntroPy normalizes the substring count by
+    ``n / log2(n)``. A one-symbol sequence has no defined binary normalization
+    and raises ``ValueError``.
+    """
+    import antropy
+
+    if symbolization not in ("median", "mean"):
+        raise ValueError("symbolization must be 'median' or 'mean'.")
+
+    def measure(values: npt.NDArray[np.float64]) -> float:
+        threshold = np.median(values) if symbolization == "median" else np.mean(values)
+        symbols = (values >= threshold).astype(np.uint32)
+        if np.unique(symbols).size != 2:
+            raise ValueError("lempel_ziv_complexity requires both binary symbols in each window.")
+        return float(antropy.lziv_complexity(symbols, normalize=True))
+
+    return _antropy_feature(
+        series,
+        windows,
+        measure,
+        "lempel_ziv_complexity",
+        2,
+        {"symbolization": symbolization, "threshold_comparison": ">=", "normalize": True},
+        groups,
+        include_global,
+    )
+
+
+def detrended_fluctuation(
+    series: Sequence[TimeSeries],
+    *,
+    windows: Sequence[Window],
+    groups: Mapping[str, Sequence[str]] | None = None,
+    include_global: bool = True,
+) -> FeatureTable:
+    """DFA scaling exponent using AntroPy's linear detrending implementation.
+
+    Nonoverlapping block sizes span 4 to 10 percent of the window length,
+    geometrically spaced by 1.2. At least 50 samples are required to support
+    two distinct block sizes. Constant windows raise ``ValueError``.
+    """
+    import antropy
+
+    def measure(values: npt.NDArray[np.float64]) -> float:
+        if np.ptp(values) == 0.0:
+            raise ValueError("detrended_fluctuation requires a nonconstant window.")
+        exponent = float(antropy.detrended_fluctuation(values))
+        if not np.isfinite(exponent):
+            raise ValueError("detrended_fluctuation could not estimate a finite scaling exponent.")
+        return exponent
+
+    return _antropy_feature(
+        series,
+        windows,
+        measure,
+        "dfa_exponent",
+        50,
+        {"detrending_order": 1, "minimum_block": 4, "maximum_fraction": 0.1, "factor": 1.2},
+        groups,
+        include_global,
+    )
 
 
 def sample_entropy(
@@ -134,7 +276,7 @@ def multiscale_entropy(
     _validate(order, r)
     if tolerance_mode not in ("original_sd", "scale_sd"):
         raise ValueError(
-            "tolerance_mode must be 'original_sd' or 'scale_sd', got " f"{tolerance_mode!r}."
+            f"tolerance_mode must be 'original_sd' or 'scale_sd', got {tolerance_mode!r}."
         )
     raw_scales = list(scales)
     if (

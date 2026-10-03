@@ -7,10 +7,11 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
+from scipy.optimize import linear_sum_assignment
 from scipy.signal import find_peaks
 
 from eegfeat._expand import window_mask
-from eegfeat._validation import minimum_sample_count
+from eegfeat._validation import minimum_sample_count, validate_names
 from eegfeat.signal import Signal
 from eegfeat.spectra import Window
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, RowId
@@ -51,6 +52,237 @@ class MicrostateSegmentation:
     def n_states(self) -> int:
         """Number of microstate classes."""
         return int(self.templates.shape[0])
+
+
+def _validate_topographies(data: npt.NDArray[np.float64]) -> None:
+    if not np.isfinite(data).all() or np.any(np.ptp(data, axis=1) == 0.0):
+        raise ValueError(
+            "Microstate topographies must be finite with nonzero spatial variance "
+            "at every sample; reject invalid data before segmentation."
+        )
+
+
+def _training_rows(rows: npt.NDArray[np.intp] | None, n_epochs: int) -> npt.NDArray[np.intp]:
+    if rows is None:
+        return np.arange(n_epochs, dtype=np.intp)
+    indices = np.asarray(rows)
+    if indices.ndim != 1 or indices.size == 0:
+        raise ValueError("Microstate training rows must be a nonempty 1-D array.")
+    if not np.issubdtype(indices.dtype, np.integer):
+        raise ValueError("Microstate training rows must be integers.")
+    if np.any(indices < 0) or np.any(indices >= n_epochs):
+        raise ValueError("Microstate training rows are out of range.")
+    if np.unique(indices).size != indices.size:
+        raise ValueError("Microstate training rows must be unique.")
+    return indices.astype(np.intp)
+
+
+@dataclass(frozen=True, eq=False)
+class MicrostateModel:
+    """Frozen spatial templates fitted independently of subsequent recordings.
+
+    Fit on training epochs, then call :meth:`segment` on any recording with the
+    same channels in the same order. Use :meth:`from_templates` for an identified
+    external reference, and :meth:`match_reference` to assign its state identities
+    to a training fit. Unmatched fits have arbitrary ``state1`` onward labels.
+    """
+
+    templates: npt.NDArray[np.float64]
+    ch_names: tuple[str, ...]
+    labels: tuple[str, ...]
+    computation: ComputationSpec
+
+    def __post_init__(self) -> None:
+        templates = np.array(self.templates, dtype=float, copy=True)
+        if templates.ndim != 2 or templates.shape != (len(self.labels), len(self.ch_names)):
+            raise ValueError("templates must have shape (n_states, n_channels).")
+        if not 2 <= templates.shape[0] <= 12:
+            raise ValueError("n_states must be between 2 and 12.")
+        validate_names(self.ch_names, "Microstate channels")
+        validate_names(self.labels, "Microstate labels")
+        if not np.isfinite(templates).all() or np.any(np.ptp(templates, axis=1) == 0.0):
+            raise ValueError("Reference templates need finite, nonzero spatial variance.")
+        if not np.allclose(templates.mean(axis=1), 0.0) or not np.allclose(
+            np.linalg.norm(templates, axis=1), 1.0
+        ):
+            raise ValueError("Microstate templates must be average-referenced unit vectors.")
+        templates.setflags(write=False)
+        object.__setattr__(self, "templates", templates)
+
+    def __deepcopy__(self, memo: dict[int, object]) -> MicrostateModel:
+        """Retain immutable templates when scikit-learn clones a pipeline."""
+        return self
+
+    @classmethod
+    def fit(
+        cls,
+        signal: Signal,
+        *,
+        rows: npt.NDArray[np.intp] | None = None,
+        n_states: int = 4,
+        min_peak_distance_ms: float = 10.0,
+        max_peaks_per_epoch: int = 400,
+        peak_prominence: float | None = None,
+        random_state: int = 42,
+    ) -> MicrostateModel:
+        """Fit modified k-means exclusively on selected training epochs.
+
+        No held-out epoch contributes a GFP peak, a seed, or a template update.
+        ``rows=None`` fits all supplied epochs and is descriptive unless the
+        supplied signal itself contains only training epochs.
+        """
+        kmeans = _require_sklearn()
+        if isinstance(n_states, bool) or not isinstance(n_states, (int, np.integer)):
+            raise ValueError("n_states must be an integer between 2 and 12.")
+        if not 2 <= n_states <= 12:
+            raise ValueError(f"n_states must be between 2 and 12, got {n_states}.")
+        if not np.isfinite(min_peak_distance_ms) or min_peak_distance_ms < 0.0:
+            raise ValueError("min_peak_distance_ms must be finite and non-negative.")
+        if (
+            isinstance(max_peaks_per_epoch, bool)
+            or not isinstance(max_peaks_per_epoch, (int, np.integer))
+            or max_peaks_per_epoch < 1
+        ):
+            raise ValueError("max_peaks_per_epoch must be a positive integer.")
+        if peak_prominence is not None and (
+            not np.isfinite(peak_prominence) or peak_prominence < 0.0
+        ):
+            raise ValueError("peak_prominence must be finite and non-negative.")
+        selected = _training_rows(rows, signal.n_epochs)
+        _validate_topographies(signal.data[selected])
+        maps = [
+            _peak_topographies(
+                signal.data[epoch],
+                signal.sfreq,
+                min_peak_distance_ms,
+                max_peaks_per_epoch,
+                peak_prominence,
+            )
+            for epoch in selected
+        ]
+        stacked = np.concatenate(maps, axis=0)
+        if stacked.shape[0] < n_states:
+            raise ValueError(
+                f"only {stacked.shape[0]} global field power peaks were found across the "
+                f"contributing epochs, fewer than the {n_states} states requested."
+            )
+        kmeans_model = kmeans(n_clusters=n_states, n_init=20, random_state=random_state)
+        kmeans_model.fit(_normalize_rows(stacked))
+        templates = _modified_kmeans(
+            stacked, np.asarray(kmeans_model.cluster_centers_, dtype=float)
+        )
+        return cls(
+            templates=templates,
+            ch_names=signal.ch_names,
+            labels=tuple(f"state{i + 1}" for i in range(n_states)),
+            computation=ComputationSpec.create(
+                "modified_kmeans",
+                input_computation=signal.computation.record(),
+                channels=signal.ch_names,
+                templates=templates.tolist(),
+                fit_rows=[signal.row_ids[i] for i in selected],
+                n_states=n_states,
+                random_state=random_state,
+                n_init=20,
+                template_weighting="gfp_squared",
+                min_peak_distance_ms=min_peak_distance_ms,
+                max_peaks_per_epoch=max_peaks_per_epoch,
+                peak_prominence=peak_prominence,
+            ),
+        )
+
+    @classmethod
+    def from_templates(
+        cls,
+        templates: npt.NDArray[np.float64],
+        *,
+        ch_names: tuple[str, ...],
+        labels: tuple[str, ...],
+        reference_name: str,
+    ) -> MicrostateModel:
+        """Freeze externally supplied maps with an explicit reference identity.
+
+        Channel means, scales, and polarities are normalized. Label identity is
+        supplied by the reference; arbitrary clusters never acquire A-D labels.
+        """
+        if not isinstance(reference_name, str) or not reference_name.strip():
+            raise ValueError("reference_name must identify the external template set.")
+        maps = np.asarray(templates, dtype=float)
+        if maps.ndim != 2 or not np.isfinite(maps).all() or np.any(np.ptp(maps, axis=1) == 0):
+            raise ValueError("Reference templates need finite, nonzero spatial variance.")
+        maps = _normalize_rows(maps)
+        return cls(
+            templates=maps,
+            ch_names=tuple(ch_names),
+            labels=tuple(labels),
+            computation=ComputationSpec.create(
+                "provided_microstate_templates",
+                templates=maps.tolist(),
+                channels=ch_names,
+                labels=labels,
+                reference_name=reference_name,
+            ),
+        )
+
+    def match_reference(self, reference: MicrostateModel) -> MicrostateModel:
+        """Match states one-to-one by maximum absolute spatial correlation.
+
+        The Hungarian assignment maximizes total similarity; templates are
+        reordered into reference order. The reference must be fixed independently
+        of held-out recordings when state identities are used for prediction.
+        """
+        if self.ch_names != reference.ch_names or self.templates.shape != reference.templates.shape:
+            raise ValueError("Reference matching requires the same states and channels in order.")
+        reference_name = reference.computation.parameters.get("reference_name")
+        if reference_name is None:
+            raise ValueError("Reference matching requires an identified external reference.")
+        similarity = np.abs(reference.templates @ self.templates.T)
+        reference_rows, order = linear_sum_assignment(-similarity)
+        templates = self.templates[order]
+        return MicrostateModel(
+            templates=templates,
+            ch_names=self.ch_names,
+            labels=reference.labels,
+            computation=ComputationSpec.create(
+                "matched_microstate_templates",
+                template_fit=self.computation.record(),
+                reference=reference.computation.record(),
+                reference_name=reference_name,
+                state_order=order.tolist(),
+                spatial_correlations=similarity[reference_rows, order].tolist(),
+                templates=templates.tolist(),
+                channels=self.ch_names,
+                labels=reference.labels,
+            ),
+        )
+
+    def segment(self, signal: Signal, *, min_duration_ms: float = 20.0) -> MicrostateSegmentation:
+        """Assign a new recording using these frozen templates, without fitting."""
+        if signal.ch_names != self.ch_names:
+            raise ValueError("Microstate segmentation requires fitted channels in the same order.")
+        if not np.isfinite(min_duration_ms) or min_duration_ms < 0.0:
+            raise ValueError("min_duration_ms must be finite and non-negative.")
+        _validate_topographies(signal.data)
+        min_samples = minimum_sample_count(min_duration_ms / 1000.0, signal.sfreq)
+        states = np.stack(
+            [_smooth(_assign(epoch, self.templates), min_samples) for epoch in signal.data]
+        )
+        parameters = dict(self.computation.parameters)
+        parameters["min_duration_ms"] = min_duration_ms
+        if parameters.get("input_computation") != signal.computation.record():
+            parameters["segmentation_input_computation"] = signal.computation.record()
+        return MicrostateSegmentation(
+            templates=self.templates,
+            states=states,
+            labels=self.labels,
+            times=signal.times,
+            sfreq=signal.sfreq,
+            row_ids=signal.row_ids,
+            global_explained_variance=_global_explained_variance(
+                signal.data, self.templates, states
+            ),
+            computation=ComputationSpec.create(self.computation.method, **parameters),
+        )
 
 
 def segment(
@@ -107,18 +339,7 @@ def segment(
     -------
     MicrostateSegmentation
     """
-    kmeans = _require_sklearn()
-    if not 2 <= n_states <= 12:
-        raise ValueError(f"n_states must be between 2 and 12, got {n_states}.")
-    if min_duration_ms < 0.0:
-        raise ValueError(f"min_duration_ms must be non-negative, got {min_duration_ms}.")
-
     data = signal.data
-    if not np.isfinite(data).all() or np.any(np.ptp(data, axis=1) == 0.0):
-        raise ValueError(
-            "Microstate topographies must be finite with nonzero spatial variance "
-            "at every sample; reject invalid data before segmentation."
-        )
     contributing = np.ones(data.shape[0], dtype=bool) if fit_on is None else np.asarray(fit_on)
     if contributing.shape != (data.shape[0],):
         raise ValueError(
@@ -130,52 +351,16 @@ def segment(
     if not contributing.any():
         raise ValueError("fit_on excludes every epoch, so there is nothing to cluster.")
 
-    maps = [
-        _peak_topographies(
-            data[epoch], signal.sfreq, min_peak_distance_ms, max_peaks_per_epoch, peak_prominence
-        )
-        for epoch in np.flatnonzero(contributing)
-    ]
-    stacked = np.concatenate(maps, axis=0)
-    if stacked.shape[0] < n_states:
-        raise ValueError(
-            f"only {stacked.shape[0]} global field power peaks were found across the "
-            f"contributing epochs, fewer than the {n_states} states requested."
-        )
-
-    model = kmeans(n_clusters=n_states, n_init=20, random_state=random_state)
-    model.fit(_normalize_rows(stacked))
-    templates = _modified_kmeans(stacked, np.asarray(model.cluster_centers_, dtype=float))
-
-    min_samples = minimum_sample_count(min_duration_ms / 1000.0, signal.sfreq)
-    states = np.stack(
-        [_smooth(_assign(data[epoch], templates), min_samples) for epoch in range(data.shape[0])]
+    model = MicrostateModel.fit(
+        signal,
+        rows=np.flatnonzero(contributing),
+        n_states=n_states,
+        random_state=random_state,
+        min_peak_distance_ms=min_peak_distance_ms,
+        max_peaks_per_epoch=max_peaks_per_epoch,
+        peak_prominence=peak_prominence,
     )
-    labels = tuple(f"state{i + 1}" for i in range(n_states))
-    return MicrostateSegmentation(
-        templates=templates,
-        states=states,
-        labels=labels,
-        times=signal.times,
-        sfreq=signal.sfreq,
-        row_ids=signal.row_ids,
-        global_explained_variance=_global_explained_variance(data, templates, states),
-        computation=ComputationSpec.create(
-            "modified_kmeans",
-            input_computation=signal.computation.record(),
-            channels=signal.ch_names,
-            templates=templates.tolist(),
-            fit_rows=[signal.row_ids[i] for i in np.flatnonzero(contributing)],
-            n_states=n_states,
-            random_state=random_state,
-            n_init=20,
-            template_weighting="gfp_squared",
-            min_duration_ms=min_duration_ms,
-            min_peak_distance_ms=min_peak_distance_ms,
-            max_peaks_per_epoch=max_peaks_per_epoch,
-            peak_prominence=peak_prominence,
-        ),
-    )
+    return model.segment(signal, min_duration_ms=min_duration_ms)
 
 
 def _global_explained_variance(

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from eegfeat.provenance import implementation_hash
 from validation import report
 from validation.loaders import Recording, load_eegbci, load_sleep, load_ssvep
 
@@ -86,6 +87,7 @@ def ssvep_recording() -> Recording:
 
 _OBSERVED: dict[str, str] = {}
 _ROWS: dict[str, report.Row] = {}
+_CODE_SHA256 = implementation_hash()
 
 
 @pytest.fixture
@@ -129,4 +131,6 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     del session
     if not _ROWS:
         return
-    report.write(_ROWS.values(), Path(__file__).parents[2] / "docs" / "validation")
+    report.write(
+        _ROWS.values(), Path(__file__).parents[2] / "docs" / "validation", code_sha256=_CODE_SHA256
+    )

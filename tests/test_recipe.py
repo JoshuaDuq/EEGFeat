@@ -556,3 +556,96 @@ def test_a_bad_default_is_reported_once_not_per_entry(tmp_path) -> None:
     )
 
     assert problems.count("'mu'") == 1
+
+
+@pytest.mark.parametrize(
+    "method", ["coh", "imcoh", "plv", "ciplv", "ppc", "pli", "wpli", "wpli2_debiased"]
+)
+def test_recipes_reach_every_supported_spectral_connectivity_method(tmp_path, method) -> None:
+    pytest.importorskip("mne_connectivity")
+    recipe = _load(
+        tmp_path,
+        f'[[features]]\nmeasure = "spectral_connectivity"\n'
+        f'method = "{method}"\nmode = "fourier"\nbands = ["alpha"]\n'
+        'graph = ["global_efficiency"]\n',
+    )
+    assert recipe.features[0].params == {"method": method, "mode": "fourier"}
+    assert recipe.features[0].graph == ("global_efficiency",)
+
+
+def test_pac_surrogate_recipe_parameters_are_type_checked(tmp_path) -> None:
+    pytest.importorskip("tensorpac")
+    recipe = _load(
+        tmp_path,
+        '[[features]]\nmeasure = "pac_surrogates"\n'
+        'pairs = [["theta", "gamma"]]\nn_surrogates = 99\n'
+        'surrogate = "circular"\ncorrection = "maxstat"\nrandom_state = 7\n',
+    )
+    spec = recipe.features[0]
+    assert spec.params == {
+        "n_surrogates": 99,
+        "surrogate": "circular",
+        "correction": "maxstat",
+        "random_state": 7,
+    }
+    assert spec.pairs[0][0].name == "theta"
+
+
+def test_time_connectivity_recipe_requires_method_and_frequencies(tmp_path) -> None:
+    problems = _problems(tmp_path, '[[features]]\nmeasure = "spectral_connectivity_time"\n')
+    assert "method is required" in problems
+    assert "freqs is required" in problems
+
+
+def test_time_connectivity_recipe_accepts_frequency_grid_and_graph(tmp_path) -> None:
+    pytest.importorskip("mne_connectivity")
+    recipe = _load(
+        tmp_path,
+        '[[features]]\nmeasure = "spectral_connectivity_time"\n'
+        'method = "plv"\nfreqs = [8.0, 10.0, 12.0]\n'
+        'graph = ["global_efficiency"]\n',
+    )
+    assert recipe.features[0].params["freqs"] == (8.0, 10.0, 12.0)
+    assert recipe.features[0].graph == ("global_efficiency",)
+
+
+@pytest.mark.parametrize(
+    "measure, settings",
+    [
+        ("spectral_parameterization", 'bands = ["alpha"]\naperiodic_mode = "knee"\n'),
+        ("irasa", 'bands = ["alpha"]\nhset = [1.1, 1.3, 1.5]\n'),
+        (
+            "cycle_features",
+            'bands = ["alpha"]\n'
+            "burst_thresholds = {min_n_cycles = 3, amp_fraction_threshold = 0.2}\n",
+        ),
+        ("permutation_entropy", 'order = 4\ndelay = 2\nseries = ["broadband", "alpha"]\n'),
+        ("lempel_ziv_complexity", 'symbolization = "mean"\n'),
+        ("detrended_fluctuation", ""),
+    ],
+)
+def test_recipes_reach_new_spectral_cycle_and_complexity_methods(
+    tmp_path, measure, settings
+) -> None:
+    from eegfeat.runner.measures import REQUIRES
+
+    pytest.importorskip(REQUIRES[measure][0])
+    recipe = _load(tmp_path, f'[[features]]\nmeasure = "{measure}"\n{settings}')
+    assert recipe.features[0].measure == measure
+    if measure == "cycle_features":
+        assert recipe.features[0].params["burst_thresholds"]["min_n_cycles"] == 3
+        assert isinstance(recipe.features[0].params["burst_thresholds"]["min_n_cycles"], int)
+
+
+@pytest.mark.parametrize("measure", ["irasa", "cycle_features"])
+def test_broadband_decomposition_recipes_refuse_band_envelopes(tmp_path, measure) -> None:
+    problems = _problems(tmp_path, f'[[features]]\nmeasure = "{measure}"\nseries = ["alpha"]\n')
+    assert "requires broadband" in problems
+
+
+def test_spectral_parameterization_recipe_refuses_tfr_input(tmp_path) -> None:
+    problems = _problems(
+        tmp_path,
+        '[spectra]\nmethod = "morlet"\n' '[[features]]\nmeasure = "spectral_parameterization"\n',
+    )
+    assert "power spectral density" in problems

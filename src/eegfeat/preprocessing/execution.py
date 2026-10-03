@@ -143,6 +143,19 @@ def _external_file_hashes(stage: str, settings: ProcessingSettings) -> dict[str,
     return {name: file_hash(path) for name, path in paths.items()}
 
 
+def _input_provenance(config: PreprocessingConfig) -> dict[str, Any]:
+    if config.input.bids is None:
+        return {}
+    from eegfeat.bids import read_bids_metadata
+
+    settings = config.input.bids
+    return {
+        "bids": read_bids_metadata(
+            config.input.path, root=settings.root, canonical_channels=settings.canonical_channels
+        )
+    }
+
+
 def stage_identities(workflow: Workflow, source_id: str) -> dict[str, str]:
     reset = _reset_tokens(workflow)
     resolved: dict[str, str] = {}
@@ -150,6 +163,19 @@ def stage_identities(workflow: Workflow, source_id: str) -> dict[str, str]:
     for stage in STAGES:
         parents = {name: resolved[name] for name in stage.parents}
         settings = stage_settings(stage, workflow.config.processing)
+        if stage.name == "load" and workflow.config.input.bids is not None:
+            bids = _input_provenance(workflow.config)["bids"]
+            settings["bids_input"] = {
+                name: bids[name]
+                for name in (
+                    "reader",
+                    "mne_bids_version",
+                    "root",
+                    "path",
+                    "canonical_channels",
+                    "sidecar_hashes",
+                )
+            }
         files = _external_file_hashes(stage.name, workflow.config.processing)
         if files:
             settings["external_files"] = files
@@ -183,7 +209,17 @@ def fold_calibration(raw: Any) -> Any:
 
 
 def load_source(workflow: Workflow) -> Any:
-    raw = fold_calibration(mne.io.read_raw(workflow.config.input.path, preload=True))
+    config = workflow.config
+    if config.input.bids is None:
+        raw = mne.io.read_raw(config.input.path, preload=True)
+    else:
+        from eegfeat.bids import read_bids
+
+        settings = config.input.bids
+        raw = read_bids(
+            config.input.path, root=settings.root, canonical_channels=settings.canonical_channels
+        ).raw
+    raw = fold_calibration(raw)
     validate_source_destinations(raw, workflow.config)
     return raw
 
@@ -352,7 +388,13 @@ def _run_locked(
     state = (
         next(iter(parents.values())).state
         if parents
-        else StageData(source, provenance=_policies(workflow.config.workflow))
+        else StageData(
+            source,
+            provenance={
+                **_policies(workflow.config.workflow),
+                **_input_provenance(workflow.config),
+            },
+        )
     )
     if stage == "apply-artifact":
         state = _join_branches(parents["epoch"].state, parents["review-artifact"].state)

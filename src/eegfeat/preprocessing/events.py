@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from typing import Any
 
 import mne  # type: ignore[import-untyped]
@@ -114,3 +115,78 @@ def resolve_events(
         delay,
         shift,
     )
+
+
+def _bids_annotation_labels(sidecar: pd.DataFrame) -> pd.Series[Any]:
+    labels = sidecar["trial_type"].copy()
+    if "value" in sidecar:
+        value_counts = sidecar.groupby("trial_type", dropna=False)["value"].transform(
+            "nunique", dropna=False
+        )
+        hierarchical = value_counts > 1
+        labels.loc[hierarchical] += "/" + sidecar.loc[hierarchical, "value"].fillna("na").astype(
+            str
+        )
+    return labels
+
+
+def attach_bids_metadata(
+    raw: Any,
+    events: EventData,
+    source: EventSettings | FixedEpochSettings,
+    bids: Mapping[str, Any],
+) -> EventData:
+    """Align event sidecar rows on original acquisition samples, then add entities."""
+    metadata = pd.DataFrame(index=np.arange(len(events.events)))
+    if isinstance(source, EventSettings):
+        if bids["events"] is None:
+            raise ValueError("BIDS event epochs require an events.tsv sidecar.")
+        sidecar = pd.DataFrame(bids["events"])
+        onset = sidecar["onset"].to_numpy(dtype=float)
+        samples = np.rint(onset * events.original_sfreq).astype(np.int64)
+        if "sample" in sidecar:
+            supplied = pd.to_numeric(sidecar["sample"], errors="raise").to_numpy(dtype=float)
+            present = np.isfinite(supplied)
+            if np.any(supplied[present] != samples[present]):
+                raise ValueError(
+                    "BIDS events.tsv sample and onset disagree on the acquisition grid."
+                )
+        samples += raw.first_samp
+        selected = np.isin(samples, events.original_samples)
+        if source.source == "annotations" and "trial_type" in sidecar:
+            ambiguous = pd.Series(samples).duplicated(keep=False).to_numpy()
+            label_matches = _bids_annotation_labels(sidecar).isin(source.event_id).to_numpy()
+            selected &= ~ambiguous | label_matches
+        matches = samples[selected]
+        if np.unique(matches).size != matches.size or set(matches) != set(events.original_samples):
+            raise ValueError("BIDS events.tsv must match each selected event sample exactly once.")
+        metadata = sidecar.loc[selected].copy()
+        metadata["bids_event_row"] = np.flatnonzero(selected)
+        metadata.index = matches
+        metadata = metadata.loc[events.original_samples].reset_index(drop=True)
+    entities = bids["entities"]
+    descriptors = {f"bids_{name}": value for name, value in entities.items()}
+    descriptors["subject_id"] = f"sub-{entities['subject']}"
+    for name in ("session", "task", "run"):
+        if name in entities:
+            descriptors[name] = entities[name]
+    if bids["participant"] is not None:
+        descriptors.update(
+            {
+                f"participant_{name}": value
+                for name, value in bids["participant"].items()
+                if name != "participant_id"
+            }
+        )
+    for name, value in descriptors.items():
+        if name in metadata:
+            raise ValueError(f"BIDS event metadata collides with descriptor {name!r}.")
+        metadata[name] = value
+    if events.metadata is not None:
+        shared = set(metadata).intersection(events.metadata)
+        if shared:
+            raise ValueError(
+                f"Explicit epoch metadata collides with BIDS columns: {sorted(shared, key=str)}."
+            )
+        metadata = pd.concat([metadata, events.metadata], axis=1)
+    return replace(events, metadata=metadata)

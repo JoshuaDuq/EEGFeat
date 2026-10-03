@@ -112,10 +112,58 @@ def _parser() -> argparse.ArgumentParser:
         "epochs; resting: every family that needs no event (default basic)",
     )
     init_parser.set_defaults(handler=_init)
+    report_parser = commands.add_parser("report", help="write an auditable cohort quality report")
+    report_parser.add_argument("recipe", type=Path)
+    report_parser.add_argument("output", type=Path)
+    report_parser.add_argument("--rows", choices=("epochs", "groups"), default="epochs")
+    report_parser.add_argument("--by", nargs="+", default=["recording"])
+    report_parser.add_argument("--min-coverage", type=float, default=0.0)
+    report_parser.add_argument("--reject-flag", action="append", default=[])
+    report_parser.set_defaults(handler=_report)
     from eegfeat.preprocessing.cli import register
 
     register(commands)
+    from eegfeat.runner.model_cli import register as register_model
+
+    register_model(commands)
     return parser
+
+
+def _report(args: argparse.Namespace) -> int:
+    from eegfeat.group import GroupDataset, read_group_dataset
+    from eegfeat.io import FeatureDataset, read_dataset
+    from eegfeat.quality import QualityPolicy
+    from eegfeat.report import recording_quality, write_quality_report
+
+    try:
+        recipe = load_recipe(args.recipe)
+        entries = status(recipe)
+        incomplete = [entry for entry in entries if entry.state != "done"]
+        if incomplete:
+            raise RunError(
+                f"Report requires current results: {incomplete[0].label} "
+                f"is {incomplete[0].state} ({incomplete[0].reason})."
+            )
+        dataset: FeatureDataset | GroupDataset
+        if args.rows == "epochs":
+            paths = [entry.recording.features_path for entry in entries]
+            dataset = read_dataset(paths)
+        else:
+            paths = [entry.recording.crosstrial_path for entry in entries]
+            dataset = read_group_dataset(paths)
+        policy = QualityPolicy(args.min_coverage, tuple(args.reject_flag))
+        write_quality_report(
+            dataset.table,
+            dataset.targets,
+            args.output,
+            by=tuple(args.by),
+            quality=policy,
+            recording_summary=recording_quality(paths),
+        )
+    except (RecipeError, RunError, OSError, ValueError) as exc:
+        return _fail(exc, None)
+    print(f"Wrote {args.output}")
+    return 0
 
 
 def _add_n_jobs(parser: argparse.ArgumentParser) -> None:

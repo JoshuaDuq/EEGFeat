@@ -9,7 +9,7 @@ description = "Labelled EEG feature extraction and modeling for MNE objects"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "mne>=1.8"]
+dependencies = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.0,<3.0", "mne>=1.8"]
 
 [project.scripts]
 eegfeat = "eegfeat.runner.cli:main"
@@ -17,11 +17,16 @@ eegfeat = "eegfeat.runner.cli:main"
 preprocessing = ["mne>=1.13.2", "PyYAML>=6.0", "scikit-learn>=1.3", "h5io", "h5py", "filelock"]
 preprocessing-auto = ["pyprep>=0.9.0", "autoreject>=0.4.3", "mne-icalabel>=0.6", "onnxruntime>=1.16", "python-picard>=0.7"]
 preprocessing-gui = ["mne-qt-browser", "PyQt6"]
-# paradigm_specific/: the study's raw-to-BIDS conversion, not part of the package.
-bids = ["mne-bids>=0.16", "pybv>=0.8.1"]
+bids = ["mne-bids>=0.19", "pybv>=0.8.1"]
 connectivity = ["mne-connectivity>=0.7"]
+pac = ["tensorpac>=0.6.5"]
+spectral-model = ["specparam==2.0.0rc7"]
+irasa = ["neurodsp>=2.3.0"]
+cycles = ["bycycle>=1.2.0"]
+complexity = ["antropy>=0.2.2"]
+riemann = ["scikit-learn>=1.3", "pyriemann>=0.11"]
 microstates = ["scikit-learn>=1.3"]
-model = ["scikit-learn>=1.3"]
+model = ["scikit-learn>=1.3", "PyYAML>=6.0", "filelock>=3.0"]
 importance = ["scikit-learn>=1.3", "shap>=0.45"]
 # Third-party implementations the test suite checks our own numbers against.
 # Not needed to use eegfeat; needed to prove the formulas agree with a reference.

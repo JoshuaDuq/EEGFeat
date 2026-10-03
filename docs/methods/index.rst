@@ -54,3 +54,4 @@ Cross-fitting, permutation nulls, and conformal intervals are in
    Dynamics <dynamics>
    Phase & connectivity <connectivity>
    Complexity & microstates <complexity>
+   Cycle features <cycles>

@@ -566,3 +566,103 @@ def test_each_entry_is_timed(tmp_path) -> None:
         (1, "kurtosis"),
     ]
     assert all(t.seconds >= 0.0 for t in result.timings)
+
+
+@pytest.mark.parametrize(
+    "method", ["coh", "imcoh", "plv", "ciplv", "ppc", "pli", "wpli", "wpli2_debiased"]
+)
+def test_runner_reaches_all_cross_trial_spectral_methods(tmp_path, method) -> None:
+    pytest.importorskip("mne_connectivity")
+    result = features(
+        tmp_path,
+        '[trials]\nby = "event"\n[[features]]\n'
+        f'measure = "spectral_connectivity"\nmethod = "{method}"\n'
+        'bands = ["alpha"]\nmode = "fourier"\n',
+    )
+    assert result.epochs is None
+    assert result.crosstrial.row_labels == ("left", "right")
+    assert {meta.measure for meta in result.crosstrial.meta} == {method}
+
+
+def test_runner_time_connectivity_concatenates_with_epoch_features_and_graph(tmp_path) -> None:
+    pytest.importorskip("mne_connectivity")
+    result = features(
+        tmp_path,
+        '[[features]]\nmeasure = "spectral_connectivity_time"\n'
+        'method = "coh"\nbands = ["alpha"]\nfreqs = [8.0, 10.0, 12.0]\n'
+        'n_cycles = 3.0\ngraph = ["global_efficiency"]\n'
+        '[[features]]\nmeasure = "variance"\nspatial = ["global"]\n',
+    )
+    assert result.crosstrial is None
+    assert result.epochs.n_rows == 12
+    assert {meta.measure for meta in result.epochs.meta} == {"coh", "global_efficiency", "variance"}
+    assert result.epochs.row_ids[0][0] == "sub-test_task-test"
+
+
+def test_runner_computes_pac_surrogate_inference(tmp_path) -> None:
+    pytest.importorskip("tensorpac")
+    result = features(
+        tmp_path,
+        '[[features]]\nmeasure = "pac_surrogates"\n'
+        'pairs = [["theta", "gamma"]]\nn_surrogates = 20\n'
+        'spatial = ["global"]\nrandom_state = 42\n',
+    )
+    assert result.crosstrial is None
+    assert result.epochs.n_rows == 12
+    assert len(result.epochs.meta) == 7
+    assert result.epochs.select(measure="pac_pvalue").values.min() >= 1 / 21
+
+
+@pytest.mark.parametrize(
+    "measure, output_measure, settings",
+    [
+        ("spectral_parameterization", "specparam_exponent", "fit_range = [4.0, 30.0]\n"),
+        ("irasa", "irasa_slope", "fit_range = [4.0, 30.0]\nhset = [1.1, 1.3]\n"),
+        ("cycle_features", "cycle_count", ""),
+        ("permutation_entropy", "permutation_entropy", ""),
+        ("lempel_ziv_complexity", "lempel_ziv_complexity", ""),
+        ("detrended_fluctuation", "dfa_exponent", ""),
+    ],
+)
+def test_runner_computes_new_spectral_cycle_and_complexity_methods(
+    tmp_path,
+    measure,
+    output_measure,
+    settings,
+) -> None:
+    from eegfeat.runner.measures import REQUIRES
+
+    pytest.importorskip(REQUIRES[measure][0])
+    result = features(
+        tmp_path,
+        f'[[features]]\nmeasure = "{measure}"\n'
+        'spatial = ["global"]\n'
+        + (
+            'bands = ["alpha"]\n'
+            if measure in ("spectral_parameterization", "irasa", "cycle_features")
+            else ""
+        )
+        + settings,
+        make_epochs(n_epochs=2, seconds=6.0, channels=["Cz"]),
+    )
+    assert result.crosstrial is None
+    assert result.epochs.n_rows == 2
+    assert output_measure in {meta.measure for meta in result.epochs.meta}
+
+
+@pytest.mark.parametrize(
+    "grouping, expected",
+    [
+        ('by = "all"', None),
+        ('by = "event"', ("left", "right", "left", "right")),
+        ('by = "metadata"\ncolumn = "rating"', ("0", "1", "2", "3")),
+    ],
+)
+def test_trial_labels_exposes_the_runner_grouping(tmp_path, grouping, expected) -> None:
+    import eegfeat.runner.compute as runner_compute
+
+    path = tmp_path / "recipe.toml"
+    path.write_text(HEAD + f'[trials]\n{grouping}\n[[features]]\nmeasure = "itpc"\n')
+    epochs = make_epochs(n_epochs=4)
+    recipe = load_recipe(path)
+    assert runner_compute.trial_labels(epochs, recipe) == expected

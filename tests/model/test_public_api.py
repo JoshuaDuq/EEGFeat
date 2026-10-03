@@ -5,6 +5,13 @@ import types
 import eegfeat.model as model
 
 EXPECTED = {
+    "CSPTransformer",
+    "MicrostateTransformer",
+    "CovarianceTransformer",
+    "TangentSpaceTransformer",
+    "learned_pipeline",
+    "cross_fit_signal_classification",
+    "cross_fit_signal_regression",
     "AggregationConfig",
     "ClassificationResult",
     "Deconfounder",

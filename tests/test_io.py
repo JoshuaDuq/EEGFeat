@@ -9,9 +9,18 @@ import pytest
 import eegfeat.io as io_module
 from eegfeat.bands import Band
 from eegfeat.io import read_table, write_table
+from eegfeat.provenance import file_hash
 from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
 
 ALPHA = Band("alpha", 8.0, 13.0)
+
+
+def _resign(path: Path) -> None:
+    """Re-sign a deliberately malformed fixture to exercise schema checks."""
+    sidecar_path = path.with_suffix(".json")
+    sidecar = json.loads(sidecar_path.read_text())
+    sidecar["files"] = {name: file_hash(path.parent / name) for name in sidecar["files"]}
+    sidecar_path.write_text(json.dumps(sidecar))
 
 
 def _meta(**overrides: object) -> FeatureMeta:
@@ -173,6 +182,17 @@ def test_sidecar_describes_every_column_with_its_band_bounds(tmp_path) -> None:
     assert sidecar["provenance"] == {"input": "sub-01_epo.fif"}
 
 
+def test_reader_requires_the_descriptor_type_manifest(tmp_path) -> None:
+    path = tmp_path / "features.tsv"
+    write_table(_epoch_table(), path)
+    sidecar = json.loads(path.with_suffix(".json").read_text())
+    del sidecar["row_text_columns"]
+    path.with_suffix(".json").write_text(json.dumps(sidecar))
+
+    with pytest.raises(ValueError, match="descriptor type manifest.*regenerate"):
+        read_table(path)
+
+
 def test_rejects_a_path_that_is_not_tsv(tmp_path) -> None:
     with pytest.raises(ValueError, match=r"\.tsv"):
         write_table(_epoch_table(), tmp_path / "t.csv")
@@ -215,6 +235,7 @@ def test_read_fails_when_the_values_file_lacks_a_described_column(tmp_path) -> N
     frame = pd.read_csv(tmp_path / "t.tsv", sep="\t", keep_default_na=False)
     missing_name = _epoch_table().names[1]
     frame.drop(columns=[missing_name]).to_csv(tmp_path / "t.tsv", sep="\t", index=False)
+    _resign(tmp_path / "t.tsv")
 
     with pytest.raises(ValueError, match=missing_name):
         read_table(tmp_path / "t.tsv")
@@ -271,12 +292,30 @@ def test_read_dataset_accepts_event_names_that_look_numeric(tmp_path) -> None:
     assert dataset.targets["event"].tolist() == ["1", "2", "01"]
 
 
+@pytest.mark.parametrize("dtype", [object, "string", "category"])
+def test_read_dataset_preserves_text_descriptors_that_look_numeric(tmp_path, dtype) -> None:
+    path = tmp_path / "features.tsv"
+    rows = pd.DataFrame(
+        {
+            "subject_id": pd.Series(["01", "1", "02"], dtype=dtype),
+            "rating": [0.25, 1.5, 3.0],
+        }
+    )
+    write_table(_epoch_table(), path, rows=rows)
+
+    dataset = io_module.read_dataset([path])
+
+    assert dataset.targets["subject_id"].tolist() == ["01", "1", "02"]
+    assert dataset.targets["rating"].tolist() == [0.25, 1.5, 3.0]
+
+
 def test_read_dataset_refuses_epoch_key_that_disagrees_with_row_identity(tmp_path) -> None:
     path = tmp_path / "features.tsv"
     write_table(_epoch_table(), path)
     frame = pd.read_csv(path, sep="\t", keep_default_na=False)
     frame.loc[0, "epoch"] = 99
     frame.to_csv(path, sep="\t", index=False)
+    _resign(path)
 
     with pytest.raises(ValueError, match="epoch.*row_ids"):
         io_module.read_dataset([path])
@@ -289,6 +328,7 @@ def test_read_dataset_refuses_fractional_epoch_key_instead_of_truncating_it(tmp_
     frame["epoch"] = frame["epoch"].astype(float)
     frame.loc[0, "epoch"] = 0.5
     frame.to_csv(path, sep="\t", index=False)
+    _resign(path)
 
     with pytest.raises(ValueError, match="epoch.*row_ids"):
         io_module.read_dataset([path])
@@ -307,6 +347,7 @@ def test_read_dataset_refuses_a_missing_descriptor_column(tmp_path) -> None:
     write_table(_epoch_table(), path, rows=pd.DataFrame({"rating": [3, 5, 4]}))
     frame = pd.read_csv(path, sep="\t", keep_default_na=False)
     frame.drop(columns="rating").to_csv(path, sep="\t", index=False)
+    _resign(path)
 
     with pytest.raises(ValueError, match="descriptor columns.*rating"):
         io_module.read_dataset([path])
@@ -324,6 +365,7 @@ def test_reordered_coverage_rows_are_rejected(tmp_path) -> None:
     coverage_path = tmp_path / "features_coverage.tsv"
     frame = pd.read_csv(coverage_path, sep="\t", keep_default_na=False)
     frame.iloc[::-1].to_csv(coverage_path, sep="\t", index=False)
+    _resign(path)
 
     with pytest.raises(ValueError, match="row identities"):
         read_table(path)
@@ -385,7 +427,7 @@ def test_reading_a_dataset_hashes_each_column_once(tmp_path, monkeypatch) -> Non
 
     monkeypatch.setattr(table_module.hashlib, "sha256", counting)
     io_module.read_dataset([path])
-    assert len(calls) == len(_epoch_table().meta)
+    assert len(calls) == len(_epoch_table().meta) + 2  # Two serialized payload checksums.
 
 
 def test_a_macos_resource_file_is_named_instead_of_failing_to_decode(tmp_path) -> None:

@@ -1,10 +1,10 @@
 """Write the validation results the docs render.
 
 Every validation test declares what it validates with the ``validates`` marker,
-and may record an observed value through the ``record`` fixture. At the end of a
-run the rows are merged into ``docs/validation/results.json`` and rendered to
-three reStructuredText fragments the validation guide includes, so the numbers on
-the page are the numbers the tests saw and cannot drift from them.
+and may record an observed value through the ``record`` fixture. Each run is
+archived independently. Its observed rows replace ``docs/validation/results.json``
+and three reStructuredText fragments included by the validation guide, so a
+partial run cannot inherit claims from earlier evidence.
 """
 
 from __future__ import annotations
@@ -14,11 +14,12 @@ import platform
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
 import eegfeat
+from eegfeat.provenance import implementation_hash
 
 KINDS = ("formula", "estimator", "physiology", "decoding", "behaviour")
 KIND_TITLES = {
@@ -97,35 +98,36 @@ def _versions() -> dict[str, str]:
     for package in packages:
         try:
             out[package] = version(package)
-        except Exception:  # noqa: BLE001 - an optional package may be absent
+        except PackageNotFoundError:
             out[package] = "not installed"
     return out
 
 
-def write(rows: Iterable[Row], root: Path) -> None:
-    """Merge ``rows`` into the stored results and regenerate the fragments."""
+def write(rows: Iterable[Row], root: Path, *, code_sha256: str | None = None) -> None:
+    """Archive this run independently and render only its observed claims."""
+    code_hash = implementation_hash()
+    if code_sha256 is not None and code_hash != code_sha256:
+        raise ValueError(
+            "Validation implementation changed during the run; evidence not published."
+        )
     root.mkdir(parents=True, exist_ok=True)
     results = root / "results.json"
     fresh = _collapse(rows)
-    # A module that ran replaces everything previously stored for it, so a renamed or
-    # removed test does not linger; modules that did not run keep their last result.
-    ran = {row.nodeid.split("::")[0] for row in fresh}
-    stored: dict[str, dict[str, Any]] = {}
-    if results.exists():
-        stored = {
-            r["nodeid"]: r
-            for r in json.loads(results.read_text())["rows"]
-            if r["nodeid"].split("::")[0] not in ran
-        }
-    for row in fresh:
-        stored[row.nodeid] = asdict(row)
-    merged = sorted(stored.values(), key=lambda r: (r["dataset"], r["nodeid"]))
+    merged = sorted((asdict(row) for row in fresh), key=lambda r: (r["dataset"], r["nodeid"]))
+    stamp = datetime.now(UTC)
+    run_id = stamp.strftime("%Y%m%dT%H%M%S.%fZ") + "-" + code_hash[:12]
     payload = {
-        "generated": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        "generated": stamp.isoformat(),
+        "run_id": run_id,
+        "code_sha256": code_hash,
         "versions": _versions(),
         "rows": merged,
     }
-    results.write_text(json.dumps(payload, indent=1) + "\n")
+    archive = root / "runs" / run_id
+    archive.mkdir(parents=True)
+    text = json.dumps(payload, indent=1) + "\n"
+    (archive / "results.json").write_text(text)
+    results.write_text(text)
     (root / "summary.inc").write_text(_summary(payload))
     (root / "scorecard.inc").write_text(_scorecard(merged))
     (root / "results.inc").write_text(_results(merged))

@@ -154,15 +154,97 @@ runner's keys:
      - Time-domain and complexity measures: ``"broadband"`` and band names (band
        envelopes). Default ``["broadband"]``.
    * - ``pairs``
-     - ``pac`` only: ``[["theta", "gamma"], ...]`` as ``[phase, amplitude]``. PAC
+     - ``pac`` and ``pac_surrogates``: ``[["theta", "gamma"], ...]`` as ``[phase, amplitude]``. PAC
        columns are named by amplitude band, so pairs in one entry need distinct ones.
    * - ``ratios``, ``asymmetry``
      - Power measures only: ``[[numerator, denominator], ...]`` band pairs and
        ``[[left, right], ...]`` channel pairs, through :func:`eegfeat.band_ratio` and
        :func:`eegfeat.asymmetry`.
    * - ``graph``, ``clustering_threshold``
-     - ``envelope_correlation`` and ``wpli`` only: ``["global_efficiency",
+     - ``envelope_correlation``, ``wpli``, ``spectral_connectivity`` and
+       ``spectral_connectivity_time``: ``["global_efficiency",
        "clustering_coefficient"]``; the threshold is required for clustering.
+
+Connectivity and PAC recipes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``spectral_connectivity`` reaches every library method: ``coh``, ``imcoh``,
+``plv``, ``ciplv``, ``ppc``, ``pli``, ``wpli`` and ``wpli2_debiased``. ``method``
+is required; ``mode`` is ``"multitaper"`` or ``"fourier"``. These estimates use
+``[trials]`` and appear in the cross-trial table.
+
+``spectral_connectivity_time`` requires ``method`` and ``freqs``. It accepts
+``coh``, ``imcoh``, ``plv``, ``ciplv``, ``pli`` and ``wpli``. Each epoch is estimated
+independently after removing full Morlet edge support, so the result and its
+graph summaries appear in the per-epoch table. Analysis windows must be long
+enough for the requested ``n_cycles`` and frequencies.
+
+.. code-block:: toml
+
+   [[features]]
+   measure = "spectral_connectivity"
+   method = "wpli2_debiased"
+   bands = ["alpha"]
+   graph = ["global_efficiency"]
+
+   [[features]]
+   measure = "spectral_connectivity_time"
+   method = "coh"
+   bands = ["alpha"]
+   freqs = [8.0, 9.0, 10.0, 11.0, 12.0]
+   n_cycles = 5.0
+
+   [[features]]
+   measure = "pac_surrogates"
+   pairs = [["theta", "gamma"]]
+   n_surrogates = 999
+   surrogate = "blocks"
+   min_shift_seconds = 0.5
+   random_state = 42
+   correction = "maxstat"
+
+PAC inference requires the ``pac`` extra and returns raw, null-mean, null-standard-
+deviation, corrected, z-score, empirical-p-value and adjusted-p-value columns.
+Adjustments cover the returned spatial units and windows within each epoch and
+band pair. Separate entries and spatial-level calls are separate families.
+``pac`` retains its raw-estimate behavior.
+
+Spectral, cycle and complexity recipes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``spectral_parameterization`` fits a PSD from ``welch`` or ``multitaper``;
+``aperiodic_mode`` selects ``"fixed"`` or ``"knee"``. ``irasa`` and
+``cycle_features`` require ``series = ["broadband"]`` and use their ``bands``
+selection separately. Select IRASA and spectral-model bands inside ``fit_range``.
+``permutation_entropy``, ``lempel_ziv_complexity`` and ``detrended_fluctuation``
+accept broadband traces or named band envelopes through ``series``.
+
+.. code-block:: toml
+
+   [[features]]
+   measure = "spectral_parameterization"
+   bands = ["alpha", "beta"]
+   fit_range = [2.0, 40.0]
+   aperiodic_mode = "knee"
+
+   [[features]]
+   measure = "irasa"
+   bands = ["alpha", "beta"]
+   fit_range = [2.0, 40.0]
+   series = ["broadband"]
+
+   [[features]]
+   measure = "cycle_features"
+   bands = ["alpha"]
+   burst_thresholds = {min_n_cycles = 3, amp_fraction_threshold = 0.3}
+
+   [[features]]
+   measures = ["permutation_entropy", "lempel_ziv_complexity", "detrended_fluctuation"]
+   series = ["broadband"]
+
+These entries require the ``spectral-model``, ``irasa``, ``cycles`` and
+``complexity`` extras respectively. Backend and scientific validation errors
+remain visible.
 
 Shared Defaults
 ~~~~~~~~~~~~~~~
@@ -289,8 +371,10 @@ Running in Parallel
 **Worker crashes**
 
 If a worker process dies (the operating system killing it for memory, a crash in compiled
-code), every recording in flight is rerun alone. Only the one that dies again is recorded as
-failed, and the run goes on.
+code), recordings whose completion cannot be established are marked failed with
+the original pool error. Submitted recordings are never retried automatically.
+Completed results are retained, and recordings not yet submitted can continue in
+a new pool. The failure sidecar and run log make the interrupted work explicit.
 
 Outputs
 -------
@@ -315,7 +399,8 @@ The input tree is mirrored under the output root. For
   ``selection`` and ``event``, then the epoch metadata, then a ``__eegfeat_row_id`` column that
   ``read_table`` checks against the sidecar, then the features.
 - ``_crosstrial`` holds measures estimated across trials (``itpc``, ``ppc``,
-  ``envelope_correlation``, ``wpli`` and their graph summaries), keyed by ``group``.
+  ``envelope_correlation``, ``spectral_connectivity``, ``wpli`` and their graph
+  summaries), keyed by ``group``.
 - The two files are separate. See :ref:`concepts-row-kinds`.
 - Missing values are written ``n/a``.
 
@@ -369,7 +454,8 @@ Resuming
 each recording in one of five states:
 
 ``done``
-   Every table is complete, was computed by this recipe, and is newer than its input.
+   Every table is complete, passes its payload checksums, and matches the current input,
+   resolved recipe, software environment and Python source identity.
 ``missing``
    No results.
 ``failed``
@@ -387,8 +473,10 @@ each recording in one of five states:
 - It is what the recipe computes. Comments, formatting, and the three location keys
   (``inputs.root``, ``inputs.pattern``, ``output.root``) are left out, so moving the data and
   repointing ``inputs.root`` keeps results ``done``.
-- Results written before EEGFeat recorded this fingerprint count as current only while the
-  recipe file is unchanged byte for byte.
+- Defaults are recorded along with explicit settings. Input and output payloads are
+  checked by content, so changing timestamps alone does not invalidate results.
+- Unsupported or incomplete manifests require regeneration. Preprocessing manifests
+  and their payload checksums are verified when the epochs carry an EEGFeat identity.
 
 **Resuming a run**
 

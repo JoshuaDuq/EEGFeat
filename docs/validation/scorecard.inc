@@ -500,3 +500,5 @@
      - –
      - –
      - ✓ 3
+
+**Covered by unit tests only, not yet by a real-data check:** ``spectral_parameterization``, ``irasa``, ``cycle_features``, ``permutation_entropy``, ``lempel_ziv_complexity``, ``detrended_fluctuation``, ``pac_surrogates``, ``spectral_connectivity_time``, ``apply_quality``, ``cohort_quality``, ``feature_quality``, ``intraclass_reliability``.

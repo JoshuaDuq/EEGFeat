@@ -1,6 +1,8 @@
 Dynamics
 ========
 
+.. autofunction:: eegfeat.cycle_features
+
 Measures estimated from :class:`~eegfeat.Signal` and :class:`~eegfeat.BandSignal`
 containers. Their definitions are in :doc:`/methods/dynamics`.
 
@@ -68,4 +70,3 @@ ERDS Dynamics
 .. autofunction:: eegfeat.erds_onset_latency
 
 .. autofunction:: eegfeat.erds_rebound_latency
-

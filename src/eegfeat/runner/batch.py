@@ -12,20 +12,20 @@ can resume where an earlier one stopped.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import multiprocessing
 import os
 import platform
 import queue
 import time
-import tomllib
 import traceback
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -34,9 +34,18 @@ from typing import Any, Literal
 import mne  # type: ignore[import-untyped]
 import numpy as np
 import pandas as pd
+from mne._fiff.open import _get_next_fname, fiff_open  # type: ignore[import-untyped]
 
-from eegfeat.io import write_table
+from eegfeat.io import _read_sidecar, write_table
+from eegfeat.provenance import (
+    file_hash,
+    identity,
+    implementation_hash,
+    serializable,
+    software_versions,
+)
 from eegfeat.runner.compute import RecordingFeatures, compute_features, event_names
+from eegfeat.runner.measures import MEASURES, SUPPLIED
 from eegfeat.runner.progress import NullReporter, Reporter
 from eegfeat.runner.recipe import Inputs, Recipe, RoiPattern
 
@@ -61,7 +70,6 @@ _POLL_SECONDS = 0.2
 QUICK_EPOCHS = 4
 """How many epochs ``check(quick=True)`` computes."""
 # Where a recipe reads and writes, as opposed to what it computes.
-_LOCATION_KEYS = (("inputs", "root"), ("inputs", "pattern"), ("output", "root"))
 
 RecordingState = Literal["done", "missing", "failed", "stale", "partial"]
 STATES: tuple[RecordingState, ...] = ("done", "missing", "failed", "stale", "partial")
@@ -394,8 +402,10 @@ def _run_parallel(
     steps = context.Queue()
     announced: set[int] = set()
 
-    def pool_round(waiting: deque[tuple[int, Recording]], size: int) -> list[tuple[int, Recording]]:
-        """Compute what is waiting; if a worker dies, return what was in flight."""
+    def pool_round(
+        waiting: deque[tuple[int, Recording]], size: int
+    ) -> dict[Future[RecordingResult], tuple[int, Recording]]:
+        """Compute waiting recordings; return unresolved submissions if the pool breaks."""
         with ProcessPoolExecutor(
             max_workers=size, mp_context=context, initializer=_start_worker, initargs=(steps,)
         ) as pool:
@@ -406,8 +416,10 @@ def _run_parallel(
                     try:
                         future = pool.submit(_work, recording, recipe, n_jobs, overwrite)
                     except BrokenProcessPool:
-                        # A worker died since the last poll; this one never started.
-                        return list(running.values())
+                        # This recording was never submitted and stays in waiting.
+                        if not running:
+                            raise
+                        return running
                     waiting.popleft()
                     running[future] = (position, recording)
                     if position not in announced:
@@ -417,35 +429,35 @@ def _run_parallel(
                 _forward_steps(steps, report)
                 broken = False
                 for future in done:
-                    # Only a dead worker raises here: _process catches everything else.
-                    if future.exception() is not None:
+                    try:
+                        outcome = future.result()
+                    except BrokenProcessPool:
                         broken = True
                         continue
                     position, _ = running.pop(future)
-                    record(position, future.result())
+                    record(position, outcome)
                 if broken:
-                    return list(running.values())
-        return []
+                    return running
+        return {}
 
     waiting = deque(enumerate(recordings, start=1))
     with _thread_limits(workers):
         while waiting:
-            # A dying worker breaks the whole pool and fails every future in it, so the
-            # recordings in flight are rerun one at a time: whichever breaks a pool of
-            # its own was the cause.
-            for suspect in pool_round(waiting, min(workers, len(waiting))):
-                if pool_round(deque([suspect]), 1):
-                    position, recording = suspect
-                    record(
-                        position,
-                        RecordingResult(
-                            recording,
-                            success=False,
-                            seconds=0.0,
-                            error="the worker process computing it exited unexpectedly "
-                            "(out of memory, or a crash in compiled code)",
-                        ),
+            pending = pool_round(waiting, min(workers, len(waiting)))
+            for future, (position, recording) in pending.items():
+                try:
+                    outcome = future.result()
+                except BrokenProcessPool as exc:
+                    outcome = RecordingResult(
+                        recording,
+                        success=False,
+                        seconds=0.0,
+                        error="the worker process pool exited unexpectedly; this recording's "
+                        "completion could not be established. No automatic retry was "
+                        f"performed. {exc}",
+                        traceback="".join(traceback.format_exception(exc)),
                     )
+                record(position, outcome)
     _forward_steps(steps, report)
 
 
@@ -541,18 +553,42 @@ def settings_sha256(recipe: Recipe) -> str:
     Comments, formatting and key order do not change it; ``inputs.root``,
     ``inputs.pattern`` and ``output.root`` are left out.
     """
-    data = tomllib.loads(recipe.text)
-    for section, key in _LOCATION_KEYS:
-        if isinstance(data.get(section), dict):
-            data[section].pop(key, None)
-    return _sha256(json.dumps(data, sort_keys=True, default=str))
+    return identity(resolved_settings(recipe))
+
+
+def resolved_settings(recipe: Recipe) -> dict[str, Any]:
+    """Canonical computation settings, including extractor and recipe defaults."""
+    data = asdict(recipe)
+    for key in ("path", "text"):
+        del data[key]
+    for key in ("root", "pattern"):
+        del data["inputs"][key]
+    del data["output"]["root"]
+    for entry in data["features"]:
+        del entry["entry"]
+        parameters = inspect.signature(MEASURES[entry["measure"]].function).parameters
+        defaults = {
+            name: parameter.default
+            for name, parameter in parameters.items()
+            if name not in SUPPLIED and parameter.default is not inspect.Parameter.empty
+        }
+        entry["params"] = {**defaults, **entry["params"]}
+    return dict(serializable(data))
 
 
 def _statuses(recipe: Recipe, recordings: tuple[Recording, ...]) -> tuple[RecordingStatus, ...]:
     logged = _last_failures(recipe.output.root)
-    current = {settings_sha256(recipe), _sha256(recipe.text)}
+    current = {
+        "settings_sha256": settings_sha256(recipe),
+        "software": software_versions(),
+        "code_sha256": implementation_hash(),
+    }
     return tuple(
-        _status_of(recording, current, _failure_of(recording) or logged.get(recording.label))
+        _status_of(
+            recording,
+            {**current, "recording": recording.source.relative_to(recipe.inputs.root).as_posix()},
+            _failure_of(recording) or logged.get(recording.label),
+        )
         for recording in recordings
     )
 
@@ -565,7 +601,9 @@ def _failure_of(recording: Recording) -> str | None:
     return str(failure.get("error") or "failed") if isinstance(failure, dict) else None
 
 
-def _status_of(recording: Recording, current: set[str], failure: str | None) -> RecordingStatus:
+def _status_of(
+    recording: Recording, current: dict[str, Any], failure: str | None
+) -> RecordingStatus:
     outputs = tuple(path for path in recording.files() if path.exists())
     if not outputs:
         if failure is not None:
@@ -578,7 +616,7 @@ def _status_of(recording: Recording, current: set[str], failure: str | None) -> 
     return RecordingStatus(recording, state, reason, outputs)
 
 
-def _judge(recording: Recording, current: set[str]) -> tuple[RecordingState, str]:
+def _judge(recording: Recording, current: dict[str, Any]) -> tuple[RecordingState, str]:
     present: dict[str, dict[str, Any]] = {}
     for name in _TABLES:
         bundle = recording._bundle(name)
@@ -588,26 +626,57 @@ def _judge(recording: Recording, current: set[str]) -> tuple[RecordingState, str
         if gone:
             return "partial", f"the {name} table lacks {', '.join(gone)}"
         try:
-            present[name] = json.loads(bundle[1].read_text()).get("provenance") or {}
-        except (OSError, ValueError, AttributeError) as exc:
+            provenance = _read_sidecar(bundle[0])["provenance"]
+            required = {
+                "tables",
+                "recording",
+                "input_sha256",
+                "input_files",
+                "resolved_settings",
+                "upstream",
+                *current,
+            }
+            if not isinstance(provenance, dict) or not required <= provenance.keys():
+                return "partial", f"the {name} provenance manifest is incomplete; regenerate it"
+            present[name] = provenance
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             return "partial", f"the {name} sidecar is unreadable ({exc})"
 
     for provenance in present.values():
-        # Sidecars from before runs recorded their tables name none, so only the
-        # bundles on disk are checked for them.
-        expected = provenance.get("tables", ())
+        expected = provenance["tables"]
         lost = [name for name in expected if name not in present]
         if lost:
             return "partial", f"the {', '.join(lost)} table is missing"
 
     for name, provenance in present.items():
-        fingerprints = {provenance.get("settings_sha256"), provenance.get("recipe_sha256")}
-        if not fingerprints & current:
+        if provenance["recording"] != current["recording"]:
+            return "stale", f"the {name} recording identity changed"
+        if provenance["settings_sha256"] != current["settings_sha256"]:
             return "stale", f"the {name} table was computed by a different recipe"
-
-    oldest = min(recording._table(name).stat().st_mtime for name in present)
-    if recording.source.stat().st_mtime > oldest:
-        return "stale", "the input file changed after these results were written"
+        if any(provenance[key] != current[key] for key in ("software", "code_sha256")):
+            return "stale", f"the {name} software or implementation changed"
+    try:
+        source_files = _source_hashes(recording.source)
+    except (OSError, ValueError) as exc:
+        return "stale", f"the input recording cannot be verified ({exc})"
+    source_hash = source_files[recording.source.resolve().name]
+    if any(
+        provenance["input_sha256"] != source_hash or provenance["input_files"] != source_files
+        for provenance in present.values()
+    ):
+        return "stale", "the input file content changed"
+    for provenance in present.values():
+        upstream = provenance["upstream"]
+        if upstream is not None:
+            try:
+                manifest = recording.source.parent / upstream["manifest"]
+                if manifest.parent.resolve() != recording.source.parent.resolve():
+                    return "partial", "invalid preprocessing manifest path"
+                if file_hash(manifest) != upstream["manifest_sha256"]:
+                    return "stale", "the preprocessing manifest changed"
+                _verify_upstream(manifest, upstream["identity"])
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                return "partial", f"the preprocessing evidence is invalid ({exc})"
     return "done", "up to date"
 
 
@@ -660,7 +729,10 @@ def check(recipe: Recipe, *, n_jobs: int = 1, quick: bool = False) -> CheckRepor
         if quick and total > QUICK_EPOCHS:
             epochs = epochs[:QUICK_EPOCHS]
         features = compute_features(
-            epochs, recipe, recording=first.source.as_posix(), n_jobs=n_jobs
+            epochs,
+            recipe,
+            recording=first.source.relative_to(recipe.inputs.root).as_posix(),
+            n_jobs=n_jobs,
         )
         if features.epochs is not None:
             epoch_rows(epochs, recipe.output.epoch_metadata)
@@ -751,17 +823,21 @@ def _process(
     clock = time.perf_counter()
     total = len(recipe.features) + 2
     try:
+        captured = _capture_provenance(recording, recipe)
         report.step(label, "read", 1, total)
         epochs = load_epochs(recording.source, recipe.inputs)
+        captured["upstream"] = _upstream_provenance(recording.source, epochs)
         features = compute_features(
             epochs,
             recipe,
-            recording=recording.source.as_posix(),
+            recording=recording.source.relative_to(recipe.inputs.root).as_posix(),
             n_jobs=n_jobs,
             on_step=lambda measure, current, _: report.step(label, measure, current + 1, total),
         )
         report.step(label, "write", total, total)
-        outputs = _stage_and_publish(recording, features, epochs, recipe, overwrite=overwrite)
+        outputs = _stage_and_publish(
+            recording, features, epochs, recipe, provenance=captured, overwrite=overwrite
+        )
     except Exception as exc:  # noqa: BLE001 - one bad recording must not end the batch
         return RecordingResult(
             recording,
@@ -786,6 +862,7 @@ def _stage_and_publish(
     epochs: Any,
     recipe: Recipe,
     *,
+    provenance: Mapping[str, Any],
     overwrite: bool,
 ) -> tuple[Path, ...]:
     destination = recording.base.parent
@@ -797,8 +874,10 @@ def _stage_and_publish(
             label=recording.label,
             base=staging / recording.base.name,
         )
-        staged_outputs = _write(staged, features, epochs, recipe)
+        _verify_captured_provenance(recording.source, epochs, provenance)
+        staged_outputs = _write(staged, features, epochs, recipe, provenance=provenance)
         _validate_staged_tables(staged_outputs)
+        _verify_captured_provenance(recording.source, epochs, provenance)
         final_outputs = tuple(destination / path.name for path in staged_outputs)
         _publish(
             staged_outputs,
@@ -844,19 +923,75 @@ def _publish(
         raise
 
 
-def _write(
-    recording: Recording, features: RecordingFeatures, epochs: Any, recipe: Recipe
-) -> tuple[Path, ...]:
-    recording.base.parent.mkdir(parents=True, exist_ok=True)
-    provenance = {
+def _source_hashes(source: Path) -> dict[str, str]:
+    """Fingerprint the FIF parts MNE follows, using portable source-relative paths."""
+    parent = source.resolve().parent
+    current: Path | None = source.resolve()
+    hashes: dict[str, str] = {}
+    while current is not None:
+        current = current.resolve()
+        name = Path(os.path.relpath(current, parent)).as_posix()
+        if name in hashes:
+            raise ValueError(f"Cyclic split FIF reference: {current}")
+        hashes[name] = file_hash(current)
+        fid, tree, _ = fiff_open(current, verbose="error")
+        with fid:
+            current = _get_next_fname(fid, current, tree)
+    return hashes
+
+
+def _capture_provenance(recording: Recording, recipe: Recipe) -> dict[str, Any]:
+    """Snapshot the input and executing implementation before loading any data."""
+    source_files = _source_hashes(recording.source)
+    return {
         "input": str(recording.source),
         "recipe": str(recipe.path),
         "recipe_sha256": _sha256(recipe.text),
+        "mne_version": mne.__version__,
+        "settings_sha256": settings_sha256(recipe),
+        "recording": recording.source.relative_to(recipe.inputs.root).as_posix(),
+        "input_sha256": source_files[recording.source.resolve().name],
+        "input_files": source_files,
+        "resolved_settings": resolved_settings(recipe),
+        "software": software_versions(),
+        "code_sha256": implementation_hash(),
+    }
+
+
+def _verify_captured_provenance(source: Path, epochs: Any, captured: Mapping[str, Any]) -> None:
+    source_files = _source_hashes(source)
+    if (
+        source_files[source.resolve().name] != captured["input_sha256"]
+        or source_files != captured["input_files"]
+    ):
+        raise ValueError("Input changed during extraction; results were not published.")
+    if (
+        software_versions() != captured["software"]
+        or implementation_hash() != captured["code_sha256"]
+    ):
+        raise ValueError(
+            "Software or implementation changed during extraction; results were not published."
+        )
+    if _upstream_provenance(source, epochs) != captured["upstream"]:
+        raise ValueError(
+            "Upstream preprocessing evidence changed during extraction; results were not published."
+        )
+
+
+def _write(
+    recording: Recording,
+    features: RecordingFeatures,
+    epochs: Any,
+    recipe: Recipe,
+    *,
+    provenance: Mapping[str, Any],
+) -> tuple[Path, ...]:
+    recording.base.parent.mkdir(parents=True, exist_ok=True)
+    provenance = {
+        **provenance,
         "channels": list(epochs.ch_names),
         "n_epochs": len(epochs),
         "sfreq": float(epochs.info["sfreq"]),
-        "mne_version": mne.__version__,
-        "settings_sha256": settings_sha256(recipe),
         "tables": [
             name
             for name, table in zip(_TABLES, (features.epochs, features.crosstrial), strict=True)
@@ -871,10 +1006,54 @@ def _write(
             features.epochs, recording.features_path, rows=rows, provenance=provenance
         )
     if features.crosstrial is not None:
+        from eegfeat.runner.compute import trial_labels
+
+        labels = trial_labels(epochs, recipe) or ("all",) * len(epochs)
+        group_labels = features.crosstrial.row_labels
+        if group_labels is None:
+            raise ValueError("Cross-trial outputs require group row labels.")
+        group_rows = pd.DataFrame(
+            {
+                "recording": [provenance["recording"]] * features.crosstrial.n_rows,
+                "n_trials": [labels.count(label) for label in group_labels],
+            }
+        )
         written += write_table(
-            features.crosstrial, recording.crosstrial_path, provenance=provenance
+            features.crosstrial, recording.crosstrial_path, rows=group_rows, provenance=provenance
         )
     return tuple(written)
+
+
+def _upstream_provenance(source: Path, epochs: Any) -> dict[str, Any] | None:
+    import re
+
+    description = epochs.info["description"] or ""
+    match = re.search(r"preprocessing=([^;]+); identity=([0-9a-f]{64})", description)
+    if match is None:
+        return None
+    manifest = source.parent / match[1]
+    if manifest.parent.resolve() != source.parent.resolve():
+        raise ValueError("preprocessing manifest must be beside the epochs file")
+    content = _verify_upstream(manifest, match[2])
+    return {
+        "identity": match[2],
+        "manifest": manifest.name,
+        "manifest_sha256": file_hash(manifest),
+        "provenance": content["provenance"],
+    }
+
+
+def _verify_upstream(manifest: Path, expected_identity: str) -> dict[str, Any]:
+    content = json.loads(manifest.read_text())
+    if not isinstance(content, dict):
+        raise ValueError("preprocessing manifest must contain an object")
+    if identity(content["provenance"]) != expected_identity:
+        raise ValueError("preprocessing provenance identity mismatch")
+    for name, digest in content["files"].items():
+        payload = manifest.parent / name
+        if payload.parent.resolve() != manifest.parent.resolve() or file_hash(payload) != digest:
+            raise ValueError(f"preprocessing payload checksum mismatch: {name}")
+    return content
 
 
 def _existing(recordings: tuple[Recording, ...]) -> tuple[Path, ...]:

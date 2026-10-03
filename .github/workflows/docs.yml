@@ -27,7 +27,7 @@ jobs:
           cache: pip
 
       - name: Install docs dependencies
-        run: pip install -e ".[docs,connectivity,microstates,model,importance]"
+        run: pip install -e ".[docs,connectivity,microstates,model,importance,bids,spectral-model,irasa,cycles,complexity,pac,riemann]"
 
       - name: Build Sphinx docs
         run: sphinx-build -b html -W docs docs/_build/html

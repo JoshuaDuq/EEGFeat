@@ -195,13 +195,15 @@ def _init(args: argparse.Namespace) -> int:
 
 
 def _check(ctx: Context) -> int:
-    from .execution import load_source, open_workflow
+    from .execution import _input_provenance, load_source, open_workflow
     from .pipeline import StageData, execute_numeric
 
     failed = 0
     for label, config in ctx.selected.items():
         try:
-            state = StageData(load_source(open_workflow(config)))
+            state = StageData(
+                load_source(open_workflow(config)), provenance=_input_provenance(config)
+            )
             for stage in ("load", "prepare", "events"):
                 state = execute_numeric(stage, state, config.processing)
         except Exception as exc:  # one recording's problem must not hide the others'

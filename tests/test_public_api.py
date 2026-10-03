@@ -3,6 +3,21 @@ import types
 import eegfeat
 
 EXPECTED = {
+    "spectral_parameterization",
+    "irasa",
+    "cycle_features",
+    "permutation_entropy",
+    "lempel_ziv_complexity",
+    "detrended_fluctuation",
+    "pac_surrogates",
+    "spectral_connectivity_time",
+    "MicrostateModel",
+    "QualityPolicy",
+    "QualityResult",
+    "apply_quality",
+    "cohort_quality",
+    "feature_quality",
+    "intraclass_reliability",
     "BANDS_STANDARD",
     "Band",
     "CommonSpatialPattern",

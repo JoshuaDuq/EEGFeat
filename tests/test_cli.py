@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from importlib import util
 from pathlib import Path
 
 import pytest
@@ -371,3 +372,34 @@ def test_a_quick_check_scales_the_computing_but_not_the_reading(tmp_path) -> Non
     rows = dict(_timing_rows(CheckReport(recordings, (), trial), workers=1))  # type: ignore[arg-type]
 
     assert rows["Time"].startswith("22 s for this recording")
+
+
+@pytest.mark.parametrize("dependency", ["yaml", "sklearn", "filelock"])
+@pytest.mark.parametrize("command", ["check", "run"])
+def test_model_commands_explain_missing_dependencies(
+    tmp_path, capsys, monkeypatch, dependency, command
+) -> None:
+    find_spec = util.find_spec
+    monkeypatch.setattr(
+        util, "find_spec", lambda name: None if name == dependency else find_spec(name)
+    )
+
+    code = main(["model", command, str(tmp_path / "recipe.yml")])
+
+    assert code == 2
+    error = capsys.readouterr().err
+    assert dependency in error
+    assert "pip install 'eegfeat[model]'" in error
+
+
+def test_model_init_needs_no_modeling_dependencies(tmp_path, monkeypatch) -> None:
+    find_spec = util.find_spec
+    monkeypatch.setattr(
+        util,
+        "find_spec",
+        lambda name: None if name in {"yaml", "sklearn", "filelock"} else find_spec(name),
+    )
+    path = tmp_path / "model.yaml"
+
+    assert main(["model", "init", str(path)]) == 0
+    assert path.is_file()

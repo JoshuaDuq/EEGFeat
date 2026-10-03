@@ -28,6 +28,7 @@ import pandas as pd
 
 from eegfeat._validation import validate_names
 from eegfeat.bands import Band
+from eegfeat.provenance import file_hash
 from eegfeat.table import (
     ComputationSpec,
     FeatureMeta,
@@ -133,12 +134,26 @@ def write_table(
     coverage_path = target.with_name(f"{target.stem}_coverage.tsv")
     sidecar_path = target.with_suffix(".json")
     sidecar = _sidecar(table, key, list(descriptors.columns), coverage_path.name, provenance)
+    sidecar["row_text_columns"] = [
+        column
+        for column in [key, *descriptors.columns]
+        if column in {_GROUP_KEY, "recording", "event"}
+        or (
+            column in descriptors
+            and (
+                pd.api.types.is_string_dtype(descriptors[column].dtype)
+                or isinstance(descriptors[column].dtype, pd.CategoricalDtype)
+            )
+        )
+    ]
 
     with TemporaryDirectory(prefix=".eegfeat-", dir=target.parent) as temporary:
         staging = Path(temporary)
         staged = tuple(staging / path.name for path in (target, coverage_path, sidecar_path))
         _write_tsv(values_frame, staged[0])
         _write_tsv(coverage_frame, staged[1])
+        sidecar["schema"] = 2
+        sidecar["files"] = {path.name: file_hash(path) for path in staged[:2]}
         _write_text(json.dumps(sidecar, indent=2, allow_nan=False) + "\n", staged[2])
         _publish_bundle(staged, (target, coverage_path, sidecar_path), staging / "backup")
     return target, coverage_path, sidecar_path
@@ -244,6 +259,20 @@ def read_dataset(
     )
 
 
+def _read_descriptor_frame(source: Path, sidecar: Mapping[str, Any]) -> pd.DataFrame:
+    columns = sidecar["row_columns"]
+    validate_names(columns, "descriptor columns")
+    return pd.read_csv(
+        source,
+        sep="\t",
+        na_values=[_NA],
+        keep_default_na=False,
+        dtype={column: str for column in sidecar["row_text_columns"]},
+        float_precision="round_trip",
+        usecols=lambda column: column in columns,
+    )
+
+
 def _read_targets(
     source: Path,
     table: FeatureTable,
@@ -254,19 +283,7 @@ def _read_targets(
     if not row_columns or row_columns[0] != _EPOCH_KEY:
         raise ValueError(f"{source.name} sidecar does not declare an epoch row key.")
     descriptor_columns = row_columns[1:]
-    wanted = {_EPOCH_KEY, *descriptor_columns}
-    frame = pd.read_csv(
-        source,
-        sep="\t",
-        na_values=[_NA],
-        keep_default_na=False,
-        # Identities are text however they look: MNE names events "1", "2", ... by default,
-        # and parsed as numbers they would never equal the row_ids they are checked against.
-        dtype={"recording": str, "event": str},
-        # The feature columns were already read with the table; parsing them again for the
-        # handful of descriptors doubled the cost of every bundle.
-        usecols=lambda column: column in wanted,
-    )
+    frame = _read_descriptor_frame(source, sidecar)
     if _EPOCH_KEY not in frame.columns:
         raise ValueError(f"{source.name} lacks the epoch row key its sidecar describes.")
     missing_descriptors = [column for column in descriptor_columns if column not in frame.columns]
@@ -298,7 +315,7 @@ def _read_targets(
 def _read_sidecar(source: Path) -> dict[str, Any]:
     path = source.with_suffix(".json")
     try:
-        return cast(dict[str, Any], json.loads(path.read_text()))
+        sidecar = cast(dict[str, Any], json.loads(path.read_text()))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         # macOS writes a "._" twin beside every file on an exFAT drive, and globs find them.
         hint = (
@@ -307,6 +324,23 @@ def _read_sidecar(source: Path) -> dict[str, Any]:
             else ""
         )
         raise ValueError(f"{path} is not a feature sidecar ({exc}).{hint}") from exc
+    if not isinstance(sidecar, dict) or sidecar.get("schema") != 2:
+        raise ValueError(f"{path}: unsupported feature bundle schema; regenerate the bundle.")
+    text_columns = sidecar.get("row_text_columns")
+    if not isinstance(text_columns, list):
+        raise ValueError(f"{path}: missing descriptor type manifest; regenerate the bundle.")
+    validate_names(text_columns, "text descriptor columns")
+    if not set(text_columns).issubset(sidecar["row_columns"]):
+        raise ValueError(f"{path}: text descriptor columns are not declared row columns.")
+    coverage = sidecar["coverage"]
+    expected = {source.name, source.stem + "_coverage.tsv"}
+    if coverage != source.stem + "_coverage.tsv" or set(sidecar["files"]) != expected:
+        raise ValueError(f"{path}: invalid feature bundle file manifest.")
+    for name, checksum in sidecar["files"].items():
+        payload = source.parent / name
+        if not payload.is_file() or file_hash(payload) != checksum:
+            raise ValueError(f"{payload}: feature bundle checksum mismatch.")
+    return sidecar
 
 
 def _row_key(table: FeatureTable) -> tuple[str, list[int] | list[str]]:

@@ -5,7 +5,7 @@
 [![MNE-Python ≥ 1.8](https://img.shields.io/badge/mne--python-≥1.8-blue.svg)](https://mne.tools/stable/)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](https://joshuaduq.github.io/EEGFeat/)
 
-**Spectral**, **temporal**, and **connectivity** features for **MNE** objects, returned as `FeatureTable`, and grouped model evaluation on per-epoch tables.
+**Spectral**, **temporal**, **connectivity**, and **complexity** features for **MNE** objects, returned as `FeatureTable`, with reproducible cohort analysis and grouped model evaluation.
 
 Every column keeps its band, window, spatial unit, normalization, coverage, and computation parameters, and its name carries the same fields:
 
@@ -41,6 +41,13 @@ Core dependencies are `numpy`, `scipy`, `pandas`, and `mne`. Optional extras:
 | `model` | Pipelines, grouped cross-fitting, metrics, nulls, uncertainty |
 | `connectivity` | Spectral connectivity and wPLI via `mne-connectivity` |
 | `microstates` | Microstate segmentation |
+| `spectral-model` | Fixed/knee spectral parameterization via specparam |
+| `irasa` | Aperiodic/oscillatory separation via NeuroDSP |
+| `cycles` | Cycle waveform and burst features via ByCycle |
+| `complexity` | Permutation entropy, Lempel–Ziv complexity and DFA via AntroPy |
+| `pac` | PAC surrogate inference via Tensorpac |
+| `riemann` | Training-fitted covariance and tangent-space decoding via pyRiemann |
+| `bids` | Native BIDS discovery and loading via MNE-BIDS |
 | `importance` | SHAP (permutation importance is in `model`) |
 | `preprocessing` | Raw-to-epochs workflow for one recording or a cohort |
 | `preprocessing-auto` | PyPREP, ICLabel, Picard, autoreject |
@@ -88,6 +95,7 @@ eegfeat init recipe.toml     # commented recipe; --template task or resting
 eegfeat check recipe.toml    # validate and time the first recording; writes nothing
 eegfeat run recipe.toml      # every recording
 eegfeat status recipe.toml   # what is done, and what to run next
+eegfeat report recipe.toml quality.html --by recording
 ```
 
 **Preprocessing.** Optional raw-to-epochs cleaning from one YAML recipe, with review gates you can require, auto-accept, or skip.
@@ -98,11 +106,21 @@ eegfeat preprocess check preprocessing.yaml
 eegfeat preprocess run preprocessing.yaml
 ```
 
-Recipes, flags, exit codes, and the review workflow are in the [Runner](https://joshuaduq.github.io/EEGFeat/guides/runner.html) and [Preprocessing](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html) guides. [`tui/`](tui) is an optional terminal front end for both (Go 1.24+).
+Recipes, flags, exit codes, and the review workflow are in the [Runner](https://joshuaduq.github.io/EEGFeat/guides/runner.html) and [Preprocessing](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html) guides. [`tui/`](tui) is an optional preprocessing terminal front end (Go 1.24+).
 
 ## Modeling
 
 `eegfeat.model` builds a design from per-epoch tables and evaluates it with group-disjoint nested validation. Preprocessing and tuning are fit inside each training fold, and permutation nulls cover the full procedure. Ridge, elastic net, random forest, logistic regression, SVM, and ensembles are included. See [Predictive Modeling](https://joshuaduq.github.io/EEGFeat/guides/modeling.html).
+
+Reusable microstate templates and fold-fitted CSP, microstate, covariance and tangent-space transforms support analysis across recordings without fitting on held-out data. `eegfeat.group` provides a separate design interface for trial-group estimates. Fixed quality policies preserve coverage, flags and exclusion evidence in the design.
+
+```bash
+eegfeat model init model.yaml
+eegfeat model check model.yaml
+eegfeat model run model.yaml
+```
+
+Saved feature bundles require checksummed schema 2 manifests. Input content, resolved defaults, software and source identity govern extraction status. Regenerate older outputs; modified or incomplete bundles raise errors.
 
 ## What it computes
 
@@ -110,19 +128,21 @@ Recipes, flags, exit codes, and the review workflow are in the [Runner](https://
 | :--- | :--- |
 | Power | `mean_psd`, `integrated_band_power`, `mean_tfr_power`, `periodic_power`, `band_ratio`, `asymmetry` |
 | Spectral shape | `peak_frequency`, `spectral_centroid`, `spectral_bandwidth`, `spectral_edge`, `spectral_entropy`, `aperiodic`, `aperiodic_ratio` |
+| Spectral separation | `spectral_parameterization`, `irasa` |
 | Time domain | `variance`, `mean_amplitude`, `peak_to_peak`, `area_under_curve`, `peak_amplitude`, `peak_latency`, `amplitude_quantile`, `kurtosis`, `skewness`, `line_length`, `root_mean_square`, `zero_crossing_rate`, `hjorth_mobility`, `hjorth_complexity` |
 | Bursts and ERDS | `burst_count`, `burst_rate`, `burst_duration`, `burst_amplitude`, `fraction_above_threshold`, `erds_mean`, `erds_slope`, `erd_magnitude`, `erd_duration`, `ers_magnitude`, `ers_duration`, `erds_onset_latency`, `erds_peak_latency`, `erds_rebound_latency` |
-| Phase and connectivity | `itpc`, `ppc`, `envelope_correlation`, `spectral_connectivity`, `wpli`, `pac`, `global_efficiency`, `clustering_coefficient` |
-| Complexity | `sample_entropy`, `multiscale_entropy`, `higuchi_fractal_dimension` |
+| Phase and connectivity | `itpc`, `ppc`, `envelope_correlation`, `spectral_connectivity`, `spectral_connectivity_time`, `wpli`, `pac`, `pac_surrogates`, `global_efficiency`, `clustering_coefficient` |
+| Complexity | `sample_entropy`, `multiscale_entropy`, `higuchi_fractal_dimension`, `permutation_entropy`, `lempel_ziv_complexity`, `detrended_fluctuation` |
+| Cycle waveforms | `cycle_features` |
 | Microstates | `segment`, `microstate_coverage`, `microstate_duration`, `microstate_occurrence`, `microstate_transitions` |
 | Spatial filters | `CommonSpatialPattern`, `csp_features` |
 
-Definitions are in [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html). Signatures are in the [API Reference](https://joshuaduq.github.io/EEGFeat/api/index.html). Every public function is checked on four public datasets; the results are in [Validation](https://joshuaduq.github.io/EEGFeat/guides/validation.html).
+Definitions are in [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html). Signatures are in the [API Reference](https://joshuaduq.github.io/EEGFeat/api/index.html). Numerical and boundary tests cover the new APIs; public-dataset evidence for established methods is in [Validation](https://joshuaduq.github.io/EEGFeat/guides/validation.html). Each dataset validation run saves its own immutable evidence snapshot.
 
 ## Development
 
 ```bash
-python -m pip install -e ".[dev,model,connectivity,microstates,importance,preprocessing,preprocessing-auto,docs]"
+python -m pip install -e ".[dev,model,connectivity,microstates,importance,preprocessing,preprocessing-auto,bids,spectral-model,irasa,cycles,complexity,pac,riemann,docs]"
 python -m pytest
 python -m ruff check src tests
 python -m black --check src tests

@@ -25,7 +25,7 @@ Prerequisites
       :link: https://mne.tools/stable/
       :link-type: url
 
-      ``numpy>=1.26``, ``scipy>=1.11``, ``pandas>=2.0``, ``mne>=1.8``.
+      ``numpy>=1.26``, ``scipy>=1.11``, ``pandas>=2.0,<3.0``, ``mne>=1.8``.
 
 Setup
 -----
@@ -95,8 +95,26 @@ Optional extras.
      - ``pyprep``, ``autoreject``, ``mne-icalabel``, ``python-picard``, ``onnxruntime``
      - PyPREP candidates, ICLabel, the Picard ICA solver, and autoreject.
    * - ``[bids]``
-     - ``mne-bids``, ``pybv``
-     - The study conversion in ``paradigm_specific/thermal_pain``. Not used by ``eegfeat``.
+     - ``mne-bids>=0.19``, ``pybv``
+     - Native EEG BIDS discovery, loading and preprocessing.
+   * - ``[spectral-model]``
+     - ``specparam==2.0.0rc7``
+     - Full fixed/knee spectral parameterization and band peaks.
+   * - ``[irasa]``
+     - ``neurodsp>=2.3.0``
+     - IRASA aperiodic and oscillatory separation.
+   * - ``[cycles]``
+     - ``bycycle>=1.2.0``
+     - Cycle waveform and burst features.
+   * - ``[complexity]``
+     - ``antropy>=0.2.2``
+     - Permutation entropy, Lempel–Ziv complexity and DFA.
+   * - ``[pac]``
+     - ``tensorpac>=0.6.5``
+     - Phase-amplitude coupling surrogate inference.
+   * - ``[riemann]``
+     - ``pyriemann>=0.11``, ``scikit-learn``
+     - Training-fitted covariance and tangent-space decoding.
    * - ``[preprocessing-gui]``
      - ``mne-qt-browser``, ``PyQt6``
      - MNE viewers for ``preprocess review`` and ``preprocess inspect``.
@@ -111,7 +129,11 @@ To install with all extras:
 
 .. code-block:: bash
 
-   pip install -e ".[connectivity,microstates,model,importance,preprocessing,preprocessing-auto,dev,docs]"
+   pip install -e ".[connectivity,microstates,model,importance,preprocessing,preprocessing-auto,bids,spectral-model,irasa,cycles,complexity,pac,riemann,dev,docs]"
+
+ByCycle 1.2 requires writable pandas arrays; pandas 3 is currently unsupported.
+The package constraint selects pandas 2. The specparam release is pinned because
+its result interface is changing during the version 2 release-candidate series.
 
 Modeling needs the ``model`` extra. SHAP needs the ``importance`` extra.
 Permutation importance is included in ``model``.

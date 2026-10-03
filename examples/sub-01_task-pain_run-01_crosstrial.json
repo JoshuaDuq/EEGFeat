@@ -7,12 +7,14 @@
   ],
   "row_ids": null,
   "row_columns": [
-    "group"
+    "group",
+    "recording",
+    "n_trials"
   ],
   "coverage": "sub-01_task-pain_run-01_crosstrial_coverage.tsv",
   "columns": [
     {
-      "name": "eeg_itpc_theta_central_baseline_raw_p082795f6407b",
+      "name": "eeg_itpc_theta_central_baseline_raw_pe1180fb85534",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -75,13 +77,18 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "C3",
+            "C4",
+            "Cz"
+          ]
         }
       },
-      "parameter_hash": "082795f6407b26ff35f0867040eca15f2cd7127322b2b4de7bf8572966cb8fc3"
+      "parameter_hash": "e1180fb855348352b52a230bbbc2499426c8459cb52f8ea0e6fc0729be57e66d"
     },
     {
-      "name": "eeg_itpc_theta_central_stimulus_raw_pb167797a676b",
+      "name": "eeg_itpc_theta_central_stimulus_raw_p8cb21b1fe98c",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -144,13 +151,18 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "C3",
+            "C4",
+            "Cz"
+          ]
         }
       },
-      "parameter_hash": "b167797a676bfc55a0b73bb66213d1f335ee1c82c0d50e2d1c7db42e0efb4fab"
+      "parameter_hash": "8cb21b1fe98cf7fbaccf81da9c840b2e4d50d128624c61c58bcb887f53d56f4b"
     },
     {
-      "name": "eeg_itpc_theta_parietal_baseline_raw_pc03630e19492",
+      "name": "eeg_itpc_theta_parietal_baseline_raw_p6529c0cff5ed",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -213,13 +225,17 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "P3",
+            "Pz"
+          ]
         }
       },
-      "parameter_hash": "c03630e19492c68c2569e6ea73a0316dd1da90ff781c482a44b786dbe73bbb99"
+      "parameter_hash": "6529c0cff5ed4b37c9b593391a3a8db3223929434bcb9567d93f545e67592481"
     },
     {
-      "name": "eeg_itpc_theta_parietal_stimulus_raw_p83e61a384b2a",
+      "name": "eeg_itpc_theta_parietal_stimulus_raw_p4be703a3aa0b",
       "measure": "itpc",
       "band": {
         "name": "theta",
@@ -282,13 +298,17 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "P3",
+            "Pz"
+          ]
         }
       },
-      "parameter_hash": "83e61a384b2a046131507ce16f6135778f9aeb45a5afed502e47fb352b83cd88"
+      "parameter_hash": "4be703a3aa0b99b0610b1e3b78540d70ddd62a5242cd07ffce8a08ff1cbc7a49"
     },
     {
-      "name": "eeg_itpc_alpha_central_baseline_raw_p73c45d0e495d",
+      "name": "eeg_itpc_alpha_central_baseline_raw_p7212222fb0d4",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -351,13 +371,18 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "C3",
+            "C4",
+            "Cz"
+          ]
         }
       },
-      "parameter_hash": "73c45d0e495d0b549d5cc4dc2f892bf94df9a1b19478f6e3d14af753a602c737"
+      "parameter_hash": "7212222fb0d45ac3becbc07542038be941a5bfab6013b61168205bc5c5510bac"
     },
     {
-      "name": "eeg_itpc_alpha_central_stimulus_raw_p48a2762a64ff",
+      "name": "eeg_itpc_alpha_central_stimulus_raw_p5e57c714b09d",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -420,13 +445,18 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "C3",
+            "C4",
+            "Cz"
+          ]
         }
       },
-      "parameter_hash": "48a2762a64ffc444df5306df071929192f1949e6b3b8b8efa27a6252e4177aa1"
+      "parameter_hash": "5e57c714b09d5b7a313e611718ea3d42739d17217358fed898b4e835d63f13bd"
     },
     {
-      "name": "eeg_itpc_alpha_parietal_baseline_raw_p196a2c304ff4",
+      "name": "eeg_itpc_alpha_parietal_baseline_raw_p57c4cf6dcd81",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -489,13 +519,17 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "P3",
+            "Pz"
+          ]
         }
       },
-      "parameter_hash": "196a2c304ff449f68894ada1caf073f84550e9ebe2d98ceef97f855705f19169"
+      "parameter_hash": "57c4cf6dcd812782df47ff2641fe92e7769cf168f66625536d0669a5d48907fd"
     },
     {
-      "name": "eeg_itpc_alpha_parietal_stimulus_raw_pea8d0d786609",
+      "name": "eeg_itpc_alpha_parietal_stimulus_raw_p704e65b7fd56",
       "measure": "itpc",
       "band": {
         "name": "alpha",
@@ -558,10 +592,14 @@
               "stim"
             ]
           },
-          "spatial_aggregation": "arithmetic_mean_of_channel_features"
+          "spatial_aggregation": "arithmetic_mean_of_channel_features",
+          "spatial_channels": [
+            "P3",
+            "Pz"
+          ]
         }
       },
-      "parameter_hash": "ea8d0d7866098b9ece417f3a140a1b9f145cc73694824561c4fdcf854465ea8e"
+      "parameter_hash": "704e65b7fd5623d9cd4c33e038556aa9aa42a166c8df572901c46a610e854d55"
     }
   ],
   "flags": {
@@ -571,6 +609,281 @@
     "input": "epochs/sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
     "recipe": "recipe.toml",
     "recipe_sha256": "1570489eff36d0a8f613c2ca09a408506ba913daa317b5f713eec07246b0d232",
+    "mne_version": "1.13.2",
+    "settings_sha256": "0e28fa8bb21db37a0333f0ce80f867a105bf62fc8d4e1b26947d1227d9f8efbd",
+    "recording": "sub-01/eeg/sub-01_task-pain_run-01_epo.fif",
+    "input_sha256": "f8d63b56eeca0402ffd58a9e13712624dd74fde91e8263e619d841e71b0c9b22",
+    "input_files": {
+      "sub-01_task-pain_run-01_epo.fif": "f8d63b56eeca0402ffd58a9e13712624dd74fde91e8263e619d841e71b0c9b22"
+    },
+    "resolved_settings": {
+      "inputs": {
+        "picks": "eeg",
+        "exclude_bads": true
+      },
+      "output": {
+        "epoch_metadata": true
+      },
+      "bands": [
+        {
+          "name": "theta",
+          "fmin": 4.0,
+          "fmax": 8.0
+        },
+        {
+          "name": "alpha",
+          "fmin": 8.0,
+          "fmax": 13.0
+        },
+        {
+          "name": "beta",
+          "fmin": 13.0,
+          "fmax": 30.0
+        }
+      ],
+      "windows": [
+        {
+          "name": "baseline",
+          "tmin": -1.5,
+          "tmax": -0.5
+        },
+        {
+          "name": "stimulus",
+          "tmin": 0.5,
+          "tmax": 3.5
+        }
+      ],
+      "rois": {
+        "central": [
+          "C3",
+          "Cz",
+          "C4"
+        ],
+        "parietal": [
+          "P3",
+          "Pz"
+        ]
+      },
+      "spectra": {
+        "method": "welch",
+        "fmin": 4.0,
+        "fmax": 30.0,
+        "n_fft": null,
+        "n_overlap": null,
+        "bandwidth": 2.0,
+        "n_freqs": 40,
+        "spacing": "log",
+        "n_cycles_factor": 2.0,
+        "min_cycles": 3.0,
+        "max_cycles": 15.0,
+        "decim": 4,
+        "window_statistic": "mean"
+      },
+      "band_signal": {
+        "pad_sec": 0.5,
+        "pad_cycles": 3.0
+      },
+      "trials": {
+        "by": "event",
+        "column": null
+      },
+      "microstates": {},
+      "features": [
+        {
+          "measure": "integrated_band_power",
+          "bands": [
+            {
+              "name": "theta",
+              "fmin": 4.0,
+              "fmax": 8.0
+            },
+            {
+              "name": "alpha",
+              "fmin": 8.0,
+              "fmax": 13.0
+            },
+            {
+              "name": "beta",
+              "fmin": 13.0,
+              "fmax": 30.0
+            }
+          ],
+          "windows": [
+            {
+              "name": "baseline",
+              "tmin": -1.5,
+              "tmax": -0.5
+            },
+            {
+              "name": "stimulus",
+              "tmin": 0.5,
+              "tmax": 3.5
+            }
+          ],
+          "baseline": null,
+          "spatial": [
+            "channels",
+            "global"
+          ],
+          "series": [],
+          "pairs": [],
+          "ratios": [],
+          "asymmetry": [],
+          "graph": [],
+          "clustering_threshold": null,
+          "params": {
+            "normalize": "log10"
+          }
+        },
+        {
+          "measure": "erds_mean",
+          "bands": [
+            {
+              "name": "alpha",
+              "fmin": 8.0,
+              "fmax": 13.0
+            },
+            {
+              "name": "beta",
+              "fmin": 13.0,
+              "fmax": 30.0
+            }
+          ],
+          "windows": [
+            {
+              "name": "stimulus",
+              "tmin": 0.5,
+              "tmax": 3.5
+            }
+          ],
+          "baseline": {
+            "name": "baseline",
+            "tmin": -1.5,
+            "tmax": -0.5
+          },
+          "spatial": [
+            "rois",
+            "global"
+          ],
+          "series": [],
+          "pairs": [],
+          "ratios": [],
+          "asymmetry": [],
+          "graph": [],
+          "clustering_threshold": null,
+          "params": {
+            "normalize": "db"
+          }
+        },
+        {
+          "measure": "peak_frequency",
+          "bands": [
+            {
+              "name": "alpha",
+              "fmin": 8.0,
+              "fmax": 13.0
+            }
+          ],
+          "windows": [
+            {
+              "name": "baseline",
+              "tmin": -1.5,
+              "tmax": -0.5
+            },
+            {
+              "name": "stimulus",
+              "tmin": 0.5,
+              "tmax": 3.5
+            }
+          ],
+          "baseline": null,
+          "spatial": [
+            "global"
+          ],
+          "series": [],
+          "pairs": [],
+          "ratios": [],
+          "asymmetry": [],
+          "graph": [],
+          "clustering_threshold": null,
+          "params": {
+            "aperiodic_adjusted": true,
+            "smoothing_hz": 1.0,
+            "min_prominence": 0.1,
+            "interpolate": true,
+            "fit_range": null
+          }
+        },
+        {
+          "measure": "itpc",
+          "bands": [
+            {
+              "name": "theta",
+              "fmin": 4.0,
+              "fmax": 8.0
+            },
+            {
+              "name": "alpha",
+              "fmin": 8.0,
+              "fmax": 13.0
+            }
+          ],
+          "windows": [
+            {
+              "name": "baseline",
+              "tmin": -1.5,
+              "tmax": -0.5
+            },
+            {
+              "name": "stimulus",
+              "tmin": 0.5,
+              "tmax": 3.5
+            }
+          ],
+          "baseline": null,
+          "spatial": [
+            "rois"
+          ],
+          "series": [],
+          "pairs": [],
+          "ratios": [],
+          "asymmetry": [],
+          "graph": [],
+          "clustering_threshold": null,
+          "params": {
+            "min_valid_trials": 2
+          }
+        }
+      ]
+    },
+    "software": {
+      "python": "3.11.14",
+      "eegfeat": "0.1.0.dev0",
+      "mne": "1.13.2",
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.9.1",
+      "mne-connectivity": "0.9.0",
+      "mne-bids": "0.19.0",
+      "antropy": "0.2.2",
+      "specparam": "2.0.0rc7",
+      "neurodsp": "2.3.0",
+      "bycycle": "1.2.0",
+      "pyriemann": "0.12",
+      "tensorpac": "0.6.5",
+      "PyYAML": "6.0.3",
+      "filelock": "4.0.1",
+      "h5io": "0.2.5",
+      "h5py": "3.16.0",
+      "autoreject": "0.4.3",
+      "pyprep": "0.9.0",
+      "mne-icalabel": "0.9.0",
+      "onnxruntime": "1.30.0",
+      "python-picard": "0.8.2"
+    },
+    "code_sha256": "0f8192a9a5e8f2652715c526073d2b2d2b74e8871cd4a697576ec9d6330fe3fd",
+    "upstream": null,
     "channels": [
       "F3",
       "Fz",
@@ -583,12 +896,19 @@
     ],
     "n_epochs": 16,
     "sfreq": 200.0,
-    "mne_version": "1.13.2",
-    "settings_sha256": "d09786deea5359a54834b4589f069978629cc4c95f1144b8d4e82fc66e16e0e3",
     "tables": [
       "features",
       "crosstrial"
     ],
-    "created": "2026-09-23T20:37:58+00:00"
+    "created": "2026-10-03T14:41:31+00:00"
+  },
+  "row_text_columns": [
+    "group",
+    "recording"
+  ],
+  "schema": 2,
+  "files": {
+    "sub-01_task-pain_run-01_crosstrial.tsv": "1c56227bd7c7ef8eb695f921db4225185b4647d2339669b3f6d82c39bd2931f2",
+    "sub-01_task-pain_run-01_crosstrial_coverage.tsv": "09ff8ec77d939618ca03c8afb39c9a5ff6df8e06f16b127c92a3787edbb86342"
   }
 }

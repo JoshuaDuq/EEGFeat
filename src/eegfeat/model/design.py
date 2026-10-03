@@ -9,6 +9,7 @@ import numpy.typing as npt
 import pandas as pd
 
 from eegfeat.model import _deps as _deps
+from eegfeat.quality import QualityPolicy, _validate_descriptor_labels, apply_quality
 from eegfeat.table import FeatureMeta, FeatureTable, RowId
 
 __all__ = [
@@ -43,6 +44,10 @@ class Design:
     column_names: tuple[str, ...]
     feature_columns: npt.NDArray[np.intp]
     covariate_columns: npt.NDArray[np.intp]
+    coverage: npt.NDArray[np.float64]
+    flags: dict[str, npt.NDArray[np.bool_]]
+    meta: tuple[FeatureMeta, ...]
+    quality_ledger: pd.DataFrame
 
     @property
     def n_covariates(self) -> int:
@@ -91,6 +96,19 @@ def select(table: FeatureTable, selection: Selection) -> FeatureTable:
     )
 
 
+def _validate_precomputed_features(table: FeatureTable) -> None:
+    """Reject learned features that must be fitted within predictive folds."""
+    if any(
+        meta.measure == "csp_log_power" or meta.computation.method == "csp_features"
+        for meta in table.meta
+    ):
+        raise ValueError(
+            "CSP must be fitted inside each training fold, including inner tuning; "
+            "an assembled cross-fitted CSP table can leak test labels into training "
+            "features even when the same folds are reused."
+        )
+
+
 def build_design(
     table: FeatureTable,
     targets: pd.DataFrame,
@@ -101,6 +119,7 @@ def build_design(
     covariates: Sequence[str] = (),
     selection: Selection = _DEFAULT_SELECTION,
     strict_covariates: bool = True,
+    quality: QualityPolicy | None = None,
 ) -> Design:
     if table.row_ids is None:
         msg = (
@@ -113,15 +132,12 @@ def build_design(
     if selection != _DEFAULT_SELECTION:
         table = select(table, selection)
 
-    if any(
-        meta.measure == "csp_log_power" or meta.computation.method == "csp_features"
-        for meta in table.meta
-    ):
-        raise ValueError(
-            "CSP must be fitted inside each training fold, including inner tuning; "
-            "an assembled cross-fitted CSP table can leak test labels into training "
-            "features even when the same folds are reused."
-        )
+    quality_ledger = pd.DataFrame(columns=["row", "feature", "reason", "coverage"])
+    if quality is not None:
+        quality_result = apply_quality(table, quality)
+        table, quality_ledger = quality_result.table, quality_result.ledger
+
+    _validate_precomputed_features(table)
 
     key_columns = ["recording", "epoch", "event"]
     for col in key_columns:
@@ -140,6 +156,7 @@ def build_design(
     if runs is not None and runs not in targets.columns:
         msg = f"Runs column '{runs}' missing from targets."
         raise ValueError(msg)
+    _validate_descriptor_labels(targets, (groups, *((runs,) if runs is not None else ())))
 
     target_lower = target.strip().lower()
     leaking = [
@@ -218,6 +235,10 @@ def build_design(
         column_names=column_names,
         feature_columns=feature_columns,
         covariate_columns=covariate_columns,
+        coverage=table.coverage,
+        flags=dict(table.flags),
+        meta=table.meta,
+        quality_ledger=quality_ledger,
     )
 
 

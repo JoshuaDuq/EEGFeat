@@ -28,3 +28,6 @@ are in :doc:`/methods/spectral`.
 
 .. autofunction:: eegfeat.aperiodic_ratio
 
+.. autofunction:: eegfeat.spectral_parameterization
+
+.. autofunction:: eegfeat.irasa
