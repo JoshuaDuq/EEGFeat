@@ -100,6 +100,7 @@ def test_microstate_transformer_explicit_reference_matches_feature_order():
 
 
 def test_covariances_project_average_reference_into_training_rank():
+    pytest.importorskip("pyriemann")
     from pyriemann.estimation import Covariances
 
     signal, _, _ = _signals()
@@ -117,6 +118,7 @@ def test_covariances_project_average_reference_into_training_rank():
 
 
 def test_tangent_reference_is_training_only_and_prediction_is_batch_independent():
+    pytest.importorskip("pyriemann")
     from pyriemann.tangentspace import TangentSpace
 
     signal, _, _ = _signals()
@@ -134,6 +136,7 @@ def test_tangent_reference_is_training_only_and_prediction_is_batch_independent(
 
 
 def test_covariances_reject_singular_scm_and_zero_variance():
+    pytest.importorskip("pyriemann")
     signal, _, _ = _signals()
     short = signal.data[:, :, :3]
     with pytest.raises(ValueError, match="positive definite"):
@@ -174,6 +177,7 @@ def test_signal_classification_produces_nested_held_out_predictions():
 
 
 def test_signal_regression_produces_nested_held_out_predictions():
+    pytest.importorskip("pyriemann")
     signal, _, groups = _signals()
     target = np.log(np.var(signal.data[:, 0], axis=-1))
     pipeline = learned.learned_pipeline(learned.TangentSpaceTransformer(ch_names=CHANNELS), Ridge())

@@ -37,6 +37,7 @@ def _compute(spectra, **parameters):
 
 
 def test_fixed_model_recovers_aperiodic_and_gaussian_peak_parameters():
+    pytest.importorskip("specparam")
     power = 10 ** (1.0 - 1.7 * np.log10(FREQS) + 0.5 * np.exp(-0.5 * ((FREQS - 10) / 1) ** 2))
     table = _compute(_spectra(power), bands=(ALPHA,))
     for measure, expected, tolerance in [
@@ -58,6 +59,7 @@ def test_fixed_model_recovers_aperiodic_and_gaussian_peak_parameters():
 
 
 def test_knee_model_recovers_the_knee_in_the_aperiodic_denominator():
+    pytest.importorskip("specparam")
     power = 10 ** (1.0 - np.log10(20.0 + FREQS**2))
     table = _compute(_spectra(power), aperiodic_mode="knee", max_n_peaks=0)
     assert table.select(measure="specparam_knee").values.item() == pytest.approx(20.0, rel=0.01)
@@ -65,6 +67,7 @@ def test_knee_model_recovers_the_knee_in_the_aperiodic_denominator():
 
 
 def test_no_peak_is_nan_and_flagged_without_replacing_the_model():
+    pytest.importorskip("specparam")
     table = _compute(_spectra(FREQS**-2), bands=(ALPHA,), max_n_peaks=0)
     peaks = table.select(measure="specparam_peak_cf")
     assert np.isnan(peaks.values).all()
@@ -73,6 +76,7 @@ def test_no_peak_is_nan_and_flagged_without_replacing_the_model():
 
 
 def test_strongest_peak_is_selected_when_one_band_has_two_peaks():
+    pytest.importorskip("specparam")
     periodic = 0.3 * np.exp(-0.5 * ((FREQS - 9) / 0.3) ** 2)
     periodic += 0.7 * np.exp(-0.5 * ((FREQS - 12) / 0.3) ** 2)
     table = _compute(_spectra(10 ** (-2 * np.log10(FREQS) + periodic)), bands=(ALPHA,))
@@ -81,6 +85,7 @@ def test_strongest_peak_is_selected_when_one_band_has_two_peaks():
 
 @pytest.mark.parametrize("kind", ["zero", "nan", "inf", "grid", "representation", "outside"])
 def test_spectral_model_refuses_invalid_input(kind):
+    pytest.importorskip("specparam")
     power = FREQS**-2
     spectrum = _spectra(power)
     if kind in ("zero", "nan", "inf"):
@@ -109,5 +114,6 @@ def test_spectral_model_refuses_invalid_input(kind):
     ],
 )
 def test_spectral_model_refuses_invalid_settings(parameters):
+    pytest.importorskip("specparam")
     with pytest.raises(ValueError):
         _compute(_spectra(FREQS**-2), **parameters)

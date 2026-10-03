@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from tests.validation.report import Row, write
 
 

@@ -46,6 +46,7 @@ def _compute(signal, **parameters):
 
 
 def test_irasa_matches_neurodsp_aperiodic_fit_and_component_integrals():
+    pytest.importorskip("neurodsp")
     from neurodsp.aperiodic import compute_irasa, fit_irasa
 
     signal = _signal()
@@ -77,6 +78,7 @@ def test_irasa_matches_neurodsp_aperiodic_fit_and_component_integrals():
 
 
 def test_irasa_preserves_signed_residuals_and_total_power():
+    pytest.importorskip("neurodsp")
     from neurodsp.spectral import compute_spectrum
 
     values = np.random.default_rng(1).normal(size=2000)
@@ -95,6 +97,7 @@ def test_irasa_preserves_signed_residuals_and_total_power():
 
 @pytest.mark.parametrize("band", [Band("low", 2.1, 4.0), Band("high", 38.0, 39.9)])
 def test_irasa_retains_bins_bracketing_non_grid_aligned_band_boundaries(band):
+    pytest.importorskip("neurodsp")
     from neurodsp.aperiodic import compute_irasa, fit_irasa
 
     from eegfeat.irasa import irasa
@@ -149,6 +152,7 @@ def test_irasa_validates_resampling_support_of_bracketing_bins(boundary):
 
 @pytest.mark.parametrize("kind", ["nan", "short", "nyquist", "passband", "constant"])
 def test_irasa_refuses_unsupported_signals(kind):
+    pytest.importorskip("neurodsp")
     signal = _signal()
     if kind == "nan":
         signal.data[0, 0, 40] = np.nan

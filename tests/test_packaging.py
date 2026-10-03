@@ -51,11 +51,10 @@ def test_ci_covers_supported_endpoints_optional_integrations_and_the_wheel() -> 
     for suite in (
         "tests/test_complexity.py",
         "tests/test_higuchi.py",
-        "tests/model/test_importance.py",
+        "tests/model",
         "tests/test_spectral_model.py",
         "tests/test_irasa.py",
         "tests/test_cycles.py",
-        "tests/model/test_learned.py",
         "tests/test_bids.py",
     ):
         assert suite in workflow

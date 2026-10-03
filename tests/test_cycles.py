@@ -44,6 +44,7 @@ def _compute(signal, **parameters):
 
 
 def test_sine_cycles_have_expected_amplitude_period_and_symmetry():
+    pytest.importorskip("bycycle")
     table = _compute(_signal())
     for name, expected in [
         ("cycle_period", 0.1),
@@ -61,6 +62,7 @@ def test_sine_cycles_have_expected_amplitude_period_and_symmetry():
 
 
 def test_cycles_match_bycycle_and_only_use_complete_windowed_cycles():
+    pytest.importorskip("bycycle")
     assert find_spec("eegfeat.cycles") is not None, "cycle analysis is not implemented"
     from bycycle.features import compute_features
 
@@ -86,6 +88,7 @@ def test_cycles_match_bycycle_and_only_use_complete_windowed_cycles():
 
 
 def test_no_burst_is_flagged_and_waveform_summaries_remain_undefined():
+    pytest.importorskip("bycycle")
     table = _compute(_signal(), burst_thresholds={"min_n_cycles": 1000})
     assert table.select(measure="cycle_burst_fraction").values.item() == 0
     shape = table.select(measure="cycle_amplitude")
@@ -94,6 +97,7 @@ def test_no_burst_is_flagged_and_waveform_summaries_remain_undefined():
 
 
 def test_window_without_complete_cycles_is_explicit():
+    pytest.importorskip("bycycle")
     table = _compute(_signal(), windows=(Window("tiny", 2.0, 2.005),))
     assert table.select(measure="cycle_count").values.item() == 0
     assert np.isnan(table.select(measure="cycle_burst_fraction").values).all()
@@ -102,6 +106,7 @@ def test_window_without_complete_cycles_is_explicit():
 
 @pytest.mark.parametrize("kind", ["nan", "passband", "constant", "short"])
 def test_cycles_refuse_unsupported_inputs(kind):
+    pytest.importorskip("bycycle")
     signal = _signal()
     if kind == "nan":
         signal.data[0, 0, 400] = np.nan
@@ -130,6 +135,7 @@ def test_cycles_refuse_invalid_burst_thresholds(thresholds):
 
 
 def test_overlapping_windows_keep_their_own_cycle_flags():
+    pytest.importorskip("bycycle")
     table = _compute(
         _signal(), windows=(Window("all", -np.inf, np.inf), Window("tiny", 2.0, 2.005))
     )

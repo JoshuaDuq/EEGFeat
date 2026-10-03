@@ -28,6 +28,7 @@ def _measure(name, values, **parameters):
 
 
 def test_permutation_entropy_matches_antropy_and_preserves_identity():
+    pytest.importorskip("antropy")
     import antropy
 
     values = np.random.default_rng(4).normal(size=500)
@@ -41,6 +42,7 @@ def test_permutation_entropy_matches_antropy_and_preserves_identity():
 
 
 def test_lempel_ziv_uses_explicit_median_binary_symbols():
+    pytest.importorskip("antropy")
     import antropy
 
     values = np.random.default_rng(5).normal(size=200)
@@ -51,6 +53,7 @@ def test_lempel_ziv_uses_explicit_median_binary_symbols():
 
 
 def test_lempel_ziv_mean_symbolization_changes_the_actual_sequence():
+    pytest.importorskip("antropy")
     import antropy
 
     values = np.r_[np.arange(100), np.repeat(1000.0, 5)]
@@ -60,6 +63,7 @@ def test_lempel_ziv_mean_symbolization_changes_the_actual_sequence():
 
 
 def test_detrended_fluctuation_matches_antropy():
+    pytest.importorskip("antropy")
     import antropy
 
     values = np.random.default_rng(6).normal(size=1000)
@@ -71,6 +75,7 @@ def test_detrended_fluctuation_matches_antropy():
     "name", ["permutation_entropy", "lempel_ziv_complexity", "detrended_fluctuation"]
 )
 def test_extended_complexity_rejects_missing_samples(name):
+    pytest.importorskip("antropy")
     values = np.random.default_rng(7).normal(size=200)
     values[50] = np.nan
     with pytest.raises(ValueError, match="finite"):
@@ -86,6 +91,7 @@ def test_extended_complexity_rejects_missing_samples(name):
     ],
 )
 def test_extended_complexity_rejects_invalid_parameters(name, parameters):
+    pytest.importorskip("antropy")
     with pytest.raises(ValueError):
         _measure(name, np.arange(200), **parameters)
 
@@ -100,11 +106,13 @@ def test_extended_complexity_rejects_invalid_parameters(name, parameters):
     ],
 )
 def test_extended_complexity_rejects_unsupported_windows(name, values):
+    pytest.importorskip("antropy")
     with pytest.raises(ValueError):
         _measure(name, values)
 
 
 def test_dfa_accepts_multichannel_windows_with_noncontiguous_storage():
+    pytest.importorskip("antropy")
     import antropy
 
     assert hasattr(complexity, "detrended_fluctuation")

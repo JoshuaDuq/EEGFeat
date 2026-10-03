@@ -3,6 +3,7 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 import pytest
+
 from tests.test_io import _epoch_table
 
 

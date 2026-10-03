@@ -1007,6 +1007,7 @@ def test_time_connectivity_surfaces_undefined_backend_estimates(method) -> None:
 
 @pytest.mark.parametrize("groups", [None, {"left": ["C3", "P3"], "right": ["C4", "P4"]}])
 def test_time_connectivity_retains_pairwise_input_coverage_for_quality(groups) -> None:
+    pytest.importorskip("mne_connectivity")
     from eegfeat.connectivity import spectral_connectivity_time
     from eegfeat.quality import QualityPolicy, apply_quality
 
@@ -1048,6 +1049,7 @@ def test_time_connectivity_retains_pairwise_input_coverage_for_quality(groups) -
 
 
 def test_time_connectivity_padding_discards_the_full_integer_wavelet_support() -> None:
+    pytest.importorskip("mne_connectivity")
     from mne.time_frequency import morlet
     from mne_connectivity import spectral_connectivity_time as reference
 
@@ -1082,6 +1084,7 @@ def test_time_connectivity_padding_discards_the_full_integer_wavelet_support() -
 @pytest.mark.parametrize("method", ["coh", "imcoh", "plv", "ciplv", "pli", "wpli"])
 @pytest.mark.parametrize("constant", [0.0, 1.0])
 def test_time_connectivity_rejects_constant_channels_inside_each_window(method, constant) -> None:
+    pytest.importorskip("mne_connectivity")
     from eegfeat.connectivity import spectral_connectivity_time
 
     signal = _coupled_broadband(n_epochs=2)

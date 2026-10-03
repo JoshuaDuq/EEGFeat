@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
 from tests.test_io import _epoch_table
 
 
@@ -147,9 +148,8 @@ def test_recording_quality_deduplicates_consistent_evidence_and_rejects_conflict
 
 
 def test_report_cli_includes_saved_recording_evidence(tmp_path):
-    from tests.test_provenance import _extract
-
     from eegfeat.runner.cli import main
+    from tests.test_provenance import _extract
 
     recipe, _, _ = _extract(tmp_path)
     path = tmp_path / "quality.html"

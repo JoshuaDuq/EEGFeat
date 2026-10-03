@@ -477,6 +477,7 @@ def test_pac_surrogates_matches_tensorpac_null_and_preserves_epoch_rows() -> Non
 @pytest.mark.parametrize("normalize", [False, True])
 @pytest.mark.parametrize("surrogate", ["blocks", "circular"])
 def test_constant_amplitude_surrogates_do_not_report_significant_pac(normalize, surrogate) -> None:
+    pytest.importorskip("tensorpac")
     from tensorpac.methods import mean_vector_length
 
     from eegfeat.phase import pac_surrogates
