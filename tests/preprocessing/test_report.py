@@ -1,9 +1,9 @@
 import numpy as np
 
-from eegfeat.preprocessing import preprocess
-from eegfeat.preprocessing.config import FixedEpochSettings, ICASettings, ProcessingSettings
-from eegfeat.preprocessing.ica import fit_ica
-from eegfeat.preprocessing.report import build_artifact_report, build_report
+from eegtable.preprocessing import preprocess
+from eegtable.preprocessing.config import FixedEpochSettings, ICASettings, ProcessingSettings
+from eegtable.preprocessing.ica import fit_ica
+from eegtable.preprocessing.report import build_artifact_report, build_report
 
 
 def test_report_is_headless_and_leaves_result_unchanged(raw, tmp_path):

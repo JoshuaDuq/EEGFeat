@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.complexity import _coarse_grain, _sample_entropy, multiscale_entropy, sample_entropy
-from eegfeat.signal import BandSignal, Signal
-from eegfeat.spectra import Window
+from eegtable.bands import Band
+from eegtable.complexity import _coarse_grain, _sample_entropy, multiscale_entropy, sample_entropy
+from eegtable.signal import BandSignal, Signal
+from eegtable.spectra import Window
 
 SFREQ = 100.0
 WINDOW = Window("all", 0.0, 2.0)
@@ -158,7 +158,7 @@ def test_no_matching_template_is_undefined_not_zero() -> None:
 
 
 def test_chunking_does_not_change_the_result() -> None:
-    import eegfeat.complexity as mod
+    import eegtable.complexity as mod
 
     rng = np.random.RandomState(5)
     x = rng.randn(400)

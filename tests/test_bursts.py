@@ -1,17 +1,17 @@
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.bands import Band
-from eegfeat.bursts import (
+import eegtable as ef
+from eegtable.bands import Band
+from eegtable.bursts import (
     burst_amplitude,
     burst_count,
     burst_duration,
     burst_rate,
     fraction_above_threshold,
 )
-from eegfeat.signal import BandSignal
-from eegfeat.spectra import Window
+from eegtable.signal import BandSignal
+from eegtable.spectra import Window
 
 BURST_FUNCTIONS = {
     "count": burst_count,

@@ -15,7 +15,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording
 
 OCCIPITAL = {"occipital": ["O1", "Oz", "O2"]}

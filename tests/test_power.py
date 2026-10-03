@@ -5,10 +5,10 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power, periodic_power
-from eegfeat.spectra import Spectra, Window
-from eegfeat.table import ComputationSpec, FeatureTable
+from eegtable.bands import Band
+from eegtable.power import integrated_band_power, mean_psd, mean_tfr_power, periodic_power
+from eegtable.spectra import Spectra, Window
+from eegtable.table import ComputationSpec, FeatureTable
 
 ALPHA = Band("alpha", 8.0, 13.0)
 

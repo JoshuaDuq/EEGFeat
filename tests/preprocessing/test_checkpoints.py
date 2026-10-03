@@ -2,8 +2,8 @@ from dataclasses import replace
 
 import pytest
 
-from eegfeat.preprocessing import list_steps, open_workflow, run_step, run_until
-from eegfeat.preprocessing.config import FilterSettings
+from eegtable.preprocessing import list_steps, open_workflow, run_step, run_until
+from eegtable.preprocessing.config import FilterSettings
 
 from .test_execution import config_for
 
@@ -45,7 +45,7 @@ def test_disabled_filter_change_does_not_invalidate_events(raw, tmp_path):
 
 
 def test_reset_retires_descendants_and_keeps_payloads(raw, tmp_path):
-    from eegfeat.preprocessing import reset_from
+    from eegtable.preprocessing import reset_from
 
     workflow = open_workflow(config_for(raw, tmp_path))
     run_until(workflow, "epoch")
@@ -71,7 +71,7 @@ def test_second_writer_is_refused(raw, tmp_path):
 
 
 def test_hidden_files_beside_payloads_are_ignored(raw, tmp_path):
-    from eegfeat.preprocessing import read_checkpoint
+    from eegtable.preprocessing import read_checkpoint
 
     workflow = open_workflow(config_for(raw, tmp_path))
     result = run_step(workflow, "load")
@@ -82,7 +82,7 @@ def test_hidden_files_beside_payloads_are_ignored(raw, tmp_path):
 
 
 def test_epoch_checkpoints_hold_no_raw(raw, tmp_path):
-    from eegfeat.preprocessing import read_checkpoint
+    from eegtable.preprocessing import read_checkpoint
 
     workflow = open_workflow(config_for(raw, tmp_path))
     run_until(workflow, "crop-epochs")

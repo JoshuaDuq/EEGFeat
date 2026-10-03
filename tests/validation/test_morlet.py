@@ -1,6 +1,6 @@
 """The Morlet path: wavelet power as a density comparable to a Welch PSD.
 
-:meth:`eegfeat.Spectra.from_tfr` divides MNE's unit-energy wavelet power by the
+:meth:`eegtable.Spectra.from_tfr` divides MNE's unit-energy wavelet power by the
 sampling rate and calls the result a density in V²/Hz. If that is right, the band
 mean of the wavelet power equals the band mean of a Welch PSD of the same window
 up to the wavelet's smoothing, and it does not move when the recording is
@@ -14,7 +14,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording
 
 MU = ef.Band("mu", 8.0, 13.0)

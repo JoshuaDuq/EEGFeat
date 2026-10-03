@@ -494,7 +494,7 @@
      - –
      - –
      - ✓ 1
-   * - ``eegfeat command``
+   * - ``eegtable command``
      - –
      - –
      - –

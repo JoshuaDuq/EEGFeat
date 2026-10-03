@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.model.design import build_design
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+from eegtable.bands import Band
+from eegtable.model.design import build_design
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def alpha_beta_table():
 
 
 def test_quality_policy_masks_only_requested_cells(alpha_beta_table):
-    from eegfeat.quality import QualityPolicy, apply_quality
+    from eegtable.quality import QualityPolicy, apply_quality
 
     table = replace(
         alpha_beta_table,
@@ -52,7 +52,7 @@ def test_quality_policy_masks_only_requested_cells(alpha_beta_table):
 
 
 def test_unknown_quality_flag_is_an_error(alpha_beta_table):
-    from eegfeat.quality import QualityPolicy, apply_quality
+    from eegtable.quality import QualityPolicy, apply_quality
 
     with pytest.raises(ValueError, match="unknown"):
         apply_quality(alpha_beta_table, QualityPolicy(rejected_flags=("typo",)))
@@ -60,14 +60,14 @@ def test_unknown_quality_flag_is_an_error(alpha_beta_table):
 
 @pytest.mark.parametrize("value", [True, "0.5", [0.5], np.array([0.5]), np.nan, np.inf])
 def test_quality_policy_requires_a_finite_scalar_fraction(value):
-    from eegfeat.quality import QualityPolicy
+    from eegtable.quality import QualityPolicy
 
     with pytest.raises(ValueError, match="min_coverage"):
         QualityPolicy(min_coverage=value)
 
 
 def test_design_retains_quality_and_feature_definitions(alpha_beta_table):
-    from eegfeat.quality import QualityPolicy
+    from eegtable.quality import QualityPolicy
 
     table = replace(alpha_beta_table, coverage=np.array([[0.4, 1.0], [1.0, 1.0]]))
     targets = pd.DataFrame(table.row_ids, columns=["recording", "epoch", "event"])
@@ -81,7 +81,7 @@ def test_design_retains_quality_and_feature_definitions(alpha_beta_table):
 
 
 def test_cohort_report_counts_cells_by_condition(alpha_beta_table):
-    from eegfeat.quality import cohort_quality, feature_quality
+    from eegtable.quality import cohort_quality, feature_quality
 
     targets = pd.DataFrame({"condition": ["rest", "task"]})
     table = replace(alpha_beta_table, values=np.array([[1.0, np.nan], [2.0, 3.0]]))
@@ -92,7 +92,7 @@ def test_cohort_report_counts_cells_by_condition(alpha_beta_table):
 
 
 def test_report_preserves_all_group_keys_with_missing_labels(alpha_beta_table):
-    from eegfeat.quality import cohort_quality
+    from eegtable.quality import cohort_quality
 
     with pytest.raises(ValueError, match="missing"):
         cohort_quality(
@@ -101,7 +101,7 @@ def test_report_preserves_all_group_keys_with_missing_labels(alpha_beta_table):
 
 
 def test_input_low_coverage_flag_cannot_override_the_policy_threshold(alpha_beta_table):
-    from eegfeat.quality import QualityPolicy, apply_quality
+    from eegtable.quality import QualityPolicy, apply_quality
 
     table = replace(
         alpha_beta_table,
@@ -115,7 +115,7 @@ def test_input_low_coverage_flag_cannot_override_the_policy_threshold(alpha_beta
 
 
 def test_reapplying_quality_preserves_prior_exclusion_evidence(alpha_beta_table):
-    from eegfeat.quality import QualityPolicy, apply_quality
+    from eegtable.quality import QualityPolicy, apply_quality
 
     coverage = alpha_beta_table.coverage.copy()
     coverage[0, 0] = 0.2

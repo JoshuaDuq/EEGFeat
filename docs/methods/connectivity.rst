@@ -68,8 +68,8 @@ Row layout of ITPC and PPC
 ITPC and PPC have one row per trial group. The same summary copied onto each
 member epoch would repeat one number across rows.
 
-- :func:`~eegfeat.itpc` and :func:`~eegfeat.ppc` return ``row_labels``.
-- :func:`~eegfeat.concat` rejects a join of group rows with per-epoch rows.
+- :func:`~eegtable.itpc` and :func:`~eegtable.ppc` return ``row_labels``.
+- :func:`~eegtable.concat` rejects a join of group rows with per-epoch rows.
 - Pass ``trials`` to compute the measure inside groups such as experimental
   condition.
 
@@ -202,7 +202,7 @@ Requirements and options
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Spectral connectivity requires the ``connectivity`` extra
-  (``pip install eegfeat[connectivity]``).
+  (``pip install eegtable[connectivity]``).
 - Every trial group needs at least two epochs for ``spectral_connectivity`` and
   ``wpli``. ``spectral_connectivity_time`` can estimate a single epoch.
 - A spectral band must lie at or below the signal's Nyquist frequency;
@@ -222,7 +222,7 @@ Nodes and ROIs
 - Repeated channels within an ROI raise ``ValueError``; members have equal
   weight and must be unique.
 - ``envelope_correlation``, ``spectral_connectivity`` and ``wpli`` have one row
-  per trial group, as :func:`~eegfeat.itpc` does.
+  per trial group, as :func:`~eegtable.itpc` does.
 
 Per-epoch time averaging
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -341,7 +341,7 @@ The band reduction applied afterwards is
 Common Spatial Patterns
 -----------------------
 
-:class:`~eegfeat.CommonSpatialPattern` finds spatial filters that maximize the
+:class:`~eegtable.CommonSpatialPattern` finds spatial filters that maximize the
 variance ratio between two classes (Ramoser, Müller-Gerking, and Pfurtscheller,
 2000). The labels determine the filters.
 
@@ -355,7 +355,7 @@ Requirements
 Cross-fitting and leakage
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- :func:`~eegfeat.csp_features` fits on each training fold and transforms the
+- :func:`~eegtable.csp_features` fits on each training fold and transforms the
   held-out rows of that fold. The resulting table is a description of those
   held-out rows.
 - A supplied ``window`` restricts both fitting and held-out projected variance;
@@ -363,7 +363,7 @@ Cross-fitting and leakage
 - Reusing the same folds as a classifier's outer split still leaks. A fold's
   filters are estimated with labels from epochs that fall in the classifier's
   training set through another fold.
-- :func:`eegfeat.model.build_design` rejects these columns.
+- :func:`eegtable.model.build_design` rejects these columns.
 - The split that produced a column is stored in its computation metadata.
 
 To use CSP as a predictor:
@@ -425,7 +425,7 @@ Graph Measures
 --------------
 
 ``global_efficiency`` and ``clustering_coefficient`` reduce a pairwise table to
-one value per band and window, in the same way :func:`~eegfeat.band_ratio`
+one value per band and window, in the same way :func:`~eegtable.band_ratio`
 reduces a power table. Both are computed in this package.
 
 Global efficiency

@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.crossfit import cross_fit_regression
-from eegfeat.model.estimators import (
+from eegtable.model.crossfit import cross_fit_regression
+from eegtable.model.estimators import (
     elasticnet_grid,
     elasticnet_pipeline,
     ensemble_pipeline,
@@ -22,8 +22,8 @@ from eegfeat.model.estimators import (
     svm_grid,
     svm_pipeline,
 )
-from eegfeat.model.splits import InnerSplit, loso_folds
-from eegfeat.model.transformers import PreprocessingConfig
+from eegtable.model.splits import InnerSplit, loso_folds
+from eegtable.model.transformers import PreprocessingConfig
 
 _CONFIG = PreprocessingConfig()
 
@@ -189,7 +189,7 @@ def test_unpenalized_logistic_regression_uses_none_before_scikit_learn_1_8(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # scikit-learn 1.4 removed the string "none"; from 1.2 the unpenalized model is None.
-    from eegfeat.model import estimators
+    from eegtable.model import estimators
 
     monkeypatch.setattr(estimators.sklearn, "__version__", "1.7.2")
     assert estimators._get_lr_kwargs("none") == {"penalty": None}

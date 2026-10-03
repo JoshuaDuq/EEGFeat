@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import (
+from eegtable.preprocessing.config import (
     AnnotationSettings,
     BadSpan,
     ChannelSettings,
@@ -12,7 +12,7 @@ from eegfeat.preprocessing.config import (
 
 
 def test_channel_copy(raw):
-    from eegfeat.preprocessing.raw import prepare_channels
+    from eegtable.preprocessing.raw import prepare_channels
 
     result = prepare_channels(raw, ChannelSettings(bads=("C3",)))
     assert result.info["bads"] == ["C3"]
@@ -22,7 +22,7 @@ def test_channel_copy(raw):
 
 @pytest.mark.parametrize("dated", [False, True])
 def test_annotation_time(raw, dated):
-    from eegfeat.preprocessing.raw import annotate_raw
+    from eegtable.preprocessing.raw import annotate_raw
 
     if dated:
         raw.set_meas_date(datetime(2020, 1, 1, tzinfo=UTC))
@@ -32,7 +32,7 @@ def test_annotation_time(raw, dated):
 
 
 def test_filter_agrees_and_leaves_stim(raw):
-    from eegfeat.preprocessing.raw import filter_raw
+    from eegtable.preprocessing.raw import filter_raw
 
     settings = FilterSettings(l_freq=1, h_freq=40)
     actual = filter_raw(raw, settings)
@@ -42,14 +42,14 @@ def test_filter_agrees_and_leaves_stim(raw):
 
 
 def test_short_filter_segment_fails(raw):
-    from eegfeat.preprocessing.raw import filter_raw
+    from eegtable.preprocessing.raw import filter_raw
 
     with pytest.raises(ValueError, match="support"):
         filter_raw(raw.copy().crop(0, 1), FilterSettings(l_freq=1))
 
 
 def test_notch_attenuates_mains_and_keeps_alpha(raw):
-    from eegfeat.preprocessing.raw import notch_coefficients, notch_raw
+    from eegtable.preprocessing.raw import notch_coefficients, notch_raw
 
     times = raw.times
     raw.apply_function(lambda values: values + 20e-6 * np.sin(2 * np.pi * 60 * times), picks="eeg")
@@ -68,7 +68,7 @@ def test_notch_attenuates_mains_and_keeps_alpha(raw):
 
 
 def test_montage_from_a_custom_file(raw, tmp_path):
-    from eegfeat.preprocessing.raw import prepare_channels
+    from eegtable.preprocessing.raw import prepare_channels
 
     # Any format MNE's read_custom_montage accepts, not only digitized FIF.
     lines = [

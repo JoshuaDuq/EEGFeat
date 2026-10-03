@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from eegfeat.microstates import (
+from eegtable.microstates import (
     _coverage,
     _duration,
     _occurrence,
@@ -15,8 +15,8 @@ from eegfeat.microstates import (
     microstate_transitions,
     segment,
 )
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 # segment() clusters with scikit-learn, the optional "microstates" extra; the
 # metric definitions below do not need it.
@@ -169,7 +169,7 @@ def test_a_topography_and_its_inversion_are_the_same_state() -> None:
         sfreq=signal.sfreq,
         row_ids=signal.row_ids,
     )
-    from eegfeat.microstates import _assign
+    from eegtable.microstates import _assign
 
     original = _assign(signal.data[0], seg.templates)
     inverted = _assign(flipped.data[0], seg.templates)
@@ -257,7 +257,7 @@ def test_segment_reports_its_missing_dependency_clearly() -> None:
     if importlib.util.find_spec("sklearn") is not None:
         pytest.skip("scikit-learn is installed here")
     signal, _ = _planted()
-    with pytest.raises(ImportError, match=r"eegfeat\[microstates\]"):
+    with pytest.raises(ImportError, match=r"eegtable\[microstates\]"):
         segment(signal)
 
 
@@ -396,7 +396,7 @@ def test_an_ambiguous_dipole_does_not_cost_explained_variance() -> None:
 def test_fitted_microstate_model_segments_a_new_recording_without_refitting() -> None:
     from dataclasses import replace
 
-    from eegfeat import microstates
+    from eegtable import microstates
 
     training, _ = _planted(n_epochs=3)
     held_out, _ = _planted(n_epochs=2)
@@ -417,7 +417,7 @@ def test_fitted_microstate_model_segments_a_new_recording_without_refitting() ->
 def test_microstate_model_fits_only_selected_rows() -> None:
     from dataclasses import replace
 
-    from eegfeat import microstates
+    from eegtable import microstates
 
     signal, _ = _planted(n_epochs=6)
     rows = np.arange(3)
@@ -430,7 +430,7 @@ def test_microstate_model_fits_only_selected_rows() -> None:
 
 @requires_sklearn
 def test_reference_matching_reorders_states_and_carries_identified_labels() -> None:
-    from eegfeat import microstates
+    from eegtable import microstates
 
     signal, _ = _planted()
     model = microstates.MicrostateModel.fit(signal)
@@ -456,7 +456,7 @@ def test_reference_matching_reorders_states_and_carries_identified_labels() -> N
 def test_shared_templates_reject_reordered_channels() -> None:
     from dataclasses import replace
 
-    from eegfeat import microstates
+    from eegtable import microstates
 
     signal, _ = _planted()
     model = microstates.MicrostateModel.fit(signal)
@@ -465,7 +465,7 @@ def test_shared_templates_reject_reordered_channels() -> None:
 
 
 def test_reference_templates_are_owned_and_spatially_validated() -> None:
-    from eegfeat import microstates
+    from eegtable import microstates
 
     templates = np.array([[1.0, -1.0, 0.0], [1.0, 1.0, -2.0]])
     model = microstates.MicrostateModel.from_templates(

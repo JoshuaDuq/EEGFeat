@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.derived import asymmetry, band_ratio
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, Normalization
+from eegtable.bands import Band
+from eegtable.derived import asymmetry, band_ratio
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable, Normalization
 
 THETA, BETA = Band("theta", 4.0, 8.0), Band("beta", 13.0, 30.0)
 

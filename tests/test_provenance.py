@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from eegfeat.io import read_table
-from eegfeat.runner import load_recipe, run, status
+from eegtable.io import read_table
+from eegtable.runner import load_recipe, run, status
 from tests.synthetic import save_epochs
 
 
@@ -81,7 +81,7 @@ def test_missing_provenance_manifest_is_not_accepted_as_current(tmp_path):
 
 
 def test_input_change_during_computation_fails_without_publishing(tmp_path, monkeypatch):
-    import eegfeat.runner.batch as batch
+    import eegtable.runner.batch as batch
 
     source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
     save_epochs(source)
@@ -142,7 +142,7 @@ def test_changed_split_recording_is_stale_and_recomputed(tmp_path, split_naming)
 def test_split_recording_manifest_is_portable(tmp_path):
     import shutil
 
-    from eegfeat.provenance import file_hash
+    from eegtable.provenance import file_hash
 
     recipe, paths = _split_recording(tmp_path, "neuromag")
     result = run(recipe)
@@ -167,7 +167,7 @@ def test_missing_split_recording_is_stale(tmp_path):
 
 @pytest.mark.parametrize("changed", ["edit", "delete"])
 def test_split_change_during_computation_fails_without_publishing(tmp_path, monkeypatch, changed):
-    import eegfeat.runner.batch as batch
+    import eegtable.runner.batch as batch
 
     recipe, paths = _split_recording(tmp_path, "neuromag")
     compute = batch.compute_features
@@ -187,7 +187,7 @@ def test_split_change_during_computation_fails_without_publishing(tmp_path, monk
 
 
 def test_software_versions_include_installed_preprocessing_dependencies(monkeypatch):
-    import eegfeat.provenance as provenance
+    import eegtable.provenance as provenance
 
     monkeypatch.setattr(provenance, "version", lambda name: "test-version")
     versions = provenance.software_versions()
@@ -210,8 +210,8 @@ def test_upstream_change_during_computation_fails_without_publishing(
 ):
     import mne
 
-    import eegfeat.runner.batch as batch
-    from eegfeat.provenance import file_hash, identity
+    import eegtable.runner.batch as batch
+    from eegtable.provenance import file_hash, identity
 
     source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
     save_epochs(source)
@@ -256,7 +256,7 @@ def test_upstream_change_during_computation_fails_without_publishing(
 def test_environment_change_during_computation_fails_without_publishing(
     tmp_path, monkeypatch, changed
 ):
-    import eegfeat.runner.batch as batch
+    import eegtable.runner.batch as batch
 
     source = tmp_path / "data/sub-01/eeg/sub-01_task-rest_epo.fif"
     save_epochs(source)

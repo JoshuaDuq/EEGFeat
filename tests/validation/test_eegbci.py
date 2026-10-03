@@ -26,9 +26,9 @@ import pytest
 from scipy.integrate import trapezoid
 from scipy.stats import ttest_1samp
 
-import eegfeat as ef
-from eegfeat.io import read_dataset
-from eegfeat.runner import load_recipe, run
+import eegtable as ef
+from eegtable.io import read_dataset
+from eegtable.runner import load_recipe, run
 from tests.validation.loaders import Recording
 
 MU = ef.Band("mu", 8.0, 13.0)

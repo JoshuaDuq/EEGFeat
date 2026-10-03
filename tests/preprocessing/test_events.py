@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import EventSettings, FixedEpochSettings
+from eegtable.preprocessing.config import EventSettings, FixedEpochSettings
 
 
 @pytest.mark.parametrize("dtype", [np.int64, np.uint64])
 def test_events_reject_decreasing_samples(raw, dtype):
-    from eegfeat.preprocessing.events import validate_events
+    from eegtable.preprocessing.events import validate_events
 
     events = np.array([[raw.first_samp + 20, 0, 1], [raw.first_samp + 10, 0, 1]], dtype=dtype)
     with pytest.raises(ValueError, match="strictly increasing"):
@@ -14,7 +14,7 @@ def test_events_reject_decreasing_samples(raw, dtype):
 
 
 def test_original_sample_identity(raw):
-    from eegfeat.preprocessing.events import resolve_events
+    from eegtable.preprocessing.events import resolve_events
 
     result = resolve_events(
         raw,
@@ -27,8 +27,8 @@ def test_original_sample_identity(raw):
 
 
 def test_fixed_sample_geometry(raw):
-    from eegfeat.preprocessing.epochs import make_epochs
-    from eegfeat.preprocessing.events import resolve_events
+    from eegtable.preprocessing.epochs import make_epochs
+    from eegtable.preprocessing.events import resolve_events
 
     settings = FixedEpochSettings(duration=2)
     events = resolve_events(raw, settings)

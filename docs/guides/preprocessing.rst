@@ -24,7 +24,7 @@ and frequencies are hertz.
 Quick Start
 -----------
 
-``python -m eegfeat preprocess`` is the same command as ``eegfeat preprocess``.
+``python -m eegtable preprocess`` is the same command as ``eegtable preprocess``.
 
 Create the Recipe
 ~~~~~~~~~~~~~~~~~
@@ -32,7 +32,7 @@ Create the Recipe
 .. code-block:: bash
 
    python -m pip install -e ".[preprocessing]"
-   eegfeat preprocess init preprocessing.yaml --mode events
+   eegtable preprocess init preprocessing.yaml --mode events
 
 - ``--mode resting`` writes ``epochs.kind: fixed`` and ``duration: 2.0`` instead of
   an event block.
@@ -56,8 +56,8 @@ Check and Run
 
 .. code-block:: bash
 
-   eegfeat preprocess check preprocessing.yaml
-   eegfeat preprocess run preprocessing.yaml
+   eegtable preprocess check preprocessing.yaml
+   eegtable preprocess run preprocessing.yaml
 
 - ``check`` reads every recording and runs ``load``, ``prepare``, and ``events``.
   It writes nothing.
@@ -69,12 +69,12 @@ Check and Run
 .. code-block:: text
 
    [1/2] sub-01
-         ✓ awaiting review-raw · eegfeat preprocess review preprocessing.yaml --recording sub-01 raw
+         ✓ awaiting review-raw · eegtable preprocess review preprocessing.yaml --recording sub-01 raw
 
 Review the Raw Gate
 ~~~~~~~~~~~~~~~~~~~
 
-- **With a display**: install ``eegfeat[preprocessing-gui]`` and run that
+- **With a display**: install ``eegtable[preprocessing-gui]`` and run that
   printed command. It opens the Qt browser. The decision is saved when the
   dialog is accepted.
 - **Without a display**: fill in the pending file the run wrote,
@@ -87,8 +87,8 @@ Review the Raw Gate
 
 .. code-block:: bash
 
-   eegfeat preprocess review preprocessing.yaml raw
-   eegfeat preprocess run preprocessing.yaml
+   eegtable preprocess review preprocessing.yaml raw
+   eegtable preprocess run preprocessing.yaml
 
 That second ``run`` exports.
 
@@ -105,7 +105,7 @@ That second ``run`` exports.
 Status and Resuming
 ~~~~~~~~~~~~~~~~~~~
 
-When every recording is exported, ``run`` prints the ``eegfeat init`` command
+When every recording is exported, ``run`` prints the ``eegtable init`` command
 and the ``inputs.root`` to set.
 
 - **status on a cohort**: one line per recording (``exported``,
@@ -143,16 +143,16 @@ Command Reference
 
 .. code-block:: text
 
-   eegfeat preprocess init CONFIG [--mode events|resting]
-   eegfeat preprocess check CONFIG [--recording LABEL]
-   eegfeat preprocess steps CONFIG
-   eegfeat preprocess status CONFIG [--recording LABEL] [--verify] [--json]
-   eegfeat preprocess step CONFIG STAGE --recording LABEL [--n-jobs N] [--overwrite]
-   eegfeat preprocess next CONFIG --recording LABEL [--n-jobs N] [--overwrite]
-   eegfeat preprocess run CONFIG [--until STAGE] [--recording LABEL] [--n-jobs N] [--overwrite] [--progress-json]
-   eegfeat preprocess inspect CONFIG STAGE --recording LABEL [--report | --json]
-   eegfeat preprocess review CONFIG raw|artifact|epochs [--recording LABEL] [--decisions FILE | --suggested]
-   eegfeat preprocess reset CONFIG --from STAGE --recording LABEL
+   eegtable preprocess init CONFIG [--mode events|resting]
+   eegtable preprocess check CONFIG [--recording LABEL]
+   eegtable preprocess steps CONFIG
+   eegtable preprocess status CONFIG [--recording LABEL] [--verify] [--json]
+   eegtable preprocess step CONFIG STAGE --recording LABEL [--n-jobs N] [--overwrite]
+   eegtable preprocess next CONFIG --recording LABEL [--n-jobs N] [--overwrite]
+   eegtable preprocess run CONFIG [--until STAGE] [--recording LABEL] [--n-jobs N] [--overwrite] [--progress-json]
+   eegtable preprocess inspect CONFIG STAGE --recording LABEL [--report | --json]
+   eegtable preprocess review CONFIG raw|artifact|epochs [--recording LABEL] [--decisions FILE | --suggested]
+   eegtable preprocess reset CONFIG --from STAGE --recording LABEL
 
 ``--recording`` is optional when the recipe selects one recording. Every
 command and flag has ``--help``.
@@ -182,15 +182,15 @@ command and flag has ``--help``.
 Python
 ~~~~~~
 
-- :func:`eegfeat.preprocessing.load_recipe` returns one configuration per
+- :func:`eegtable.preprocessing.load_recipe` returns one configuration per
   recording, keyed by label.
-- :func:`eegfeat.preprocessing.load_config` returns the single configuration of
+- :func:`eegtable.preprocessing.load_config` returns the single configuration of
   a one-recording recipe.
 - The rest of the API is per recording.
 
 .. code-block:: python
 
-   from eegfeat.preprocessing import load_recipe, open_workflow, run_until
+   from eegtable.preprocessing import load_recipe, open_workflow, run_until
 
    for label, config in load_recipe("preprocessing.yaml").items():
        outcome = run_until(open_workflow(config), "review-raw")
@@ -561,8 +561,8 @@ does not import it.
 
 .. code-block:: bash
 
-   cd tui && go build -o eegfeat-tui .     # Go 1.24+
-   ./eegfeat-tui preprocessing.yaml        # finds eegfeat on PATH, or set EEGFEAT
+   cd tui && go build -o eegtable-tui .     # Go 1.24+
+   ./eegtable-tui preprocessing.yaml        # finds eegtable on PATH, or set EEGTABLE
 
 **Keys**:
 
@@ -633,7 +633,7 @@ Notes
   filter, or EEG-fMRI gradient correction.
 - ICA, SSP, EOG regression, and autoreject are fit on the recording being
   processed. A fit that must stay inside a training split uses the numerical
-  functions in ``eegfeat.preprocessing`` (:doc:`/api/preprocessing`) directly.
+  functions in ``eegtable.preprocessing`` (:doc:`/api/preprocessing`) directly.
 - Muscle and high-frequency detectors need the unfiltered recording to cover
   the band they measure.
 - A notch removes a line and does not change the highpass or lowpass stored on

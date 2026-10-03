@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeat/tui/styles"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
+	"github.com/JoshuaDuq/EEGTable/tui/styles"
 )
 
 func (m Model) updateHome(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -84,7 +84,7 @@ func (m Model) begin(busy string, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 }
 
 // next performs Python's own recommendation for the selected recording.
-func (m Model) next(recording eegfeat.Recording) (tea.Model, tea.Cmd) {
+func (m Model) next(recording eegtable.Recording) (tea.Model, tea.Cmd) {
 	action := recording.Next
 	switch {
 	case action == nil:
@@ -134,19 +134,19 @@ func clamp(index, count int) int {
 	return max(0, min(index, count-1))
 }
 
-func (m Model) selected() (eegfeat.Recording, bool) {
+func (m Model) selected() (eegtable.Recording, bool) {
 	if m.cursor < len(m.status.Recordings) {
 		return m.status.Recordings[m.cursor], true
 	}
-	return eegfeat.Recording{}, false
+	return eegtable.Recording{}, false
 }
 
-func (m Model) visibleStages() []eegfeat.Stage {
+func (m Model) visibleStages() []eegtable.Stage {
 	recording, ok := m.selected()
 	if !ok {
 		return nil
 	}
-	stages := make([]eegfeat.Stage, 0, len(recording.Stages))
+	stages := make([]eegtable.Stage, 0, len(recording.Stages))
 	for _, stage := range recording.Stages {
 		if stage.State != "disabled" {
 			stages = append(stages, stage)
@@ -155,10 +155,10 @@ func (m Model) visibleStages() []eegfeat.Stage {
 	return stages
 }
 
-func (m Model) selectedStage() eegfeat.Stage {
+func (m Model) selectedStage() eegtable.Stage {
 	stages := m.visibleStages()
 	if len(stages) == 0 {
-		return eegfeat.Stage{}
+		return eegtable.Stage{}
 	}
 	return stages[clamp(m.stageCursor, len(stages))]
 }
@@ -199,7 +199,7 @@ func (m Model) viewHome() string {
 // recipeTitle keeps the recipe's file name whole and shortens its directory from the left.
 func (m Model) recipeTitle(available int) string {
 	dir, base := filepath.Split(m.config)
-	brand := styles.Title.Render("eegfeat") + styles.Faint.Render(" · ")
+	brand := styles.Title.Render("eegtable") + styles.Faint.Render(" · ")
 	room := available - lipgloss.Width(brand) - lipgloss.Width(base)
 	if runes := []rune(dir); room < len(runes) {
 		dir = ""
@@ -292,7 +292,7 @@ func (m Model) homeHints() []styles.Hint {
 	return hints
 }
 
-func nextLabel(next eegfeat.Next) string {
+func nextLabel(next eegtable.Next) string {
 	switch next.Kind {
 	case "review":
 		return "Review " + next.Target

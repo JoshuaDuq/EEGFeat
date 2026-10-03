@@ -11,7 +11,7 @@ python examples/make_examples.py
 ## Feature extraction
 
 [`recipe.toml`](recipe.toml) sets bands, windows, regions, and one entry per measure.
-`eegfeat run` applies it to every epochs file and writes, for each recording,
+`eegtable run` applies it to every epochs file and writes, for each recording,
 
 - [`sub-01_task-pain_run-01_features.tsv`](sub-01_task-pain_run-01_features.tsv) — one row per
   epoch. Leading columns are the epoch identity and the metadata attached to it

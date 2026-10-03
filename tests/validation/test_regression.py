@@ -15,8 +15,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import eegfeat as ef
-import eegfeat.model as efm
+import eegtable as ef
+import eegtable.model as efm
 from tests.validation.loaders import Recording, load_sleep
 
 SEED = 0

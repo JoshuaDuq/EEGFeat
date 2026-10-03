@@ -8,14 +8,14 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-import eegfeat.model.nulls as nulls
-from eegfeat.model import _ridge_null
-from eegfeat.model.aggregate import AggregationConfig
-from eegfeat.model.crossfit import cross_fit_regression
-from eegfeat.model.estimators import ridge_grid, ridge_pipeline
-from eegfeat.model.nulls import NullConfig, _prediction_statistic, permutation_test
-from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
-from eegfeat.model.transformers import PreprocessingConfig
+import eegtable.model.nulls as nulls
+from eegtable.model import _ridge_null
+from eegtable.model.aggregate import AggregationConfig
+from eegtable.model.crossfit import cross_fit_regression
+from eegtable.model.estimators import ridge_grid, ridge_pipeline
+from eegtable.model.nulls import NullConfig, _prediction_statistic, permutation_test
+from eegtable.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegtable.model.transformers import PreprocessingConfig
 
 GROUPS = np.repeat([f"s{i}" for i in range(6)], 12).astype(object)
 RUNS = np.tile(np.repeat(["r1", "r2", "r3"], 4), 6).astype(object)

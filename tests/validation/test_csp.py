@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 from sklearn.metrics import roc_auc_score
 
-import eegfeat as ef
-import eegfeat.model as efm
+import eegtable as ef
+import eegtable.model as efm
 from tests.validation.loaders import Recording
 
 MU = ef.Band("mu", 8.0, 13.0)

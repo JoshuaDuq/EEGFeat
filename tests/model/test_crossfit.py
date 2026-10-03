@@ -9,11 +9,11 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.dummy import DummyRegressor
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.aggregate import fold_results, subject_level_r
-from eegfeat.model.crossfit import cross_fit_regression
-from eegfeat.model.estimators import ridge_pipeline
-from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
-from eegfeat.model.transformers import PreprocessingConfig
+from eegtable.model.aggregate import fold_results, subject_level_r
+from eegtable.model.crossfit import cross_fit_regression
+from eegtable.model.estimators import ridge_pipeline
+from eegtable.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegtable.model.transformers import PreprocessingConfig
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 GRID = {"regressor__strategy": ["mean", "median"]}
@@ -172,7 +172,7 @@ def test_a_training_subject_above_the_missingness_limit_fails_the_fold(
 
 
 def test_custom_fold_with_overlap_is_rejected() -> None:
-    from eegfeat.model.splits import Fold
+    from eegtable.model.splits import Fold
 
     bad = Fold(
         index=1,
@@ -196,7 +196,7 @@ def test_custom_fold_with_overlap_is_rejected() -> None:
 def test_target_residualization_is_refitted_inside_inner_cv(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import eegfeat.model.crossfit as module
+    import eegtable.model.crossfit as module
 
     rng = np.random.default_rng(42)
     groups = np.repeat(["s1", "s2", "s3", "s4"], 8).astype(object)
@@ -246,7 +246,7 @@ def test_target_residualization_is_refitted_inside_inner_cv(
 def test_inner_validation_targets_do_not_leak_into_nuisance_fit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import eegfeat.model.crossfit as module
+    import eegtable.model.crossfit as module
 
     rng = np.random.default_rng(42)
     groups = np.repeat(["s1", "s2", "s3", "s4"], 8).astype(object)

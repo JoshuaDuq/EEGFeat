@@ -5,10 +5,10 @@ from importlib.util import find_spec
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+from eegtable.bands import Band
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable
 
-# eegfeat.model refuses to import without scikit-learn, so these modules cannot even be
+# eegtable.model refuses to import without scikit-learn, so these modules cannot even be
 # collected where it is absent, as in CI, which installs only the dev extra.
 collect_ignore_glob = [] if find_spec("sklearn") is not None else ["test_*.py"]
 

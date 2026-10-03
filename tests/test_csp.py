@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import eegfeat as ef
-from eegfeat.spectra import Window
+import eegtable as ef
+from eegtable.spectra import Window
 
 SFREQ = 250.0
 N_TIMES = int(2 * SFREQ)
@@ -382,7 +382,7 @@ def test_invalid_csp_fold_indices_are_refused(invalid) -> None:
 
 @pytest.mark.skipif(not _HAS_SKLEARN, reason="needs scikit-learn")
 def test_oof_csp_table_is_refused_as_a_classifier_design() -> None:
-    from eegfeat.model import Selection, build_design
+    from eegtable.model import Selection, build_design
 
     signal, y = _lateralised(n_per_class=10)
     folds = _folds(len(y))
@@ -411,7 +411,7 @@ def test_oof_csp_table_is_refused_as_a_classifier_design() -> None:
 
 
 def test_it_accepts_the_model_layer_own_fold_objects() -> None:
-    from eegfeat.model.splits import loso_folds
+    from eegtable.model.splits import loso_folds
 
     signal, y = _lateralised(n_per_class=15)
     groups = np.array(["a"] * 10 + ["b"] * 10 + ["c"] * 10)

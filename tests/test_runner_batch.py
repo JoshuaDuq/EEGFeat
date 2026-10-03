@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.io import read_dataset, read_table
-from eegfeat.runner import RunError, check, load_recipe, run, status
-from eegfeat.runner.progress import JsonReporter
+from eegtable.io import read_dataset, read_table
+from eegtable.runner import RunError, check, load_recipe, run, status
+from eegtable.runner.progress import JsonReporter
 from tests.synthetic import save_epochs
 
 POWER = '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
@@ -24,7 +24,7 @@ ITPC = (
 
 @pytest.mark.parametrize("exclude_bads", [True, False])
 def test_explicit_channel_names_respect_recipe_bad_channel_exclusion(tmp_path, exclude_bads):
-    from eegfeat.runner.batch import load_epochs
+    from eegtable.runner.batch import load_epochs
     from tests.synthetic import make_epochs
 
     epochs = make_epochs()
@@ -76,7 +76,7 @@ def test_each_recording_gets_its_own_table_in_a_mirrored_tree(tmp_path) -> None:
     reason="scikit-learn is not installed in this environment",
 )
 def test_runner_outputs_feed_group_disjoint_modeling_without_manual_reassembly(tmp_path) -> None:
-    import eegfeat.model as efm
+    import eegtable.model as efm
 
     for subject in ("sub-01", "sub-02", "sub-03"):
         save_epochs(tmp_path / f"data/{subject}/eeg/{subject}_task-rest_epo.fif")
@@ -171,7 +171,7 @@ def test_run_log_records_every_recording(tmp_path) -> None:
 
     run(recipe)
 
-    log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+    log = json.loads((tmp_path / "out/eegtable_run.json").read_text())
     assert log["recipe_text"] == recipe.text
     assert [(r["label"], r["success"]) for r in log["recordings"]] == [
         ("sub-01_task-rest", True),
@@ -201,7 +201,7 @@ def test_a_failing_recording_does_not_stop_the_others(tmp_path) -> None:
     assert not result.ok
     assert _features_path(tmp_path, "sub-01").exists()
     assert not _features_path(tmp_path, "sub-02").exists()
-    log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+    log = json.loads((tmp_path / "out/eegtable_run.json").read_text())
     assert "F3" in log["recordings"][1]["error"]
 
 
@@ -242,7 +242,7 @@ def test_failed_overwrite_preserves_the_previous_complete_result(tmp_path, monke
         )
     }
 
-    import eegfeat.runner.batch as batch
+    import eegtable.runner.batch as batch
 
     def fail(*args, **kwargs):
         raise RuntimeError("intentional replacement failure")
@@ -501,7 +501,7 @@ def test_resume_computes_only_the_recordings_without_results(tmp_path) -> None:
     assert [r.label for r in result.recordings] == ["sub-02_task-rest"]
     assert _features_path(tmp_path, "sub-01").read_bytes() == before
     assert set(_states(recipe).values()) == {"done"}
-    log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+    log = json.loads((tmp_path / "out/eegtable_run.json").read_text())
     assert log["skipped"] == ["sub-01_task-rest"]
 
 
@@ -569,7 +569,7 @@ def test_workers_compute_the_same_tables_as_one_process(tmp_path) -> None:
                 read_table(tmp_path / "parallel" / name).values,
                 read_table(tmp_path / "serial" / name).values,
             )
-    log = json.loads((tmp_path / "parallel/eegfeat_run.json").read_text())
+    log = json.loads((tmp_path / "parallel/eegtable_run.json").read_text())
     assert [r["label"] for r in log["recordings"]] == [r.label for r in serial.recordings]
 
 
@@ -610,7 +610,7 @@ def test_a_failing_recording_does_not_stop_the_other_workers(tmp_path) -> None:
 def _work_or_crash(recording, *args):
     # Stands in for a real crash (a segfault in a compiled dependency, the OOM killer). At
     # module level, so spawned workers import it by name, and with it an unpatched batch.
-    from eegfeat.runner.batch import _work
+    from eegtable.runner.batch import _work
 
     with recording.source.with_suffix(".attempts").open("a") as attempts:
         attempts.write("attempt\n")
@@ -620,7 +620,7 @@ def _work_or_crash(recording, *args):
 
 
 def test_a_worker_process_that_dies_does_not_rerun_submitted_recordings(tmp_path, monkeypatch):
-    import eegfeat.runner.batch as batch
+    import eegtable.runner.batch as batch
 
     _three_recordings(tmp_path)
     monkeypatch.setattr(batch, "_work", _work_or_crash)
@@ -655,13 +655,13 @@ def test_the_run_log_is_written_after_every_recording(tmp_path) -> None:
 
     class Watcher(JsonReporter):
         def recording_done(self, label, success, message):
-            log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+            log = json.loads((tmp_path / "out/eegtable_run.json").read_text())
             seen.append([entry["label"] for entry in log["recordings"]])
 
     run(_recipe(tmp_path, POWER), reporter=Watcher(StringIO()))
 
     assert seen == [["sub-01_task-rest"], ["sub-01_task-rest", "sub-02_task-rest"]]
-    log = json.loads((tmp_path / "out/eegfeat_run.json").read_text())
+    log = json.loads((tmp_path / "out/eegtable_run.json").read_text())
     assert log["finished"] is True
 
 
@@ -682,12 +682,23 @@ def test_a_failure_is_kept_beside_the_recordings_results(tmp_path) -> None:
     # survive it.
     recipe = _one_failing(tmp_path)
     run(recipe)
-    (tmp_path / "out/eegfeat_run.json").unlink()
+    (tmp_path / "out/eegtable_run.json").unlink()
 
     failed = json.loads((tmp_path / "out/sub-02/eeg/sub-02_task-rest_failed.json").read_text())
 
     assert "F3" in failed["error"] and failed["traceback"]
     assert {e.label: e.state for e in status(recipe)}["sub-02_task-rest"] == "failed"
+
+
+def test_a_failure_in_a_run_log_written_before_the_rename_is_still_reported(tmp_path) -> None:
+    recipe = _one_failing(tmp_path)
+    run(recipe)
+    (tmp_path / "out/sub-02/eeg/sub-02_task-rest_failed.json").unlink()
+    (tmp_path / "out/eegtable_run.json").rename(tmp_path / "out/eegfeat_run.json")
+
+    failed = {e.label: e for e in status(recipe)}["sub-02_task-rest"]
+
+    assert failed.state == "failed" and "F3" in failed.reason
 
 
 def test_a_later_success_clears_the_recorded_failure(tmp_path) -> None:
@@ -729,7 +740,7 @@ def test_a_quick_check_computes_only_the_first_epochs(tmp_path) -> None:
 def test_workers_share_the_cores_between_their_thread_pools() -> None:
     # Each worker's BLAS and OpenMP pools would otherwise size themselves to the whole
     # machine, and N workers would oversubscribe it N times over.
-    from eegfeat.runner.batch import _worker_threads
+    from eegtable.runner.batch import _worker_threads
 
     limits = _worker_threads(workers=4, cpu_count=10, environ={})
 
@@ -738,7 +749,7 @@ def test_workers_share_the_cores_between_their_thread_pools() -> None:
 
 
 def test_a_thread_limit_the_user_set_is_left_alone() -> None:
-    from eegfeat.runner.batch import _worker_threads
+    from eegtable.runner.batch import _worker_threads
 
     limits = _worker_threads(workers=4, cpu_count=10, environ={"OMP_NUM_THREADS": "3"})
 
@@ -750,7 +761,7 @@ def test_a_pool_that_breaks_before_a_submission_does_not_end_the_run(tmp_path, m
     # the broken pool. Everything must still be computed.
     from concurrent.futures.process import BrokenProcessPool
 
-    import eegfeat.runner.batch as batch
+    import eegtable.runner.batch as batch
 
     _three_recordings(tmp_path)
     submissions = []

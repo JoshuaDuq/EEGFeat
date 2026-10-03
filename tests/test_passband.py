@@ -12,8 +12,8 @@ import mne
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.bands import Band, check_passband, passband_fraction
+import eegtable as ef
+from eegtable.bands import Band, check_passband, passband_fraction
 
 SFREQ = 250.0
 ALPHA = Band("alpha", 8.0, 13.0)

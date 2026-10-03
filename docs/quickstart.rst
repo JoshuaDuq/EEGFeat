@@ -25,7 +25,7 @@ normalization is rejected, because it is not a density in V²/Hz.
 .. code-block:: python
 
    import mne
-   import eegfeat as ef
+   import eegtable as ef
 
    epochs = mne.read_epochs("sample-epo.fif", preload=True)
 
@@ -71,7 +71,7 @@ window. A low-frequency coefficient near a window edge is excluded.
    import numpy as np
    import mne
    from mne.time_frequency import tfr_morlet
-   import eegfeat as ef
+   import eegtable as ef
 
    freqs = np.linspace(4.0, 40.0, num=30)
    n_cycles = 6.0
@@ -106,7 +106,7 @@ Workflow 3. Bursts and ERDS
 
 .. code-block:: python
 
-   import eegfeat as ef
+   import eegtable as ef
 
    beta_signal = ef.BandSignal.from_epochs(
        epochs,

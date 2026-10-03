@@ -1,93 +1,93 @@
 Containers and I/O
 ==================
 
-:class:`~eegfeat.FeatureTable` is the return type of every extractor. The other
+:class:`~eegtable.FeatureTable` is the return type of every extractor. The other
 types on this page are inputs. Field definitions are in :doc:`/concepts`.
 
 Feature tables
 --------------
 
-.. autoclass:: eegfeat.FeatureTable
+.. autoclass:: eegtable.FeatureTable
    :members:
    :show-inheritance:
 
-.. autoclass:: eegfeat.FeatureMeta
+.. autoclass:: eegtable.FeatureMeta
    :members:
    :show-inheritance:
 
-.. autoclass:: eegfeat.ComputationSpec
+.. autoclass:: eegtable.ComputationSpec
    :members:
    :show-inheritance:
 
-.. autofunction:: eegfeat.concat
+.. autofunction:: eegtable.concat
 
-.. autofunction:: eegfeat.stack_rows
+.. autofunction:: eegtable.stack_rows
 
 Reading and writing
 -------------------
 
-.. autoclass:: eegfeat.io.FeatureDataset
+.. autoclass:: eegtable.io.FeatureDataset
    :members:
 
-.. autofunction:: eegfeat.io.read_dataset
+.. autofunction:: eegtable.io.read_dataset
 
-.. autofunction:: eegfeat.io.read_table
+.. autofunction:: eegtable.io.read_table
 
-.. autofunction:: eegfeat.io.write_table
+.. autofunction:: eegtable.io.write_table
 
 Group samples
 -------------
 
-.. autoclass:: eegfeat.group.GroupDataset
+.. autoclass:: eegtable.group.GroupDataset
    :members:
 
-.. autoclass:: eegfeat.group.GroupDesign
+.. autoclass:: eegtable.group.GroupDesign
    :members:
 
 Native BIDS input
 -----------------
 
-.. autoclass:: eegfeat.bids.BIDSQuery
+.. autoclass:: eegtable.bids.BIDSQuery
    :members:
 
-.. autoclass:: eegfeat.bids.BIDSRecording
+.. autoclass:: eegtable.bids.BIDSRecording
    :members:
 
-.. autofunction:: eegfeat.bids.discover_bids
+.. autofunction:: eegtable.bids.discover_bids
 
-.. autofunction:: eegfeat.bids.read_bids
+.. autofunction:: eegtable.bids.read_bids
 
-.. autofunction:: eegfeat.bids.preprocess_bids
+.. autofunction:: eegtable.bids.preprocess_bids
 
 Bands and windows
 -----------------
 
-.. autoclass:: eegfeat.Band
+.. autoclass:: eegtable.Band
    :members:
    :show-inheritance:
 
-.. autoclass:: eegfeat.Window
+.. autoclass:: eegtable.Window
    :members:
    :show-inheritance:
 
-.. autodata:: eegfeat.BANDS_STANDARD
+.. autodata:: eegtable.BANDS_STANDARD
    :no-value:
 
-.. autofunction:: eegfeat.passband_fraction
+.. autofunction:: eegtable.passband_fraction
 
-.. autofunction:: eegfeat.check_passband
+.. autofunction:: eegtable.check_passband
 
 Signal containers
 -----------------
 
-.. autoclass:: eegfeat.Spectra
+.. autoclass:: eegtable.Spectra
    :members:
    :show-inheritance:
 
-.. autoclass:: eegfeat.Signal
+.. autoclass:: eegtable.Signal
    :members:
    :show-inheritance:
 
-.. autoclass:: eegfeat.BandSignal
+.. autoclass:: eegtable.BandSignal
    :members:
    :show-inheritance:

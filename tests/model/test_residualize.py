@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.model.residualize import (
+from eegtable.model.residualize import (
     FoldNuisanceFit,
     fit_nuisance_model,
     fit_staged_residual_preprocessor,
@@ -12,7 +12,7 @@ from eegfeat.model.residualize import (
     residualize_targets,
     residualize_within_subjects,
 )
-from eegfeat.model.transformers import PreprocessingConfig
+from eegtable.model.transformers import PreprocessingConfig
 
 TRAIN = np.arange(8, dtype=np.intp)
 TEST = np.arange(8, 12, dtype=np.intp)

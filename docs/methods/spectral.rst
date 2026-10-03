@@ -2,7 +2,7 @@ Spectral Methods
 ================
 
 Power integrated over a band, normalization of that power, and summaries of
-spectral shape. Each measure reads a :class:`~eegfeat.Spectra` container and
+spectral shape. Each measure reads a :class:`~eegtable.Spectra` container and
 applies to Welch, multitaper, and Morlet input unless a section says otherwise.
 
 Signatures are in :doc:`/api/spectral`.
@@ -42,7 +42,7 @@ V²/Hz.
   integrating, so the result is comparable to ``mean_psd``. Integrating it would
   give wavelet-smoothed band power in V².
 - **Missing values**: both average over the finite bins.
-- **Representation**: :class:`~eegfeat.Spectra` records which representation it
+- **Representation**: :class:`~eegtable.Spectra` records which representation it
   holds. Each function rejects the other representation.
 
 Morlet Scaling
@@ -53,7 +53,7 @@ the real part). The power it returns for a stationary signal is therefore the
 one-sided density at the wavelet frequency, smoothed over the wavelet bandwidth,
 times the sampling rate.
 
-- **Correction**: :meth:`~eegfeat.Spectra.from_tfr` divides that factor out and
+- **Correction**: :meth:`~eegtable.Spectra.from_tfr` divides that factor out and
   therefore needs the sampling rate the TFR was computed at.
 - **Decimated TFR**: it reports only the decimated rate.
 - **Why**: without the division, resampling a recording from 250 Hz to 500 Hz
@@ -440,7 +440,7 @@ Smooth Welch or multitaper PSD estimates are preferable to raw FFT power.
 See the `official SpectralModel API
 <https://specparam-tools.github.io/generated/specparam.SpectralModel.html>`__
 for the supported backend and its fitting settings. Install
-``eegfeat[spectral-model]``.
+``eegtable[spectral-model]``.
 
 IRASA
 ------
@@ -477,7 +477,7 @@ window; it is not a measure of decomposition quality.
 
 The `official IRASA tutorial
 <https://neurodsp-tools.github.io/neurodsp/auto_tutorials/aperiodic/plot_IRASA.html>`__
-explains decomposition and subsequent fits. Install ``eegfeat[irasa]``.
+explains decomposition and subsequent fits. Install ``eegtable[irasa]``.
 
 Band Ratio and Asymmetry
 ------------------------

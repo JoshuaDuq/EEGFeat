@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from eegfeat.preprocessing.provenance import file_hash
+from eegtable.preprocessing.provenance import file_hash
 
 SCRIPT = (
     Path(__file__).resolve().parents[2] / "paradigm_specific" / "thermal_pain" / "repair_markers.py"

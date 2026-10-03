@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from eegfeat.model.estimators import ridge_pipeline
-from eegfeat.model.transformers import (
+from eegtable.model.estimators import ridge_pipeline
+from eegtable.model.transformers import (
     Deconfounder,
     DropAllNaNColumns,
     PreprocessingConfig,

@@ -1,8 +1,8 @@
 BIDS EEG ingestion
 ==================
 
-``eegfeat.bids`` discovers and reads raw EEG recordings through MNE-BIDS.
-Install ``eegfeat[bids]``; preprocessing also needs ``eegfeat[preprocessing]``.
+``eegtable.bids`` discovers and reads raw EEG recordings through MNE-BIDS.
+Install ``eegtable[bids]``; preprocessing also needs ``eegtable[preprocessing]``.
 The supported EEG recording formats are BrainVision ``.vhdr``, EDF ``.edf``,
 BDF ``.bdf``, and EEGLAB ``.set``. The dataset must contain
 ``dataset_description.json`` and the required recording and channel sidecars.
@@ -13,7 +13,7 @@ Explicit discovery and reading
 .. code-block:: python
 
    from pathlib import Path
-   from eegfeat.bids import BIDSQuery, discover_bids, read_bids
+   from eegtable.bids import BIDSQuery, discover_bids, read_bids
 
    paths = discover_bids(BIDSQuery(
        root=Path("/data/study"),
@@ -76,8 +76,8 @@ Preprocessing in memory
 
 .. code-block:: python
 
-   from eegfeat.bids import preprocess_bids
-   from eegfeat.preprocessing.config import (
+   from eegtable.bids import preprocess_bids
+   from eegtable.preprocessing.config import (
        EventEpochSettings, EventSettings, ProcessingSettings,
    )
 
@@ -152,8 +152,8 @@ Run the normal commands:
 
 .. code-block:: console
 
-   eegfeat preprocess check preprocessing.yaml
-   eegfeat preprocess run preprocessing.yaml
+   eegtable preprocess check preprocessing.yaml
+   eegtable preprocess run preprocessing.yaml
 
 The check command validates the BIDS sidecars and event sample alignment.
 The checkpointed workflow persists BIDS metadata in its state and final epochs.

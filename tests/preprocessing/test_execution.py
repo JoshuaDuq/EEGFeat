@@ -2,7 +2,7 @@ import mne
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import (
+from eegtable.preprocessing.config import (
     FixedEpochSettings,
     InputSettings,
     OutputSettings,
@@ -25,7 +25,7 @@ def config_for(raw, tmp_path):
 
 
 def test_step_has_no_hidden_parents(raw, tmp_path):
-    from eegfeat.preprocessing import open_workflow, run_step
+    from eegtable.preprocessing import open_workflow, run_step
 
     workflow = open_workflow(config_for(raw, tmp_path))
     with pytest.raises(ValueError, match="load"):
@@ -34,7 +34,7 @@ def test_step_has_no_hidden_parents(raw, tmp_path):
 
 
 def test_sequential_matches_memory(raw, tmp_path):
-    from eegfeat.preprocessing import open_workflow, preprocess, read_checkpoint, run_until
+    from eegtable.preprocessing import open_workflow, preprocess, read_checkpoint, run_until
 
     config = config_for(raw, tmp_path)
     expected = preprocess(raw, config.processing)
@@ -46,7 +46,7 @@ def test_sequential_matches_memory(raw, tmp_path):
 
 
 def test_tampered_payload_fails(raw, tmp_path):
-    from eegfeat.preprocessing import open_workflow, read_checkpoint, run_step
+    from eegtable.preprocessing import open_workflow, read_checkpoint, run_step
 
     workflow = open_workflow(config_for(raw, tmp_path))
     result = run_step(workflow, "load")
@@ -58,7 +58,7 @@ def test_tampered_payload_fails(raw, tmp_path):
 
 
 def test_export_failure_is_not_completed(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, list_steps, open_workflow, run_until
+    from eegtable.preprocessing import execution, list_steps, open_workflow, run_until
 
     workflow = open_workflow(config_for(raw, tmp_path))
 
@@ -75,8 +75,8 @@ def test_headless_review(raw, tmp_path):
     import json
     from dataclasses import replace
 
-    from eegfeat.preprocessing import open_workflow, run_until
-    from eegfeat.preprocessing.review import save_review
+    from eegtable.preprocessing import open_workflow, run_until
+    from eegtable.preprocessing.review import save_review
 
     config = config_for(raw, tmp_path)
     workflow = open_workflow(replace(config, workflow=WorkflowSettings(raw_review="required")))
@@ -91,7 +91,7 @@ def test_headless_review(raw, tmp_path):
 
 
 def test_load_checkpoint_from_brainvision(tmp_path):
-    from eegfeat.preprocessing import open_workflow, read_checkpoint, run_until
+    from eegtable.preprocessing import open_workflow, read_checkpoint, run_until
 
     pybv = pytest.importorskip("pybv")
     rng = np.random.default_rng(7)
@@ -120,7 +120,7 @@ def test_load_checkpoint_from_brainvision(tmp_path):
 
 
 def test_step_hashes_the_source_once(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, open_workflow, run_step
+    from eegtable.preprocessing import execution, open_workflow, run_step
 
     calls = []
     original = execution.fingerprint
@@ -130,7 +130,7 @@ def test_step_hashes_the_source_once(raw, tmp_path, monkeypatch):
 
 
 def test_run_until_loads_and_hashes_the_source_once(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, open_workflow, run_until
+    from eegtable.preprocessing import execution, open_workflow, run_until
 
     counts = {"load": 0, "hash": 0}
     load, digest = execution.load_source, execution.fingerprint
@@ -152,7 +152,7 @@ def test_run_until_loads_and_hashes_the_source_once(raw, tmp_path, monkeypatch):
 def test_second_run_keeps_pending_edits(raw, tmp_path):
     from dataclasses import replace
 
-    from eegfeat.preprocessing import open_workflow, run_until
+    from eegtable.preprocessing import open_workflow, run_until
 
     config = config_for(raw, tmp_path)
     workflow = open_workflow(replace(config, workflow=WorkflowSettings(raw_review="required")))
@@ -163,7 +163,7 @@ def test_second_run_keeps_pending_edits(raw, tmp_path):
 
 
 def test_run_loads_the_source_once(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, open_workflow, run_until
+    from eegtable.preprocessing import execution, open_workflow, run_until
 
     calls = []
     original = execution.load_source
@@ -173,7 +173,7 @@ def test_run_loads_the_source_once(raw, tmp_path, monkeypatch):
 
 
 def test_read_checkpoint_does_not_reload_the_source(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, open_workflow, read_checkpoint, run_until
+    from eegtable.preprocessing import execution, open_workflow, read_checkpoint, run_until
 
     workflow = open_workflow(config_for(raw, tmp_path))
     run_until(workflow, "events")
@@ -186,7 +186,7 @@ def test_read_checkpoint_does_not_reload_the_source(raw, tmp_path, monkeypatch):
 
 
 def test_missing_bundle_is_republished(raw, tmp_path):
-    from eegfeat.preprocessing import open_workflow, run_until
+    from eegtable.preprocessing import open_workflow, run_until
 
     workflow = open_workflow(config_for(raw, tmp_path))
     assert run_until(workflow).state == "completed"
@@ -197,7 +197,7 @@ def test_missing_bundle_is_republished(raw, tmp_path):
 
 
 def test_parent_checkpoints_are_deserialized_once_per_step(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, open_workflow, run_until
+    from eegtable.preprocessing import execution, open_workflow, run_until
 
     loads = []
     original = execution.load_checkpoint
@@ -211,7 +211,7 @@ def test_parent_checkpoints_are_deserialized_once_per_step(raw, tmp_path, monkey
 
 
 def test_rerun_of_a_finished_recording_deserializes_nothing(raw, tmp_path, monkeypatch):
-    from eegfeat.preprocessing import execution, open_workflow, run_until
+    from eegtable.preprocessing import execution, open_workflow, run_until
 
     workflow = open_workflow(config_for(raw, tmp_path))
     assert run_until(workflow).state == "completed"
@@ -226,7 +226,7 @@ def test_rerun_of_a_finished_recording_deserializes_nothing(raw, tmp_path, monke
 def test_missing_payload_names_the_reset(raw, tmp_path):
     import shutil
 
-    from eegfeat.preprocessing import open_workflow, run_until
+    from eegtable.preprocessing import open_workflow, run_until
 
     workflow = open_workflow(config_for(raw, tmp_path))
     run_until(workflow, "prepare")
@@ -239,8 +239,8 @@ def test_missing_payload_names_the_reset(raw, tmp_path):
 def external_input_workflow(request, raw, tmp_path):
     from dataclasses import replace
 
-    from eegfeat.preprocessing import open_workflow
-    from eegfeat.preprocessing.config import ChannelSettings, EventEpochSettings, EventSettings
+    from eegtable.preprocessing import open_workflow
+    from eegtable.preprocessing.config import ChannelSettings, EventEpochSettings, EventSettings
 
     config = config_for(raw, tmp_path)
     if request.param == "montage":
@@ -268,7 +268,7 @@ def external_input_workflow(request, raw, tmp_path):
 
 
 def test_external_input_change_invalidates_owning_stage(external_input_workflow):
-    from eegfeat.preprocessing import list_steps, run_until
+    from eegtable.preprocessing import list_steps, run_until
 
     workflow, path, stage = external_input_workflow
     run_until(workflow, "epoch")
@@ -293,7 +293,7 @@ def test_external_input_change_invalidates_owning_stage(external_input_workflow)
 
 
 def test_unchanged_external_input_reuses_checkpoints(external_input_workflow):
-    from eegfeat.preprocessing import read_checkpoint, run_until
+    from eegtable.preprocessing import read_checkpoint, run_until
 
     workflow, path, _ = external_input_workflow
     run_until(workflow, "epoch")
@@ -304,7 +304,7 @@ def test_unchanged_external_input_reuses_checkpoints(external_input_workflow):
 
 
 def test_missing_external_input_surfaces(external_input_workflow):
-    from eegfeat.preprocessing import list_steps, run_until
+    from eegtable.preprocessing import list_steps, run_until
 
     workflow, path, _ = external_input_workflow
     run_until(workflow, "epoch")

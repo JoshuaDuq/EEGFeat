@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.bands import Band
-from eegfeat.erds import (
+import eegtable as ef
+from eegtable.bands import Band
+from eegtable.erds import (
     ErdsScale,
     erd_duration,
     erd_magnitude,
@@ -15,8 +15,8 @@ from eegfeat.erds import (
     ers_duration,
     ers_magnitude,
 )
-from eegfeat.signal import BandSignal
-from eegfeat.spectra import Window
+from eegtable.signal import BandSignal
+from eegtable.spectra import Window
 
 ERDS_FUNCTIONS = {
     "erds_mean": erds_mean,

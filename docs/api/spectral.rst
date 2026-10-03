@@ -1,33 +1,33 @@
 Spectral Features
 =================
 
-Measures estimated from a :class:`~eegfeat.Spectra` container. Their definitions
+Measures estimated from a :class:`~eegtable.Spectra` container. Their definitions
 are in :doc:`/methods/spectral`.
 
 
-.. autofunction:: eegfeat.integrated_band_power
-.. autofunction:: eegfeat.mean_psd
-.. autofunction:: eegfeat.mean_tfr_power
-.. autofunction:: eegfeat.periodic_power
+.. autofunction:: eegtable.integrated_band_power
+.. autofunction:: eegtable.mean_psd
+.. autofunction:: eegtable.mean_tfr_power
+.. autofunction:: eegtable.periodic_power
 
-.. autofunction:: eegfeat.band_ratio
+.. autofunction:: eegtable.band_ratio
 
-.. autofunction:: eegfeat.asymmetry
+.. autofunction:: eegtable.asymmetry
 
-.. autofunction:: eegfeat.peak_frequency
+.. autofunction:: eegtable.peak_frequency
 
-.. autofunction:: eegfeat.spectral_centroid
+.. autofunction:: eegtable.spectral_centroid
 
-.. autofunction:: eegfeat.spectral_bandwidth
+.. autofunction:: eegtable.spectral_bandwidth
 
-.. autofunction:: eegfeat.spectral_edge
+.. autofunction:: eegtable.spectral_edge
 
-.. autofunction:: eegfeat.spectral_entropy
+.. autofunction:: eegtable.spectral_entropy
 
-.. autofunction:: eegfeat.aperiodic
+.. autofunction:: eegtable.aperiodic
 
-.. autofunction:: eegfeat.aperiodic_ratio
+.. autofunction:: eegtable.aperiodic_ratio
 
-.. autofunction:: eegfeat.spectral_parameterization
+.. autofunction:: eegtable.spectral_parameterization
 
-.. autofunction:: eegfeat.irasa
+.. autofunction:: eegtable.irasa

@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import eegfeat.io as io_module
-from eegfeat.bands import Band
-from eegfeat.io import read_table, write_table
-from eegfeat.provenance import file_hash
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+import eegtable.io as io_module
+from eegtable.bands import Band
+from eegtable.io import read_table, write_table
+from eegtable.provenance import file_hash
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable
 
 ALPHA = Band("alpha", 8.0, 13.0)
 
@@ -103,6 +103,17 @@ def test_group_table_round_trips_with_its_row_labels(tmp_path) -> None:
     _assert_same_table(read_table(tmp_path / "sub-01_crosstrial.tsv"), table)
 
 
+def test_read_table_accepts_the_row_id_column_written_before_the_rename(tmp_path) -> None:
+    table = _epoch_table()
+    path = tmp_path / "sub-01_features.tsv"
+    write_table(table, path)
+    for file in (path, tmp_path / "sub-01_features_coverage.tsv"):
+        file.write_text(file.read_text().replace("__eegtable_row_id", "__eegfeat_row_id", 1))
+    _resign(path)
+
+    _assert_same_table(read_table(path), table)
+
+
 def test_write_returns_values_coverage_and_sidecar_paths(tmp_path) -> None:
     written = write_table(_epoch_table(), tmp_path / "sub-01_features.tsv")
 
@@ -120,7 +131,7 @@ def test_bundle_publish_failure_restores_all_previous_files(tmp_path, monkeypatc
     paths = (target, target.with_name(f"{target.stem}_coverage.tsv"), target.with_suffix(".json"))
     previous = {path: path.read_bytes() for path in paths}
 
-    import eegfeat.io as io
+    import eegtable.io as io
 
     real_replace = io.os.replace
     failed = False
@@ -414,7 +425,7 @@ def test_read_dataset_unions_columns_across_recordings_that_measured_different_c
 def test_reading_a_dataset_hashes_each_column_once(tmp_path, monkeypatch) -> None:
     # A column's name embeds a SHA-256 of its whole metadata record. Reading a 13,000-column
     # bundle recomputed it five times per column, most of read_dataset's time.
-    import eegfeat.table as table_module
+    import eegtable.table as table_module
 
     path = tmp_path / "features.tsv"
     write_table(_epoch_table(), path, rows=pd.DataFrame({"event": ["left", "right", "left"]}))

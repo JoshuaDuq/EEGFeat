@@ -2,11 +2,11 @@ import mne
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import AmplitudeSettings, AnnotationSettings, StimulationSettings
+from eegtable.preprocessing.config import AmplitudeSettings, AnnotationSettings, StimulationSettings
 
 
 def test_candidates_do_not_change_raw(raw):
-    from eegfeat.preprocessing.quality import detect_annotations
+    from eegtable.preprocessing.quality import detect_annotations
 
     settings = AnnotationSettings(amplitude=AmplitudeSettings(peak={"eeg": 1e-6}))
     result = detect_annotations(raw, settings)
@@ -16,7 +16,7 @@ def test_candidates_do_not_change_raw(raw):
 
 
 def test_stimulation_agrees(raw):
-    from eegfeat.preprocessing.quality import repair_stimulation
+    from eegtable.preprocessing.quality import repair_stimulation
 
     events = np.array([[2250, 0, 1], [3500, 0, 1]])
     settings = StimulationSettings((1,), ("C3",), -0.004, 0.008, "linear")
@@ -28,23 +28,23 @@ def test_stimulation_agrees(raw):
 
 
 def test_review_unknown_candidate_fails(raw):
-    from eegfeat.preprocessing.quality import apply_raw_review
+    from eegtable.preprocessing.quality import apply_raw_review
 
     with pytest.raises(ValueError, match="missing"):
         apply_raw_review(raw, ("unknown",), ())
 
 
 def test_pyprep_minimum(raw):
-    from eegfeat.preprocessing.config import BadChannelSettings
-    from eegfeat.preprocessing.quality import detect_bad_channels
+    from eegtable.preprocessing.config import BadChannelSettings
+    from eegtable.preprocessing.quality import detect_bad_channels
 
     result = detect_bad_channels(raw, BadChannelSettings(methods=("flat",)))
     assert isinstance(result.bads, tuple)
 
 
 def test_pyprep_repeats_vote_and_notch_copy(raw):
-    from eegfeat.preprocessing.config import BadChannelSettings
-    from eegfeat.preprocessing.quality import detect_bad_channels
+    from eegtable.preprocessing.config import BadChannelSettings
+    from eegtable.preprocessing.quality import detect_bad_channels
 
     pytest.importorskip("pyprep")
     with pytest.raises(ValueError, match="repeats need ransac"):
@@ -59,8 +59,8 @@ def test_pyprep_repeats_vote_and_notch_copy(raw):
 
 
 def test_bridge_evidence_names_pairs_and_fits_json(raw):
-    from eegfeat.preprocessing.provenance import canonical_json
-    from eegfeat.preprocessing.quality import detect_bridges
+    from eegtable.preprocessing.provenance import canonical_json
+    from eegtable.preprocessing.quality import detect_bridges
 
     # A near-identical pair behind a leading EOG channel: MNE indexes its EEG picks, not
     # ch_names, and its electrical-distance matrix is NaN off the upper triangle.
@@ -73,7 +73,7 @@ def test_bridge_evidence_names_pairs_and_fits_json(raw):
 
 
 def test_stimulation_intervals_use_mne_rounding(raw):
-    from eegfeat.preprocessing.quality import stimulation_intervals
+    from eegtable.preprocessing.quality import stimulation_intervals
 
     # fix_stim_artifact ceils tmin*sfreq and tmax*sfreq; -1.25 -> -1, 1.25 -> 2.
     events = np.array([[2250, 0, 1]])

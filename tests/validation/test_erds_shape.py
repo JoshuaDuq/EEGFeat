@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from scipy.stats import ttest_1samp
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording, load_eegbci
 
 SUBJECTS = tuple(range(1, 21))

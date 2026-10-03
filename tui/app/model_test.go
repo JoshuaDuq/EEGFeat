@@ -11,40 +11,40 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
 )
 
 type fakeRunner struct {
-	events  chan eegfeat.Event
-	done    chan eegfeat.Result
+	events  chan eegtable.Event
+	done    chan eegtable.Result
 	stopped bool
 }
 
-func (r *fakeRunner) Events() <-chan eegfeat.Event { return r.events }
-func (r *fakeRunner) Done() <-chan eegfeat.Result  { return r.done }
-func (r *fakeRunner) Stop()                        { r.stopped = true }
+func (r *fakeRunner) Events() <-chan eegtable.Event { return r.events }
+func (r *fakeRunner) Done() <-chan eegtable.Result  { return r.done }
+func (r *fakeRunner) Stop()                         { r.stopped = true }
 
 type fakeBackend struct {
-	status    eegfeat.Status
+	status    eegtable.Status
 	statusErr error
-	gate      eegfeat.Gate
+	gate      eegtable.Gate
 	reviewErr error
 	runner    *fakeRunner
 	calls     []string
-	decisions []eegfeat.Decision
+	decisions []eegtable.Decision
 }
 
-func (b *fakeBackend) Status(context.Context) (eegfeat.Status, error) {
+func (b *fakeBackend) Status(context.Context) (eegtable.Status, error) {
 	b.calls = append(b.calls, "status")
 	return b.status, b.statusErr
 }
 
-func (b *fakeBackend) Inspect(_ context.Context, recording, stage string) (eegfeat.Gate, error) {
+func (b *fakeBackend) Inspect(_ context.Context, recording, stage string) (eegtable.Gate, error) {
 	b.calls = append(b.calls, "inspect "+recording+" "+stage)
 	return b.gate, nil
 }
 
-func (b *fakeBackend) Review(_ context.Context, recording, target string, decision eegfeat.Decision) error {
+func (b *fakeBackend) Review(_ context.Context, recording, target string, decision eegtable.Decision) error {
 	b.calls = append(b.calls, "review "+recording+" "+target)
 	b.decisions = append(b.decisions, decision)
 	return b.reviewErr
@@ -55,9 +55,9 @@ func (b *fakeBackend) Reset(_ context.Context, recording, stage string) (string,
 	return "Pending: " + stage + ", export", nil
 }
 
-func (b *fakeBackend) Run(recording string) (eegfeat.Runner, error) {
+func (b *fakeBackend) Run(recording string) (eegtable.Runner, error) {
 	b.calls = append(b.calls, "run "+recording)
-	b.runner = &fakeRunner{events: make(chan eegfeat.Event, 8), done: make(chan eegfeat.Result, 1)}
+	b.runner = &fakeRunner{events: make(chan eegtable.Event, 8), done: make(chan eegtable.Result, 1)}
 	return b.runner, nil
 }
 
@@ -85,38 +85,38 @@ func (b *fakeBackend) count(call string) int {
 	return n
 }
 
-func statusFixture() eegfeat.Status {
-	stage := func(name, state string) eegfeat.Stage { return eegfeat.Stage{Stage: name, State: state} }
-	return eegfeat.Status{Recordings: []eegfeat.Recording{
+func statusFixture() eegtable.Status {
+	stage := func(name, state string) eegtable.Stage { return eegtable.Stage{Stage: name, State: state} }
+	return eegtable.Status{Recordings: []eegtable.Recording{
 		{Label: "sub-01", Summary: "awaiting review-raw",
-			Stages: []eegfeat.Stage{stage("load", "completed"), stage("crop-raw", "disabled"),
+			Stages: []eegtable.Stage{stage("load", "completed"), stage("crop-raw", "disabled"),
 				stage("detect-bads", "completed"), stage("review-raw", "needs-review"),
 				stage("filter", "pending"), stage("export", "pending")},
-			Next: &eegfeat.Next{Kind: "review", Stage: "review-raw", Target: "raw"}},
-		{Label: "sub-02", Summary: "exported", Stages: []eegfeat.Stage{stage("load", "completed")}},
-		{Label: "sub-03", Summary: "stale at events", Stages: []eegfeat.Stage{stage("events", "stale")},
-			Next: &eegfeat.Next{Kind: "reset", Stage: "events"}},
-		{Label: "sub-04", Summary: "0 of 9 stages", Stages: []eegfeat.Stage{stage("load", "pending")},
-			Next: &eegfeat.Next{Kind: "run", Stage: "load"}},
+			Next: &eegtable.Next{Kind: "review", Stage: "review-raw", Target: "raw"}},
+		{Label: "sub-02", Summary: "exported", Stages: []eegtable.Stage{stage("load", "completed")}},
+		{Label: "sub-03", Summary: "stale at events", Stages: []eegtable.Stage{stage("events", "stale")},
+			Next: &eegtable.Next{Kind: "reset", Stage: "events"}},
+		{Label: "sub-04", Summary: "0 of 9 stages", Stages: []eegtable.Stage{stage("load", "pending")},
+			Next: &eegtable.Next{Kind: "run", Stage: "load"}},
 	}}
 }
 
 func score(v float64) *float64 { return &v }
 
-func rawGate() eegfeat.Gate {
-	return eegfeat.Gate{Stage: "review-raw", Parent: "detect-bads", ParentID: "abc", Field: "bads", Duration: 30,
-		Items: []eegfeat.Item{
+func rawGate() eegtable.Gate {
+	return eegtable.Gate{Stage: "review-raw", Parent: "detect-bads", ParentID: "abc", Field: "bads", Duration: 30,
+		Items: []eegtable.Item{
 			{ID: []byte(`"Fp1"`), Label: "Fp1", Tags: []string{"eeg", "deviation"}, Suggested: true},
 			{ID: []byte(`"C3"`), Label: "C3", Tags: []string{"eeg"}},
 			{ID: []byte(`"VEOG"`), Label: "VEOG", Tags: []string{"eog"}},
 		},
-		Spans: []eegfeat.Span{{Onset: 5, Duration: 1, Description: "BAD_peak", Suggested: true}}}
+		Spans: []eegtable.Span{{Onset: 5, Duration: 1, Description: "BAD_peak", Suggested: true}}}
 }
 
-func icaGate() eegfeat.Gate {
-	return eegfeat.Gate{Stage: "review-artifact", Parent: "fit-artifact", ParentID: "abc", FitID: "fit",
+func icaGate() eegtable.Gate {
+	return eegtable.Gate{Stage: "review-artifact", Parent: "fit-artifact", ParentID: "abc", FitID: "fit",
 		Method: "ica", Field: "exclude",
-		Items: []eegfeat.Item{
+		Items: []eegtable.Item{
 			{ID: []byte(`0`), Label: "ICA000", Tags: []string{"eye blink", "VEOG"}, Score: score(0.98), Suggested: true},
 			{ID: []byte(`1`), Label: "ICA001", Tags: []string{"brain"}, Score: score(0.2)},
 			{ID: []byte(`2`), Label: "ICA002", Tags: []string{"muscle"}, Score: score(0.91), Suggested: true},
@@ -206,7 +206,7 @@ func TestInitLoadsStatusAndRendersRecordings(t *testing.T) {
 }
 
 func TestStatusFailureIsShownVerbatim(t *testing.T) {
-	backend := &fakeBackend{statusErr: errors.New("eegfeat preprocess status study.yaml --json: exit 2\nstudy.yaml: no such recipe")}
+	backend := &fakeBackend{statusErr: errors.New("eegtable preprocess status study.yaml --json: exit 2\nstudy.yaml: no such recipe")}
 	if view := home(t, backend).View(); !strings.Contains(view, "no such recipe") {
 		t.Fatalf("view = %s", view)
 	}
@@ -265,7 +265,7 @@ func TestRestoringSuggestionsAfterClearing(t *testing.T) {
 
 func TestSaveFailureStaysOnTheGateWithPythonsMessage(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture(), gate: rawGate(),
-		reviewErr: &eegfeat.CommandError{Code: 2, Stderr: "review.parent_id: stale or missing reviewed checkpoint identity"}}
+		reviewErr: &eegtable.CommandError{Code: 2, Stderr: "review.parent_id: stale or missing reviewed checkpoint identity"}}
 	m := openGate(t, backend)
 	m, cmd := update(t, m, special(tea.KeyEnter))
 	m = settle(t, m, cmd)
@@ -302,7 +302,7 @@ func TestSpanInputValidatesBeforeAppending(t *testing.T) {
 	m, cmd := update(t, m, special(tea.KeyEnter))
 	settle(t, m, cmd)
 	spans := backend.decisions[0].Spans
-	if len(spans) != 2 || spans[1] != (eegfeat.Span{Onset: 12.5, Duration: 2, Description: "BAD_manual"}) {
+	if len(spans) != 2 || spans[1] != (eegtable.Span{Onset: 12.5, Duration: 2, Description: "BAD_manual"}) {
 		t.Fatalf("spans = %+v", spans)
 	}
 }
@@ -353,8 +353,8 @@ func TestRunStreamsIntoTheStagePane(t *testing.T) {
 	if !backend.called("run sub-01") || !strings.Contains(m.View(), "running") {
 		t.Fatalf("calls=%v\n%s", backend.calls, m.View())
 	}
-	backend.runner.events <- eegfeat.Event{Event: "progress", Subject: "sub-01", Step: "filter", Current: 5, Total: 9}
-	backend.runner.events <- eegfeat.Event{Event: "stderr", Message: "Filtering raw data"}
+	backend.runner.events <- eegtable.Event{Event: "progress", Subject: "sub-01", Step: "filter", Current: 5, Total: 9}
+	backend.runner.events <- eegtable.Event{Event: "stderr", Message: "Filtering raw data"}
 	m = settle(t, m, m.wait())
 	m = settle(t, m, m.wait())
 	view := m.View()
@@ -362,7 +362,7 @@ func TestRunStreamsIntoTheStagePane(t *testing.T) {
 		t.Fatalf("view = %s", view)
 	}
 	close(backend.runner.events)
-	backend.runner.done <- eegfeat.Result{Code: 3}
+	backend.runner.done <- eegtable.Result{Code: 3}
 	m, next := step(t, m, m.wait())
 	m = settle(t, m, next)
 	if backend.count("status") != 2 || strings.Contains(m.View(), "running") || !strings.Contains(m.View(), "paused at a review gate") {
@@ -376,7 +376,7 @@ func TestFailedRunShowsTheStderrTail(t *testing.T) {
 	m, cmd := update(t, m, key('r'))
 	m = settle(t, m, cmd)
 	close(backend.runner.events)
-	backend.runner.done <- eegfeat.Result{Code: 1, Stderr: "ValueError: artifact.ica.max_iter: ICA did not converge"}
+	backend.runner.done <- eegtable.Result{Code: 1, Stderr: "ValueError: artifact.ica.max_iter: ICA did not converge"}
 	m = settle(t, m, m.wait())
 	if !strings.Contains(m.View(), "did not converge") {
 		t.Fatalf("view = %s", m.View())
@@ -421,7 +421,7 @@ func TestRunEndingWithdrawsItsQuestion(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 40)
 	m, _ = update(t, m, special(tea.KeyEsc))
-	m, cmd := update(t, m, runDoneMsg{eegfeat.Result{Code: 0}})
+	m, cmd := update(t, m, runDoneMsg{eegtable.Result{Code: 0}})
 	m = settle(t, m, cmd)
 	if m.confirm != nil {
 		t.Fatal("a finished run still asks whether to stop it")
@@ -459,12 +459,12 @@ func TestLeavingAnEditedGateAsksFirst(t *testing.T) {
 
 func TestFailuresShowPythonsReasonAndLogEverything(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture(), gate: rawGate(),
-		reviewErr: &eegfeat.CommandError{Args: []string{"preprocess", "review", "/very/long/path/study.yaml", "raw"},
-			Code: 2, Stderr: "eegfeat preprocess: review.parent_id: stale checkpoint identity"}}
+		reviewErr: &eegtable.CommandError{Args: []string{"preprocess", "review", "/very/long/path/study.yaml", "raw"},
+			Code: 2, Stderr: "eegtable preprocess: review.parent_id: stale checkpoint identity"}}
 	m := openGate(t, backend)
 	m, cmd := update(t, m, special(tea.KeyEnter))
 	m = settle(t, m, cmd)
-	if m.failure != "eegfeat preprocess: review.parent_id: stale checkpoint identity" {
+	if m.failure != "eegtable preprocess: review.parent_id: stale checkpoint identity" {
 		t.Fatalf("failure = %q", m.failure)
 	}
 	if log := strings.Join(m.log.lines, "\n"); !strings.Contains(log, "/very/long/path/study.yaml") {
@@ -574,10 +574,10 @@ func TestSmallTerminalAndQuit(t *testing.T) {
 }
 
 func TestLongLabelsKeepTheirSummaryVisible(t *testing.T) {
-	status := eegfeat.Status{Recordings: []eegfeat.Recording{{
+	status := eegtable.Status{Recordings: []eegtable.Recording{{
 		Label: "sub-0007_task-thermalactive_run-1", Summary: "0 of 22 stages",
-		Stages: []eegfeat.Stage{{Stage: "load", State: "pending"}},
-		Next:   &eegfeat.Next{Kind: "run", Stage: "load"}}}}
+		Stages: []eegtable.Stage{{Stage: "load", State: "pending"}},
+		Next:   &eegtable.Next{Kind: "run", Stage: "load"}}}}
 	backend := &fakeBackend{status: status}
 	view := home(t, backend).View()
 	if !strings.Contains(view, "0 of 22 stages") {
@@ -610,7 +610,7 @@ func startRun(t *testing.T, backend *fakeBackend, height int) Model {
 	return settle(t, m, cmd)
 }
 
-func feed(t *testing.T, m Model, backend *fakeBackend, events ...eegfeat.Event) Model {
+func feed(t *testing.T, m Model, backend *fakeBackend, events ...eegtable.Event) Model {
 	t.Helper()
 	for _, event := range events {
 		backend.runner.events <- event
@@ -623,8 +623,8 @@ func TestRunOutputAccumulatesInTheLogPanelAndOutlivesTheRun(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 50)
 	m = feed(t, m, backend,
-		eegfeat.Event{Event: "stderr", Message: "Filtering raw data"},
-		eegfeat.Event{Event: "log", Level: "info", Subject: "sub-01", Message: "awaiting review-raw"})
+		eegtable.Event{Event: "stderr", Message: "Filtering raw data"},
+		eegtable.Event{Event: "log", Level: "info", Subject: "sub-01", Message: "awaiting review-raw"})
 	view := m.View()
 	for _, want := range []string{"LOG", "run sub-01", "Filtering raw data", "awaiting review-raw"} {
 		if !strings.Contains(view, want) {
@@ -632,7 +632,7 @@ func TestRunOutputAccumulatesInTheLogPanelAndOutlivesTheRun(t *testing.T) {
 		}
 	}
 	close(backend.runner.events)
-	backend.runner.done <- eegfeat.Result{Code: 3}
+	backend.runner.done <- eegtable.Result{Code: 3}
 	m, next := step(t, m, m.wait())
 	m = settle(t, m, next)
 	view = m.View()
@@ -644,11 +644,11 @@ func TestRunOutputAccumulatesInTheLogPanelAndOutlivesTheRun(t *testing.T) {
 func TestLogPanelYieldsToALongStageList(t *testing.T) {
 	status := statusFixture()
 	for i := 0; i < 20; i++ {
-		status.Recordings[0].Stages = append(status.Recordings[0].Stages, eegfeat.Stage{Stage: fmt.Sprintf("stage-%02d", i), State: "pending"})
+		status.Recordings[0].Stages = append(status.Recordings[0].Stages, eegtable.Stage{Stage: fmt.Sprintf("stage-%02d", i), State: "pending"})
 	}
 	backend := &fakeBackend{status: status}
 	m := startRun(t, backend, 24)
-	m = feed(t, m, backend, eegfeat.Event{Event: "stderr", Message: "Filtering raw data"})
+	m = feed(t, m, backend, eegtable.Event{Event: "stderr", Message: "Filtering raw data"})
 	if view := m.View(); strings.Contains(view, "LOG") || !strings.Contains(view, "load") || strings.Contains(view, "stage-19") {
 		t.Fatalf("no room for a log at 24 rows with 25 stages:\n%s", view)
 	}
@@ -665,7 +665,7 @@ func TestLogScrollsWithPageKeys(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 40)
 	for i := 0; i < 60; i++ {
-		m = feed(t, m, backend, eegfeat.Event{Event: "stderr", Message: fmt.Sprintf("line %02d", i)})
+		m = feed(t, m, backend, eegtable.Event{Event: "stderr", Message: fmt.Sprintf("line %02d", i)})
 	}
 	if view := m.View(); !strings.Contains(view, "line 59") || strings.Contains(view, "line 00") {
 		t.Fatalf("newest lines show by default:\n%s", view)
@@ -687,9 +687,9 @@ func TestLogTrailsEachStageAsItFinishes(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 50)
 	m = feed(t, m, backend,
-		eegfeat.Event{Event: "progress", Subject: "sub-01", Step: "load", Current: 1, Total: 7},
-		eegfeat.Event{Event: "progress", Subject: "sub-01", Step: "detect-bads", Current: 6, Total: 7},
-		eegfeat.Event{Event: "progress", Subject: "sub-01", Step: "review-raw", Current: 7, Total: 7})
+		eegtable.Event{Event: "progress", Subject: "sub-01", Step: "load", Current: 1, Total: 7},
+		eegtable.Event{Event: "progress", Subject: "sub-01", Step: "detect-bads", Current: 6, Total: 7},
+		eegtable.Event{Event: "progress", Subject: "sub-01", Step: "review-raw", Current: 7, Total: 7})
 	log := logText(m)
 	for _, want := range []string{"1/7", "load", "6/7", "detect-bads", "7/7", "review-raw"} {
 		if !strings.Contains(log, want) {
@@ -710,9 +710,9 @@ func TestLogNamesTheRecordingWhenRunningAll(t *testing.T) {
 	m, cmd := update(t, m, key('a'))
 	m = settle(t, m, cmd)
 	m = feed(t, m, backend,
-		eegfeat.Event{Event: "progress", Subject: "sub-01", Step: "load", Current: 1, Total: 2},
-		eegfeat.Event{Event: "subject_start", Subject: "sub-02"},
-		eegfeat.Event{Event: "progress", Subject: "sub-02", Step: "load", Current: 1, Total: 2})
+		eegtable.Event{Event: "progress", Subject: "sub-01", Step: "load", Current: 1, Total: 2},
+		eegtable.Event{Event: "subject_start", Subject: "sub-02"},
+		eegtable.Event{Event: "progress", Subject: "sub-02", Step: "load", Current: 1, Total: 2})
 	if log := logText(m); !strings.Contains(log, "sub-01") || !strings.Contains(log, "sub-02") {
 		t.Fatalf("a run over every recording must say which one each line is about:\n%s", log)
 	}
@@ -722,7 +722,7 @@ func TestErrorEventsReachTheLog(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 50)
 	m = feed(t, m, backend,
-		eegfeat.Event{Event: "error", Message: "inputs.root: no such directory"})
+		eegtable.Event{Event: "error", Message: "inputs.root: no such directory"})
 	if log := logText(m); !strings.Contains(log, "no such directory") {
 		t.Fatalf("a run that fails before processing must say so:\n%s", log)
 	}
@@ -732,8 +732,8 @@ func TestMultiLineMessagesBecomeSeparateLogLines(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 50)
 	before := len(m.log.lines)
-	m = feed(t, m, backend, eegfeat.Event{Event: "log", Level: "info",
-		Message: "1 of 1 recordings await review\nNext: eegfeat preprocess review recipe.yaml"})
+	m = feed(t, m, backend, eegtable.Event{Event: "log", Level: "info",
+		Message: "1 of 1 recordings await review\nNext: eegtable preprocess review recipe.yaml"})
 	if got := len(m.log.lines) - before; got != 2 {
 		t.Fatalf("a two-line message is two log lines, not %d: %q", got, m.log.lines[before:])
 	}

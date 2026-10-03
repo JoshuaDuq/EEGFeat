@@ -3,15 +3,15 @@ from dataclasses import replace
 
 import pytest
 
-from eegfeat.preprocessing import open_workflow, read_checkpoint, reset_from, run_until
-from eegfeat.preprocessing.config import (
+from eegtable.preprocessing import open_workflow, read_checkpoint, reset_from, run_until
+from eegtable.preprocessing.config import (
     AmplitudeSettings,
     AnnotationSettings,
     ArtifactSettings,
     ICASettings,
     WorkflowSettings,
 )
-from eegfeat.preprocessing.review import save_review
+from eegtable.preprocessing.review import save_review
 
 from .test_execution import config_for
 

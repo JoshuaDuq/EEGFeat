@@ -11,9 +11,9 @@ import mne
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.runner import load_recipe
-from eegfeat.runner.compute import compute_features
+import eegtable as ef
+from eegtable.runner import load_recipe
+from eegtable.runner.compute import compute_features
 from tests.synthetic import AMPLITUDE, NOISE, SFREQ, make_epochs
 
 HEAD = """
@@ -353,7 +353,7 @@ def test_log_frequency_grid_is_correctly_rounded() -> None:
     # Linux; the correctly rounded value is the one answer they can all agree on.
     from decimal import Decimal, localcontext
 
-    from eegfeat.runner.compute import _log_grid
+    from eegtable.runner.compute import _log_grid
 
     grid = _log_grid(4.0, 45.0, 20)
     with localcontext() as context:
@@ -630,7 +630,7 @@ def test_runner_computes_new_spectral_cycle_and_complexity_methods(
     output_measure,
     settings,
 ) -> None:
-    from eegfeat.runner.measures import REQUIRES
+    from eegtable.runner.measures import REQUIRES
 
     pytest.importorskip(REQUIRES[measure][0])
     result = features(
@@ -659,7 +659,7 @@ def test_runner_computes_new_spectral_cycle_and_complexity_methods(
     ],
 )
 def test_trial_labels_exposes_the_runner_grouping(tmp_path, grouping, expected) -> None:
-    import eegfeat.runner.compute as runner_compute
+    import eegtable.runner.compute as runner_compute
 
     path = tmp_path / "recipe.toml"
     path.write_text(HEAD + f'[trials]\n{grouping}\n[[features]]\nmeasure = "itpc"\n')

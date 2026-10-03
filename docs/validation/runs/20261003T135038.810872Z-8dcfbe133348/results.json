@@ -4,7 +4,7 @@
  "code_sha256": "8dcfbe13334860fd2d9399710177300030d091176cd65fcdfaa1c6ae4970eaa4",
  "versions": {
   "python": "3.11.14",
-  "eegfeat": "0.1.0.dev0",
+  "eegtable": "0.1.0.dev0",
   "mne": "1.13.2",
   "numpy": "2.4.6",
   "scipy": "1.17.1",
@@ -74,11 +74,11 @@
   {
    "nodeid": "tests/validation/test_cli.py::test_check_reports_a_channel_the_data_lacks",
    "measures": [
-    "eegfeat command"
+    "eegtable command"
    ],
    "kind": "behaviour",
    "dataset": "eegbci",
-   "claim": "eegfeat check names a channel the recordings lack",
+   "claim": "eegtable check names a channel the recordings lack",
    "criterion": "exit 1 and the channel named",
    "observed": "",
    "passed": true,
@@ -88,11 +88,11 @@
   {
    "nodeid": "tests/validation/test_cli.py::test_check_validates_without_writing",
    "measures": [
-    "eegfeat command"
+    "eegtable command"
    ],
    "kind": "behaviour",
    "dataset": "eegbci",
-   "claim": "eegfeat check validates a recipe against real files and writes nothing",
+   "claim": "eegtable check validates a recipe against real files and writes nothing",
    "criterion": "exit 0; recordings listed; no output directory",
    "observed": "",
    "passed": true,
@@ -102,12 +102,12 @@
   {
    "nodeid": "tests/validation/test_cli.py::test_run_writes_a_bundle_per_recording",
    "measures": [
-    "eegfeat command",
+    "eegtable command",
     "runner"
    ],
    "kind": "behaviour",
    "dataset": "eegbci",
-   "claim": "eegfeat run writes per-epoch and cross-trial bundles with a JSON progress stream",
+   "claim": "eegtable run writes per-epoch and cross-trial bundles with a JSON progress stream",
    "criterion": "two bundles of each kind, as the recipe says; a second run refused",
    "observed": "",
    "passed": true,
@@ -513,9 +513,9 @@
    ],
    "kind": "decoding",
    "dataset": "eegbci",
-   "claim": "In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as well as mne.decoding.CSP",
+   "claim": "In MNE's CSP decoding pipeline, eegtable's CSP separates movement from rest about as well as mne.decoding.CSP",
    "criterion": "mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits",
-   "observed": "mean accuracy over 20 subjects: MNE 0.757, eegfeat 0.731",
+   "observed": "mean accuracy over 20 subjects: MNE 0.757, eegtable 0.731",
    "passed": true,
    "run": "2026-10-03T13:49:51+00:00",
    "cases": 1
@@ -917,7 +917,7 @@
    "dataset": "sleep",
    "claim": "Band power reproduces the staging accuracy of MNE's sleep-classification tutorial",
    "criterion": "random forest trained on one night scores the other within 0.03 of the tutorial's own features",
-   "observed": "accuracy on SC4011: tutorial 0.684, eegfeat 0.683",
+   "observed": "accuracy on SC4011: tutorial 0.684, eegtable 0.683",
    "passed": true,
    "run": "2026-10-03T13:49:42+00:00",
    "cases": 1

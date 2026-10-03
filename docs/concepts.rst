@@ -13,10 +13,10 @@ Concepts
 From MNE objects to feature tables
 ----------------------------------
 
-``eegfeat`` accepts MNE ``Spectrum``, ``EpochsTFR``, and ``Epochs`` objects.
+``eegtable`` accepts MNE ``Spectrum``, ``EpochsTFR``, and ``Epochs`` objects.
 Spectra and time-frequency representations are computed in MNE, then wrapped.
-:class:`~eegfeat.BandSignal` is the exception.
-:meth:`~eegfeat.BandSignal.from_epochs` applies its documented band-pass and
+:class:`~eegtable.BandSignal` is the exception.
+:meth:`~eegtable.BandSignal.from_epochs` applies its documented band-pass and
 Hilbert transform.
 
 .. grid:: 1 1 3 3
@@ -25,8 +25,8 @@ Hilbert transform.
 
    .. grid-item-card:: 1. Wrap MNE Objects
 
-      Convert MNE outputs into :class:`~eegfeat.Spectra`, :class:`~eegfeat.Signal`,
-      or :class:`~eegfeat.BandSignal`.
+      Convert MNE outputs into :class:`~eegtable.Spectra`, :class:`~eegtable.Signal`,
+      or :class:`~eegtable.BandSignal`.
 
    .. grid-item-card:: 2. Extract Features
 
@@ -34,9 +34,9 @@ Hilbert transform.
 
    .. grid-item-card:: 3. Query and Export
 
-      Filter columns with :meth:`~eegfeat.FeatureTable.select`, read
+      Filter columns with :meth:`~eegtable.FeatureTable.select`, read
       ``coverage``, or export with
-      :meth:`~eegfeat.FeatureTable.to_dataframe`.
+      :meth:`~eegtable.FeatureTable.to_dataframe`.
 
 The spectral estimator, the filter, and the trial grouping are arguments of the
 wrapper, or keys in a runner recipe. See :doc:`/guides/runner`.
@@ -52,22 +52,22 @@ The containers
 
    * - Container
      - Contents
-   * - :class:`~eegfeat.Spectra`
+   * - :class:`~eegtable.Spectra`
      - A power spectrum or a time-frequency representation, plus the estimator
        parameters that produced it. The container records which of the two it
        holds. An operation defined for one rejects the other.
-   * - :class:`~eegfeat.Signal`
+   * - :class:`~eegtable.Signal`
      - Broadband time-domain data.
-   * - :class:`~eegfeat.BandSignal`
+   * - :class:`~eegtable.BandSignal`
      - Band-limited analytic signal. ``from_epochs`` filters and takes the
        Hilbert transform.
-   * - :class:`~eegfeat.Band`
+   * - :class:`~eegtable.Band`
      - A named half-open frequency interval.
-   * - :class:`~eegfeat.Window`
+   * - :class:`~eegtable.Window`
      - A named time interval within the epoch.
 
 Bands and windows are named, not positional. A column records that it is
-``alpha`` in ``baseline``, and :meth:`~eegfeat.FeatureTable.select` matches
+``alpha`` in ``baseline``, and :meth:`~eegtable.FeatureTable.select` matches
 those fields.
 
 .. _concepts-feature-table:
@@ -75,7 +75,7 @@ those fields.
 Anatomy of a feature table
 --------------------------
 
-Every extractor returns a :class:`~eegfeat.FeatureTable` with five aligned
+Every extractor returns a :class:`~eegtable.FeatureTable` with five aligned
 parts.
 
 ``values``
@@ -84,15 +84,15 @@ parts.
 ``coverage``
    Same shape. Fraction of finite input behind each value, in ``[0, 1]``.
    This is the fraction of the input that was present. It is not an artifact
-   score. For Morlet input, ``support`` on :class:`~eegfeat.Spectra` is the fraction of
+   score. For Morlet input, ``support`` on :class:`~eegtable.Spectra` is the fraction of
    the requested window with complete wavelet support.
 
 ``meta``
-   One :class:`~eegfeat.FeatureMeta` per column. Fields are the measure, band,
+   One :class:`~eegtable.FeatureMeta` per column. Fields are the measure, band,
    space and its kind (``space_kind``), window and its bounds, normalization,
    unit, source, the frequency resolution, the phase and amplitude bands of a
    coupling measure, the node pair of a pairwise measure, and the
-   :class:`~eegfeat.ComputationSpec` that produced the column. Each field is
+   :class:`~eegtable.ComputationSpec` that produced the column. Each field is
    constant across rows.
 
 ``flags``
@@ -103,7 +103,7 @@ parts.
    Row identity. See below.
 
 Slicing, concatenation, and a round trip through disk keep this metadata.
-:meth:`~eegfeat.FeatureTable.select` matches the metadata. It does not parse
+:meth:`~eegtable.FeatureTable.select` matches the metadata. It does not parse
 the column name.
 
 .. _concepts-naming:
@@ -147,7 +147,7 @@ There are two kinds of table. They are not merged.
 
 **Per-epoch tables** have one row per epoch. ``row_ids`` is a
 ``(recording, epoch index, event)`` triple per row. Concatenation across
-recordings uses that triple. :func:`eegfeat.model.build_design` accepts only
+recordings uses that triple. :func:`eegtable.model.build_design` accepts only
 per-epoch tables.
 
 **Group-row tables** come from measures that are undefined on one trial.
@@ -173,6 +173,6 @@ returns ``NaN`` and records the condition in ``coverage`` and ``flags``.
 
 A finite value can still come from a small fraction of its input. Read
 ``coverage`` with the value. ``max_feature_missingness`` in
-:class:`~eegfeat.model.PreprocessingConfig` is a separate check. It drops a
+:class:`~eegtable.model.PreprocessingConfig` is a separate check. It drops a
 column when the fraction of ``NaN`` rows exceeds the threshold. It does not
 read ``coverage``.

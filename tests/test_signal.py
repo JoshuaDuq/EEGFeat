@@ -6,8 +6,8 @@ import mne
 import numpy as np
 import pytest
 
-from eegfeat.bands import BANDS_STANDARD, Band
-from eegfeat.signal import BandSignal, Signal, TimeSeries, _required_filter_length
+from eegtable.bands import BANDS_STANDARD, Band
+from eegtable.signal import BandSignal, Signal, TimeSeries, _required_filter_length
 
 BETA = Band("beta", 13.0, 30.0)
 

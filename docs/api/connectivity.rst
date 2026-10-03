@@ -6,27 +6,27 @@ Measures defined across trials or between sensor pairs. Their definitions are in
 ``connectivity`` extra.
 
 
-.. autofunction:: eegfeat.itpc
+.. autofunction:: eegtable.itpc
 
-.. autofunction:: eegfeat.ppc
+.. autofunction:: eegtable.ppc
 
-.. autofunction:: eegfeat.pac
+.. autofunction:: eegtable.pac
 
-.. autofunction:: eegfeat.pac_surrogates
+.. autofunction:: eegtable.pac_surrogates
 
-.. autofunction:: eegfeat.envelope_correlation
+.. autofunction:: eegtable.envelope_correlation
 
-.. autofunction:: eegfeat.spectral_connectivity
+.. autofunction:: eegtable.spectral_connectivity
 
-.. autofunction:: eegfeat.spectral_connectivity_time
+.. autofunction:: eegtable.spectral_connectivity_time
 
-.. autofunction:: eegfeat.wpli
+.. autofunction:: eegtable.wpli
 
-.. autoclass:: eegfeat.CommonSpatialPattern
+.. autoclass:: eegtable.CommonSpatialPattern
    :members:
 
-.. autofunction:: eegfeat.csp_features
+.. autofunction:: eegtable.csp_features
 
-.. autofunction:: eegfeat.global_efficiency
+.. autofunction:: eegtable.global_efficiency
 
-.. autofunction:: eegfeat.clustering_coefficient
+.. autofunction:: eegtable.clustering_coefficient

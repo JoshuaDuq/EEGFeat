@@ -33,7 +33,7 @@ Querying a table
 
 Three methods narrow a table further:
 
-- ``select`` matches :class:`~eegfeat.FeatureMeta` fields.
+- ``select`` matches :class:`~eegtable.FeatureMeta` fields.
 - ``take`` keeps rows by position or mask, in the order given, with their
   identities and flags.
 - ``drop_missing`` keeps the columns missing in at most a given fraction of
@@ -47,12 +47,12 @@ Three methods narrow a table further:
 Writing and reading
 -------------------
 
-``eegfeat.io`` writes a table to TSV and JSON, reads it back, and stacks
+``eegtable.io`` writes a table to TSV and JSON, reads it back, and stacks
 per-epoch tables into a dataset.
 
 .. code-block:: python
 
-   from eegfeat.io import read_dataset, read_table, write_table
+   from eegtable.io import read_dataset, read_table, write_table
 
    paths = write_table(spectral_features, "sub-01_features.tsv", rows=epochs.metadata)
    restored = read_table("sub-01_features.tsv")
@@ -69,10 +69,10 @@ Numeric descriptors retain their numerical values.
 
 The functions:
 
-- :func:`eegfeat.io.write_table` writes a TSV of values, a ``_coverage.tsv`` of
+- :func:`eegtable.io.write_table` writes a TSV of values, a ``_coverage.tsv`` of
   the same shape, and a JSON sidecar.
-- :func:`eegfeat.io.read_table` restores metadata, flags, and row identity.
-- :func:`eegfeat.io.read_dataset` stacks per-epoch tables and returns descriptor
+- :func:`eegtable.io.read_table` restores metadata, flags, and row identity.
+- :func:`eegtable.io.read_dataset` stacks per-epoch tables and returns descriptor
   columns separately from features.
 
 **File layout.** The filenames follow BIDS TSV and JSON sidecar conventions. The
@@ -91,7 +91,7 @@ cohort.
 Building a cohort
 -----------------
 
-:func:`eegfeat.stack_rows` concatenates per-epoch tables in input order.
+:func:`eegtable.stack_rows` concatenates per-epoch tables in input order.
 
 **Refusals.**
 
@@ -111,6 +111,6 @@ Building a cohort
        [sub_01_features, sub_02_features, sub_03_features], columns="union"
    )
 
-**Modeling input.** The frame passed to :func:`eegfeat.model.build_design` needs
+**Modeling input.** The frame passed to :func:`eegtable.model.build_design` needs
 matching ``recording``, ``epoch``, and ``event`` keys, plus the target and
 grouping columns. The cross-fitting workflow is in :doc:`/guides/modeling`.

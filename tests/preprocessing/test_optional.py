@@ -12,8 +12,8 @@ def blocked(name, *args, **kwargs):
         raise AssertionError('unexpected optional import: ' + name)
     return original(name, *args, **kwargs)
 builtins.__import__ = blocked
-import eegfeat
-from eegfeat.runner.cli import main
+import eegtable
+from eegtable.runner.cli import main
 try:
     main(['--version'])
 except SystemExit as error:
@@ -36,11 +36,11 @@ def blocked(name, *args, **kwargs):
         raise ModuleNotFoundError(name=name)
     return original(name, *args, **kwargs)
 builtins.__import__ = blocked
-from eegfeat.preprocessing import load_config
+from eegtable.preprocessing import load_config
 try:
     load_config('missing.yaml')
 except ModuleNotFoundError as error:
-    assert "pip install 'eegfeat[preprocessing]'" in str(error)
+    assert "pip install 'eegtable[preprocessing]'" in str(error)
 else:
     raise AssertionError('YAML import was not required')
 """

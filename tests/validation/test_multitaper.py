@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from scipy.integrate import trapezoid
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording
 
 MU = ef.Band("mu", 8.0, 13.0)

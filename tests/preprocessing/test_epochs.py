@@ -2,18 +2,18 @@ import mne
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import (
+from eegtable.preprocessing.config import (
     EventEpochSettings,
     EventSettings,
     ReferenceSettings,
     ThresholdSettings,
 )
-from eegfeat.preprocessing.epochs import make_epochs, reference_epochs
-from eegfeat.preprocessing.events import resolve_events
+from eegtable.preprocessing.epochs import make_epochs, reference_epochs
+from eegtable.preprocessing.events import resolve_events
 
 
 def test_threshold_rejection_matches_mne(raw):
-    from eegfeat.preprocessing.rejection import reject_epochs
+    from eegtable.preprocessing.rejection import reject_epochs
 
     settings = EventEpochSettings(
         EventSettings("stim", {"stimulus": 1}, stim_channel="STI", shortest_event=1), -0.2, 0.8
@@ -54,15 +54,15 @@ def test_missing_acquisition_reference_cannot_be_restored_after_rereferencing(ra
 
 @pytest.mark.parametrize("artifact_reference", ["average", ("Cz",)])
 def test_acquisition_reference_is_restored_before_artifact_reference(raw, artifact_reference):
-    from eegfeat.preprocessing.checks import validate_processing
-    from eegfeat.preprocessing.config import (
+    from eegtable.preprocessing.checks import validate_processing
+    from eegtable.preprocessing.config import (
         ArtifactSettings,
         ChannelSettings,
         FixedEpochSettings,
         ICASettings,
         ProcessingSettings,
     )
-    from eegfeat.preprocessing.pipeline import StageData, execute_numeric
+    from eegtable.preprocessing.pipeline import StageData, execute_numeric
 
     settings = ProcessingSettings(
         FixedEpochSettings(2),
@@ -96,8 +96,8 @@ def test_acquisition_reference_is_restored_before_artifact_reference(raw, artifa
     "artifact_reference,error", [("unknown", "missing channels"), ("VEOG", "good.*EEG")]
 )
 def test_preflight_rejects_invalid_artifact_reference(raw, artifact_reference, error):
-    from eegfeat.preprocessing.checks import validate_processing
-    from eegfeat.preprocessing.config import (
+    from eegtable.preprocessing.checks import validate_processing
+    from eegtable.preprocessing.config import (
         ArtifactSettings,
         FixedEpochSettings,
         ICASettings,
@@ -114,8 +114,12 @@ def test_preflight_rejects_invalid_artifact_reference(raw, artifact_reference, e
 
 
 def test_final_reference_locates_restored_electrodes(raw):
-    from eegfeat.preprocessing.config import ChannelSettings, FixedEpochSettings, ProcessingSettings
-    from eegfeat.preprocessing.pipeline import StageData, execute_numeric
+    from eegtable.preprocessing.config import (
+        ChannelSettings,
+        FixedEpochSettings,
+        ProcessingSettings,
+    )
+    from eegtable.preprocessing.pipeline import StageData, execute_numeric
 
     settings = ProcessingSettings(
         FixedEpochSettings(2),
@@ -128,8 +132,8 @@ def test_final_reference_locates_restored_electrodes(raw):
 
 
 def test_preflight_rejects_restoration_from_custom_referenced_source(raw):
-    from eegfeat.preprocessing.checks import validate_processing
-    from eegfeat.preprocessing.config import FixedEpochSettings, ProcessingSettings
+    from eegtable.preprocessing.checks import validate_processing
+    from eegtable.preprocessing.config import FixedEpochSettings, ProcessingSettings
 
     settings = ProcessingSettings(
         FixedEpochSettings(2), reference=ReferenceSettings("average", ("Cz",))

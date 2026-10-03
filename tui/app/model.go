@@ -12,16 +12,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeat/tui/styles"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
+	"github.com/JoshuaDuq/EEGTable/tui/styles"
 )
 
 type Backend interface {
-	Status(ctx context.Context) (eegfeat.Status, error)
-	Inspect(ctx context.Context, recording, stage string) (eegfeat.Gate, error)
-	Review(ctx context.Context, recording, target string, decision eegfeat.Decision) error
+	Status(ctx context.Context) (eegtable.Status, error)
+	Inspect(ctx context.Context, recording, stage string) (eegtable.Gate, error)
+	Review(ctx context.Context, recording, target string, decision eegtable.Decision) error
 	Reset(ctx context.Context, recording, stage string) (string, error)
-	Run(recording string) (eegfeat.Runner, error)
+	Run(recording string) (eegtable.Runner, error)
 	Viewer(recording, stage string) *exec.Cmd
 }
 
@@ -32,7 +32,7 @@ type Model struct {
 	width   int
 	height  int
 
-	status eegfeat.Status
+	status eegtable.Status
 	// statusSeq numbers status loads so a slow one cannot land after a newer one;
 	// statusInFlight keeps the idle poll to one Python process at a time.
 	statusSeq      int
@@ -65,12 +65,12 @@ const runDetail = "Finished checkpoints are kept; the stage in progress starts o
 type (
 	statusMsg struct {
 		seq    int
-		status eegfeat.Status
+		status eegtable.Status
 		err    error
 	}
 	gateMsg struct {
 		recording string
-		gate      eegfeat.Gate
+		gate      eegtable.Gate
 		err       error
 	}
 	savedMsg struct{ err error }
@@ -79,12 +79,12 @@ type (
 		err error
 	}
 	runStartedMsg struct {
-		runner    eegfeat.Runner
+		runner    eegtable.Runner
 		recording string
 		err       error
 	}
-	runEventMsg struct{ event eegfeat.Event }
-	runDoneMsg  struct{ result eegfeat.Result }
+	runEventMsg struct{ event eegtable.Event }
+	runDoneMsg  struct{ result eegtable.Result }
 	viewerMsg   struct{ failure string }
 	tickMsg     struct{}
 )
@@ -308,7 +308,7 @@ func (m Model) reload() (tea.Model, tea.Cmd) {
 	return m, m.loadStatus()
 }
 
-func (m *Model) setStatus(status eegfeat.Status) {
+func (m *Model) setStatus(status eegtable.Status) {
 	selected := m.selectedLabel()
 	stage := m.selectedStage().Stage
 	m.status = status

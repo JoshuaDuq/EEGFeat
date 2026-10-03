@@ -25,15 +25,15 @@ PhysioNet motor movement
      - lower during movement in at least 80 percent of 20 subjects; p below 1e-3
      - burst_rate mu: lower during movement in 20 of 20 subjects, mean difference -0.355; burst_rate beta: lower during movement in 20 of 20 subjects, mean difference -0.250; fraction_above_threshold mu: lower during movement in 20 of 20 subjects, mean difference -0.088; fraction_above_threshold beta: lower during movement in 20 of 20 subjects, mean difference -0.090; burst_duration mu: lower during movement in 20 of 20 subjects, mean difference -0.025; burst_duration beta: lower during movement in 17 of 20 subjects, mean difference -0.007
      - pass
-   * - eegfeat check names a channel the recordings lack (``eegfeat command``)
+   * - eegtable check names a channel the recordings lack (``eegtable command``)
      - exit 1 and the channel named
      - –
      - pass
-   * - eegfeat check validates a recipe against real files and writes nothing (``eegfeat command``)
+   * - eegtable check validates a recipe against real files and writes nothing (``eegtable command``)
      - exit 0; recordings listed; no output directory
      - –
      - pass
-   * - eegfeat run writes per-epoch and cross-trial bundles with a JSON progress stream (``eegfeat command``, ``runner``)
+   * - eegtable run writes per-epoch and cross-trial bundles with a JSON progress stream (``eegtable command``, ``runner``)
      - two bundles of each kind, as the recipe says; a second run refused
      - –
      - pass
@@ -141,9 +141,9 @@ PhysioNet motor movement
      - median duration of every state between 30 and 150 ms
      - median durations 68 to 96 ms
      - pass
-   * - In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as well as mne.decoding.CSP (``CommonSpatialPattern``)
+   * - In MNE's CSP decoding pipeline, eegtable's CSP separates movement from rest about as well as mne.decoding.CSP (``CommonSpatialPattern``)
      - mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits
-     - mean accuracy over 20 subjects: MNE 0.757, eegfeat 0.731
+     - mean accuracy over 20 subjects: MNE 0.757, eegtable 0.731
      - pass
    * - Orthogonalized envelope correlation is the Fisher-z mean of mne-connectivity's per-trial estimate (``envelope_correlation``)
      - relative error below 1e-9 on every pair
@@ -279,7 +279,7 @@ Sleep-EDF
      - pass
    * - Band power reproduces the staging accuracy of MNE's sleep-classification tutorial (``mean_psd``)
      - random forest trained on one night scores the other within 0.03 of the tutorial's own features
-     - accuracy on SC4011: tutorial 0.684, eegfeat 0.683
+     - accuracy on SC4011: tutorial 0.684, eegtable 0.683
      - pass
    * - Held-out permutation importance points at the derivation that carries sleep depth (``permutation_importance_over_folds``)
      - Pz-Oz carries more than 60 percent of the total; every value finite

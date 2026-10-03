@@ -7,7 +7,7 @@ from tests.test_io import _epoch_table
 
 
 def test_quality_report_writes_cohort_feature_and_definition_evidence(tmp_path):
-    from eegfeat.report import write_quality_report
+    from eegtable.report import write_quality_report
 
     table = _epoch_table()
     descriptors = pd.DataFrame({"condition": ["rest", "task", "rest"]})
@@ -24,8 +24,8 @@ def test_quality_report_writes_cohort_feature_and_definition_evidence(tmp_path):
 def _linked_bundle(tmp_path):
     from dataclasses import replace
 
-    from eegfeat.io import write_table
-    from eegfeat.provenance import identity
+    from eegtable.io import write_table
+    from eegtable.provenance import identity
 
     provenance = {
         "retained": 3,
@@ -54,7 +54,7 @@ def _linked_bundle(tmp_path):
 
 
 def test_recording_quality_restores_observed_retention_and_artifact_decisions(tmp_path):
-    import eegfeat.report as reporting
+    import eegtable.report as reporting
 
     path = _linked_bundle(tmp_path)
     summary = reporting.recording_quality([path])
@@ -70,8 +70,8 @@ def test_recording_quality_restores_observed_retention_and_artifact_decisions(tm
 
 
 def test_recording_quality_marks_unavailable_upstream_evidence_missing(tmp_path):
-    import eegfeat.report as reporting
-    from eegfeat.io import write_table
+    import eegtable.report as reporting
+    from eegtable.io import write_table
 
     path = tmp_path / "features.tsv"
     write_table(
@@ -88,8 +88,8 @@ def test_recording_quality_marks_unavailable_upstream_evidence_missing(tmp_path)
 def test_quality_report_includes_recording_retention_without_mutating_evidence(tmp_path):
     import numpy as np
 
-    import eegfeat.report as reporting
-    from eegfeat.quality import QualityPolicy
+    import eegtable.report as reporting
+    from eegtable.quality import QualityPolicy
 
     table = _epoch_table()
     values, coverage = table.values.copy(), table.coverage.copy()
@@ -114,7 +114,7 @@ def test_quality_report_includes_recording_retention_without_mutating_evidence(t
 def test_recording_quality_checks_bundle_payloads_and_saved_upstream_identity(tmp_path):
     import json
 
-    from eegfeat.report import recording_quality
+    from eegtable.report import recording_quality
 
     path = _linked_bundle(tmp_path)
     sidecar_path = path.with_suffix(".json")
@@ -132,7 +132,7 @@ def test_recording_quality_checks_bundle_payloads_and_saved_upstream_identity(tm
 def test_recording_quality_deduplicates_consistent_evidence_and_rejects_conflicts(tmp_path):
     import json
 
-    from eegfeat.report import recording_quality
+    from eegtable.report import recording_quality
 
     path = _linked_bundle(tmp_path)
     assert len(recording_quality([path, path])) == 1
@@ -148,7 +148,7 @@ def test_recording_quality_deduplicates_consistent_evidence_and_rejects_conflict
 
 
 def test_report_cli_includes_saved_recording_evidence(tmp_path):
-    from eegfeat.runner.cli import main
+    from eegtable.runner.cli import main
     from tests.test_provenance import _extract
 
     recipe, _, _ = _extract(tmp_path)

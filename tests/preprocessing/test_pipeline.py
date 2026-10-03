@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.preprocessing import open_workflow, preprocess, read_checkpoint, run_until
-from eegfeat.preprocessing.config import (
+from eegtable.preprocessing import open_workflow, preprocess, read_checkpoint, run_until
+from eegtable.preprocessing.config import (
     ArtifactSettings,
     AutoRejectSettings,
     EventEpochSettings,
@@ -17,7 +17,7 @@ from eegfeat.preprocessing.config import (
     ProcessingSettings,
     read_yaml,
 )
-from eegfeat.preprocessing.review import save_review
+from eegtable.preprocessing.review import save_review
 
 from .test_execution import config_for
 
@@ -94,12 +94,12 @@ def test_checkpointed_ica_review_and_autoreject_export(mixture, tmp_path):
 
 
 def test_candidate_and_review_spans_use_acquisition_time(raw):
-    from eegfeat.preprocessing.config import (
+    from eegtable.preprocessing.config import (
         AmplitudeSettings,
         AnnotationSettings,
         CropSettings,
     )
-    from eegfeat.preprocessing.pipeline import StageData, execute_numeric
+    from eegtable.preprocessing.pipeline import StageData, execute_numeric
 
     # A flat second at 12 s of the file, seen through a crop that removes the first 4 s.
     flat = slice(int(12 * raw.info["sfreq"]), int(13 * raw.info["sfreq"]))
@@ -124,7 +124,7 @@ def test_candidate_and_review_spans_use_acquisition_time(raw):
 
 
 def test_missing_review_decision_is_refused(raw):
-    from eegfeat.preprocessing.config import RegressionSettings
+    from eegtable.preprocessing.config import RegressionSettings
 
     artifact = ArtifactSettings("regression", RegressionSettings(("VEOG",)), "average")
     with pytest.raises(ValueError, match="review-artifact"):
@@ -135,7 +135,7 @@ def test_missing_review_decision_is_refused(raw):
 def test_configured_eeg_types_are_applied_before_requiring_eeg(raw, tmp_path, execution):
     from dataclasses import replace
 
-    from eegfeat.preprocessing.config import ChannelSettings
+    from eegtable.preprocessing.config import ChannelSettings
 
     names = raw.ch_names[:2]
     source = mne.io.RawArray(
@@ -157,7 +157,7 @@ def test_configured_eeg_types_are_applied_before_requiring_eeg(raw, tmp_path, ex
 
 @pytest.mark.parametrize("invalid", ["type", "sampling", "empty", "nonfinite", "no_eeg"])
 def test_load_and_prepare_reject_invalid_recordings(invalid):
-    from eegfeat.preprocessing.config import ChannelSettings
+    from eegtable.preprocessing.config import ChannelSettings
 
     source = mne.io.RawArray(np.zeros((1, 100)), mne.create_info(["Cz"], 100, "misc"))
     settings = ProcessingSettings(

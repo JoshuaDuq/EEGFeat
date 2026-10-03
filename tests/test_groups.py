@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from eegfeat.groups import aggregate
+from eegtable.groups import aggregate
 
 CH = ("C3", "Cz", "C4")
 

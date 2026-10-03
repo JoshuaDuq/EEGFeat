@@ -1,4 +1,4 @@
-"""The ``eegfeat`` command on real epochs files.
+"""The ``eegtable`` command on real epochs files.
 
 ``check`` must validate a recipe against the recordings and try the first one
 without writing; ``run`` must write a bundle per recording, with cross-trial
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from eegfeat.io import read_dataset, read_table
+from eegtable.io import read_dataset, read_table
 from tests.validation.loaders import Recording
 
 RECIPE = """
@@ -65,9 +65,9 @@ spatial = ["rois"]
 DATASET = "eegbci"
 
 
-def _eegfeat(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+def _eegtable(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "eegfeat", *args], cwd=cwd, capture_output=True, text=True
+        [sys.executable, "-m", "eegtable", *args], cwd=cwd, capture_output=True, text=True
     )
 
 
@@ -83,41 +83,41 @@ def workspace(eegbci_recordings: list[Recording], tmp_path_factory: pytest.TempP
 
 
 @pytest.mark.validates(
-    "eegfeat command",
+    "eegtable command",
     kind="behaviour",
-    claim="eegfeat check validates a recipe against real files and writes nothing",
+    claim="eegtable check validates a recipe against real files and writes nothing",
     criterion="exit 0; recordings listed; no output directory",
 )
 def test_check_validates_without_writing(workspace: Path) -> None:
-    result = _eegfeat("check", "recipe.toml", cwd=workspace)
+    result = _eegtable("check", "recipe.toml", cwd=workspace)
     assert result.returncode == 0, result.stderr
     assert "2" in result.stdout and "S001" in result.stdout
     assert not (workspace / "features").exists()
 
 
 @pytest.mark.validates(
-    "eegfeat command",
+    "eegtable command",
     kind="behaviour",
-    claim="eegfeat check names a channel the recordings lack",
+    claim="eegtable check names a channel the recordings lack",
     criterion="exit 1 and the channel named",
 )
 def test_check_reports_a_channel_the_data_lacks(workspace: Path) -> None:
     broken = RECIPE.replace('hand = ["C3", "C4"]', 'hand = ["C3", "C4", "Nope"]')
     (workspace / "broken.toml").write_text(broken)
-    result = _eegfeat("check", "broken.toml", cwd=workspace)
+    result = _eegtable("check", "broken.toml", cwd=workspace)
     assert result.returncode == 1, (result.stdout, result.stderr)
     assert "Nope" in result.stdout + result.stderr
 
 
 @pytest.mark.validates(
-    "eegfeat command",
+    "eegtable command",
     "runner",
     kind="behaviour",
-    claim="eegfeat run writes per-epoch and cross-trial bundles with a JSON progress stream",
+    claim="eegtable run writes per-epoch and cross-trial bundles with a JSON progress stream",
     criterion="two bundles of each kind, as the recipe says; a second run refused",
 )
 def test_run_writes_a_bundle_per_recording(workspace: Path) -> None:
-    result = _eegfeat("run", "recipe.toml", "--progress-json", cwd=workspace)
+    result = _eegtable("run", "recipe.toml", "--progress-json", cwd=workspace)
     assert result.returncode == 0, result.stderr
     events = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
     assert events, "the JSON progress stream was empty"
@@ -140,7 +140,7 @@ def test_run_writes_a_bundle_per_recording(workspace: Path) -> None:
     assert {meta.measure for meta in groups.meta} == {"itpc"}
 
     # A second run must refuse to overwrite earlier results unless told to.
-    again = _eegfeat("run", "recipe.toml", cwd=workspace)
+    again = _eegtable("run", "recipe.toml", cwd=workspace)
     assert again.returncode == 2, again.stderr
-    forced = _eegfeat("run", "recipe.toml", "--overwrite", cwd=workspace)
+    forced = _eegtable("run", "recipe.toml", "--overwrite", cwd=workspace)
     assert forced.returncode == 0, forced.stderr

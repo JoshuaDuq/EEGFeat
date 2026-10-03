@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from eegfeat.bands import BANDS_STANDARD, Band
+from eegtable.bands import BANDS_STANDARD, Band
 
 
 def test_mask_is_half_open_so_standard_bands_tile_without_overlap() -> None:
@@ -40,7 +40,7 @@ def test_integer_bounds_are_stored_as_floats() -> None:
 
 
 def test_integer_and_float_bounds_produce_one_parameter_hash() -> None:
-    from eegfeat.table import ComputationSpec
+    from eegtable.table import ComputationSpec
 
     def digest(band: Band) -> str:
         return ComputationSpec.create(

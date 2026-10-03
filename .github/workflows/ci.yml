@@ -76,13 +76,13 @@ jobs:
           python-version: "3.11"
       - run: pip install build
       - run: python -m build
-      - run: python -m venv /tmp/eegfeat-wheel
-      - run: /tmp/eegfeat-wheel/bin/pip install dist/*.whl
-      - run: /tmp/eegfeat-wheel/bin/python -c "import eegfeat"
-      - run: /tmp/eegfeat-wheel/bin/eegfeat --version
-      - run: cd /tmp && /tmp/eegfeat-wheel/bin/eegfeat model init model.yaml
-      - run: /tmp/eegfeat-wheel/bin/pip install "$(ls dist/*.whl)[preprocessing]"
-      - run: cd /tmp && /tmp/eegfeat-wheel/bin/eegfeat preprocess init preprocessing.yaml && /tmp/eegfeat-wheel/bin/eegfeat preprocess steps preprocessing.yaml
+      - run: python -m venv /tmp/eegtable-wheel
+      - run: /tmp/eegtable-wheel/bin/pip install dist/*.whl
+      - run: /tmp/eegtable-wheel/bin/python -c "import eegtable"
+      - run: /tmp/eegtable-wheel/bin/eegtable --version
+      - run: cd /tmp && /tmp/eegtable-wheel/bin/eegtable model init model.yaml
+      - run: /tmp/eegtable-wheel/bin/pip install "$(ls dist/*.whl)[preprocessing]"
+      - run: cd /tmp && /tmp/eegtable-wheel/bin/eegtable preprocess init preprocessing.yaml && /tmp/eegtable-wheel/bin/eegtable preprocess steps preprocessing.yaml
 
   preprocessing-minimum:
     runs-on: ubuntu-latest

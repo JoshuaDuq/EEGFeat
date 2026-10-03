@@ -22,9 +22,9 @@ import mne
 import numpy as np
 import pandas as pd
 
-import eegfeat.model as efm
-from eegfeat.io import read_dataset
-from eegfeat.runner import load_recipe, run
+import eegtable.model as efm
+from eegtable.io import read_dataset
+from eegtable.runner import load_recipe, run
 
 HERE = Path(__file__).resolve().parent
 RECIPE = HERE / "recipe.toml"

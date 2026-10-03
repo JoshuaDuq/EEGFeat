@@ -7,9 +7,9 @@ from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.aggregate import AggregationConfig
-from eegfeat.model.crossfit import cross_fit_regression
-from eegfeat.model.nulls import (
+from eegtable.model.aggregate import AggregationConfig
+from eegtable.model.crossfit import cross_fit_regression
+from eegtable.model.nulls import (
     _DEFAULT_AGGREGATION,
     NullConfig,
     _prediction_statistic,
@@ -18,8 +18,8 @@ from eegfeat.model.nulls import (
     permutation_test,
     permute,
 )
-from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
-from eegfeat.model.tuning import FoldFitError
+from eegtable.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegtable.model.tuning import FoldFitError
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 GRID = {"regressor__strategy": ["mean"]}
@@ -363,14 +363,14 @@ def test_the_shift_set_is_closed_under_composition(n_retained: int) -> None:
 
 @pytest.mark.parametrize("n_retained", [0, 1, 7])
 def test_short_runs_carry_no_shift(n_retained: int) -> None:
-    from eegfeat.model.nulls import is_permutation_valid_run
+    from eegtable.model.nulls import is_permutation_valid_run
 
     assert not is_permutation_valid_run(np.arange(1, n_retained + 1, dtype=int))
 
 
 @pytest.mark.parametrize("n_retained", [8, 11])
 def test_runs_with_enough_retained_trials_are_permutation_valid(n_retained: int) -> None:
-    from eegfeat.model.nulls import is_permutation_valid_run
+    from eegtable.model.nulls import is_permutation_valid_run
 
     assert is_permutation_valid_run(np.arange(1, n_retained + 1, dtype=int))
 
@@ -641,7 +641,7 @@ def test_permute_refuses_a_trial_without_a_subject_label() -> None:
 def test_a_run_of_missing_trial_counts_is_not_a_valid_run() -> None:
     # The count array is cast to int before the finiteness test, which made the test vacuous
     # and reported a run of NaNs as usable.
-    from eegfeat.model.nulls import is_permutation_valid_run
+    from eegtable.model.nulls import is_permutation_valid_run
 
     assert not is_permutation_valid_run(np.array([np.nan] * 10))
     assert is_permutation_valid_run(np.arange(10))

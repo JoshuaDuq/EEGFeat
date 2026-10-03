@@ -14,7 +14,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-import eegfeat.model as efm
+import eegtable.model as efm
 from tests.validation.loaders import Recording, load_sleep
 from tests.validation.test_regression import CONFIG, DEPTH, INNER, SEED, _relative_power
 from tests.validation.test_regression import design as design_fixture

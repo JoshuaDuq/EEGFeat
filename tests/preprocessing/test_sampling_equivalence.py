@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import FilterSettings, FixedEpochSettings, ResamplingSettings
-from eegfeat.preprocessing.epochs import make_epochs
-from eegfeat.preprocessing.events import resolve_events
-from eegfeat.preprocessing.sampling import crop_epochs, resample_epochs
+from eegtable.preprocessing.config import FilterSettings, FixedEpochSettings, ResamplingSettings
+from eegtable.preprocessing.epochs import make_epochs
+from eegtable.preprocessing.events import resolve_events
+from eegtable.preprocessing.sampling import crop_epochs, resample_epochs
 
 
 @pytest.mark.parametrize("target,padding", [(200.0, 0.5), (125.0, 0.52)])

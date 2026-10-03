@@ -12,7 +12,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording
 
 WINDOW = ef.Window("window", 0.5, 3.5)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import types
 
-import eegfeat.model as model
+import eegtable.model as model
 
 EXPECTED = {
     "CSPTransformer",

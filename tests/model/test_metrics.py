@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from eegfeat.model.metrics import (
+from eegtable.model.metrics import (
     classification_metrics,
     regression_metrics,
     within_condition_metrics,

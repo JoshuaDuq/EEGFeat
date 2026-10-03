@@ -1,7 +1,7 @@
 # The recipe behind the example outputs in this folder.
 #
-#   eegfeat check recipe.toml
-#   eegfeat run recipe.toml
+#   eegtable check recipe.toml
+#   eegtable run recipe.toml
 
 [inputs]
 root = "epochs"

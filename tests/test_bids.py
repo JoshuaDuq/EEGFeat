@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat import bids
-from eegfeat.preprocessing import load_recipe, open_workflow, read_checkpoint, run_until
-from eegfeat.preprocessing.config import EventEpochSettings, EventSettings, ProcessingSettings
+from eegtable import bids
+from eegtable.preprocessing import load_recipe, open_workflow, read_checkpoint, run_until
+from eegtable.preprocessing.config import EventEpochSettings, EventSettings, ProcessingSettings
 
 mne_bids = pytest.importorskip("mne_bids")
 pytest.importorskip("pybv")
@@ -216,7 +216,7 @@ def test_bids_channel_sidecar_mismatch_is_an_error(dataset):
 
 
 def test_cli_check_validates_bids_sidecar_sample_alignment(dataset, tmp_path, capsys):
-    from eegfeat.runner.cli import main
+    from eegtable.runner.cli import main
 
     root, paths = dataset
     events_path = paths[0].find_matching_sidecar(suffix="events", extension=".tsv")
@@ -235,7 +235,7 @@ def test_cli_check_validates_bids_sidecar_sample_alignment(dataset, tmp_path, ca
 
 
 def test_fixed_epochs_carry_descriptors_without_inventing_event_matches(dataset):
-    from eegfeat.preprocessing.config import FixedEpochSettings
+    from eegtable.preprocessing.config import FixedEpochSettings
 
     _, paths = dataset
     result = bids.preprocess_bids(
@@ -247,7 +247,7 @@ def test_fixed_epochs_carry_descriptors_without_inventing_event_matches(dataset)
 
 
 def test_missing_event_sidecar_is_supported_for_fixed_epochs(dataset):
-    from eegfeat.preprocessing.config import FixedEpochSettings
+    from eegtable.preprocessing.config import FixedEpochSettings
 
     _, paths = dataset
     events_path = paths[0].find_matching_sidecar(suffix="events", extension=".tsv")

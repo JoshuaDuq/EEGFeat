@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from eegfeat.bands import BANDS_STANDARD, Band
-from eegfeat.runner import RecipeError, load_recipe
-from eegfeat.spectra import Window
+from eegtable.bands import BANDS_STANDARD, Band
+from eegtable.runner import RecipeError, load_recipe
+from eegtable.spectra import Window
 
 HEAD = """
 [inputs]
@@ -387,7 +387,7 @@ def test_measure_whose_optional_dependency_is_missing_is_rejected(tmp_path) -> N
         pytest.skip("mne-connectivity is installed")
     problems = _problems(tmp_path, '[[features]]\nmeasure = "wpli"\n')
 
-    assert "eegfeat[connectivity]" in problems
+    assert "eegtable[connectivity]" in problems
 
 
 def test_a_measure_that_cannot_read_the_chosen_spectrum_is_refused(tmp_path) -> None:
@@ -627,7 +627,7 @@ def test_time_connectivity_recipe_accepts_frequency_grid_and_graph(tmp_path) -> 
 def test_recipes_reach_new_spectral_cycle_and_complexity_methods(
     tmp_path, measure, settings
 ) -> None:
-    from eegfeat.runner.measures import REQUIRES
+    from eegtable.runner.measures import REQUIRES
 
     pytest.importorskip(REQUIRES[measure][0])
     recipe = _load(tmp_path, f'[[features]]\nmeasure = "{measure}"\n{settings}')

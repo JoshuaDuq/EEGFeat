@@ -1,5 +1,5 @@
-from eegfeat.preprocessing.pipeline import OPERATIONS
-from eegfeat.preprocessing.stages import STAGES
+from eegtable.preprocessing.pipeline import OPERATIONS
+from eegtable.preprocessing.stages import STAGES
 
 
 def test_complete_acyclic_callable_catalog():
@@ -14,14 +14,14 @@ def test_complete_acyclic_callable_catalog():
 
 
 def test_artifact_reference_identity_owns_restored_electrodes():
-    from eegfeat.preprocessing.config import (
+    from eegtable.preprocessing.config import (
         ArtifactSettings,
         FixedEpochSettings,
         ICASettings,
         ProcessingSettings,
         ReferenceSettings,
     )
-    from eegfeat.preprocessing.stages import get_stage, stage_settings
+    from eegtable.preprocessing.stages import get_stage, stage_settings
 
     settings = ProcessingSettings(
         FixedEpochSettings(2),

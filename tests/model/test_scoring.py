@@ -5,7 +5,7 @@ import pytest
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
 
-from eegfeat.model.scoring import _selection_pearsonr, pearsonr_scorer, safe_pearsonr, scoring_dict
+from eegtable.model.scoring import _selection_pearsonr, pearsonr_scorer, safe_pearsonr, scoring_dict
 
 
 def test_perfect_correlation_is_one() -> None:

@@ -2,12 +2,12 @@ import mne
 import numpy as np
 import pytest
 
-from eegfeat.preprocessing.config import FixedEpochSettings, OutputSettings, ProcessingSettings
-from eegfeat.preprocessing.pipeline import preprocess
+from eegtable.preprocessing.config import FixedEpochSettings, OutputSettings, ProcessingSettings
+from eegtable.preprocessing.pipeline import preprocess
 
 
 def test_export_bundle(raw, tmp_path):
-    from eegfeat.preprocessing.io import validate_bundle, write_result
+    from eegtable.preprocessing.io import validate_bundle, write_result
 
     result = preprocess(raw, ProcessingSettings(FixedEpochSettings(2)))
     output = OutputSettings(tmp_path, "subject")
@@ -22,8 +22,8 @@ def test_export_bundle(raw, tmp_path):
 def test_export_keeps_float_metadata(raw, tmp_path):
     import pandas as pd
 
-    from eegfeat.preprocessing.config import EventEpochSettings, EventSettings
-    from eegfeat.preprocessing.io import write_result
+    from eegtable.preprocessing.config import EventEpochSettings, EventSettings
+    from eegtable.preprocessing.io import write_result
 
     # MNE stores epoch metadata as JSON at 10 significant digits; ordinary reaction
     # times have more, and that documented rounding must not fail the export.

@@ -1,12 +1,12 @@
 import numpy as np
 
-from eegfeat.preprocessing.artifacts import (
+from eegtable.preprocessing.artifacts import (
     apply_artifact,
     fit_eog_regression,
     reference_artifact_data,
     review_artifact,
 )
-from eegfeat.preprocessing.config import RegressionSettings
+from eegtable.preprocessing.config import RegressionSettings
 
 
 def test_regression_matches_mne_and_attenuates(raw):
@@ -34,8 +34,8 @@ def test_ssp_matches_mne_and_excludes_existing_projectors(raw):
     import mne
     from scipy.ndimage import gaussian_filter1d
 
-    from eegfeat.preprocessing.artifacts import fit_ssp
-    from eegfeat.preprocessing.config import SSPSettings
+    from eegtable.preprocessing.artifacts import fit_ssp
+    from eegtable.preprocessing.config import SSPSettings
 
     blink = np.zeros(raw.n_times)
     blink[600::900] = 3e-4

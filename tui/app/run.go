@@ -5,20 +5,20 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeat/tui/styles"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
+	"github.com/JoshuaDuq/EEGTable/tui/styles"
 )
 
-// liveRun mirrors a running `eegfeat preprocess run` for display only: which
+// liveRun mirrors a running `eegtable preprocess run` for display only: which
 // stages each recording has finished and the last lines Python wrote.
 type liveRun struct {
-	runner          eegfeat.Runner
+	runner          eegtable.Runner
 	recording       string
 	activeRecording string
 	completed       map[string]map[string]bool
 }
 
-func (r *liveRun) apply(event eegfeat.Event) {
+func (r *liveRun) apply(event eegtable.Event) {
 	switch event.Event {
 	case "subject_start":
 		r.activeRecording = event.Subject
@@ -36,7 +36,7 @@ func (r *liveRun) apply(event eegfeat.Event) {
 
 // record writes what an event adds to the log. A run silences MNE's narration,
 // so this trail of finished steps is all the log has to show while stages run.
-func (r *liveRun) record(log *logView, event eegfeat.Event) {
+func (r *liveRun) record(log *logView, event eegtable.Event) {
 	switch event.Event {
 	case "progress":
 		log.add(r.stepLine(event))
@@ -53,7 +53,7 @@ func (r *liveRun) record(log *logView, event eegfeat.Event) {
 
 // stepLine reads "[ 6/27] ✓ detect-bads", naming the recording only when the
 // run covers more than one. A review step is a gate reached, not work finished.
-func (r *liveRun) stepLine(event eegfeat.Event) string {
+func (r *liveRun) stepLine(event eegtable.Event) string {
 	glyph := styles.Value.Render(styles.CheckMark)
 	if strings.HasPrefix(event.Step, "review-") {
 		glyph = styles.Strong.Render(styles.ActiveMark)

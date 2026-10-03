@@ -11,7 +11,7 @@ def write_config(tmp_path, extra=""):
 
 
 def test_paths_and_defaults(tmp_path):
-    from eegfeat.preprocessing import load_config
+    from eegtable.preprocessing import load_config
 
     config = load_config(write_config(tmp_path))
     assert config.input.path == tmp_path / "raw.fif"
@@ -34,7 +34,7 @@ def test_paths_and_defaults(tmp_path):
     ],
 )
 def test_invalid_config(tmp_path, extra, match):
-    from eegfeat.preprocessing import load_config
+    from eegtable.preprocessing import load_config
 
     with pytest.raises((ValueError, TypeError), match=match):
         load_config(write_config(tmp_path, extra))
@@ -42,7 +42,7 @@ def test_invalid_config(tmp_path, extra, match):
 
 @pytest.mark.parametrize("value", [True, -1, float("inf"), "1"])
 def test_direct_settings_validate(value):
-    from eegfeat.preprocessing.config import FilterSettings
+    from eegtable.preprocessing.config import FilterSettings
 
     with pytest.raises((TypeError, ValueError), match="filter.l_freq"):
         FilterSettings(l_freq=value)

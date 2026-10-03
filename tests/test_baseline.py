@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from eegfeat.baseline import normalize
+from eegtable.baseline import normalize
 
 
 def _values() -> np.ndarray:

@@ -5,8 +5,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.table import ComputationSpec
+import eegtable as ef
+from eegtable.table import ComputationSpec
 
 _ERDS_FUNCTIONS = {
     "mean": ef.erds_mean,
@@ -198,10 +198,10 @@ def test_erds_matches_the_reference(
     base = ef.Window("base", manifest["windows"]["base"][0], manifest["windows"]["base"][1])
     stim = ef.Window("stim", manifest["windows"]["stim"][0], manifest["windows"]["stim"][1])
     # The reference pipeline's onset is the first single-sample crossing, which fires
-    # on every trial. eegfeat now requires the excursion to persist by default; the
+    # on every trial. eegtable now requires the excursion to persist by default; the
     # equivalence holds for the persistence-free setting, a deliberate divergence.
     kwargs = {"min_duration_ms": 0.0} if measure == "onset_latency" else {}
-    # The reference pipeline reports percent; eegfeat's default is now decibels.
+    # The reference pipeline reports percent; eegtable's default is now decibels.
     table = _ERDS_FUNCTIONS[measure](
         [signal],
         baseline=base,

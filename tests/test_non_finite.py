@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 from scipy.signal import hilbert
 
-import eegfeat as ef
-from eegfeat.bands import Band
-from eegfeat.signal import BandSignal, Signal
-from eegfeat.spectra import Window
+import eegtable as ef
+from eegtable.bands import Band
+from eegtable.signal import BandSignal, Signal
+from eegtable.spectra import Window
 
 SFREQ = 250.0
 N = 600
@@ -138,7 +138,7 @@ def test_a_band_measure_treats_infinity_as_missing_too(function, kwargs, bad) ->
 def test_an_infinite_channel_value_does_not_poison_its_roi() -> None:
     # The spatial aggregate is the last place a non-finite value can spread: one
     # channel's infinity would otherwise become every ROI it belongs to.
-    from eegfeat.groups import aggregate
+    from eegtable.groups import aggregate
 
     values = np.array([[[1.0], [3.0], [np.inf]]])
     coverage = np.ones_like(values)

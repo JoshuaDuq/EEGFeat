@@ -3,12 +3,12 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.bands import Band
-from eegfeat.phase import itpc, pac, ppc
-from eegfeat.signal import BandSignal
-from eegfeat.spectra import Window
-from eegfeat.table import ComputationSpec, FeatureTable
+import eegtable as ef
+from eegtable.bands import Band
+from eegtable.phase import itpc, pac, ppc
+from eegtable.signal import BandSignal
+from eegtable.spectra import Window
+from eegtable.table import ComputationSpec, FeatureTable
 
 SFREQ = 100.0
 ALPHA, GAMMA = Band("alpha", 8.0, 13.0), Band("gamma", 30.0, 45.0)
@@ -430,7 +430,7 @@ def test_pac_surrogates_matches_tensorpac_null_and_preserves_epoch_rows() -> Non
     pytest.importorskip("tensorpac")
     from tensorpac.methods import mean_vector_length, swap_blocks
 
-    import eegfeat.phase as phase_methods
+    import eegtable.phase as phase_methods
 
     slow, fast = _irregular_coupling()
     table = phase_methods.pac_surrogates(
@@ -480,7 +480,7 @@ def test_constant_amplitude_surrogates_do_not_report_significant_pac(normalize, 
     pytest.importorskip("tensorpac")
     from tensorpac.methods import mean_vector_length
 
-    from eegfeat.phase import pac_surrogates
+    from eegtable.phase import pac_surrogates
 
     times = np.arange(100) / SFREQ
     phase = np.random.default_rng(0).uniform(-np.pi, np.pi, (1, 1, times.size))
@@ -509,7 +509,7 @@ def test_constant_amplitude_surrogates_do_not_report_significant_pac(normalize, 
 
 
 def test_pac_maxstat_counts_floating_point_ties_like_scipy() -> None:
-    from eegfeat.phase import _adjust_pac_pvalues
+    from eegtable.phase import _adjust_pac_pvalues
 
     observed = np.ones((1, 2))
     null = np.full((20, 1, 2), np.nextafter(1.0, 0.0))
@@ -523,7 +523,7 @@ def test_pac_maxstat_counts_floating_point_ties_like_scipy() -> None:
 @pytest.mark.parametrize("surrogate", ["blocks", "circular"])
 def test_pac_surrogates_is_seeded_and_handles_spatial_null_before_inference(surrogate) -> None:
     pytest.importorskip("tensorpac")
-    import eegfeat.phase as phase_methods
+    import eegtable.phase as phase_methods
 
     slow, fast = _irregular_coupling()
     kwargs = dict(
@@ -558,7 +558,7 @@ def test_pac_surrogates_is_seeded_and_handles_spatial_null_before_inference(surr
 )
 def test_pac_surrogates_validates_inference_parameters(parameters, message) -> None:
     pytest.importorskip("tensorpac")
-    import eegfeat.phase as phase_methods
+    import eegtable.phase as phase_methods
 
     slow, fast = _irregular_coupling()
     with pytest.raises(ValueError, match=message):
@@ -567,7 +567,7 @@ def test_pac_surrogates_validates_inference_parameters(parameters, message) -> N
 
 def test_pac_surrogates_refuses_nonfinite_samples() -> None:
     pytest.importorskip("tensorpac")
-    import eegfeat.phase as phase_methods
+    import eegtable.phase as phase_methods
 
     slow, fast = _irregular_coupling()
     analytic = fast.analytic.copy()
@@ -582,7 +582,7 @@ def test_pac_adjustment_matches_the_prespecified_family(correction) -> None:
     from scipy.stats import false_discovery_control
     from tensorpac.methods import mean_vector_length, swap_blocks
 
-    import eegfeat.phase as phase_methods
+    import eegtable.phase as phase_methods
 
     slow, fast = _irregular_coupling()
     table = phase_methods.pac_surrogates(
@@ -622,7 +622,7 @@ def test_pac_surrogate_inference_computes_roi_null_before_statistics() -> None:
     pytest.importorskip("tensorpac")
     from tensorpac.methods import mean_vector_length, swap_blocks
 
-    import eegfeat.phase as phase_methods
+    import eegtable.phase as phase_methods
 
     slow, fast = _irregular_coupling()
     windows = [Window("early", 0.0, 2.0), Window("late", 2.1, 4.0)]

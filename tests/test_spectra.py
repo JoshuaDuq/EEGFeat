@@ -1,16 +1,16 @@
 import numpy as np
 import pytest
 
-from eegfeat.signal import Signal
-from eegfeat.spectra import (
+from eegtable.signal import Signal
+from eegtable.spectra import (
     Spectra,
     Window,
     gradient_weights,
     support_restricted_mask,
     trapezoid_weights,
 )
-from eegfeat.table import ComputationSpec
-from eegfeat.temporal import variance
+from eegtable.table import ComputationSpec
+from eegtable.temporal import variance
 
 
 def test_trapezoid_weights_sum_to_the_frequency_span() -> None:

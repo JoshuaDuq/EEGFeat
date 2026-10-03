@@ -7,8 +7,8 @@ API Reference
      Signatures, parameters, and return types.
    </p>
 
-These names are exported from ``eegfeat``, except ``eegfeat.model``,
-``eegfeat.microstates``, and ``eegfeat.preprocessing``, which live in their submodules. Definitions are in
+These names are exported from ``eegtable``, except ``eegtable.model``,
+``eegtable.microstates``, and ``eegtable.preprocessing``, which live in their submodules. Definitions are in
 :doc:`/methods/index`.
 
 Browse the complete :ref:`symbol index <genindex>` to find a function or class by name.

@@ -1,4 +1,4 @@
-// eegfeat-tui: an optional terminal front end for `eegfeat preprocess`.
+// eegtable-tui: an optional terminal front end for `eegtable preprocess`.
 package main
 
 import (
@@ -8,15 +8,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/app"
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeat/tui/styles"
+	"github.com/JoshuaDuq/EEGTable/tui/app"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
+	"github.com/JoshuaDuq/EEGTable/tui/styles"
 )
 
 func main() {
-	jobs := flag.Int("n-jobs", 1, "parallel jobs handed to `eegfeat preprocess run`")
+	jobs := flag.Int("n-jobs", 1, "parallel jobs handed to `eegtable preprocess run`")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: eegfeat-tui [--n-jobs N] preprocessing.yaml")
+		fmt.Fprintln(os.Stderr, "usage: eegtable-tui [--n-jobs N] preprocessing.yaml")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -28,18 +28,18 @@ func main() {
 	if _, err := os.Stat(config); err != nil {
 		fail(err)
 	}
-	binary, err := eegfeat.Locate()
+	binary, err := eegtable.Locate()
 	if err != nil {
 		fail(err)
 	}
 	styles.ApplyNoColorProfile()
-	client := eegfeat.Client{Binary: binary, Config: config, Jobs: *jobs}
+	client := eegtable.Client{Binary: binary, Config: config, Jobs: *jobs}
 	if _, err := tea.NewProgram(app.New(client, config), tea.WithAltScreen()).Run(); err != nil {
 		fail(err)
 	}
 }
 
 func fail(err error) {
-	fmt.Fprintln(os.Stderr, "eegfeat-tui:", err)
+	fmt.Fprintln(os.Stderr, "eegtable-tui:", err)
 	os.Exit(2)
 }

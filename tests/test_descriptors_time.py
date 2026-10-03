@@ -9,9 +9,9 @@ import pytest
 from scipy import stats
 from scipy.signal import butter, filtfilt, resample
 
-import eegfeat as ef
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+import eegtable as ef
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 SFREQ = 250.0
 

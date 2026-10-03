@@ -8,5 +8,5 @@ __pycache__/
 dist/
 docs/_build/
 .claude/launch.json
-tui/eegfeat-tui
+tui/eegtable-tui
 docs/superpowers/

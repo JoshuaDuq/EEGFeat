@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.preprocessing import load_config, open_workflow, read_checkpoint
-from eegfeat.preprocessing.config import read_yaml
-from eegfeat.runner import load_recipe, run
-from eegfeat.runner.cli import main
+from eegtable.preprocessing import load_config, open_workflow, read_checkpoint
+from eegtable.preprocessing.config import read_yaml
+from eegtable.runner import load_recipe, run
+from eegtable.runner.cli import main
 
 
 def test_cli_init_and_catalog(tmp_path, capsys):
@@ -72,7 +72,7 @@ def test_cli_return_codes_and_review_gate(raw, tmp_path, capsys):
     assert main(["preprocess", "check", str(config)]) == 0
     assert not (tmp_path / "preprocessed").exists()
     assert main(["preprocess", "run", str(config)]) == 3
-    assert f"eegfeat preprocess review {config} raw" in capsys.readouterr().out
+    assert f"eegtable preprocess review {config} raw" in capsys.readouterr().out
     assert main(["preprocess", "status", str(config)]) == 0
     assert "review-raw: needs-review" in capsys.readouterr().out
     assert main(["preprocess", "step", str(config), "export"]) == 2
@@ -83,7 +83,7 @@ def test_cli_return_codes_and_review_gate(raw, tmp_path, capsys):
 def test_export_feeds_feature_runner_and_hides_checkpoints(raw, tmp_path, capsys):
     config = _write_config(raw, tmp_path, "disabled")
     assert main(["preprocess", "run", str(config)]) == 0
-    assert "eegfeat init" in capsys.readouterr().out
+    assert "eegtable init" in capsys.readouterr().out
     assert main(["preprocess", "run", str(config)]) == 0
     assert main(["preprocess", "status", str(config), "--verify"]) == 0
     recipe = tmp_path / "recipe.toml"
@@ -112,16 +112,16 @@ def test_cohort_run_mirrors_tree_and_isolates_failures(raw, tmp_path, capsys):
     assert "Opening raw data file" not in out
     assert (tmp_path / "preprocessed" / "sub-01" / "sub-01_epo.fif").exists()
     assert (tmp_path / "preprocessed" / "sub-02" / "sub-02_epo.fif").exists()
-    assert "eegfeat init" not in out
+    assert "eegtable init" not in out
     assert main(["preprocess", "run", str(config), "--recording", "sub-02"]) == 0
-    assert "eegfeat init" in capsys.readouterr().out
+    assert "eegtable init" in capsys.readouterr().out
 
 
 def test_cohort_gate_prints_complete_commands_and_status_summary(raw, tmp_path, capsys):
     config = _write_cohort(raw, tmp_path, "required", "sub-01", "sub-02")
     assert main(["preprocess", "run", str(config)]) == 3
     out = capsys.readouterr().out
-    assert f"eegfeat preprocess review {config} --recording sub-01 raw" in out
+    assert f"eegtable preprocess review {config} --recording sub-01 raw" in out
     assert main(["preprocess", "status", str(config)]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert any(line.startswith("sub-01") and "awaiting review-raw" in line for line in lines)
@@ -190,20 +190,20 @@ def test_stale_checkpoint_is_reported_as_a_command(raw, tmp_path, capsys):
     config.write_text(config.read_text().replace("duration: 2.0", "duration: 1.0"))
     assert main(["preprocess", "run", str(config)]) == 1
     out = capsys.readouterr().out
-    assert f"eegfeat preprocess reset {config} --from events" in out
+    assert f"eegtable preprocess reset {config} --from events" in out
     assert "CONFIG" not in out
     assert main(["preprocess", "status", str(config)]) == 0
-    assert f"Next: eegfeat preprocess reset {config} --from events" in capsys.readouterr().out
+    assert f"Next: eegtable preprocess reset {config} --from events" in capsys.readouterr().out
 
 
 def test_cohort_status_suggests_the_next_command(raw, tmp_path, capsys):
     config = _write_cohort(raw, tmp_path, "required", "sub-01", "sub-02")
     assert main(["preprocess", "status", str(config)]) == 0
-    assert f"Next: eegfeat preprocess run {config}" in capsys.readouterr().out
+    assert f"Next: eegtable preprocess run {config}" in capsys.readouterr().out
     assert main(["preprocess", "run", str(config)]) == 3
     capsys.readouterr()
     assert main(["preprocess", "status", str(config)]) == 0
-    assert f"Next: eegfeat preprocess review {config} raw" in capsys.readouterr().out
+    assert f"Next: eegtable preprocess review {config} raw" in capsys.readouterr().out
 
 
 def test_cohort_status_verify_rereads_every_recording(raw, tmp_path, capsys):
@@ -229,7 +229,7 @@ def test_stage_arguments_are_checked_before_any_recording_runs(raw, tmp_path, ca
 def test_only_unexpected_failures_keep_a_traceback(
     raw, tmp_path, capsys, monkeypatch, error, traced
 ):
-    from eegfeat.preprocessing import execution
+    from eegtable.preprocessing import execution
 
     config = _write_cohort(raw, tmp_path, "disabled", "sub-01")
 
@@ -246,11 +246,11 @@ def test_only_unexpected_failures_keep_a_traceback(
 def test_run_summary_points_at_the_pending_review(raw, tmp_path, capsys):
     config = _write_cohort(raw, tmp_path, "required", "sub-01", "sub-02")
     assert main(["preprocess", "run", str(config)]) == 3
-    assert f"Next: eegfeat preprocess review {config} raw" in capsys.readouterr().out
+    assert f"Next: eegtable preprocess review {config} raw" in capsys.readouterr().out
 
 
 def test_stage_reporter_shows_progress_only_on_a_terminal():
-    from eegfeat.preprocessing.cli import StageReporter
+    from eegtable.preprocessing.cli import StageReporter
 
     class Tty(io.StringIO):
         def isatty(self):
@@ -457,4 +457,4 @@ def test_a_saved_decision_turns_the_gate_pending_until_run(raw, tmp_path, capsys
     assert states["review-raw"] == "pending"
     assert entry["next"] == {"kind": "run", "stage": "review-raw"}
     assert main(["preprocess", "status", str(config)]) == 0
-    assert f"Next: eegfeat preprocess run {config}" in capsys.readouterr().out
+    assert f"Next: eegtable preprocess run {config}" in capsys.readouterr().out

@@ -3,12 +3,12 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat._expand import expand_signal
-from eegfeat.bands import Band
-from eegfeat.signal import BandSignal
-from eegfeat.spectra import Window
-from eegfeat.table import FeatureTable
+import eegtable as ef
+from eegtable._expand import expand_signal
+from eegtable.bands import Band
+from eegtable.signal import BandSignal
+from eegtable.spectra import Window
+from eegtable.table import FeatureTable
 
 ALPHA, BETA = Band("alpha", 8.0, 13.0), Band("beta", 13.0, 30.0)
 EARLY, LATE = Window("early", -1.0, 0.0), Window("late", 0.0, 1.0)

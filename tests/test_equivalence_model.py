@@ -7,9 +7,9 @@ import pytest
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.crossfit import cross_fit_classification, cross_fit_regression
-from eegfeat.model.scoring import scoring_dict
-from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegtable.model.crossfit import cross_fit_classification, cross_fit_regression
+from eegtable.model.scoring import scoring_dict
+from eegtable.model.splits import InnerSplit, loso_folds, within_subject_folds
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "model_reference.npz"
 
@@ -95,8 +95,8 @@ def test_within_subject_predictions_match_the_reference_pipeline(
 def test_nested_loso_classification_matches_reference(
     reference: dict[str, np.ndarray],
 ) -> None:
-    from eegfeat.model.estimators import logistic_grid, logistic_pipeline
-    from eegfeat.model.transformers import PreprocessingConfig
+    from eegtable.model.estimators import logistic_grid, logistic_pipeline
+    from eegtable.model.transformers import PreprocessingConfig
 
     clf_X = reference["clf_X"]
     clf_y = reference["clf_y"]

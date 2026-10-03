@@ -16,8 +16,8 @@ from sklearn.metrics import make_scorer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from eegfeat.model.estimators import ridge_pipeline
-from eegfeat.model.importance import (
+from eegtable.model.estimators import ridge_pipeline
+from eegtable.model.importance import (
     Importance,
     aggregate_by,
     permutation_importance,
@@ -25,10 +25,10 @@ from eegfeat.model.importance import (
     shap_importance,
     shap_importance_over_folds,
 )
-from eegfeat.model.scoring import pearsonr_scorer
-from eegfeat.model.splits import Fold, InnerSplit, loso_folds
-from eegfeat.model.transformers import PreprocessingConfig
-from eegfeat.table import FeatureMeta
+from eegtable.model.scoring import pearsonr_scorer
+from eegtable.model.splits import Fold, InnerSplit, loso_folds
+from eegtable.model.transformers import PreprocessingConfig
+from eegtable.table import FeatureMeta
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 needs_shap = pytest.mark.skipif(
@@ -51,7 +51,7 @@ def test_shap_binary_tree_output_keeps_class_and_feature_axes_separate() -> None
     fake_shap = types.ModuleType("shap")
     fake_shap.TreeExplainer = TreeExplainer
     with (
-        patch("eegfeat.model.importance.require_shap", return_value=None),
+        patch("eegtable.model.importance.require_shap", return_value=None),
         patch.dict("sys.modules", {"shap": fake_shap}),
     ):
         result = shap_importance(model, X, ["a", "b", "c"])
@@ -75,7 +75,7 @@ def _shap_stand_in() -> Iterator[None]:
     module = types.ModuleType("shap")
     module.LinearExplainer = _LinearExplainerStandIn  # type: ignore[attr-defined]
     with (
-        patch("eegfeat.model.importance.require_shap", return_value=None),
+        patch("eegtable.model.importance.require_shap", return_value=None),
         patch.dict("sys.modules", {"shap": module}),
     ):
         yield
@@ -152,7 +152,7 @@ def test_shap_kernel_uses_estimator_predict_fn_for_transformed_features() -> Non
     pipe.fit(X, y)
 
     with (
-        patch("eegfeat.model.importance.require_shap", return_value=None),
+        patch("eegtable.model.importance.require_shap", return_value=None),
         patch.dict("sys.modules", {"shap": fake_shap}),
     ):
         shap_importance(pipe, X, ["f1", "f2"])
@@ -172,9 +172,9 @@ def test_shap_stage_requires_min_valid_fold_fraction() -> None:
     inner = InnerSplit(grouping="subject", n_splits=2)
 
     with (
-        patch("eegfeat.model.importance.require_shap", return_value=None),
+        patch("eegtable.model.importance.require_shap", return_value=None),
         patch(
-            "eegfeat.model.importance.shap_importance",
+            "eegtable.model.importance.shap_importance",
             side_effect=[
                 Importance(
                     feature_names=("f1", "f2"),
@@ -216,7 +216,7 @@ def test_permutation_importance_stage_requires_min_valid_fold_fraction() -> None
 
     with (
         patch(
-            "eegfeat.model.importance.permutation_importance",
+            "eegtable.model.importance.permutation_importance",
             side_effect=[
                 Importance(
                     feature_names=("f1", "f2"),
@@ -506,7 +506,7 @@ def test_an_infinite_fold_value_is_skipped_like_a_missing_one() -> None:
     # A fold counts as successful when any feature survived it, so one feature's
     # infinity must not become that feature's mean across folds: the guard above
     # already calls a non-finite value missing, and nanmean alone does not.
-    from eegfeat.model.importance import _combine_folds
+    from eegtable.model.importance import _combine_folds
 
     folds = [
         np.array([1.0, np.inf, 3.0]),

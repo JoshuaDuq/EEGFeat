@@ -1,6 +1,6 @@
 import pytest
 
-from eegfeat.naming import feature_name
+from eegtable.naming import feature_name
 
 
 def test_renders_all_six_fields_in_canonical_order() -> None:

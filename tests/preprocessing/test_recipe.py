@@ -1,7 +1,7 @@
 import pytest
 
-from eegfeat.preprocessing import load_config, load_recipe
-from eegfeat.preprocessing.config import WorkflowSettings
+from eegtable.preprocessing import load_config, load_recipe
+from eegtable.preprocessing.config import WorkflowSettings
 
 EPOCHS = "epochs: {kind: fixed, duration: 2.0}\n"
 

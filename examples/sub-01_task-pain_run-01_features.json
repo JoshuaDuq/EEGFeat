@@ -1,5 +1,5 @@
 {
-  "eegfeat_version": "0.1.0.dev0",
+  "eegtable_version": "0.1.0.dev0",
   "n_rows": 16,
   "rows": "epochs",
   "row_labels": null,
@@ -4023,7 +4023,7 @@
     },
     "software": {
       "python": "3.11.14",
-      "eegfeat": "0.1.0.dev0",
+      "eegtable": "0.1.0.dev0",
       "mne": "1.13.2",
       "numpy": "2.4.6",
       "scipy": "1.17.1",

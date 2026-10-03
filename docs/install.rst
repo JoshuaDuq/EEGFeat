@@ -31,7 +31,7 @@ Setup
 -----
 
 Choose your operating system. Run these commands in a terminal to create
-an environment and install EEGFeat from source.
+an environment and install EEGTable from source.
 
 .. tab-set::
    :sync-group: operating-system
@@ -42,8 +42,8 @@ an environment and install EEGFeat from source.
 
       .. code-block:: bash
 
-         git clone https://github.com/JoshuaDuq/EEGFeat.git
-         cd EEGFeat
+         git clone https://github.com/JoshuaDuq/EEGTable.git
+         cd EEGTable
          python3 -m venv .venv
          source .venv/bin/activate
          pip install --upgrade pip
@@ -55,8 +55,8 @@ an environment and install EEGFeat from source.
 
       .. code-block:: powershell
 
-         git clone https://github.com/JoshuaDuq/EEGFeat.git
-         cd EEGFeat
+         git clone https://github.com/JoshuaDuq/EEGTable.git
+         cd EEGTable
          py -3.11 -m venv .venv
          .\.venv\Scripts\Activate.ps1
          python -m pip install --upgrade pip
@@ -76,17 +76,17 @@ Optional extras.
      - Used For
    * - ``[connectivity]``
      - ``mne-connectivity>=0.7``
-     - Weighted Phase Lag Index (:func:`~eegfeat.wpli`).
+     - Weighted Phase Lag Index (:func:`~eegtable.wpli`).
    * - ``[microstates]``
      - ``scikit-learn>=1.3``
-     - GFP peak clustering and microstate segmentation (``eegfeat.microstates``).
+     - GFP peak clustering and microstate segmentation (``eegtable.microstates``).
    * - ``[model]``
      - ``scikit-learn>=1.3``
      - Design matrices, grouped cross-fitting, metrics, nulls, uncertainty, and
-       model selection (``eegfeat.model``, :doc:`/api/model`).
+       model selection (``eegtable.model``, :doc:`/api/model`).
    * - ``[importance]``
      - ``scikit-learn>=1.3``, ``shap>=0.45``
-     - SHAP explanations (``eegfeat.model.importance``). Permutation importance
+     - SHAP explanations (``eegtable.model.importance``). Permutation importance
        is in the ``model`` extra.
    * - ``[preprocessing]``
      - ``mne>=1.13.2``, ``PyYAML``, ``scikit-learn``, ``h5io``, ``h5py``, ``filelock``
@@ -139,7 +139,7 @@ Modeling needs the ``model`` extra. SHAP needs the ``importance`` extra.
 Permutation importance is included in ``model``.
 
 The preprocessing terminal front end is a Go program, not a Python extra.
-Build it with ``cd tui && go build -o eegfeat-tui .`` (Go 1.24 or newer).
+Build it with ``cd tui && go build -o eegtable-tui .`` (Go 1.24 or newer).
 Keys are in :doc:`/guides/preprocessing`.
 
 Verification

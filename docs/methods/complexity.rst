@@ -121,7 +121,7 @@ Additional AntroPy Complexity Estimators
 ----------------------------------------
 
 The following estimators use AntroPy rather than independent reimplementations.
-Install ``eegfeat[complexity]``. They accept broadband signals or band envelopes,
+Install ``eegtable[complexity]``. They accept broadband signals or band envelopes,
 compute each channel/window independently, and preserve row identity, coverage,
 and computation metadata. ROI and global columns average the channel estimates.
 Non-finite samples raise errors; deleting gaps would change the sequence.
@@ -326,7 +326,7 @@ Coverage, duration, occurrence, and transitions are then computed as follows:
 - **transitions**: row-normalized counts of successive runs.
 
 **Requirement**
-   Segmentation requires scikit-learn (``pip install eegfeat[microstates]``).
+   Segmentation requires scikit-learn (``pip install eegtable[microstates]``).
 
 References
 ----------

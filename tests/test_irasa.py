@@ -4,9 +4,9 @@ from importlib.util import find_spec
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window, band_integration_weights
+from eegtable.bands import Band
+from eegtable.signal import Signal
+from eegtable.spectra import Window, band_integration_weights
 
 SFREQ = 200.0
 ALPHA = Band("alpha", 8.0, 13.0)
@@ -32,8 +32,8 @@ def _signal(values=None):
 
 
 def _compute(signal, **parameters):
-    assert find_spec("eegfeat.irasa") is not None, "IRASA is not implemented"
-    from eegfeat.irasa import irasa
+    assert find_spec("eegtable.irasa") is not None, "IRASA is not implemented"
+    from eegtable.irasa import irasa
 
     return irasa(
         [signal],
@@ -84,8 +84,8 @@ def test_irasa_preserves_signed_residuals_and_total_power():
     values = np.random.default_rng(1).normal(size=2000)
     band = Band("beta", 13, 30)
     signal = _signal(values)
-    assert find_spec("eegfeat.irasa") is not None, "IRASA is not implemented"
-    from eegfeat.irasa import irasa
+    assert find_spec("eegtable.irasa") is not None, "IRASA is not implemented"
+    from eegtable.irasa import irasa
 
     table = irasa([signal], windows=(WINDOW,), bands=(band,), hset=FACTORS, include_global=False)
     freqs, power = compute_spectrum(values, SFREQ, nperseg=400, noverlap=200)
@@ -100,7 +100,7 @@ def test_irasa_retains_bins_bracketing_non_grid_aligned_band_boundaries(band):
     pytest.importorskip("neurodsp")
     from neurodsp.aperiodic import compute_irasa, fit_irasa
 
-    from eegfeat.irasa import irasa
+    from eegtable.irasa import irasa
 
     signal = _signal()
     fit_range = (2.1, 39.9)
@@ -176,8 +176,8 @@ def test_irasa_refuses_invalid_parameters(parameters):
 
 
 def test_irasa_refuses_integer_resampling_factors():
-    assert find_spec("eegfeat.irasa") is not None, "IRASA is not implemented"
-    from eegfeat.irasa import irasa
+    assert find_spec("eegtable.irasa") is not None, "IRASA is not implemented"
+    from eegtable.irasa import irasa
 
     with pytest.raises(ValueError, match="hset"):
         irasa([_signal()], windows=(WINDOW,), bands=(ALPHA,), hset=(1.0, 2.0))
@@ -185,7 +185,7 @@ def test_irasa_refuses_integer_resampling_factors():
 
 @pytest.mark.parametrize("factor", [1.00001, 1.99999])
 def test_irasa_refuses_factors_that_round_to_integers(factor):
-    from eegfeat.irasa import irasa
+    from eegtable.irasa import irasa
 
     with pytest.raises(ValueError, match="hset"):
         irasa([_signal()], windows=(WINDOW,), bands=(ALPHA,), hset=(factor,))

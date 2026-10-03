@@ -8,7 +8,7 @@ import pytest
 from scipy import stats
 from sklearn.metrics import roc_auc_score
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording
 
 WHOLE_EPOCH = ef.Window("epoch", 0.0, 30.0)

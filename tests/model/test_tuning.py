@@ -6,17 +6,17 @@ from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import Pipeline
 
-from eegfeat.model.aggregate import subject_r_scorer
-from eegfeat.model.estimators import (
+from eegtable.model.aggregate import subject_r_scorer
+from eegtable.model.estimators import (
     elasticnet_grid,
     elasticnet_pipeline,
     ridge_grid,
     ridge_pipeline,
 )
-from eegfeat.model.scoring import scoring_dict
-from eegfeat.model.splits import InnerSplit
-from eegfeat.model.transformers import PreprocessingConfig
-from eegfeat.model.tuning import FoldFitError, fit_untuned, tune
+from eegtable.model.scoring import scoring_dict
+from eegtable.model.splits import InnerSplit
+from eegtable.model.transformers import PreprocessingConfig
+from eegtable.model.tuning import FoldFitError, fit_untuned, tune
 
 PIPE = Pipeline([("regressor", DummyRegressor(strategy="mean"))])
 GRID = {"regressor__strategy": ["mean", "median"]}

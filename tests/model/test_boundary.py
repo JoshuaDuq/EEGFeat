@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-MODEL = pathlib.Path(__file__).parents[2] / "src" / "eegfeat" / "model"
+MODEL = pathlib.Path(__file__).parents[2] / "src" / "eegtable" / "model"
 
 
 def _imported_modules(path: pathlib.Path) -> set[str]:
@@ -21,7 +21,7 @@ def _imported_modules(path: pathlib.Path) -> set[str]:
 
 @pytest.mark.parametrize("path", sorted(MODEL.glob("*.py")), ids=lambda p: p.name)
 def test_no_model_module_imports_the_runner(path: pathlib.Path) -> None:
-    assert not {n for n in _imported_modules(path) if n.startswith("eegfeat.runner")}
+    assert not {n for n in _imported_modules(path) if n.startswith("eegtable.runner")}
 
 
 @pytest.mark.parametrize("path", sorted(MODEL.glob("*.py")), ids=lambda p: p.name)
@@ -36,7 +36,7 @@ def test_no_model_module_reads_toml_or_writes_files(path: pathlib.Path) -> None:
     assert ".write_text(" not in source
 
 
-def test_top_level_eegfeat_does_not_import_model() -> None:
-    # Importing eegfeat must not cost scikit-learn.
+def test_top_level_eegtable_does_not_import_model() -> None:
+    # Importing eegtable must not cost scikit-learn.
     init = (MODEL.parent / "__init__.py").read_text()
-    assert "eegfeat.model" not in init
+    assert "eegtable.model" not in init

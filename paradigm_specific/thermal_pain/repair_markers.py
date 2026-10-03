@@ -2,11 +2,11 @@
 
 The BrainVision derivatives (BIDS and every decomb stage) share one marker file per run,
 byte for byte, so each is rewritten from a freshly converted BIDS tree whose positions must
-match. eegfeat bundles get the event name renamed in the recipe, the events ledger, the
+match. eegtable bundles get the event name renamed in the recipe, the events ledger, the
 epochs' event_id and the manifest's provenance, with the manifest hashes recomputed.
 
     python paradigm_specific/thermal_pain/repair_markers.py --fixed-bids FIXED \\
-        --derivatives BIDS_EEG DECOMB_STAGE... --bundles EEGFEAT --archive ARCHIVE
+        --derivatives BIDS_EEG DECOMB_STAGE... --bundles EEGTABLE --archive ARCHIVE
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ import mne
 import pandas as pd
 import yaml
 
-from eegfeat.preprocessing.config import read_yaml
-from eegfeat.preprocessing.provenance import canonical_json, file_hash
+from eegtable.preprocessing.config import read_yaml
+from eegtable.preprocessing.provenance import canonical_json, file_hash
 
 GENERIC = {"Stimulus/S  1": "Trig_therm/T  1", "Stimulus/S  2": "Volume/V  1"}
 RUN = re.compile(r"(sub-[A-Za-z0-9]+)_task-thermalactive_run-(\d+)")
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         help="trees holding *_eeg.vmrk to rewrite",
     )
     parser.add_argument(
-        "--bundles", type=Path, default=None, help="EEGFeat tree holding *_preprocessing.json"
+        "--bundles", type=Path, default=None, help="EEGTable tree holding *_preprocessing.json"
     )
     parser.add_argument(
         "--archive", type=Path, required=True, help="where originals are copied first"

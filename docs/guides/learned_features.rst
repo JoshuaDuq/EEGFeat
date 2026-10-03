@@ -7,7 +7,7 @@ prediction. A table assembled from separately cross-fitted CSP features remains
 unsafe for classifier cross-validation, because other folds' feature fits can
 encode the current test labels; ``build_design`` continues to reject it.
 
-Install ``eegfeat[model]`` for pipelines and ``eegfeat[riemann]`` for pyRiemann
+Install ``eegtable[model]`` for pipelines and ``eegtable[riemann]`` for pyRiemann
 covariance and tangent-space estimation. These APIs accept finite real epochs,
 with the same sensor names, sensor order, sampling frequency, and preprocessing
 across recordings. Choose the frequency band and crop the analysis window on
@@ -23,7 +23,7 @@ in one call, with the same polarity-invariant algorithm and output measures.
 
 .. code-block:: python
 
-   from eegfeat import MicrostateModel, microstate_coverage, Window
+   from eegtable import MicrostateModel, microstate_coverage, Window
 
    model = MicrostateModel.fit(training_signal, n_states=4)
    held_out = model.segment(new_signal, min_duration_ms=20.0)
@@ -75,7 +75,7 @@ and ``model__``.
 .. code-block:: python
 
    from sklearn.linear_model import LogisticRegression
-   from eegfeat.model import (
+   from eegtable.model import (
        CSPTransformer,
        InnerSplit,
        cross_fit_signal_classification,
@@ -109,7 +109,7 @@ For microstates, replace the feature step with:
 
 .. code-block:: python
 
-   from eegfeat.model import MicrostateTransformer
+   from eegtable.model import MicrostateTransformer
 
    features = MicrostateTransformer(
        ch_names=signal.ch_names,
@@ -151,7 +151,7 @@ or including it in a batch gives the same vector.
 .. code-block:: python
 
    from sklearn.linear_model import Ridge
-   from eegfeat.model import TangentSpaceTransformer, cross_fit_signal_regression
+   from eegtable.model import TangentSpaceTransformer, cross_fit_signal_regression
 
    pipeline = learned_pipeline(
        TangentSpaceTransformer(ch_names=signal.ch_names, estimator="oas"),
@@ -174,7 +174,7 @@ Covariance matrices may instead be passed directly to a pyRiemann classifier:
 
    from pyriemann.classification import MDM
    from sklearn.pipeline import Pipeline
-   from eegfeat.model import CovarianceTransformer
+   from eegtable.model import CovarianceTransformer
 
    pipeline = Pipeline([
        ("covariance", CovarianceTransformer(ch_names=signal.ch_names)),

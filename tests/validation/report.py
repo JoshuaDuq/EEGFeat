@@ -18,8 +18,8 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
-import eegfeat
-from eegfeat.provenance import implementation_hash
+import eegtable
+from eegtable.provenance import implementation_hash
 
 KINDS = ("formula", "estimator", "physiology", "decoding", "behaviour")
 KIND_TITLES = {
@@ -38,7 +38,7 @@ KIND_MEANINGS = {
 }
 
 # The modeling and runner entry points the scorecard reports on; the rest of
-# eegfeat.model are helpers reached through these.
+# eegtable.model are helpers reached through these.
 MODEL_API = (
     "build_design",
     "within_subject_folds",
@@ -59,7 +59,7 @@ TOOLING = (
     "BandSignal.from_epochs",
     "stack_rows",
     "runner",
-    "eegfeat command",
+    "eegtable command",
 )
 
 DATASET_TITLES = {
@@ -87,13 +87,13 @@ class Row:
 def feature_api() -> tuple[str, ...]:
     return tuple(
         name
-        for name in eegfeat.__all__
-        if name[0].islower() and callable(getattr(eegfeat, name)) and name != "concat"
+        for name in eegtable.__all__
+        if name[0].islower() and callable(getattr(eegtable, name)) and name != "concat"
     )
 
 
 def _versions() -> dict[str, str]:
-    packages = ("eegfeat", "mne", "numpy", "scipy", "scikit-learn", "mne-connectivity")
+    packages = ("eegtable", "mne", "numpy", "scipy", "scikit-learn", "mne-connectivity")
     out = {"python": platform.python_version()}
     for package in packages:
         try:
@@ -172,7 +172,7 @@ def _summary(payload: Mapping[str, Any]) -> str:
         f"across {len(datasets)} public datasets, covering {len(measures)} public functions. "
         f"Last run {payload['generated'][:10]} on "
         f"Python {v['python']}, MNE {v['mne']}, NumPy {v['numpy']}, SciPy {v['scipy']}, "
-        f"scikit-learn {v['scikit-learn']}, eegfeat {v['eegfeat']}.\n"
+        f"scikit-learn {v['scikit-learn']}, eegtable {v['eegtable']}.\n"
     )
 
 

@@ -1,9 +1,9 @@
-# <img src="docs/_static/favicon.svg" width="32" height="32" valign="middle" alt="EEGFeat logo" /> EEGFeat
+# <img src="docs/_static/favicon.svg" width="32" height="32" valign="middle" alt="EEGTable logo" /> EEGTable
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue.svg)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![MNE-Python ≥ 1.8](https://img.shields.io/badge/mne--python-≥1.8-blue.svg)](https://mne.tools/stable/)
-[![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](https://joshuaduq.github.io/EEGFeat/)
+[![Docs](https://img.shields.io/badge/docs-Sphinx-blue.svg)](https://joshuaduq.github.io/EEGTable/)
 
 **Spectral**, **temporal**, **connectivity**, and **complexity** features for **MNE** objects, returned as `FeatureTable`, with reproducible cohort analysis and grouped model evaluation.
 
@@ -20,15 +20,15 @@ eeg_erds-mean_alpha_central_stimulus_db_pd6572187a139
 └─ domain
 ```
 
-**Documentation:** [joshuaduq.github.io/EEGFeat](https://joshuaduq.github.io/EEGFeat/)
+**Documentation:** [joshuaduq.github.io/EEGTable](https://joshuaduq.github.io/EEGTable/)
 
 ## Install
 
 Python 3.11 or newer. Not on PyPI; install from source.
 
 ```bash
-git clone https://github.com/JoshuaDuq/EEGFeat.git
-cd EEGFeat
+git clone https://github.com/JoshuaDuq/EEGTable.git
+cd EEGTable
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\Activate.ps1
 python -m pip install -e ".[model]"
@@ -58,7 +58,7 @@ Core dependencies are `numpy`, `scipy`, `pandas`, and `mne`. Optional extras:
 
 ```python
 import mne
-import eegfeat as ef
+import eegtable as ef
 
 epochs = mne.read_epochs("sub-01_epo.fif", preload=True)
 
@@ -84,40 +84,40 @@ features.to_dataframe()
 
 `estimator_parameters` goes into the column hash. MNE does not store Welch `n_per_seg`, `n_overlap`, or `window` on a `Spectrum`, so record every setting that varies. Otherwise two different estimates share a column name.
 
-More workflows: [Quick Start](https://joshuaduq.github.io/EEGFeat/quickstart.html). Tables, files, and stacking: [Feature Tables and Files](https://joshuaduq.github.io/EEGFeat/guides/tables.html).
+More workflows: [Quick Start](https://joshuaduq.github.io/EEGTable/quickstart.html). Tables, files, and stacking: [Feature Tables and Files](https://joshuaduq.github.io/EEGTable/guides/tables.html).
 
 ## Command line
 
 **Batch runner.** One TOML recipe applied to a folder of epochs files. Each written table loads back as a `FeatureTable`.
 
 ```bash
-eegfeat init recipe.toml     # commented recipe; --template task or resting
-eegfeat check recipe.toml    # validate and time the first recording; writes nothing
-eegfeat run recipe.toml      # every recording
-eegfeat status recipe.toml   # what is done, and what to run next
-eegfeat report recipe.toml quality.html --by recording
+eegtable init recipe.toml     # commented recipe; --template task or resting
+eegtable check recipe.toml    # validate and time the first recording; writes nothing
+eegtable run recipe.toml      # every recording
+eegtable status recipe.toml   # what is done, and what to run next
+eegtable report recipe.toml quality.html --by recording
 ```
 
 **Preprocessing.** Optional raw-to-epochs cleaning from one YAML recipe, with review gates you can require, auto-accept, or skip.
 
 ```bash
-eegfeat preprocess init preprocessing.yaml --mode events
-eegfeat preprocess check preprocessing.yaml
-eegfeat preprocess run preprocessing.yaml
+eegtable preprocess init preprocessing.yaml --mode events
+eegtable preprocess check preprocessing.yaml
+eegtable preprocess run preprocessing.yaml
 ```
 
-Recipes, flags, exit codes, and the review workflow are in the [Runner](https://joshuaduq.github.io/EEGFeat/guides/runner.html) and [Preprocessing](https://joshuaduq.github.io/EEGFeat/guides/preprocessing.html) guides. [`tui/`](tui) is an optional preprocessing terminal front end (Go 1.24+).
+Recipes, flags, exit codes, and the review workflow are in the [Runner](https://joshuaduq.github.io/EEGTable/guides/runner.html) and [Preprocessing](https://joshuaduq.github.io/EEGTable/guides/preprocessing.html) guides. [`tui/`](tui) is an optional preprocessing terminal front end (Go 1.24+).
 
 ## Modeling
 
-`eegfeat.model` builds a design from per-epoch tables and evaluates it with group-disjoint nested validation. Preprocessing and tuning are fit inside each training fold, and permutation nulls cover the full procedure. Ridge, elastic net, random forest, logistic regression, SVM, and ensembles are included. See [Predictive Modeling](https://joshuaduq.github.io/EEGFeat/guides/modeling.html).
+`eegtable.model` builds a design from per-epoch tables and evaluates it with group-disjoint nested validation. Preprocessing and tuning are fit inside each training fold, and permutation nulls cover the full procedure. Ridge, elastic net, random forest, logistic regression, SVM, and ensembles are included. See [Predictive Modeling](https://joshuaduq.github.io/EEGTable/guides/modeling.html).
 
-Reusable microstate templates and fold-fitted CSP, microstate, covariance and tangent-space transforms support analysis across recordings without fitting on held-out data. `eegfeat.group` provides a separate design interface for trial-group estimates. Fixed quality policies preserve coverage, flags and exclusion evidence in the design.
+Reusable microstate templates and fold-fitted CSP, microstate, covariance and tangent-space transforms support analysis across recordings without fitting on held-out data. `eegtable.group` provides a separate design interface for trial-group estimates. Fixed quality policies preserve coverage, flags and exclusion evidence in the design.
 
 ```bash
-eegfeat model init model.yaml
-eegfeat model check model.yaml
-eegfeat model run model.yaml
+eegtable model init model.yaml
+eegtable model check model.yaml
+eegtable model run model.yaml
 ```
 
 Saved feature bundles require checksummed schema 2 manifests. Input content, resolved defaults, software and source identity govern extraction status. Regenerate older outputs; modified or incomplete bundles raise errors.
@@ -137,7 +137,7 @@ Saved feature bundles require checksummed schema 2 manifests. Input content, res
 | Microstates | `segment`, `microstate_coverage`, `microstate_duration`, `microstate_occurrence`, `microstate_transitions` |
 | Spatial filters | `CommonSpatialPattern`, `csp_features` |
 
-Definitions are in [Methods](https://joshuaduq.github.io/EEGFeat/methods/index.html). Signatures are in the [API Reference](https://joshuaduq.github.io/EEGFeat/api/index.html). Numerical and boundary tests cover the new APIs; public-dataset evidence for established methods is in [Validation](https://joshuaduq.github.io/EEGFeat/guides/validation.html). Each dataset validation run saves its own immutable evidence snapshot.
+Definitions are in [Methods](https://joshuaduq.github.io/EEGTable/methods/index.html). Signatures are in the [API Reference](https://joshuaduq.github.io/EEGTable/api/index.html). Numerical and boundary tests cover the new APIs; public-dataset evidence for established methods is in [Validation](https://joshuaduq.github.io/EEGTable/guides/validation.html). Each dataset validation run saves its own immutable evidence snapshot.
 
 ## Development
 
@@ -147,10 +147,10 @@ python -m pytest
 python -m ruff check src tests
 python -m black --check src tests
 python -m mypy
-EEGFEAT_DATASETS=1 python -m pytest tests/validation -ra   # public-dataset suite, ~350 MB on first run
+EEGTABLE_DATASETS=1 python -m pytest tests/validation -ra   # public-dataset suite, ~350 MB on first run
 ```
 
-[`paradigm_specific/`](paradigm_specific) holds this study's raw-to-BIDS conversion scripts. They need the `bids` extra, and `eegfeat` does not import them.
+[`paradigm_specific/`](paradigm_specific) holds this study's raw-to-BIDS conversion scripts. They need the `bids` extra, and `eegtable` does not import them.
 
 ## License
 

@@ -60,11 +60,11 @@ def test_ci_covers_supported_endpoints_optional_integrations_and_the_wheel() -> 
         assert suite in workflow
     assert "python -m build" in workflow
     assert "pip install dist/*.whl" in workflow
-    assert 'python -c "import eegfeat"' in workflow
+    assert 'python -c "import eegtable"' in workflow
     assert 'MNE_DONTWRITE_HOME: "true"' in workflow
 
 
 @pytest.mark.skipif(find_spec("sklearn") is not None, reason="scikit-learn is installed")
 def test_the_model_subpackage_names_its_extra_when_scikit_learn_is_absent() -> None:
-    with pytest.raises(ModuleNotFoundError, match=r"pip install 'eegfeat\[model\]'"):
-        import eegfeat.model  # noqa: F401
+    with pytest.raises(ModuleNotFoundError, match=r"pip install 'eegtable\[model\]'"):
+        import eegtable.model  # noqa: F401

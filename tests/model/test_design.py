@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.model.design import Selection, build_design, harmonize_fold, select
-from eegfeat.table import FeatureMeta, FeatureTable
+from eegtable.model.design import Selection, build_design, harmonize_fold, select
+from eegtable.table import FeatureMeta, FeatureTable
 
 
 def test_every_selection_field_is_a_real_feature_meta_field() -> None:

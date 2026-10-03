@@ -1,5 +1,5 @@
 # Study-specific example, not default cleaning advice. Volts, seconds, Hz.
-# Point input.root at the raw tree, then: eegfeat preprocess check preprocessing.yaml
+# Point input.root at the raw tree, then: eegtable preprocess check preprocessing.yaml
 input:
   root: sourcedata
   pattern: "sub-*/eeg/*_task-example_eeg.vhdr"

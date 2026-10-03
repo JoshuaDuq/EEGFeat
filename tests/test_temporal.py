@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.signal import BandSignal, Signal
-from eegfeat.spectra import Window
-from eegfeat.temporal import (
+from eegtable.bands import Band
+from eegtable.signal import BandSignal, Signal
+from eegtable.spectra import Window
+from eegtable.temporal import (
     area_under_curve,
     mean_amplitude,
     peak_amplitude,

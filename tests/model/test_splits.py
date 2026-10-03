@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat.model.splits import (
+from eegtable.model.splits import (
     Fold,
     InnerSplit,
     find_run_column,
@@ -280,7 +280,7 @@ def test_inner_folds_break_trial_count_ties_by_subject_label(order) -> None:
 
 def test_inner_folds_do_not_depend_on_the_installed_scikit_learn(monkeypatch) -> None:
     # Before 1.6, scikit-learn ordered tied groups with an unstable sort, so the same cohort
-    # could be split differently on another machine. eegfeat assigns folds itself.
+    # could be split differently on another machine. eegtable assigns folds itself.
     from sklearn.model_selection import GroupKFold
 
     def ascending_ties(self, X, y, groups):

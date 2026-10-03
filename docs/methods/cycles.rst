@@ -4,7 +4,7 @@ Cycle-by-Cycle Waveform Features
 ``cycle_features`` uses `ByCycle compute_features
 <https://bycycle-tools.github.io/bycycle/generated/bycycle.features.compute_features.html>`__
 to locate trough-to-trough cycles and characterize their waveform. Install
-``eegfeat[cycles]``. ByCycle 1.2 requires pandas 2; pandas 3 makes arrays read-only
+``eegtable[cycles]``. ByCycle 1.2 requires pandas 2; pandas 3 makes arrays read-only
 and is outside this backend's supported dependency range.
 
 Cycle detection runs once on the complete epoch for each channel and requested

@@ -2,8 +2,8 @@ Dynamics Methods
 ================
 
 Amplitude change within an epoch, bursts of the analytic envelope, and
-time-domain summaries of the waveform. Inputs are :class:`~eegfeat.Signal` and
-:class:`~eegfeat.BandSignal`.
+time-domain summaries of the waveform. Inputs are :class:`~eegtable.Signal` and
+:class:`~eegtable.BandSignal`.
 
 Signatures are in :doc:`/api/dynamics`.
 
@@ -189,7 +189,7 @@ with ``normalize="percent"``.
 different order.
 
 - The ``erds_*`` functions average the per-sample dB trace.
-- :func:`~eegfeat.mean_tfr_power` with a baseline and ``normalize="db"`` takes
+- :func:`~eegtable.mean_tfr_power` with a baseline and ``normalize="db"`` takes
   the decibel of the window-mean power.
 - For near-exponential instantaneous power the per-sample mean sits about
   2.5 dB below the decibel of the mean.
@@ -285,8 +285,8 @@ also included.
 
 **Input.**
 
-- On a :class:`~eegfeat.Signal` the input is the waveform.
-- On a :class:`~eegfeat.BandSignal` the input is the envelope.
+- On a :class:`~eegtable.Signal` the input is the waveform.
+- On a :class:`~eegtable.BandSignal` the input is the envelope.
 
 **Missing values and coverage.**
 

@@ -1,4 +1,4 @@
-"""The ``eegfeat`` command line: exit codes, output, and the progress stream."""
+"""The ``eegtable`` command line: exit codes, output, and the progress stream."""
 
 import json
 import subprocess
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from eegfeat.runner import load_recipe
-from eegfeat.runner.cli import main
+from eegtable.runner import load_recipe
+from eegtable.runner.cli import main
 from tests.synthetic import save_epochs
 
 POWER = '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
@@ -202,11 +202,11 @@ def test_init_does_not_overwrite_an_existing_file(tmp_path, capsys) -> None:
 
 def test_the_package_runs_as_a_module() -> None:
     completed = subprocess.run(
-        [sys.executable, "-m", "eegfeat", "--version"], capture_output=True, text=True
+        [sys.executable, "-m", "eegtable", "--version"], capture_output=True, text=True
     )
 
     assert completed.returncode == 0
-    assert completed.stdout.startswith("eegfeat ")
+    assert completed.stdout.startswith("eegtable ")
 
 
 def test_check_reports_a_channel_the_first_recording_lacks_instead_of_computing_it(
@@ -238,7 +238,7 @@ def test_status_lists_each_recording_and_what_to_run_next(tmp_path, capsys) -> N
     assert code == 0
     assert "sub-01_task-rest" in out and "done" in out
     assert "sub-02_task-rest" in out and "missing" in out
-    assert f"eegfeat run {recipe} --resume" in out
+    assert f"eegtable run {recipe} --resume" in out
 
 
 def test_status_json_describes_every_recording_for_a_front_end(tmp_path, capsys) -> None:
@@ -347,7 +347,7 @@ def test_each_init_template_checks_cleanly_on_real_epochs(tmp_path, capsys, temp
     assert main(["init", str(path), "--template", template]) == 0
     text = path.read_text()
     text = text.replace('root = "derivatives/preprocessed"', 'root = "data"', 1)
-    text = text.replace('root = "derivatives/eegfeat"', 'root = "out"', 1)
+    text = text.replace('root = "derivatives/eegtable"', 'root = "out"', 1)
     path.write_text(text)
 
     assert main(["check", str(path)]) == 0, capsys.readouterr()
@@ -355,9 +355,9 @@ def test_each_init_template_checks_cleanly_on_real_epochs(tmp_path, capsys, temp
 
 def test_a_quick_check_scales_the_computing_but_not_the_reading(tmp_path) -> None:
     # Reading the file costs the same however many epochs are then computed.
-    from eegfeat.runner.batch import CheckReport, Trial
-    from eegfeat.runner.cli import _timing_rows
-    from eegfeat.runner.compute import EntryTiming, RecordingFeatures
+    from eegtable.runner.batch import CheckReport, Trial
+    from eegtable.runner.cli import _timing_rows
+    from eegtable.runner.compute import EntryTiming, RecordingFeatures
 
     recordings = tuple(object() for _ in range(2))
     trial = Trial(
@@ -389,7 +389,7 @@ def test_model_commands_explain_missing_dependencies(
     assert code == 2
     error = capsys.readouterr().err
     assert dependency in error
-    assert "pip install 'eegfeat[model]'" in error
+    assert "pip install 'eegtable[model]'" in error
 
 
 def test_model_init_needs_no_modeling_dependencies(tmp_path, monkeypatch) -> None:

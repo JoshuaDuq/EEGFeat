@@ -2,7 +2,7 @@
 
 Each loader follows the corresponding MNE tutorial, so the epochs here are the
 ones the literature on these datasets describes. Nothing is preprocessed beyond
-what the tutorials do: the point is to see the known effects come out of eegfeat
+what the tutorials do: the point is to see the known effects come out of eegtable
 on data it has never been tuned on.
 """
 

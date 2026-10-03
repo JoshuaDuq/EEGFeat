@@ -1,4 +1,4 @@
-/* EEGFeat documentation: a calm workspace for scientific reading. */
+/* EEGTable documentation: a calm workspace for scientific reading. */
 :root {
   --measure: 47rem;
   --docs-header-height: 4rem;
@@ -408,7 +408,7 @@ html {
   padding-inline: 3rem;
   margin-inline: auto;
 }
-body:has(#eegfeat) .content {
+body:has(#eegtable) .content {
   width: 64rem;
 }
 article {
@@ -1167,7 +1167,7 @@ footer .bottom-of-page .right-details {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-#search-results a[href*="#eegfeat."] {
+#search-results a[href*="#eegtable."] {
   font: 500 0.85rem var(--font-stack--monospace);
 }
 #search-results .search-summary {
@@ -1333,7 +1333,7 @@ html:has(body.drawer-open) {
   .header-search {
     display: none;
   }
-  .content, body:has(#eegfeat) .content {
+  .content, body:has(#eegtable) .content {
     width: 100%;
     padding-inline: 2.5rem;
   }
@@ -1364,7 +1364,7 @@ html:has(body.drawer-open) {
   }
 }
 @media (max-width: 50em) {
-  .content, body:has(#eegfeat) .content {
+  .content, body:has(#eegtable) .content {
     padding-inline: 1.5rem;
   }
   table.genindextable :is(tbody, tr, td) {
@@ -1423,7 +1423,7 @@ html:has(body.drawer-open) {
   .docs-header, .breadcrumbs, .reference-switcher, .overview-links, .back-to-top, .related-pages, button.copybtn {
     display: none !important;
   }
-  .content, body:has(#eegfeat) .content {
+  .content, body:has(#eegtable) .content {
     width: 100%;
     padding: 0;
   }

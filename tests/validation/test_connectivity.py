@@ -15,7 +15,7 @@ import mne_connectivity
 import numpy as np
 import pytest
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording
 
 ALPHA = ef.Band("alpha", 8.0, 13.0)

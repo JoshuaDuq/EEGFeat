@@ -9,10 +9,10 @@ Predictive Modeling
      screen, conformal intervals, and feature importance.
    </p>
 
-``eegfeat.model`` is optional.
+``eegtable.model`` is optional.
 
-- **Install**: ``pip install "eegfeat[model]"``.
-- **SHAP**: needs ``pip install "eegfeat[importance]"``.
+- **Install**: ``pip install "eegtable[model]"``.
+- **SHAP**: needs ``pip install "eegtable[importance]"``.
 - **Held-out permutation importance**: included in ``model``.
 
 Inputs
@@ -21,11 +21,11 @@ Inputs
 Modeling uses one row per epoch.
 
 **Feature table**
-   The :class:`~eegfeat.FeatureTable` must carry ``row_ids`` of
+   The :class:`~eegtable.FeatureTable` must carry ``row_ids`` of
    ``(recording, epoch, event)`` for every row.
 
 **Target frame**
-   The frame passed to :func:`eegfeat.model.build_design` must contain:
+   The frame passed to :func:`eegtable.model.build_design` must contain:
 
    - the same ``recording``, ``epoch``, and ``event`` columns,
    - the target column,
@@ -48,7 +48,7 @@ Tables in memory
 
 Compute the same measures per recording and stack the per-epoch tables.
 
-- **Stacking**: :func:`eegfeat.stack_rows` keeps input order, values, coverage,
+- **Stacking**: :func:`eegtable.stack_rows` keeps input order, values, coverage,
   flags, and metadata, and rejects duplicate row identities.
 - **Differing columns**: recordings drop different bad channels, so their
   columns differ.
@@ -57,13 +57,13 @@ Compute the same measures per recording and stack the per-epoch tables.
 - ``harmonization="intersection"``: each fold then drops columns that some
   training subject lacks.
 - **Alignment**: the target frame uses the same ``recording``, ``epoch``, and
-  ``event`` keys. :func:`eegfeat.model.build_design` aligns rows on those keys.
+  ``event`` keys. :func:`eegtable.model.build_design` aligns rows on those keys.
 
 .. code-block:: python
 
    import pandas as pd
-   import eegfeat as ef
-   import eegfeat.model as efm
+   import eegtable as ef
+   import eegtable.model as efm
 
    selection = efm.Selection(
        band=("theta", "alpha"),
@@ -84,17 +84,17 @@ Compute the same measures per recording and stack the per-epoch tables.
 Runner output
 ~~~~~~~~~~~~~
 
-Pass the ``*_features.tsv`` paths to :func:`eegfeat.io.read_dataset`.
+Pass the ``*_features.tsv`` paths to :func:`eegtable.io.read_dataset`.
 
 .. code-block:: python
 
-   import eegfeat.model as efm
-   from eegfeat.io import read_dataset
+   import eegtable.model as efm
+   from eegtable.io import read_dataset
 
    dataset = read_dataset(
        [
-           "derivatives/eegfeat/sub-01_task-rest_features.tsv",
-           "derivatives/eegfeat/sub-02_task-rest_features.tsv",
+           "derivatives/eegtable/sub-01_task-rest_features.tsv",
+           "derivatives/eegtable/sub-02_task-rest_features.tsv",
        ]
    )
    design = efm.build_design(
@@ -126,10 +126,10 @@ target row a feature row, and says how many are left over on each side.
 To model a subset of the epochs, such as the trials that remain after
 exclusions, cut the table first.
 
-- :meth:`~eegfeat.FeatureTable.take` cuts the table to the given rows.
+- :meth:`~eegtable.FeatureTable.take` cuts the table to the given rows.
 - Choose excluded trials before evaluation using the study's quality criteria.
 - Keep missingness-based feature selection inside the training folds. Calling
-  :meth:`~eegfeat.FeatureTable.drop_missing` on the full cohort uses held-out
+  :meth:`~eegtable.FeatureTable.drop_missing` on the full cohort uses held-out
   observations to select columns even though it does not use the target.
   The modeling pipeline fits its missingness limit on each training split.
 
@@ -142,7 +142,7 @@ exclusions, cut the table first.
 Selecting features and covariates
 ---------------------------------
 
-:class:`eegfeat.model.Selection` filters on metadata fields, not on substrings
+:class:`eegtable.model.Selection` filters on metadata fields, not on substrings
 of the generated column name. The fields are ``measure``, ``band``,
 ``space_kind``, ``window``, ``normalization``, and ``space``. Numeric
 covariates are appended to ``X`` after the feature columns and listed in
@@ -151,9 +151,9 @@ covariates are appended to ``X`` after the feature columns and listed in
 ``measure`` matches ``FeatureMeta.measure``, the label stored on the column.
 That label is not always the function name or the recipe key.
 
-- :func:`eegfeat.integrated_band_power` labels columns ``"band_power"``.
-- :func:`eegfeat.peak_frequency` labels them ``"peak_freq_adjusted"``.
-- :func:`eegfeat.aperiodic` emits ``"slope"``, ``"offset"``, and
+- :func:`eegtable.integrated_band_power` labels columns ``"band_power"``.
+- :func:`eegtable.peak_frequency` labels them ``"peak_freq_adjusted"``.
+- :func:`eegtable.aperiodic` emits ``"slope"``, ``"offset"``, and
   ``"r_squared"``.
 - The labels in a cohort are ``sorted({m.measure for m in cohort_table.meta})``.
 
@@ -193,10 +193,10 @@ Group-disjoint cross-fitting
 
 The outer split is the evaluation. Inner tuning stays inside the outer grouping.
 
-- :func:`eegfeat.model.loso_folds` holds out groups.
-- :func:`eegfeat.model.within_subject_folds` holds out runs within each subject
+- :func:`eegtable.model.loso_folds` holds out groups.
+- :func:`eegtable.model.within_subject_folds` holds out runs within each subject
   and requires a run label on every row.
-- Inner tuning uses :class:`eegfeat.model.InnerSplit`.
+- Inner tuning uses :class:`eegtable.model.InnerSplit`.
 
 .. code-block:: python
 
@@ -230,12 +230,12 @@ Pipelines
   ``random_forest_pipeline``.
 - **Classification**: ``svm_pipeline``, ``logistic_pipeline``,
   ``random_forest_classifier_pipeline``, and ``ensemble_pipeline``.
-  :func:`eegfeat.model.classification_metrics` requires labels in ``{0, 1}``.
+  :func:`eegtable.model.classification_metrics` requires labels in ``{0, 1}``.
 
 Ridge grid
 ~~~~~~~~~~
 
-:func:`~eegfeat.model.ridge_grid` takes the design because scikit-learn's
+:func:`~eegtable.model.ridge_grid` takes the design because scikit-learn's
 ``Ridge`` does not divide its penalty by the number of trials.
 
 - On standardized features the eigenvalues of the Gram matrix sum to
@@ -251,7 +251,7 @@ Tuning statistic
 Regression is tuned on the statistic it is reported with.
 
 - **Default**: each inner validation split is scored by its subject-level ``r``
-  (:func:`~eegfeat.model.subject_r_scorer`), not by pooled ``R²``.
+  (:func:`~eegtable.model.subject_r_scorer`), not by pooled ``R²``.
 - **Why**: pooled ``R²`` rewards predicting each subject's mean, which the
   subject-level ``r`` ignores, and with no signal it always prefers the most
   heavily shrunk model.
@@ -300,7 +300,7 @@ instead.
 - A held-out subject, as in leave-one-subject-out folds, is fitted on its own
   rows. That defines the subject's residual target without informing any model.
 - The estimand becomes the within-subject association beyond the nuisance.
-- :func:`~eegfeat.model.residualize_within_subjects` is the same step for a fold
+- :func:`~eegtable.model.residualize_within_subjects` is the same step for a fold
   loop of your own.
 
 .. code-block:: python
@@ -324,12 +324,12 @@ Evaluation
 
 Predictions are mapped back to the design groups, then scored.
 
-- :func:`eegfeat.model.fold_results` returns predictions in fold order and maps
+- :func:`eegtable.model.fold_results` returns predictions in fold order and maps
   them back to the design groups.
-- :func:`eegfeat.model.regression_metrics` returns Pearson ``r``, ``R²``,
+- :func:`eegtable.model.regression_metrics` returns Pearson ``r``, ``R²``,
   explained variance, and subject-level correlation. The default subject-level
   correlation averages Fisher ``z`` with equal weight per subject.
-- :func:`eegfeat.model.classification_metrics` returns accuracy, balanced
+- :func:`eegtable.model.classification_metrics` returns accuracy, balanced
   accuracy, AUC, average precision, F1, precision, recall, specificity, and the
   confusion matrix.
 
@@ -404,19 +404,19 @@ training data.
 - **Evidence**: in a null simulation of leave-one-subject-out ridge, a
   :math:`t` interval over the per-subject correlations excluded zero in 13–19%
   of cohorts at a nominal 5%.
-- **Default**: :func:`~eegfeat.model.subject_level_r` therefore reports no
+- **Default**: :func:`~eegtable.model.subject_level_r` therefore reports no
   interval unless ``AggregationConfig.ci_method`` asks for one.
 - **When to ask**: only when no subject is scored by a model trained on another
   subject's data, as with within-subject folds.
 - **Testing instead**: test cross-subject scores with
-  :func:`~eegfeat.model.permutation_test`, which refits the whole procedure
+  :func:`~eegtable.model.permutation_test`, which refits the whole procedure
   under the null.
 
 Independent statistics
 ~~~~~~~~~~~~~~~~~~~~~~
 
-:func:`eegfeat.model.bootstrap_mean_ci` and
-:func:`eegfeat.model.paired_signflip_p_value` take a pre-specified vector of
+:func:`eegtable.model.bootstrap_mean_ci` and
+:func:`eegtable.model.paired_signflip_p_value` take a pre-specified vector of
 independent subject-level statistics, which leave-one-subject-out scores are
 not.
 
@@ -432,9 +432,9 @@ not.
 Permutation nulls
 -----------------
 
-:func:`eegfeat.model.permutation_test` refits the full cross-fitting procedure
+:func:`eegtable.model.permutation_test` refits the full cross-fitting procedure
 on each draw. It is for regression and refits
-:func:`~eegfeat.model.cross_fit_regression`.
+:func:`~eegtable.model.cross_fit_regression`.
 
 Schemes
 ~~~~~~~
@@ -540,7 +540,7 @@ This restriction does not change ordinary cross-fitting.
 Univariate screen
 -----------------
 
-:func:`eegfeat.model.univariate_screen` asks which single features track the
+:func:`eegtable.model.univariate_screen` asks which single features track the
 target within subjects.
 
 - **Statistic**: each subject's correlation is taken over its own trials,
@@ -577,7 +577,7 @@ not enter the Benjamini-Hochberg adjustment.
 Conformal intervals
 -------------------
 
-:func:`eegfeat.model.prediction_intervals` returns bounds for ``"split"``,
+:func:`eegtable.model.prediction_intervals` returns bounds for ``"split"``,
 ``"cv_plus"``, or ``"quantile"`` conformal calibration.
 
 - **Groups**: with ``groups``, the fitting split and the calibration split are
@@ -637,10 +637,10 @@ Importance
 
 Importance is computed on the same fold-fitted models used for evaluation.
 
-- :func:`eegfeat.model.permutation_importance_over_folds` computes held-out
+- :func:`eegtable.model.permutation_importance_over_folds` computes held-out
   permutation importance. Pass the feature names that were selected so a score
   can be matched after fold-local column drops.
-- :func:`eegfeat.model.shap_importance_over_folds` computes SHAP values.
+- :func:`eegtable.model.shap_importance_over_folds` computes SHAP values.
 - A step such as PCA that mixes columns cannot be mapped back to one input
   feature.
 
@@ -650,7 +650,7 @@ a pipeline without covariates. With covariates:
 - fit on a pipeline with the same ``n_covariates``;
 - pass ``design.column_names``;
 - keep only ``design.feature_columns`` before aggregating, because covariates
-  have no ``FeatureMeta`` record and :func:`~eegfeat.model.aggregate_by`
+  have no ``FeatureMeta`` record and :func:`~eegtable.model.aggregate_by`
   refuses them.
 
 .. code-block:: python

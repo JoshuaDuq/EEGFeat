@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from eegfeat import complexity
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+from eegtable import complexity
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 
 def _signal(values):

@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 from scipy.signal import resample
 
-import eegfeat as ef
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+import eegtable as ef
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 
 def _series(real: np.ndarray, sfreq: float) -> Signal:

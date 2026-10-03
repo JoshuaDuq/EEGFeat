@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
 )
 
 func TestLongReviewKeepsEverySelectedRowVisible(t *testing.T) {
@@ -19,7 +19,7 @@ func TestLongReviewKeepsEverySelectedRowVisible(t *testing.T) {
 			gate.Field = field
 			gate.Items = nil
 			for i := 0; i < 80; i++ {
-				gate.Items = append(gate.Items, eegfeat.Item{ID: []byte(fmt.Sprint(i)), Label: fmt.Sprintf("item-%03d", i)})
+				gate.Items = append(gate.Items, eegtable.Item{ID: []byte(fmt.Sprint(i)), Label: fmt.Sprintf("item-%03d", i)})
 			}
 			m := openGate(t, &fakeBackend{status: statusFixture(), gate: gate})
 			for _, height := range []int{24, 40, 24} {
@@ -56,7 +56,7 @@ func assertFocusedRow(t *testing.T, view, label string) {
 func TestLongRecordingListFollowsSelection(t *testing.T) {
 	status := statusFixture()
 	for i := 0; i < 80; i++ {
-		status.Recordings = append(status.Recordings, eegfeat.Recording{Label: fmt.Sprintf("recording-%03d", i)})
+		status.Recordings = append(status.Recordings, eegtable.Recording{Label: fmt.Sprintf("recording-%03d", i)})
 	}
 	m := home(t, &fakeBackend{status: status})
 	m, _ = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -132,7 +132,7 @@ func TestSlowRefreshCannotOverwriteANewerStatus(t *testing.T) {
 func TestStatusFailureClearsOnceStatusReadsAgain(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := home(t, backend)
-	backend.statusErr = errors.New("eegfeat preprocess status: exit 1\neegfeat preprocess: study.yaml: mapping values are not allowed here")
+	backend.statusErr = errors.New("eegtable preprocess status: exit 1\neegtable preprocess: study.yaml: mapping values are not allowed here")
 	m, cmd := update(t, m, tickMsg{})
 	m = settle(t, m, cmd)
 	if !strings.Contains(m.View(), "mapping values are not allowed") || len(m.status.Recordings) != 4 {
@@ -177,7 +177,7 @@ func TestSaveFinishesBeforeLeavingReview(t *testing.T) {
 func TestSpanValidationStaysVisibleAtEndOfLongReview(t *testing.T) {
 	gate := rawGate()
 	for i := 0; i < 80; i++ {
-		gate.Spans = append(gate.Spans, eegfeat.Span{Onset: float64(i), Duration: 1, Description: "BAD_manual"})
+		gate.Spans = append(gate.Spans, eegtable.Span{Onset: float64(i), Duration: 1, Description: "BAD_manual"})
 	}
 	m := openGate(t, &fakeBackend{status: statusFixture(), gate: gate})
 	m, _ = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 24})

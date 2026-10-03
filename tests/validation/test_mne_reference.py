@@ -1,10 +1,10 @@
-"""eegfeat against MNE's own implementations, on the datasets MNE's documentation uses.
+"""eegtable against MNE's own implementations, on the datasets MNE's documentation uses.
 
-Where eegfeat computes a quantity MNE also computes, the two have to agree: exactly
+Where eegtable computes a quantity MNE also computes, the two have to agree: exactly
 when the definitions coincide, and in outcome when they differ by design. Peaks are
 checked against ``Evoked.get_peak`` on ERP CORE and orthogonalized envelope correlation
 against mne-connectivity on the motor data; then two of MNE's documented pipelines are
-rerun with eegfeat in place of their own code, the Sleep-EDF staging tutorial and the
+rerun with eegtable in place of their own code, the Sleep-EDF staging tutorial and the
 motor CSP decoding example.
 """
 
@@ -15,7 +15,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording, load_erp_core
 
 N1 = ef.Window("n1", 0.1, 0.25)
@@ -42,7 +42,7 @@ SLEEP_BANDS = (
 def test_peaks_are_what_evoked_get_peak_reports(record: Callable[[str], None]) -> None:
     evoked = load_erp_core("stimulus").epochs.average()
     times = evoked.times
-    # get_peak rounds its bounds to the sample grid and eegfeat does not, so the window
+    # get_peak rounds its bounds to the sample grid and eegtable does not, so the window
     # is laid on samples for the two to search the same stretch.
     first, last = np.searchsorted(times, [N1.tmin, N1.tmax])
     window = ef.Window(N1.name, times[first], times[last])
@@ -120,7 +120,7 @@ def _tutorial_features(recording: Recording) -> np.ndarray:
     )
 
 
-def _eegfeat_features(recording: Recording) -> np.ndarray:
+def _eegtable_features(recording: Recording) -> np.ndarray:
     spectrum = recording.epochs.compute_psd(picks="eeg", fmin=0.5, fmax=30.0, normalization="full")
     spectra = ef.Spectra.from_spectrum(
         spectrum, recording=recording.name, estimator_parameters={"normalization": "full"}
@@ -157,8 +157,8 @@ def test_band_power_reproduces_the_sleep_staging_tutorial(
         forest.fit(features(train), y_train)
         return float(np.mean(forest.predict(features(test)) == y_test))
 
-    tutorial, ours = accuracy(_tutorial_features), accuracy(_eegfeat_features)
-    record(f"accuracy on {test.name}: tutorial {tutorial:.3f}, eegfeat {ours:.3f}")
+    tutorial, ours = accuracy(_tutorial_features), accuracy(_eegtable_features)
+    record(f"accuracy on {test.name}: tutorial {tutorial:.3f}, eegtable {ours:.3f}")
     assert abs(ours - tutorial) < 0.03
 
 
@@ -166,7 +166,7 @@ def test_band_power_reproduces_the_sleep_staging_tutorial(
     "CommonSpatialPattern",
     kind="decoding",
     dataset="eegbci",
-    claim="In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as "
+    claim="In MNE's CSP decoding pipeline, eegtable's CSP separates movement from rest about as "
     "well as mne.decoding.CSP",
     criterion="mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits",
 )
@@ -202,11 +202,11 @@ def test_csp_decodes_like_mne_in_its_decoding_example(
             scores.append(lda.score(csp.transform(signal, rows=test), moving[test]))
         ours.append(float(np.mean(scores)))
 
-    # eegfeat's features are log variance relative to the components' sum (Ramoser 2000),
+    # eegtable's features are log variance relative to the components' sum (Ramoser 2000),
     # MNE's the log of absolute power; the overall power drop that movement causes is in
     # MNE's features only, which is most of what separates the two means.
     record(
         f"mean accuracy over {len(ours)} subjects: MNE {np.mean(theirs):.3f}, "
-        f"eegfeat {np.mean(ours):.3f}"
+        f"eegtable {np.mean(ours):.3f}"
     )
     assert abs(np.mean(ours) - np.mean(theirs)) < 0.05

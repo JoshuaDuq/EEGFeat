@@ -1,72 +1,72 @@
 Dynamics
 ========
 
-.. autofunction:: eegfeat.cycle_features
+.. autofunction:: eegtable.cycle_features
 
-Measures estimated from :class:`~eegfeat.Signal` and :class:`~eegfeat.BandSignal`
+Measures estimated from :class:`~eegtable.Signal` and :class:`~eegtable.BandSignal`
 containers. Their definitions are in :doc:`/methods/dynamics`.
 
 Time-Domain Measures
 --------------------
 
-.. autofunction:: eegfeat.variance
+.. autofunction:: eegtable.variance
 
-.. autofunction:: eegfeat.amplitude_quantile
+.. autofunction:: eegtable.amplitude_quantile
 
-.. autofunction:: eegfeat.kurtosis
+.. autofunction:: eegtable.kurtosis
 
-.. autofunction:: eegfeat.line_length
+.. autofunction:: eegtable.line_length
 
-.. autofunction:: eegfeat.root_mean_square
+.. autofunction:: eegtable.root_mean_square
 
-.. autofunction:: eegfeat.skewness
+.. autofunction:: eegtable.skewness
 
-.. autofunction:: eegfeat.zero_crossing_rate
+.. autofunction:: eegtable.zero_crossing_rate
 
-.. autofunction:: eegfeat.hjorth_mobility
+.. autofunction:: eegtable.hjorth_mobility
 
-.. autofunction:: eegfeat.hjorth_complexity
+.. autofunction:: eegtable.hjorth_complexity
 
-.. autofunction:: eegfeat.mean_amplitude
+.. autofunction:: eegtable.mean_amplitude
 
-.. autofunction:: eegfeat.peak_to_peak
+.. autofunction:: eegtable.peak_to_peak
 
-.. autofunction:: eegfeat.area_under_curve
+.. autofunction:: eegtable.area_under_curve
 
-.. autofunction:: eegfeat.peak_amplitude
+.. autofunction:: eegtable.peak_amplitude
 
-.. autofunction:: eegfeat.peak_latency
+.. autofunction:: eegtable.peak_latency
 
 Oscillatory Bursts
 ------------------
 
-.. autofunction:: eegfeat.burst_count
+.. autofunction:: eegtable.burst_count
 
-.. autofunction:: eegfeat.burst_rate
+.. autofunction:: eegtable.burst_rate
 
-.. autofunction:: eegfeat.burst_duration
+.. autofunction:: eegtable.burst_duration
 
-.. autofunction:: eegfeat.burst_amplitude
+.. autofunction:: eegtable.burst_amplitude
 
-.. autofunction:: eegfeat.fraction_above_threshold
+.. autofunction:: eegtable.fraction_above_threshold
 
 ERDS Dynamics
 -------------
 
-.. autofunction:: eegfeat.erds_mean
+.. autofunction:: eegtable.erds_mean
 
-.. autofunction:: eegfeat.erds_slope
+.. autofunction:: eegtable.erds_slope
 
-.. autofunction:: eegfeat.erd_magnitude
+.. autofunction:: eegtable.erd_magnitude
 
-.. autofunction:: eegfeat.erd_duration
+.. autofunction:: eegtable.erd_duration
 
-.. autofunction:: eegfeat.ers_magnitude
+.. autofunction:: eegtable.ers_magnitude
 
-.. autofunction:: eegfeat.ers_duration
+.. autofunction:: eegtable.ers_duration
 
-.. autofunction:: eegfeat.erds_peak_latency
+.. autofunction:: eegtable.erds_peak_latency
 
-.. autofunction:: eegfeat.erds_onset_latency
+.. autofunction:: eegtable.erds_onset_latency
 
-.. autofunction:: eegfeat.erds_rebound_latency
+.. autofunction:: eegtable.erds_rebound_latency

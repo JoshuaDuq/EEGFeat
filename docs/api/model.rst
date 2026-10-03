@@ -2,7 +2,7 @@ Predictive Modeling
 ===================
 
 Available with the ``model`` extra. Inputs are per-epoch arrays or tables.
-:func:`eegfeat.model.build_design` rejects cross-trial group-row tables.
+:func:`eegtable.model.build_design` rejects cross-trial group-row tables.
 
 The workflow is in :doc:`/guides/modeling`.
 
@@ -10,156 +10,156 @@ The workflow is in :doc:`/guides/modeling`.
 Design and preprocessing
 -------------------------------------------
 
-.. autoclass:: eegfeat.model.Selection
+.. autoclass:: eegtable.model.Selection
    :members:
 
-.. autoclass:: eegfeat.model.Design
+.. autoclass:: eegtable.model.Design
    :members:
 
-.. autoclass:: eegfeat.model.PreprocessingConfig
+.. autoclass:: eegtable.model.PreprocessingConfig
    :members:
 
-.. autofunction:: eegfeat.model.select
+.. autofunction:: eegtable.model.select
 
-.. autofunction:: eegfeat.model.build_design
+.. autofunction:: eegtable.model.build_design
 
-.. autofunction:: eegfeat.model.harmonize_fold
+.. autofunction:: eegtable.model.harmonize_fold
 
-.. autofunction:: eegfeat.model.compute_train_group_intersection_mask
+.. autofunction:: eegtable.model.compute_train_group_intersection_mask
 
 Splits, estimators, and cross-fitting
 -------------------------------------------
 
-.. autoclass:: eegfeat.model.Fold
+.. autoclass:: eegtable.model.Fold
    :members:
 
-.. autoclass:: eegfeat.model.InnerSplit
+.. autoclass:: eegtable.model.InnerSplit
    :members:
 
-.. autofunction:: eegfeat.model.loso_folds
+.. autofunction:: eegtable.model.loso_folds
 
-.. autofunction:: eegfeat.model.within_subject_folds
+.. autofunction:: eegtable.model.within_subject_folds
 
-.. autofunction:: eegfeat.model.ridge_pipeline
+.. autofunction:: eegtable.model.ridge_pipeline
 
-.. autofunction:: eegfeat.model.elasticnet_pipeline
+.. autofunction:: eegtable.model.elasticnet_pipeline
 
-.. autofunction:: eegfeat.model.random_forest_pipeline
+.. autofunction:: eegtable.model.random_forest_pipeline
 
-.. autofunction:: eegfeat.model.logistic_pipeline
+.. autofunction:: eegtable.model.logistic_pipeline
 
-.. autofunction:: eegfeat.model.svm_pipeline
+.. autofunction:: eegtable.model.svm_pipeline
 
-.. autofunction:: eegfeat.model.random_forest_classifier_pipeline
+.. autofunction:: eegtable.model.random_forest_classifier_pipeline
 
-.. autofunction:: eegfeat.model.ensemble_pipeline
+.. autofunction:: eegtable.model.ensemble_pipeline
 
-.. autofunction:: eegfeat.model.elasticnet_grid
+.. autofunction:: eegtable.model.elasticnet_grid
 
-.. autofunction:: eegfeat.model.ridge_grid
+.. autofunction:: eegtable.model.ridge_grid
 
-.. autofunction:: eegfeat.model.random_forest_grid
+.. autofunction:: eegtable.model.random_forest_grid
 
-.. autofunction:: eegfeat.model.svm_grid
+.. autofunction:: eegtable.model.svm_grid
 
-.. autofunction:: eegfeat.model.logistic_grid
+.. autofunction:: eegtable.model.logistic_grid
 
-.. autofunction:: eegfeat.model.random_forest_classifier_grid
+.. autofunction:: eegtable.model.random_forest_classifier_grid
 
-.. autofunction:: eegfeat.model.cross_fit_regression
+.. autofunction:: eegtable.model.cross_fit_regression
 
-.. autofunction:: eegfeat.model.cross_fit_classification
+.. autofunction:: eegtable.model.cross_fit_classification
 
-.. autoclass:: eegfeat.model.FoldPrediction
+.. autoclass:: eegtable.model.FoldPrediction
    :members:
 
-.. autoclass:: eegfeat.model.FoldClassification
+.. autoclass:: eegtable.model.FoldClassification
    :members:
 
 Metrics, nulls, uncertainty, and importance
 -------------------------------------------
 
-.. autofunction:: eegfeat.model.fold_results
+.. autofunction:: eegtable.model.fold_results
 
-.. autoclass:: eegfeat.model.FoldResults
+.. autoclass:: eegtable.model.FoldResults
    :members:
 
-.. autofunction:: eegfeat.model.regression_metrics
+.. autofunction:: eegtable.model.regression_metrics
 
-.. autofunction:: eegfeat.model.subject_level_r
+.. autofunction:: eegtable.model.subject_level_r
 
-.. autofunction:: eegfeat.model.subject_level_errors
+.. autofunction:: eegtable.model.subject_level_errors
 
-.. autofunction:: eegfeat.model.subject_r_scorer
+.. autofunction:: eegtable.model.subject_r_scorer
 
-.. autofunction:: eegfeat.model.within_subject_centered_metrics
+.. autofunction:: eegtable.model.within_subject_centered_metrics
 
-.. autofunction:: eegfeat.model.within_condition_metrics
+.. autofunction:: eegtable.model.within_condition_metrics
 
-.. autofunction:: eegfeat.model.residualize_targets
+.. autofunction:: eegtable.model.residualize_targets
 
-.. autofunction:: eegfeat.model.residualize_within_subjects
+.. autofunction:: eegtable.model.residualize_within_subjects
 
-.. autofunction:: eegfeat.model.classification_metrics
+.. autofunction:: eegtable.model.classification_metrics
 
-.. autoclass:: eegfeat.model.ClassificationResult
+.. autoclass:: eegtable.model.ClassificationResult
    :members:
 
-.. autoclass:: eegfeat.model.AggregationConfig
+.. autoclass:: eegtable.model.AggregationConfig
    :members:
 
-.. autoclass:: eegfeat.model.SubjectLevelR
+.. autoclass:: eegtable.model.SubjectLevelR
    :members:
 
-.. autofunction:: eegfeat.model.bootstrap_mean_ci
+.. autofunction:: eegtable.model.bootstrap_mean_ci
 
-.. autofunction:: eegfeat.model.paired_signflip_p_value
+.. autofunction:: eegtable.model.paired_signflip_p_value
 
-.. autofunction:: eegfeat.model.permutation_test
+.. autofunction:: eegtable.model.permutation_test
 
-.. autofunction:: eegfeat.model.univariate_screen
+.. autofunction:: eegtable.model.univariate_screen
 
-.. autoclass:: eegfeat.model.NullConfig
+.. autoclass:: eegtable.model.NullConfig
    :members:
 
-.. autoclass:: eegfeat.model.NullResult
+.. autoclass:: eegtable.model.NullResult
    :members:
 
-.. autofunction:: eegfeat.model.prediction_intervals
+.. autofunction:: eegtable.model.prediction_intervals
 
-.. autoclass:: eegfeat.model.PredictionIntervals
+.. autoclass:: eegtable.model.PredictionIntervals
    :members:
 
-.. autoclass:: eegfeat.model.Importance
+.. autoclass:: eegtable.model.Importance
    :members:
 
-.. autofunction:: eegfeat.model.permutation_importance
+.. autofunction:: eegtable.model.permutation_importance
 
-.. autofunction:: eegfeat.model.permutation_importance_over_folds
+.. autofunction:: eegtable.model.permutation_importance_over_folds
 
-.. autofunction:: eegfeat.model.shap_importance
+.. autofunction:: eegtable.model.shap_importance
 
-.. autofunction:: eegfeat.model.shap_importance_over_folds
+.. autofunction:: eegtable.model.shap_importance_over_folds
 
-.. autofunction:: eegfeat.model.aggregate_by
+.. autofunction:: eegtable.model.aggregate_by
 
 Learned signal features
 -----------------------
 
-.. autoclass:: eegfeat.model.CSPTransformer
+.. autoclass:: eegtable.model.CSPTransformer
    :members:
 
-.. autoclass:: eegfeat.model.MicrostateTransformer
+.. autoclass:: eegtable.model.MicrostateTransformer
    :members:
 
-.. autoclass:: eegfeat.model.CovarianceTransformer
+.. autoclass:: eegtable.model.CovarianceTransformer
    :members:
 
-.. autoclass:: eegfeat.model.TangentSpaceTransformer
+.. autoclass:: eegtable.model.TangentSpaceTransformer
    :members:
 
-.. autofunction:: eegfeat.model.learned_pipeline
+.. autofunction:: eegtable.model.learned_pipeline
 
-.. autofunction:: eegfeat.model.cross_fit_signal_classification
+.. autofunction:: eegtable.model.cross_fit_signal_classification
 
-.. autofunction:: eegfeat.model.cross_fit_signal_regression
+.. autofunction:: eegtable.model.cross_fit_signal_regression

@@ -3,10 +3,10 @@ from dataclasses import replace
 
 import pytest
 
-from eegfeat.preprocessing import open_workflow, read_checkpoint, run_until
-from eegfeat.preprocessing import review as review_module
-from eegfeat.preprocessing.config import WorkflowSettings, read_yaml
-from eegfeat.preprocessing.review import ReviewCancelled, save_review
+from eegtable.preprocessing import open_workflow, read_checkpoint, run_until
+from eegtable.preprocessing import review as review_module
+from eegtable.preprocessing.config import WorkflowSettings, read_yaml
+from eegtable.preprocessing.review import ReviewCancelled, save_review
 
 from .test_execution import config_for
 
@@ -65,7 +65,7 @@ def test_invalid_headless_decisions_are_rejected(raw, tmp_path, edit, match):
 def test_suggested_raw_review_applies_candidates(raw, tmp_path):
     import mne
 
-    from eegfeat.preprocessing.config import AmplitudeSettings, AnnotationSettings
+    from eegtable.preprocessing.config import AmplitudeSettings, AnnotationSettings
 
     # One channel ten times larger than the rest is the only amplitude candidate.
     data = raw.get_data()
@@ -96,7 +96,7 @@ def test_suggested_raw_review_applies_candidates(raw, tmp_path):
 
 
 def test_suggested_artifact_review_takes_detector_union(mixture, tmp_path):
-    from eegfeat.preprocessing.config import ArtifactSettings, ICASettings
+    from eegtable.preprocessing.config import ArtifactSettings, ICASettings
 
     base = config_for(mixture, tmp_path)
     artifact = ArtifactSettings(
@@ -126,7 +126,7 @@ def test_flagless_review_without_viewer_names_the_pending_file(raw, tmp_path, mo
     workflow = _pending_workflow(raw, tmp_path)
 
     def missing(stage, state):
-        raise ModuleNotFoundError("Install eegfeat[preprocessing-gui]")
+        raise ModuleNotFoundError("Install eegtable[preprocessing-gui]")
 
     monkeypatch.setattr(review_module, "viewer_decision", missing)
     with pytest.raises(ModuleNotFoundError, match="preprocessing-gui.*review-raw.pending.yaml"):
@@ -145,7 +145,7 @@ def test_review_of_a_disabled_gate_is_refused(raw, tmp_path):
 def test_viewer_raw_review_reports_only_new_spans_in_acquisition_time(raw):
     import mne
 
-    from eegfeat.preprocessing.review import new_bad_spans
+    from eegtable.preprocessing.review import new_bad_spans
 
     # The viewer copy starts with the spans already on the record; only additions are the decision.
     before = raw.copy()

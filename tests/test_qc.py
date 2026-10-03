@@ -1,6 +1,6 @@
 import numpy as np
 
-from eegfeat.qc import band_coverage
+from eegtable.qc import band_coverage
 
 
 def test_full_coverage_stays_one() -> None:

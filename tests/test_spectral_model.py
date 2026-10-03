@@ -4,9 +4,9 @@ from importlib.util import find_spec
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.spectra import Spectra, Window
-from eegfeat.table import ComputationSpec
+from eegtable.bands import Band
+from eegtable.spectra import Spectra, Window
+from eegtable.table import ComputationSpec
 
 FREQS = np.arange(2.0, 40.25, 0.25)
 ALPHA = Band("alpha", 8.0, 13.0)
@@ -30,8 +30,8 @@ def _spectra(power, freqs=FREQS):
 
 
 def _compute(spectra, **parameters):
-    assert find_spec("eegfeat.spectral_model") is not None, "spectral parameterization missing"
-    from eegfeat.spectral_model import spectral_parameterization
+    assert find_spec("eegtable.spectral_model") is not None, "spectral parameterization missing"
+    from eegtable.spectral_model import spectral_parameterization
 
     return spectral_parameterization(spectra, include_global=False, **parameters)
 

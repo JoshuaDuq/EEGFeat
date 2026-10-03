@@ -9,7 +9,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 from sklearn.random_projection import GaussianRandomProjection
 
-from eegfeat.model.uncertainty import (
+from eegtable.model.uncertainty import (
     _compute_conformal_quantile,
     _order_stat_quantile,
     prediction_intervals,

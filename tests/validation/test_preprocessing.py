@@ -21,10 +21,10 @@ import pandas as pd
 import pytest
 from mne.datasets import eegbci, erp_core
 
-from eegfeat.preprocessing import load_config, open_workflow, read_checkpoint, run_until
-from eegfeat.preprocessing.config import read_yaml
-from eegfeat.preprocessing.execution import Workflow
-from eegfeat.preprocessing.review import save_review
+from eegtable.preprocessing import load_config, open_workflow, read_checkpoint, run_until
+from eegtable.preprocessing.config import read_yaml
+from eegtable.preprocessing.execution import Workflow
+from eegtable.preprocessing.review import save_review
 
 ERP_FILE = "ERP-CORE_Subject-001_Task-Flankers_eeg.fif"
 ERP_EVENTS = {

@@ -4,14 +4,14 @@ import contextlib
 
 import numpy as np
 
-from eegfeat.model.execution import (
+from eegtable.model.execution import (
     inner_n_jobs,
     run_folds,
     seeded,
     set_random_seeds,
     should_parallelize,
 )
-from eegfeat.model.splits import Fold
+from eegtable.model.splits import Fold
 
 FOLDS = tuple(
     Fold(index=i, train=np.array([0], dtype=np.intp), test=np.array([1], dtype=np.intp))

@@ -1,7 +1,7 @@
 """Opt-in validation against public MNE datasets.
 
 These tests download real recordings from PhysioNet and the MNE servers and
-take minutes to run, so they are skipped unless ``EEGFEAT_DATASETS=1`` is set.
+take minutes to run, so they are skipped unless ``EEGTABLE_DATASETS=1`` is set.
 Data lands wherever MNE keeps its datasets (``MNE_DATA``, default ``~/mne_data``)
 and is reused on later runs.
 """
@@ -16,16 +16,16 @@ from pathlib import Path
 
 import pytest
 
-from eegfeat.provenance import implementation_hash
+from eegtable.provenance import implementation_hash
 from tests.validation import report
 from tests.validation.loaders import Recording, load_eegbci, load_sleep, load_ssvep
 
-ENABLE = "EEGFEAT_DATASETS"
+ENABLE = "EEGTABLE_DATASETS"
 
 EEGBCI_SUBJECTS = tuple(range(1, 21))
 SLEEP_SUBJECTS = (0, 1)
 
-# Optional extras: eegfeat.model and the microstates need scikit-learn, the
+# Optional extras: eegtable.model and the microstates need scikit-learn, the
 # spectral connectivity estimators need mne-connectivity.
 collect_ignore = []
 if find_spec("sklearn") is None:

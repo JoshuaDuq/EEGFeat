@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegfeat import Band
-from eegfeat.io import write_table
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+from eegtable import Band
+from eegtable.io import write_table
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable
 
 
 def _table(space="C3"):
@@ -30,7 +30,7 @@ def _table(space="C3"):
 
 
 def test_group_dataset_preserves_recording_and_trial_counts(tmp_path):
-    from eegfeat.group import build_group_design, read_group_dataset
+    from eegtable.group import build_group_design, read_group_dataset
 
     paths = []
     for recording, space in (("sub01", "C3"), ("sub02", "C4")):
@@ -65,7 +65,7 @@ def test_group_dataset_preserves_recording_and_trial_counts(tmp_path):
 
 
 def test_group_dataset_preserves_numeric_looking_subject_labels(tmp_path):
-    from eegfeat.group import build_group_design, read_group_dataset
+    from eegtable.group import build_group_design, read_group_dataset
 
     path = tmp_path / "features.tsv"
     write_table(
@@ -87,7 +87,7 @@ def test_group_dataset_preserves_numeric_looking_subject_labels(tmp_path):
 
 
 def test_group_dataset_rejects_duplicate_group_samples(tmp_path):
-    from eegfeat.group import read_group_dataset
+    from eegtable.group import read_group_dataset
 
     path = tmp_path / "features.tsv"
     write_table(
@@ -98,7 +98,7 @@ def test_group_dataset_rejects_duplicate_group_samples(tmp_path):
 
 
 def test_group_dataset_requires_positive_trial_counts(tmp_path):
-    from eegfeat.group import read_group_dataset
+    from eegtable.group import read_group_dataset
 
     path = tmp_path / "features.tsv"
     write_table(
@@ -111,7 +111,7 @@ def test_group_dataset_requires_positive_trial_counts(tmp_path):
 def test_group_design_rejects_packaged_csp_features(tmp_path):
     from dataclasses import replace
 
-    from eegfeat.group import build_group_design, read_group_dataset
+    from eegtable.group import build_group_design, read_group_dataset
 
     original = _table()
     table = replace(
@@ -145,7 +145,7 @@ def test_group_design_rejects_duplicate_canonical_samples():
     import json
     from dataclasses import replace
 
-    from eegfeat.group import GroupDataset, build_group_design
+    from eegtable.group import GroupDataset, build_group_design
 
     table = replace(
         _table(), row_labels=(json.dumps(["sub01", "rest"], separators=(",", ":")),) * 2
@@ -165,7 +165,7 @@ def test_group_design_rejects_duplicate_canonical_samples():
 def test_group_dataset_rejects_blank_group_identity(tmp_path):
     from dataclasses import replace
 
-    from eegfeat.group import read_group_dataset
+    from eegtable.group import read_group_dataset
 
     path = tmp_path / "features.tsv"
     write_table(

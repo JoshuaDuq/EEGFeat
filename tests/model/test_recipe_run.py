@@ -9,15 +9,15 @@ import pandas as pd
 import pytest
 import yaml
 
-from eegfeat.io import write_table
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable
+from eegtable.io import write_table
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable
 
 
 def _api():
-    assert find_spec("eegfeat.runner.model_recipe") is not None, "model recipe is not implemented"
-    assert find_spec("eegfeat.runner.model_run") is not None, "model run is not implemented"
-    from eegfeat.runner.model_recipe import load_model_recipe
-    from eegfeat.runner.model_run import check_model, run_model
+    assert find_spec("eegtable.runner.model_recipe") is not None, "model recipe is not implemented"
+    assert find_spec("eegtable.runner.model_run") is not None, "model run is not implemented"
+    from eegtable.runner.model_recipe import load_model_recipe
+    from eegtable.runner.model_run import check_model, run_model
 
     return load_model_recipe, check_model, run_model
 
@@ -144,7 +144,7 @@ def test_model_check_validates_nested_group_splits_without_writing(tmp_path):
 
 @pytest.mark.parametrize("rows", ["epochs", "groups"])
 def test_model_check_keeps_numeric_looking_groups_distinct(tmp_path, rows):
-    from eegfeat.io import read_table
+    from eegtable.io import read_table
 
     path, settings = _recipe(tmp_path, rows=rows)
     row_key = "epoch" if rows == "epochs" else "group"
@@ -223,7 +223,7 @@ def test_model_check_rejects_insufficient_nested_training_groups(tmp_path):
 def test_model_check_rejects_nonbinary_classification_labels(tmp_path):
     path, _ = _recipe(tmp_path, task="classification")
     file = tmp_path / "sub-0_features.tsv"
-    from eegfeat.io import read_table
+    from eegtable.io import read_table
 
     table = read_table(tmp_path / "sub-1_features.tsv")
     table = FeatureTable(
@@ -248,8 +248,8 @@ def test_model_check_rejects_nonbinary_classification_labels(tmp_path):
 
 
 def test_model_cli_init_and_check(tmp_path, capsys):
-    assert find_spec("eegfeat.runner.model_command") is not None, "model CLI is not implemented"
-    from eegfeat.runner.model_command import register
+    assert find_spec("eegtable.runner.model_command") is not None, "model CLI is not implemented"
+    from eegtable.runner.model_command import register
 
     parser = argparse.ArgumentParser()
     register(parser.add_subparsers(required=True))
@@ -273,7 +273,7 @@ def test_model_recipe_requires_integer_version(tmp_path):
 
 
 def test_external_targets_join_by_exact_sample_identity(tmp_path):
-    from eegfeat.io import read_dataset
+    from eegtable.io import read_dataset
 
     path, record = _recipe(tmp_path)
     dataset = read_dataset([tmp_path / name for name in record["inputs"]["paths"]])
@@ -290,7 +290,7 @@ def test_external_targets_join_by_exact_sample_identity(tmp_path):
 
 
 def test_external_targets_refuse_missing_identity(tmp_path):
-    from eegfeat.io import read_dataset
+    from eegtable.io import read_dataset
 
     path, record = _recipe(tmp_path)
     dataset = read_dataset([tmp_path / name for name in record["inputs"]["paths"]])
@@ -307,7 +307,7 @@ def test_external_targets_refuse_missing_identity(tmp_path):
 
 
 def test_external_group_labels_preserve_distinct_numeric_strings(tmp_path):
-    from eegfeat.io import read_dataset
+    from eegtable.io import read_dataset
 
     path, record = _recipe(tmp_path)
     dataset = read_dataset([tmp_path / name for name in record["inputs"]["paths"]])
@@ -358,7 +358,7 @@ def test_group_kfold_predictions_are_complete_and_reproducible(tmp_path):
 
 @pytest.mark.parametrize("changed", ["recipe", "implementation", "software"])
 def test_model_run_refuses_changed_provenance_during_fitting(tmp_path, monkeypatch, changed):
-    from eegfeat.runner import model_run
+    from eegtable.runner import model_run
 
     path, _ = _recipe(tmp_path)
     load, _, run = _api()
@@ -403,8 +403,8 @@ def test_model_run_refuses_recipe_modified_after_loading(tmp_path):
 def test_model_bundle_preserves_canonical_identity_when_used_in_analysis(
     tmp_path, rows, role, name
 ):
-    from eegfeat.group import read_group_dataset
-    from eegfeat.io import read_dataset
+    from eegtable.group import read_group_dataset
+    from eegtable.io import read_dataset
 
     task = "classification" if name == "event" else "regression"
     path, record = _recipe(tmp_path, task=task, rows=rows)

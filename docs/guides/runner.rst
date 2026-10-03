@@ -9,19 +9,19 @@ Command Line Runner
    </p>
 
 A recipe sets spectral estimation, band-pass filtering, and trial grouping.
-``eegfeat run`` applies that recipe to every recording.
+``eegtable run`` applies that recipe to every recording.
 
 Quick Start
 -----------
 
 .. code-block:: bash
 
-   eegfeat init recipe.toml --template task   # a commented recipe to start from
-   eegfeat check recipe.toml                  # validate it, time it on the first recording
-   eegfeat run recipe.toml --workers 4        # compute features for every recording
-   eegfeat status recipe.toml                 # which recordings are done, and what to run next
+   eegtable init recipe.toml --template task   # a commented recipe to start from
+   eegtable check recipe.toml                  # validate it, time it on the first recording
+   eegtable run recipe.toml --workers 4        # compute features for every recording
+   eegtable status recipe.toml                 # which recordings are done, and what to run next
 
-``python -m eegfeat`` is the same command.
+``python -m eegtable`` is the same command.
 
 ``init`` **templates**
    ``basic``
@@ -54,7 +54,7 @@ A recipe is a TOML file.
    pattern = "**/*_proc-clean_epo.fif"
 
    [output]
-   root = "derivatives/eegfeat"
+   root = "derivatives/eegtable"
 
    [windows]
    baseline = [-5.0, -1.0]
@@ -105,12 +105,12 @@ A recipe is a TOML file.
      - ``method`` = ``"welch"``, ``"multitaper"`` or ``"morlet"``; ``fmin``/``fmax``
        default to the span of the bands. See below.
    * - ``[band_signal]``
-     - ``pad_sec`` = 0.5, ``pad_cycles`` = 3.0, passed to :meth:`eegfeat.BandSignal.from_epochs`.
+     - ``pad_sec`` = 0.5, ``pad_cycles`` = 3.0, passed to :meth:`eegtable.BandSignal.from_epochs`.
    * - ``[trials]``
      - How cross-trial measures group epochs: ``by`` = ``"all"`` (one group),
        ``"event"`` (by event name) or ``"metadata"`` with a ``column``.
    * - ``[microstates]``
-     - Parameters of :func:`~eegfeat.microstates.segment`, fitted once per recording and shared by
+     - Parameters of :func:`~eegtable.microstates.segment`, fitted once per recording and shared by
        every microstate measure.
    * - ``[defaults]``
      - ``bands``, ``windows``, ``spatial`` and ``series`` for every entry that takes them
@@ -158,8 +158,8 @@ runner's keys:
        columns are named by amplitude band, so pairs in one entry need distinct ones.
    * - ``ratios``, ``asymmetry``
      - Power measures only: ``[[numerator, denominator], ...]`` band pairs and
-       ``[[left, right], ...]`` channel pairs, through :func:`eegfeat.band_ratio` and
-       :func:`eegfeat.asymmetry`.
+       ``[[left, right], ...]`` channel pairs, through :func:`eegtable.band_ratio` and
+       :func:`eegtable.asymmetry`.
    * - ``graph``, ``clustering_threshold``
      - ``envelope_correlation``, ``wpli``, ``spectral_connectivity`` and
        ``spectral_connectivity_time``: ``["global_efficiency",
@@ -360,7 +360,7 @@ count.
 Running in Parallel
 -------------------
 
-``eegfeat run --workers N`` computes N recordings at once, each in its own process.
+``eegtable run --workers N`` computes N recordings at once, each in its own process.
 
 - Results are the same as one at a time, and the run log lists recordings in input order.
 - Each worker's BLAS and OpenMP thread pools are sized to its share of the cores
@@ -391,12 +391,12 @@ The input tree is mirrored under the output root. For
    sub-01/eeg/sub-01_task-rest_crosstrial_coverage.tsv
    sub-01/eeg/sub-01_task-rest_crosstrial.json
    sub-01/eeg/sub-01_task-rest_failed.json             only while the recording fails: error, traceback
-   eegfeat_run.json                                    what happened to every recording
+   eegtable_run.json                                    what happened to every recording
 
 **Tables**
 
 - ``_features`` holds measures estimated within an epoch. Its rows start with ``epoch``,
-  ``selection`` and ``event``, then the epoch metadata, then a ``__eegfeat_row_id`` column that
+  ``selection`` and ``event``, then the epoch metadata, then a ``__eegtable_row_id`` column that
   ``read_table`` checks against the sidecar, then the features.
 - ``_crosstrial`` holds measures estimated across trials (``itpc``, ``ppc``,
   ``envelope_correlation``, ``spectral_connectivity``, ``wpli`` and their graph
@@ -411,29 +411,29 @@ Load a table back with its metadata:
 
 .. code-block:: python
 
-   import eegfeat as ef
-   from eegfeat.io import read_table
+   import eegtable as ef
+   from eegtable.io import read_table
 
-   table = read_table("derivatives/eegfeat/sub-01/eeg/sub-01_task-rest_features.tsv")
+   table = read_table("derivatives/eegtable/sub-01/eeg/sub-01_task-rest_features.tsv")
    alpha = table.select(band=ef.Band("alpha", 8.0, 13.0), space="global")
 
 For modeling across recordings, pass several per-epoch ``*_features.tsv`` paths to
-:func:`eegfeat.io.read_dataset`.
+:func:`eegtable.io.read_dataset`.
 
 - The loader stacks tables on the union of their feature columns.
 - It restores the descriptor columns written by the runner, plus ``recording``, ``epoch``, and
   ``event`` from the stored row identity.
 - Put target and grouping variables in the epoch metadata when
-  :func:`eegfeat.model.build_design` needs them.
+  :func:`eegtable.model.build_design` needs them.
 - Descriptor columns are separate from feature columns.
 
 .. code-block:: python
 
-   from eegfeat.io import read_dataset
+   from eegtable.io import read_dataset
 
    dataset = read_dataset([
-       "derivatives/eegfeat/sub-01/eeg/sub-01_task-rest_features.tsv",
-       "derivatives/eegfeat/sub-02/eeg/sub-02_task-rest_features.tsv",
+       "derivatives/eegtable/sub-01/eeg/sub-01_task-rest_features.tsv",
+       "derivatives/eegtable/sub-02/eeg/sub-02_task-rest_features.tsv",
    ])
 
 Overwriting and Failures
@@ -450,7 +450,7 @@ Overwriting and Failures
 Resuming
 --------
 
-``eegfeat status`` reads the results and the run log back, computing nothing, and puts
+``eegtable status`` reads the results and the run log back, computing nothing, and puts
 each recording in one of five states:
 
 ``done``
@@ -476,11 +476,11 @@ each recording in one of five states:
 - Defaults are recorded along with explicit settings. Input and output payloads are
   checked by content, so changing timestamps alone does not invalidate results.
 - Unsupported or incomplete manifests require regeneration. Preprocessing manifests
-  and their payload checksums are verified when the epochs carry an EEGFeat identity.
+  and their payload checksums are verified when the epochs carry an EEGTable identity.
 
 **Resuming a run**
 
-- ``eegfeat run --resume`` computes only the recordings that are not ``done``.
+- ``eegtable run --resume`` computes only the recordings that are not ``done``.
 - Recordings that have stale or partial results still need ``--overwrite``, so nothing is
   replaced unasked.
 - ``status`` ends with the command to run next.
@@ -492,10 +492,10 @@ Command Reference
 
 .. code-block:: text
 
-   eegfeat run RECIPE [--overwrite] [--resume] [--workers N] [--n-jobs N] [--progress-json]
-   eegfeat check RECIPE [--quick] [--workers N] [--n-jobs N]
-   eegfeat status RECIPE [--json]
-   eegfeat init [PATH] [--template basic|task|resting]
+   eegtable run RECIPE [--overwrite] [--resume] [--workers N] [--n-jobs N] [--progress-json]
+   eegtable check RECIPE [--quick] [--workers N] [--n-jobs N]
+   eegtable status RECIPE [--json]
+   eegtable init [PATH] [--template basic|task|resting]
 
 ``--n-jobs`` is passed to MNE's filtering and spectral estimation.
 

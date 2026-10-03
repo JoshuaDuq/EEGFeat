@@ -5,17 +5,17 @@ import numpy as np
 import pytest
 from scipy.signal import hilbert
 
-import eegfeat as ef
-from eegfeat.bands import Band
-from eegfeat.connectivity import (
+import eegtable as ef
+from eegtable.bands import Band
+from eegtable.connectivity import (
     _clustering,
     _global_efficiency,
     clustering_coefficient,
     envelope_correlation,
     global_efficiency,
 )
-from eegfeat.signal import BandSignal, Signal
-from eegfeat.spectra import Window
+from eegtable.signal import BandSignal, Signal
+from eegtable.spectra import Window
 
 SFREQ = 100.0
 ALPHA = Band("alpha", 8.0, 13.0)
@@ -386,7 +386,7 @@ def test_graph_measures_refuse_a_non_pairwise_table() -> None:
 def test_connectivity_reports_its_missing_dependency_clearly(method, monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "mne_connectivity", None)
     signal = _coupled_broadband()
-    with pytest.raises(ImportError, match=r"eegfeat\[connectivity\]"):
+    with pytest.raises(ImportError, match=r"eegtable\[connectivity\]"):
         if method == "wpli":
             ef.wpli(signal, bands=[ALPHA], windows=[WINDOW])
         else:
@@ -398,8 +398,8 @@ def test_connectivity_reports_its_missing_dependency_clearly(method, monkeypatch
     reason="mne-connectivity is not installed in this environment",
 )
 def test_wpli_places_a_planted_coupling_on_the_right_pair() -> None:
-    from eegfeat.connectivity import wpli
-    from eegfeat.signal import Signal
+    from eegtable.connectivity import wpli
+    from eegtable.signal import Signal
 
     n, n_epochs = 800, 12
     times = np.arange(n) / 200.0
@@ -594,7 +594,7 @@ def test_missing_edges_are_not_treated_as_observed_disconnections(invalid) -> No
 def test_wpli_preserves_estimator_reliability_warnings(monkeypatch) -> None:
     import warnings
 
-    import eegfeat.connectivity as connectivity
+    import eegtable.connectivity as connectivity
 
     class Result:
         freqs = np.array([8.0, 10.0, 12.0])
@@ -632,7 +632,7 @@ def test_orthogonalized_aec_agrees_with_mne_connectivity(fixture) -> None:
     # equivalent of.
     from mne_connectivity import envelope_correlation as reference
 
-    from eegfeat.connectivity import _trial_correlation
+    from eegtable.connectivity import _trial_correlation
 
     signal = fixture(5.0)
     for trial in signal.analytic:
@@ -650,7 +650,7 @@ def test_orthogonalized_aec_agrees_with_mne_connectivity(fixture) -> None:
 
 def _estimator_returning_frequency_as_value(monkeypatch, freqs):
     """Stub whose connectivity value at each frequency is that frequency."""
-    import eegfeat.connectivity as connectivity
+    import eegtable.connectivity as connectivity
 
     class Result:
         def __init__(self):
@@ -820,12 +820,12 @@ def test_the_method_and_mode_are_recorded_and_separate_the_columns(monkeypatch) 
 def test_the_per_trial_matrix_is_the_one_mne_connectivity_computes(
     orthogonalize: str | None, absolute: bool
 ) -> None:
-    # envelope_correlation is the one connectivity measure eegfeat computes itself
+    # envelope_correlation is the one connectivity measure eegtable computes itself
     # rather than delegating, and its docstring claims Hipp et al. (2012) as
     # mne-connectivity implements it. Nothing else pins that claim.
     from mne_connectivity import envelope_correlation as mne_envelope_correlation
 
-    from eegfeat.connectivity import _trial_correlation
+    from eegtable.connectivity import _trial_correlation
 
     rng = np.random.RandomState(3)
     trial = rng.randn(5, 800) + 1j * rng.randn(5, 800)
@@ -843,7 +843,7 @@ def test_the_per_trial_matrix_is_the_one_mne_connectivity_computes(
 
 def test_multitaper_bandwidth_is_fixed_in_hertz_and_recorded() -> None:
     pytest.importorskip("mne_connectivity")
-    from eegfeat.connectivity import spectral_connectivity
+    from eegtable.connectivity import spectral_connectivity
 
     rng = np.random.RandomState(0)
     times = np.arange(0.0, 2.0, 1.0 / 200.0)
@@ -872,7 +872,7 @@ def test_time_connectivity_matches_mne_per_epoch_and_preserves_row_identity(meth
     from mne.time_frequency import morlet
     from mne_connectivity import spectral_connectivity_time as reference
 
-    import eegfeat.connectivity as connectivity_methods
+    import eegtable.connectivity as connectivity_methods
 
     signal = _coupled_broadband(n_epochs=3)
     freqs = np.array([8.0, 9.0, 10.0, 11.0, 12.0, 13.0])
@@ -927,7 +927,7 @@ def test_time_connectivity_matches_mne_per_epoch_and_preserves_row_identity(meth
 
 def test_time_connectivity_rejects_a_wavelet_longer_than_the_window() -> None:
     pytest.importorskip("mne_connectivity")
-    import eegfeat.connectivity as connectivity_methods
+    import eegtable.connectivity as connectivity_methods
 
     with pytest.raises(ValueError, match="wavelet|support"):
         connectivity_methods.spectral_connectivity_time(
@@ -951,7 +951,7 @@ def test_time_connectivity_rejects_a_wavelet_longer_than_the_window() -> None:
     ],
 )
 def test_time_connectivity_validates_estimator_inputs(kwargs, message) -> None:
-    import eegfeat.connectivity as connectivity_methods
+    import eegtable.connectivity as connectivity_methods
 
     parameters = {"method": "coh", "freqs": [8.0, 10.0, 12.0], "n_cycles": 3.0, **kwargs}
     with pytest.raises(ValueError, match=message):
@@ -967,7 +967,7 @@ def test_time_connectivity_validates_estimator_inputs(kwargs, message) -> None:
 def test_time_connectivity_rejects_an_undefined_two_sample_hann_smoother(
     smoothing_seconds,
 ) -> None:
-    import eegfeat.connectivity as connectivity_methods
+    import eegtable.connectivity as connectivity_methods
 
     with pytest.raises(ValueError, match="Hanning.*two samples"):
         connectivity_methods.spectral_connectivity_time(
@@ -984,7 +984,7 @@ def test_time_connectivity_rejects_an_undefined_two_sample_hann_smoother(
 @pytest.mark.parametrize("method", ["coh", "imcoh", "plv", "ciplv", "wpli"])
 def test_time_connectivity_surfaces_undefined_backend_estimates(method) -> None:
     pytest.importorskip("mne_connectivity")
-    import eegfeat.connectivity as connectivity_methods
+    import eegtable.connectivity as connectivity_methods
 
     signal = _coupled_broadband()
     data = signal.data.copy()
@@ -1008,8 +1008,8 @@ def test_time_connectivity_surfaces_undefined_backend_estimates(method) -> None:
 @pytest.mark.parametrize("groups", [None, {"left": ["C3", "P3"], "right": ["C4", "P4"]}])
 def test_time_connectivity_retains_pairwise_input_coverage_for_quality(groups) -> None:
     pytest.importorskip("mne_connectivity")
-    from eegfeat.connectivity import spectral_connectivity_time
-    from eegfeat.quality import QualityPolicy, apply_quality
+    from eegtable.connectivity import spectral_connectivity_time
+    from eegtable.quality import QualityPolicy, apply_quality
 
     signal = _coupled_broadband()
     coverage = np.ones_like(signal.coverage)
@@ -1053,7 +1053,7 @@ def test_time_connectivity_padding_discards_the_full_integer_wavelet_support() -
     from mne.time_frequency import morlet
     from mne_connectivity import spectral_connectivity_time as reference
 
-    from eegfeat.connectivity import _time_connectivity_padding, spectral_connectivity_time
+    from eegtable.connectivity import _time_connectivity_padding, spectral_connectivity_time
 
     signal = _coupled_broadband(n_epochs=2)
     freqs = np.array([8.0, 10.0, 12.0])
@@ -1085,7 +1085,7 @@ def test_time_connectivity_padding_discards_the_full_integer_wavelet_support() -
 @pytest.mark.parametrize("constant", [0.0, 1.0])
 def test_time_connectivity_rejects_constant_channels_inside_each_window(method, constant) -> None:
     pytest.importorskip("mne_connectivity")
-    from eegfeat.connectivity import spectral_connectivity_time
+    from eegtable.connectivity import spectral_connectivity_time
 
     signal = _coupled_broadband(n_epochs=2)
     data = signal.data.copy()

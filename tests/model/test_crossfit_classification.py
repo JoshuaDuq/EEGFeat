@@ -8,10 +8,10 @@ from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
 
-from eegfeat.model.crossfit import cross_fit_classification
-from eegfeat.model.estimators import ensemble_pipeline, svm_pipeline
-from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
-from eegfeat.model.transformers import PreprocessingConfig
+from eegtable.model.crossfit import cross_fit_classification
+from eegtable.model.estimators import ensemble_pipeline, svm_pipeline
+from eegtable.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegtable.model.transformers import PreprocessingConfig
 
 GROUPS = np.repeat(["s1", "s2", "s3", "s4"], 6).astype(object)
 Y = np.tile([0, 1], GROUPS.size // 2).astype(np.intp)

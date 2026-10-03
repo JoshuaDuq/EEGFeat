@@ -3,9 +3,9 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-import eegfeat.table as table_module
-from eegfeat.bands import Band
-from eegfeat.table import ComputationSpec, FeatureMeta, FeatureTable, concat
+import eegtable.table as table_module
+from eegtable.bands import Band
+from eegtable.table import ComputationSpec, FeatureMeta, FeatureTable, concat
 
 ALPHA = Band("alpha", 8.0, 13.0)
 

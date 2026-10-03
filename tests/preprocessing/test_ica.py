@@ -1,13 +1,13 @@
 import pytest
 
-from eegfeat.preprocessing.config import ICASettings
+from eegtable.preprocessing.config import ICASettings
 
 
 def test_exact_ica_review_and_no_refit(mixture):
     import numpy as np
 
-    from eegfeat.preprocessing.artifacts import apply_artifact, review_artifact
-    from eegfeat.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.artifacts import apply_artifact, review_artifact
+    from eegtable.preprocessing.ica import fit_ica
 
     model = fit_ica(mixture, ICASettings(n_components=4))
     reviewed = review_artifact(model, {"fit_id": model.fit_id, "exclude": []})
@@ -20,8 +20,8 @@ def test_exact_ica_review_and_no_refit(mixture):
 
 
 def test_rank_follows_reference(mixture):
-    from eegfeat.preprocessing.artifacts import reference_artifact_data
-    from eegfeat.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.artifacts import reference_artifact_data
+    from eegtable.preprocessing.ica import fit_ica
 
     referenced = reference_artifact_data(mixture, "average")
     assert fit_ica(referenced, ICASettings()).evidence["rank"] == 7
@@ -34,8 +34,8 @@ def test_reviewed_exclusion_removes_injected_artifact(raw):
     import numpy as np
     from scipy.ndimage import gaussian_filter1d
 
-    from eegfeat.preprocessing.artifacts import apply_artifact, review_artifact
-    from eegfeat.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.artifacts import apply_artifact, review_artifact
+    from eegtable.preprocessing.ica import fit_ica
 
     # Seven neural sources plus one sparse artifact source in eight channels.
     rng = np.random.default_rng(7)
@@ -63,8 +63,8 @@ def test_reviewed_exclusion_removes_injected_artifact(raw):
 def test_detector_suggestions_are_evidence_only(mixture):
     import numpy as np
 
-    from eegfeat.preprocessing.artifacts import reference_artifact_data
-    from eegfeat.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.artifacts import reference_artifact_data
+    from eegtable.preprocessing.ica import fit_ica
 
     referenced = reference_artifact_data(mixture, "average")
     model = fit_ica(referenced, ICASettings(eog_channels=("VEOG",), ecg_channel="ECG"))
@@ -83,7 +83,7 @@ def test_detector_suggestions_are_evidence_only(mixture):
 
 @pytest.mark.parametrize("method", ["infomax", "picard"])
 def test_ica_methods_follow_settings(mixture, method):
-    from eegfeat.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.ica import fit_ica
 
     if method == "picard":
         pytest.importorskip("picard")
@@ -95,7 +95,7 @@ def test_ica_methods_follow_settings(mixture, method):
 
 
 def test_iclabel_requires_extended_infomax_and_average_reference():
-    from eegfeat.preprocessing.config import ArtifactSettings, ICLabelSettings
+    from eegtable.preprocessing.config import ArtifactSettings, ICLabelSettings
 
     with pytest.raises(ValueError, match="infomax or picard"):
         ICASettings(iclabel=ICLabelSettings())
@@ -107,10 +107,10 @@ def test_iclabel_requires_extended_infomax_and_average_reference():
 
 def test_iclabel_labels_every_component(mixture):
     pytest.importorskip("mne_icalabel")
-    from eegfeat.preprocessing.artifacts import reference_artifact_data
-    from eegfeat.preprocessing.config import FilterSettings, ICLabelSettings
-    from eegfeat.preprocessing.ica import fit_ica
-    from eegfeat.preprocessing.raw import filter_raw
+    from eegtable.preprocessing.artifacts import reference_artifact_data
+    from eegtable.preprocessing.config import FilterSettings, ICLabelSettings
+    from eegtable.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.raw import filter_raw
 
     # ICLabel's training band, 1-100 Hz: fit_ica adds the 1 Hz high-pass.
     lowpassed = filter_raw(mixture, FilterSettings(h_freq=100.0))
@@ -136,8 +136,8 @@ def test_iclabel_labels_every_component(mixture):
 def test_iclabel_requires_its_training_band(raw):
     import pytest
 
-    from eegfeat.preprocessing.checks import validate_processing
-    from eegfeat.preprocessing.config import (
+    from eegtable.preprocessing.checks import validate_processing
+    from eegtable.preprocessing.config import (
         ArtifactSettings,
         FilterSettings,
         FixedEpochSettings,
@@ -169,9 +169,9 @@ def test_iclabel_requires_its_training_band(raw):
 @pytest.mark.parametrize("highpass", [0.5, 2.0])
 def test_iclabel_rejects_an_actual_training_band_outside_one_to_one_hundred_hz(raw, highpass):
     pytest.importorskip("mne_icalabel")
-    from eegfeat.preprocessing.config import FilterSettings, ICLabelSettings
-    from eegfeat.preprocessing.ica import fit_ica
-    from eegfeat.preprocessing.raw import filter_raw
+    from eegtable.preprocessing.config import FilterSettings, ICLabelSettings
+    from eegtable.preprocessing.ica import fit_ica
+    from eegtable.preprocessing.raw import filter_raw
 
     filtered = filter_raw(raw, FilterSettings(l_freq=highpass, h_freq=100.0))
     settings = ICASettings(method="infomax", l_freq=highpass, iclabel=ICLabelSettings())

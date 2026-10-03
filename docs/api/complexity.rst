@@ -7,34 +7,34 @@ requires the ``microstates`` extra.
 Entropy and Fractal Dimension
 -----------------------------
 
-.. autofunction:: eegfeat.higuchi_fractal_dimension
+.. autofunction:: eegtable.higuchi_fractal_dimension
 
-.. autofunction:: eegfeat.sample_entropy
+.. autofunction:: eegtable.sample_entropy
 
-.. autofunction:: eegfeat.multiscale_entropy
+.. autofunction:: eegtable.multiscale_entropy
 
-.. autofunction:: eegfeat.permutation_entropy
+.. autofunction:: eegtable.permutation_entropy
 
-.. autofunction:: eegfeat.lempel_ziv_complexity
+.. autofunction:: eegtable.lempel_ziv_complexity
 
-.. autofunction:: eegfeat.detrended_fluctuation
+.. autofunction:: eegtable.detrended_fluctuation
 
 Microstates
 -----------
 
-.. autoclass:: eegfeat.MicrostateModel
+.. autoclass:: eegtable.MicrostateModel
    :members:
 
-.. autofunction:: eegfeat.microstates.segment
+.. autofunction:: eegtable.microstates.segment
 
-.. autofunction:: eegfeat.microstates.microstate_coverage
+.. autofunction:: eegtable.microstates.microstate_coverage
 
-.. autofunction:: eegfeat.microstates.microstate_duration
+.. autofunction:: eegtable.microstates.microstate_duration
 
-.. autofunction:: eegfeat.microstates.microstate_occurrence
+.. autofunction:: eegtable.microstates.microstate_occurrence
 
-.. autofunction:: eegfeat.microstates.microstate_transitions
+.. autofunction:: eegtable.microstates.microstate_transitions
 
-.. autoclass:: eegfeat.microstates.MicrostateSegmentation
+.. autoclass:: eegtable.microstates.MicrostateSegmentation
    :members:
    :show-inheritance:

@@ -1,9 +1,9 @@
 import numpy as np
 
-from eegfeat.preprocessing.config import AutoRejectSettings, FixedEpochSettings
-from eegfeat.preprocessing.epochs import make_epochs
-from eegfeat.preprocessing.events import resolve_events
-from eegfeat.preprocessing.rejection import apply_rejection, fit_rejection
+from eegtable.preprocessing.config import AutoRejectSettings, FixedEpochSettings
+from eegtable.preprocessing.epochs import make_epochs
+from eegtable.preprocessing.events import resolve_events
+from eegtable.preprocessing.rejection import apply_rejection, fit_rejection
 
 
 def test_autoreject_minimum(raw):

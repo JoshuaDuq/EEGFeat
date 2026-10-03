@@ -9,7 +9,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 # ---------------------------------------------------------------------------
 # Project metadata
 # ---------------------------------------------------------------------------
-project = "EEGFeat"
+project = "EEGTable"
 author = "Joshua Duquette"
 release = "0.1.0.dev0"
 copyright = "2026, Joshua Duquette"
@@ -89,13 +89,13 @@ intersphinx_mapping = {
 # GitHub Pages serves 404.html for a missing path at any depth, so its links
 # must be absolute from the site root. Build with
 # `-D notfound_urls_prefix=/` to preview it from a local server.
-notfound_urls_prefix = "/EEGFeat/"
+notfound_urls_prefix = "/EEGTable/"
 
 # ---------------------------------------------------------------------------
 # HTML output — furo theme
 # ---------------------------------------------------------------------------
 html_theme = "furo"
-html_title = "EEGFeat"
+html_title = "EEGTable"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_js_files = ["custom.js", "navigation.js"]
@@ -158,7 +158,7 @@ html_theme_options = {
     "sidebar_hide_name": False,
     "navigation_with_keys": False,
     "top_of_page_buttons": ["view"],
-    "source_repository": "https://github.com/JoshuaDuq/EEGFeat",
+    "source_repository": "https://github.com/JoshuaDuq/EEGTable",
     "source_branch": "main",
     "source_directory": "docs/",
 }

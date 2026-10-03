@@ -6,7 +6,7 @@ Validation on Public Datasets
    <p class="hero-lede">
      The unit tests check each formula on synthetic signals. This page answers a
      different question: pointed at <strong>real recordings</strong> nobody tuned it on,
-     does EEGFeat compute the right numbers and find what the literature says is there?
+     does EEGTable compute the right numbers and find what the literature says is there?
    </p>
 
 .. include:: ../validation/summary.inc
@@ -88,9 +88,9 @@ Across four public datasets:
   with durations of tens of milliseconds.
 - **MNE's own implementations.** Peak latency and amplitude equal ``Evoked.get_peak`` on
   every ERP CORE channel, and orthogonalized envelope correlation equals mne-connectivity's
-  per-trial estimate to rounding. Rerun with EEGFeat's band power in place of its own
+  per-trial estimate to rounding. Rerun with EEGTable's band power in place of its own
   features, MNE's sleep-staging tutorial scores the held-out night within 0.01 of its own
-  accuracy; in MNE's CSP decoding example, EEGFeat's CSP separates movement from rest within
+  accuracy; in MNE's CSP decoding example, EEGTable's CSP separates movement from rest within
   0.03 of ``mne.decoding.CSP``, the gap being its relative rather than absolute log power.
 
 What the data changed
@@ -99,7 +99,7 @@ What the data changed
 Two defaults were changed, one estimator fixed and two notes added because real recordings
 showed the previous behaviour would mislead a user who trusted it.
 
-- **CSP fits average-referenced data.** MNE's CSP decoding example failed with EEGFeat's CSP:
+- **CSP fits average-referenced data.** MNE's CSP decoding example failed with EEGTable's CSP:
   an average reference, like removed ICA components, leaves the class covariance
   rank-deficient, and the fit refused it unless shrinkage was added. It now solves in the
   data's own subspace, as MNE's CSP does.
@@ -125,7 +125,7 @@ What was not found, and is not asserted
 - **Raw phase-amplitude coupling** did not resolve slow-oscillation to spindle coupling
   against a time-shifted surrogate on two sleep derivations, and sits well above zero even
   with the coupling destroyed. Only the formula and that surrogate floor are asserted; read
-  :func:`~eegfeat.pac` against a null of your own.
+  :func:`~eegtable.pac` against a null of your own.
 - **The post-movement beta rebound** was not visible at the group level in the 4.5 to 5.8 s
   window of the motor task.
 - **Single-trial ERDS onsets** fired on movement trials at the same rate as on rest trials at
@@ -182,7 +182,7 @@ data directory (``MNE_DATA``, default ``~/mne_data``).
 .. code-block:: bash
 
    python -m pip install -e ".[dev,model,connectivity,microstates]"
-   EEGFEAT_DATASETS=1 python -m pytest tests/validation -ra
+   EEGTABLE_DATASETS=1 python -m pytest tests/validation -ra
 
 **Output.** A run rewrites ``docs/validation/results.json`` and the fragments this page
 includes, so the scorecard and the tables below reflect the last run on the machine that

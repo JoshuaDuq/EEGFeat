@@ -1,6 +1,6 @@
 name: validation
 
-# Checks eegfeat against public MNE datasets: known physiology has to come out of
+# Checks eegtable against public MNE datasets: known physiology has to come out of
 # real recordings. Downloads about 350 MB from PhysioNet and the MNE servers, so
 # it runs on demand and weekly rather than on every push. Runs once on the oldest
 # supported MNE and once on the newest, so API drift shows up as a failure here.
@@ -13,7 +13,7 @@ env:
   MNE_DONTWRITE_HOME: "true"
   MPLBACKEND: "Agg"
   MNE_DATA: ${{ github.workspace }}/mne_data
-  EEGFEAT_DATASETS: "1"
+  EEGTABLE_DATASETS: "1"
 
 jobs:
   datasets:

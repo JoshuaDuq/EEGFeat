@@ -9,13 +9,13 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from eegfeat.csp import CommonSpatialPattern
-from eegfeat.microstates import MicrostateModel, microstate_coverage
-from eegfeat.model import learned
-from eegfeat.model.crossfit import FoldClassification, FoldPrediction
-from eegfeat.model.splits import Fold, InnerSplit, loso_folds, within_subject_folds
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+from eegtable.csp import CommonSpatialPattern
+from eegtable.microstates import MicrostateModel, microstate_coverage
+from eegtable.model import learned
+from eegtable.model.crossfit import FoldClassification, FoldPrediction
+from eegtable.model.splits import Fold, InnerSplit, loso_folds, within_subject_folds
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 CHANNELS = ("F3", "F4", "P3", "P4")
 

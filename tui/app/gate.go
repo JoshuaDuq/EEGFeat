@@ -13,15 +13,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeat/tui/styles"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
+	"github.com/JoshuaDuq/EEGTable/tui/styles"
 )
 
 // gateModel is one checklist: the gate's items in display order, then its
 // spans, then (raw gate only) a row that adds a span.
 type gateModel struct {
 	recording string
-	gate      eegfeat.Gate
+	gate      eegtable.Gate
 	checked   []bool
 	spans     []spanRow
 	order     []int
@@ -33,11 +33,11 @@ type gateModel struct {
 }
 
 type spanRow struct {
-	eegfeat.Span
+	eegtable.Span
 	kept bool
 }
 
-func newGate(recording string, gate eegfeat.Gate) gateModel {
+func newGate(recording string, gate eegtable.Gate) gateModel {
 	g := gateModel{recording: recording, gate: gate, checked: make([]bool, len(gate.Items)), order: make([]int, len(gate.Items))}
 	for i := range gate.Items {
 		g.order[i] = i
@@ -170,13 +170,13 @@ func (g *gateModel) addSpan(text string) {
 		g.problem = "description must start with BAD"
 	default:
 		g.problem = ""
-		g.spans = append(g.spans, spanRow{eegfeat.Span{Onset: onset, Duration: duration, Description: description}, true})
+		g.spans = append(g.spans, spanRow{eegtable.Span{Onset: onset, Duration: duration, Description: description}, true})
 		g.cursor = len(g.gate.Items) + len(g.spans) - 1
 	}
 }
 
-func (g gateModel) decision() eegfeat.Decision {
-	d := eegfeat.Decision{ParentID: g.gate.ParentID, FitID: g.gate.FitID, Field: g.gate.Field}
+func (g gateModel) decision() eegtable.Decision {
+	d := eegtable.Decision{ParentID: g.gate.ParentID, FitID: g.gate.FitID, Field: g.gate.Field}
 	for i, item := range g.gate.Items {
 		if g.checked[i] {
 			d.IDs = append(d.IDs, item.ID)
@@ -184,7 +184,7 @@ func (g gateModel) decision() eegfeat.Decision {
 	}
 	for _, span := range g.spans {
 		if span.kept {
-			d.Spans = append(d.Spans, eegfeat.Span{Onset: span.Onset, Duration: span.Duration, Description: span.Description})
+			d.Spans = append(d.Spans, eegtable.Span{Onset: span.Onset, Duration: span.Duration, Description: span.Description})
 		}
 	}
 	return d

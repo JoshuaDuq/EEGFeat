@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JoshuaDuq/EEGFeat/tui/eegfeat"
-	"github.com/JoshuaDuq/EEGFeat/tui/styles"
+	"github.com/JoshuaDuq/EEGTable/tui/eegtable"
+	"github.com/JoshuaDuq/EEGTable/tui/styles"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -16,7 +16,7 @@ func TestLogCanBeOpenedAtMinimumSize(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 24)
 	m, _ = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 24})
-	m = feed(t, m, backend, eegfeat.Event{Event: "stderr", Message: "Filtering raw data"})
+	m = feed(t, m, backend, eegtable.Event{Event: "stderr", Message: "Filtering raw data"})
 	m, _ = update(t, m, key('l'))
 	view := m.View()
 	if !strings.Contains(view, "Filtering raw data") || !strings.Contains(view, "Latest") {
@@ -72,7 +72,7 @@ func TestStageHintsMatchAvailableActions(t *testing.T) {
 func TestRunFailureSurvivesStatusRefresh(t *testing.T) {
 	backend := &fakeBackend{status: statusFixture()}
 	m := startRun(t, backend, 40)
-	m, cmd := update(t, m, runDoneMsg{eegfeat.Result{Code: 1, Stderr: "ICA did not converge"}})
+	m, cmd := update(t, m, runDoneMsg{eegtable.Result{Code: 1, Stderr: "ICA did not converge"}})
 	m = settle(t, m, cmd)
 	m, cmd = update(t, m, tickMsg{})
 	m = settle(t, m, cmd)
@@ -141,7 +141,7 @@ func TestRefreshPreservesSelectedStageIdentity(t *testing.T) {
 	m, _ = update(t, m, special(tea.KeyDown))
 	selected := m.selectedStage().Stage
 	status := statusFixture()
-	status.Recordings[0].Stages = append([]eegfeat.Stage{{Stage: "new-stage", State: "pending"}}, status.Recordings[0].Stages...)
+	status.Recordings[0].Stages = append([]eegtable.Stage{{Stage: "new-stage", State: "pending"}}, status.Recordings[0].Stages...)
 	m, _ = update(t, m, statusMsg{seq: m.statusSeq, status: status})
 	if m.selectedStage().Stage != selected {
 		t.Fatal("refresh moved focus to a different stage")
@@ -156,7 +156,7 @@ func TestRefreshPreservesSelectedStageIdentity(t *testing.T) {
 func TestScrollingDoesNotMoveRunningStage(t *testing.T) {
 	status := statusFixture()
 	for i := 0; i < 20; i++ {
-		status.Recordings[0].Stages = append(status.Recordings[0].Stages, eegfeat.Stage{Stage: fmt.Sprintf("later-%02d", i), State: "pending"})
+		status.Recordings[0].Stages = append(status.Recordings[0].Stages, eegtable.Stage{Stage: fmt.Sprintf("later-%02d", i), State: "pending"})
 	}
 	backend := &fakeBackend{status: status}
 	m := startRun(t, backend, 24)
@@ -174,17 +174,17 @@ func TestRunAllOnlyMarksTheActiveRecording(t *testing.T) {
 	m := home(t, backend)
 	m, cmd := update(t, m, key('a'))
 	m = settle(t, m, cmd)
-	m = feed(t, m, backend, eegfeat.Event{Event: "subject_start", Subject: "sub-01"})
+	m = feed(t, m, backend, eegtable.Event{Event: "subject_start", Subject: "sub-01"})
 	for _, line := range strings.Split(m.View(), "\n") {
 		if strings.Contains(line, "sub-02") && strings.Contains(line, "running") {
 			t.Fatal("an inactive recording is marked running")
 		}
 	}
-	m = feed(t, m, backend, eegfeat.Event{Event: "subject_done", Subject: "sub-01"})
+	m = feed(t, m, backend, eegtable.Event{Event: "subject_done", Subject: "sub-01"})
 	if strings.Contains(m.View(), "running") {
 		t.Fatal("finished recording is still running")
 	}
-	m = feed(t, m, backend, eegfeat.Event{Event: "subject_start", Subject: "sub-04"})
+	m = feed(t, m, backend, eegtable.Event{Event: "subject_start", Subject: "sub-04"})
 	found := false
 	for _, line := range strings.Split(m.View(), "\n") {
 		found = found || strings.Contains(line, "sub-04") && strings.Contains(line, "running")
@@ -347,7 +347,7 @@ func TestIdleHomeUsesSpaceInsteadOfAnEmptyLogPanel(t *testing.T) {
 	if !strings.Contains(m.View(), "LOG") {
 		t.Fatal("starting a run did not reveal its log")
 	}
-	m, cmd = update(t, m, runDoneMsg{eegfeat.Result{Code: 3}})
+	m, cmd = update(t, m, runDoneMsg{eegtable.Result{Code: 3}})
 	m = settle(t, m, cmd)
 	if !strings.Contains(m.View(), "LOG") {
 		t.Fatal("finished output should remain accessible on home")

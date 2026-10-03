@@ -9,9 +9,9 @@ import importlib.util
 import numpy as np
 import pytest
 
-import eegfeat as ef
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+import eegtable as ef
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 SFREQ = 250.0
 _HAS_ANTROPY = importlib.util.find_spec("antropy") is not None

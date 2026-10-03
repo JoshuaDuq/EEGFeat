@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from scipy.signal import find_peaks, welch
 
-from eegfeat.bands import Band
-from eegfeat.descriptors import (
+from eegtable.bands import Band
+from eegtable.descriptors import (
     _smooth,
     peak_frequency,
     spectral_bandwidth,
@@ -11,8 +11,8 @@ from eegfeat.descriptors import (
     spectral_edge,
     spectral_entropy,
 )
-from eegfeat.spectra import Spectra, Window
-from eegfeat.table import ComputationSpec
+from eegtable.spectra import Spectra, Window
+from eegtable.table import ComputationSpec
 
 ALPHA = Band("alpha", 8.0, 13.0)
 

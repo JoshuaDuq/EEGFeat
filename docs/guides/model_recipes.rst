@@ -1,25 +1,25 @@
 Modeling recipes and result bundles
 ===================================
 
-``eegfeat model`` runs nested grouped cross-validation from a strict YAML
+``eegtable model`` runs nested grouped cross-validation from a strict YAML
 recipe. Install the modeling dependencies with
-``pip install "eegfeat[model]"``. The array-based APIs remain in
-``eegfeat.model``; reading recipes and writing bundles belong to the runner.
+``pip install "eegtable[model]"``. The array-based APIs remain in
+``eegtable.model``; reading recipes and writing bundles belong to the runner.
 
 Start, validate, run
 --------------------
 
 .. code-block:: console
 
-   eegfeat model init model.yaml
+   eegtable model init model.yaml
    # Edit the inputs, target, grid and output in model.yaml.
-   eegfeat model check model.yaml
-   eegfeat model run model.yaml
+   eegtable model check model.yaml
+   eegtable model run model.yaml
 
 ``init`` writes the following template and refuses to replace an existing
 file. Paths are resolved relative to the recipe, including the output path.
 
-.. literalinclude:: ../../src/eegfeat/runner/model_template.yaml
+.. literalinclude:: ../../src/eegtable/runner/model_template.yaml
    :language: yaml
 
 ``check`` reads the inputs and validates row alignment, feature selection,
@@ -43,9 +43,9 @@ feature schema in each input.
 Set ``inputs.rows`` explicitly when using trial-group features:
 
 * ``epochs`` uses one sample per ``(recording, epoch, event)`` and delegates
-  alignment to :func:`eegfeat.model.build_design`.
+  alignment to :func:`eegtable.model.build_design`.
 * ``groups`` uses one sample per ``(recording, group)`` and delegates to
-  :func:`eegfeat.group.build_group_design`. Each row retains its ``n_trials``
+  :func:`eegtable.group.build_group_design`. Each row retains its ``n_trials``
   descriptor. Group-level features are never copied onto individual epochs.
 
 Targets and the model grouping variable must be descriptor columns. For
@@ -67,7 +67,7 @@ through the existing fold-local preprocessing pipeline.
 Feature selection and quality
 -----------------------------
 
-``selection`` matches :class:`eegfeat.model.Selection` metadata fields:
+``selection`` matches :class:`eegtable.model.Selection` metadata fields:
 ``measure``, ``band``, ``space_kind``, ``window``, ``normalization`` and
 ``space``. Empty lists match all values. ``exclude`` accepts another selection
 mapping and removes its matches. Choose these criteria before evaluating
@@ -202,8 +202,8 @@ Python entry points
 
 .. code-block:: python
 
-   from eegfeat.runner.model_recipe import load_model_recipe
-   from eegfeat.runner.model_run import check_model, run_model
+   from eegtable.runner.model_recipe import load_model_recipe
+   from eegtable.runner.model_run import check_model, run_model
 
    recipe = load_model_recipe("model.yaml")
    check = check_model(recipe)

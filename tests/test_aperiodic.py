@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 from scipy import stats
 
-from eegfeat.aperiodic import aperiodic, aperiodic_ratio
-from eegfeat.bands import Band
-from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
-from eegfeat.spectra import Spectra, Window
-from eegfeat.table import ComputationSpec
+from eegtable.aperiodic import aperiodic, aperiodic_ratio
+from eegtable.bands import Band
+from eegtable.power import integrated_band_power, mean_psd, mean_tfr_power
+from eegtable.spectra import Spectra, Window
+from eegtable.table import ComputationSpec
 
 # geomspace, not logspace: logspace lands the top bin on 40 Hz or just under it depending
 # on the platform, which decides whether the half-open default fit_range keeps it.

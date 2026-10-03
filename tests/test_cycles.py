@@ -4,9 +4,9 @@ from importlib.util import find_spec
 import numpy as np
 import pytest
 
-from eegfeat.bands import Band
-from eegfeat.signal import Signal
-from eegfeat.spectra import Window
+from eegtable.bands import Band
+from eegtable.signal import Signal
+from eegtable.spectra import Window
 
 SFREQ = 200.0
 ALPHA = Band("alpha", 8.0, 13.0)
@@ -31,8 +31,8 @@ def _signal():
 
 
 def _compute(signal, **parameters):
-    assert find_spec("eegfeat.cycles") is not None, "cycle analysis is not implemented"
-    from eegfeat.cycles import cycle_features
+    assert find_spec("eegtable.cycles") is not None, "cycle analysis is not implemented"
+    from eegtable.cycles import cycle_features
 
     return cycle_features(
         [signal],
@@ -63,7 +63,7 @@ def test_sine_cycles_have_expected_amplitude_period_and_symmetry():
 
 def test_cycles_match_bycycle_and_only_use_complete_windowed_cycles():
     pytest.importorskip("bycycle")
-    assert find_spec("eegfeat.cycles") is not None, "cycle analysis is not implemented"
+    assert find_spec("eegtable.cycles") is not None, "cycle analysis is not implemented"
     from bycycle.features import compute_features
 
     signal = _signal()

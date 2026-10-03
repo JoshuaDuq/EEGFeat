@@ -1,7 +1,7 @@
 :hide-toc:
 
-EEGFeat
-=======
+EEGTable
+========
 
 .. rst-class:: hero-lede
 

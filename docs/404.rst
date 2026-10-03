@@ -17,7 +17,7 @@ Page Not Found
       :link: index
       :link-type: doc
 
-      What EEGFeat computes and where each part is documented.
+      What EEGTable computes and where each part is documented.
 
    .. grid-item-card:: API Reference
       :link: api/index

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from scipy import stats
 
-from eegfeat.model.aggregate import (
+from eegtable.model.aggregate import (
     AggregationConfig,
     bootstrap_mean_ci,
     fold_results,
@@ -13,7 +13,7 @@ from eegfeat.model.aggregate import (
     subject_level_errors,
     subject_level_r,
 )
-from eegfeat.model.crossfit import FoldPrediction
+from eegtable.model.crossfit import FoldPrediction
 
 
 def _predictions(per_subject: dict[str, tuple[list[float], list[float]]]) -> pd.DataFrame:

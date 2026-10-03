@@ -4,7 +4,7 @@ import json
 from io import StringIO
 from pathlib import Path
 
-from eegfeat.runner.progress import JsonReporter, TextReporter
+from eegtable.runner.progress import JsonReporter, TextReporter
 
 
 class Clock:
@@ -68,7 +68,7 @@ def test_json_progress_carries_the_estimate_on_each_finished_recording() -> None
 
 
 def test_durations_read_the_way_a_person_says_them() -> None:
-    from eegfeat.runner.progress import human_duration
+    from eegtable.runner.progress import human_duration
 
     assert [human_duration(s) for s in (0.34, 4.26, 45.0, 720.0, 7500.0)] == [
         "0.3 s",

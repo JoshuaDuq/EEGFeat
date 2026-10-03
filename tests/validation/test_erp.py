@@ -16,7 +16,7 @@ import pytest
 from scipy.integrate import trapezoid
 from scipy.stats import ttest_ind
 
-import eegfeat as ef
+import eegtable as ef
 from tests.validation.loaders import Recording, load_erp_core
 
 LATERAL_OCCIPITAL = {"occipital": ["PO7", "PO8", "O1", "O2"]}
