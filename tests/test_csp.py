@@ -250,6 +250,18 @@ def test_regularized_filters_stay_in_the_data_subspace() -> None:
 # --- cross-fitting --------------------------------------------------------------------
 
 
+def test_cross_fitting_rejects_multiclass_labels_even_when_each_training_fold_is_binary() -> None:
+    signal = _signal(np.random.default_rng(7).normal(size=(6, 2, 100)))
+    labels = np.repeat(np.arange(3), 2)
+    folds = [
+        (np.flatnonzero(labels != label), np.flatnonzero(labels == label))
+        for label in np.unique(labels)
+    ]
+
+    with pytest.raises(ValueError, match="exactly two classes.*whole"):
+        ef.csp_features(signal, labels, folds=folds, n_components=2)
+
+
 def test_cross_fitted_features_cover_every_row_once() -> None:
     signal, y = _lateralised(n_per_class=20)
     table = ef.csp_features(signal, y, folds=_folds(len(y)), n_components=4)

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -6,7 +8,7 @@ from eegfeat.bands import Band
 from eegfeat.phase import itpc, pac, ppc
 from eegfeat.signal import BandSignal
 from eegfeat.spectra import Window
-from eegfeat.table import FeatureTable
+from eegfeat.table import ComputationSpec, FeatureTable
 
 SFREQ = 100.0
 ALPHA, GAMMA = Band("alpha", 8.0, 13.0), Band("gamma", 30.0, 45.0)
@@ -361,9 +363,50 @@ def test_flatlines_do_not_imply_perfect_phase_locking(measure) -> None:
     assert table.flags["insufficient_trials"].all()
 
 
+@pytest.mark.parametrize("measure", [itpc, ppc])
+def test_phase_coverage_excludes_samples_with_undefined_phase(measure) -> None:
+    amplitude = np.ones((4, 1, 201))
+    amplitude[..., :50] = 0.0
+    signal = _from_phase(np.zeros_like(amplitude), amplitude=amplitude)
+
+    table = measure([signal], windows=[WINDOW], include_global=False)
+
+    assert table.values.item() == pytest.approx(1.0)
+    assert table.coverage.item() == pytest.approx(151 / 201)
+
+
 @pytest.mark.parametrize("normalize", [True, False])
 def test_pac_requires_a_defined_phase(normalize) -> None:
     slow = _from_phase(np.zeros((4, 1, 201)), amplitude=0.0)
     fast = _from_phase(np.zeros((4, 1, 201)), band=GAMMA)
     table = pac(slow, fast, windows=[WINDOW], normalize=normalize, include_global=False)
     assert np.isnan(table.values).all()
+
+
+def test_pac_coverage_counts_only_jointly_valid_phase_and_amplitude() -> None:
+    slow, fast = _coupled(0.5, n_times=201)
+    phase = slow.analytic.copy()
+    phase[..., :50] = 0.0
+    amplitude = fast.analytic.copy()
+    amplitude[..., 50:75] = np.nan
+    slow = replace(slow, analytic=phase, coverage=np.full_like(slow.coverage, 0.8))
+    fast = replace(fast, analytic=amplitude, coverage=np.full_like(fast.coverage, 0.9))
+
+    table = pac(slow, fast, windows=[WINDOW], include_global=False)
+
+    assert np.isfinite(table.values).all()
+    np.testing.assert_allclose(table.coverage, 0.8 * (201 - 75) / 201)
+
+
+def test_pac_records_the_phase_estimator_as_well_as_the_amplitude_estimator() -> None:
+    slow, fast = _coupled(0.5)
+    other = replace(slow, computation=ComputationSpec.create("hilbert", pad_sec=2.0))
+
+    first = pac(slow, fast, windows=[WINDOW], include_global=False)
+    second = pac(other, fast, windows=[WINDOW], include_global=False)
+
+    assert first.names != second.names
+    assert (
+        second.meta[0].computation.parameters["parameters"]["phase_input_computation"]
+        == other.computation.record()
+    )

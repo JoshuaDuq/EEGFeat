@@ -42,7 +42,12 @@ STAGES = (
     Stage("repair-stim", ("review-raw",), ("stimulation",), "Raw"),
     Stage("notch", ("repair-stim",), ("filter.notch_freqs",), "Raw"),
     Stage("filter", ("notch",), ("filter.l_freq", "filter.h_freq"), "Raw"),
-    Stage("artifact-reference", ("filter",), ("artifact.reference",), "Raw"),
+    Stage(
+        "artifact-reference",
+        ("filter",),
+        ("artifact.reference", "reference.add_channels", "channels.montage"),
+        "Raw",
+    ),
     Stage(
         "fit-artifact",
         ("artifact-reference",),

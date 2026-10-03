@@ -29,6 +29,11 @@ BUNDLE_SUFFIXES = ("_epo.fif", "_events.tsv", "_repairs.tsv", "_preprocessing.js
 
 def validate_processing(raw: Any, settings: ProcessingSettings) -> None:
     sfreq = raw.info["sfreq"]
+    if settings.reference.add_channels and raw.info["custom_ref_applied"]:
+        raise ValueError(
+            "reference.add_channels: restore acquisition electrodes before re-referencing; "
+            "source already has a custom reference"
+        )
     if settings.filter.l_freq is not None or settings.filter.h_freq is not None:
         filter_coefficients(sfreq, settings.filter)
     if settings.filter.notch_freqs:
@@ -63,7 +68,14 @@ def validate_processing(raw: Any, settings: ProcessingSettings) -> None:
                 raise ValueError("artifact.ica.n_components: exceeds good EEG channel count")
         reference = settings.artifact.reference
         if isinstance(reference, tuple):
-            require_names(raw, reference, "artifact.reference")
+            restored = set(settings.reference.add_channels) - set(raw.ch_names)
+            measured = [name for name in reference if name not in restored]
+            require_names(raw, measured, "artifact.reference")
+            if not set(reference) <= set(good_eeg_names(raw)) | restored:
+                raise ValueError(
+                    "artifact.reference: requires good retained EEG channels or "
+                    "requested acquisition-reference electrodes"
+                )
     if isinstance(settings.epochs, EventEpochSettings) and settings.epochs.events.stim_channel:
         require_names(raw, [settings.epochs.events.stim_channel], "epochs.events.stim_channel")
     tmin, tmax = analysis_bounds(settings.epochs, sfreq)

@@ -144,7 +144,7 @@ def segment(
         )
 
     model = kmeans(n_clusters=n_states, n_init=20, random_state=random_state)
-    model.fit(stacked)
+    model.fit(_normalize_rows(stacked))
     templates = _modified_kmeans(stacked, np.asarray(model.cluster_centers_, dtype=float))
 
     min_samples = minimum_sample_count(min_duration_ms / 1000.0, signal.sfreq)
@@ -169,6 +169,7 @@ def segment(
             n_states=n_states,
             random_state=random_state,
             n_init=20,
+            template_weighting="gfp_squared",
             min_duration_ms=min_duration_ms,
             min_peak_distance_ms=min_peak_distance_ms,
             max_peaks_per_epoch=max_peaks_per_epoch,
@@ -352,8 +353,10 @@ def _modified_kmeans(
     """Polarity-invariant clustering, after Pascual-Marqui et al. (1995).
 
     Assignment is by absolute correlation and each template is the principal
-    eigenvector of its cluster's scatter matrix, which is unchanged when any
-    member map is negated. Euclidean k-means over sign-normalized maps is not
+    eigenvector of its cluster's raw, average-referenced scatter matrix. Retaining
+    map amplitudes weights squared correlations by GFP squared, matching the
+    explained-variance objective. The scatter matrix is unchanged when any member
+    map is negated. Euclidean k-means over sign-normalized maps is not
     equivalent: orienting a map by the sign of its strongest channel is
     discontinuous, so where a topography has two extrema of similar magnitude,
     noise decides the orientation and one state's maps are canonicalized in
@@ -411,7 +414,8 @@ def _peak_topographies(
     distance = minimum_sample_count(min_peak_distance_ms / 1000.0, sfreq)
     peaks, _ = find_peaks(strength, distance=distance, prominence=prominence)
     strongest = peaks[np.argsort(strength[peaks])[::-1][:max_peaks]]
-    return _normalize_rows(epoch[:, strongest].T)
+    maps = epoch[:, strongest].T
+    return np.asarray(maps - maps.mean(axis=1, keepdims=True), dtype=float)
 
 
 def _assign(

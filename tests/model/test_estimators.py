@@ -150,6 +150,21 @@ def test_ensemble_pipeline_contains_all_base_classifiers() -> None:
     assert "rf" in named_estimators
 
 
+def test_ensemble_uses_hard_votes_without_trial_wise_svm_calibration() -> None:
+    ensemble = ensemble_pipeline(_CONFIG, seed=42).named_steps["ensemble"]
+    assert ensemble.voting == "hard"
+    assert dict(ensemble.estimators)["svm"].probability is False
+
+
+def test_svm_pipeline_does_not_calibrate_with_hidden_trial_folds() -> None:
+    assert svm_pipeline(_CONFIG, seed=42).named_steps["svm"].probability is False
+
+
+def test_ensemble_refuses_calibration_without_group_disjoint_splits() -> None:
+    with pytest.raises(ValueError, match="group-disjoint calibration"):
+        ensemble_pipeline(_CONFIG, seed=42, calibrate_ensemble=True)
+
+
 def test_logistic_elasticnet_grid_includes_l1_ratio() -> None:
     pipe = logistic_pipeline(_CONFIG, seed=42, penalty="elasticnet")
     grid = logistic_grid(penalty="elasticnet")

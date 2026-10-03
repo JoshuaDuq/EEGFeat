@@ -6,9 +6,12 @@ from typing import cast
 
 import numpy as np
 import numpy.typing as npt
-from sklearn.base import clone
-from sklearn.model_selection import GridSearchCV
+from sklearn.base import BaseEstimator, clone
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import VotingClassifier
+from sklearn.model_selection import GridSearchCV, ParameterGrid
 from sklearn.pipeline import Pipeline
+from sklearn.svm import SVC, NuSVC
 
 from eegfeat.model import _deps as _deps
 from eegfeat.model.aggregate import _SubjectRScorer
@@ -67,6 +70,37 @@ def _assign_random_state(estimator: object, seed: int) -> None:
             estimator.set_params(**{key: seed for key in random_state_keys})
 
 
+def _validate_grouped_calibration(pipeline: Pipeline) -> None:
+    components = (pipeline, *pipeline.get_params(deep=True).values())
+    if any(isinstance(component, CalibratedClassifierCV) for component in components):
+        raise ValueError(
+            "Grouped fitting requires group-disjoint calibration with preprocessing fitted "
+            "inside each calibration split. CalibratedClassifierCV is unsupported here "
+            "because calibration groups are not routed through this workflow."
+        )
+    for component in components:
+        if (
+            isinstance(component, (SVC, NuSVC))
+            and isinstance(component.probability, (bool, np.bool_))
+            and bool(component.probability)
+        ):
+            raise ValueError(
+                "SVC probability=True uses internal trial-wise cross-validation; grouped "
+                "fitting requires probability=False. Group-disjoint probability calibration "
+                "must be performed in a separate calibration workflow."
+            )
+        if isinstance(component, VotingClassifier) and component.voting == "soft":
+            for _, member in component.estimators:
+                if isinstance(member, BaseEstimator):
+                    members = (member, *member.get_params(deep=True).values())
+                    if any(isinstance(model, (SVC, NuSVC)) for model in members):
+                        raise ValueError(
+                            "Soft voting with SVC requires group-disjoint probability "
+                            "calibration, which grouped fitting does not provide. Use an "
+                            "explicit hard vote or probability estimators without internal CV."
+                        )
+
+
 def tune(
     pipeline: Pipeline,
     grid: Mapping[str, Sequence[object]],
@@ -83,6 +117,13 @@ def tune(
 ) -> TunedFit:
     if refit is False:
         raise ValueError("refit=False cannot return a fitted outer-fold model.")
+    _validate_grouped_calibration(pipeline)
+    for parameters in ParameterGrid(dict(grid)):
+        try:
+            candidate = clone(pipeline).set_params(**parameters)
+        except ValueError as exc:
+            raise FoldFitError(f"Fold {fold}: inner CV failed: {exc}") from exc
+        _validate_grouped_calibration(candidate)
     chosen = scoring[refit] if isinstance(scoring, Mapping) and isinstance(refit, str) else scoring
     if isinstance(chosen, _SubjectRScorer):
         raise ValueError(

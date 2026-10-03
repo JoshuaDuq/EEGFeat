@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.svm import SVC
 
 from eegfeat.model.crossfit import cross_fit_classification
+from eegfeat.model.estimators import ensemble_pipeline, svm_pipeline
 from eegfeat.model.splits import InnerSplit, loso_folds, within_subject_folds
+from eegfeat.model.transformers import PreprocessingConfig
 
 GROUPS = np.repeat(["s1", "s2", "s3", "s4"], 6).astype(object)
 Y = np.tile([0, 1], GROUPS.size // 2).astype(np.intp)
@@ -123,3 +128,81 @@ def test_labels_outside_zero_and_one_are_refused_before_any_fold_is_fitted() -> 
         cross_fit_classification(
             loso_folds(GROUPS), X, y_coded, GROUPS, PIPE, GRID, inner=STRATIFIED, seed=0
         )
+
+
+@pytest.mark.parametrize("grid", [{}, {"classifier__C": [0.1, 1.0]}])
+@pytest.mark.parametrize("probability", [True, np.bool_(True)])
+def test_grouped_fitting_refuses_hidden_svm_probability_calibration(grid, probability) -> None:
+    pipe = Pipeline([("classifier", SVC(probability=probability))])
+    with pytest.raises(ValueError, match="internal trial-wise cross-validation"):
+        cross_fit_classification(
+            loso_folds(GROUPS), X, Y, GROUPS, pipe, grid, inner=STRATIFIED, seed=0
+        )
+
+
+def test_grouped_tuning_refuses_a_grid_that_enables_trial_wise_calibration() -> None:
+    pipe = Pipeline([("classifier", SVC(probability=False))])
+    with pytest.raises(ValueError, match="internal trial-wise cross-validation"):
+        cross_fit_classification(
+            loso_folds(GROUPS),
+            X,
+            Y,
+            GROUPS,
+            pipe,
+            {"classifier__probability": [False, True]},
+            inner=STRATIFIED,
+            seed=0,
+        )
+
+
+def test_grouped_fitting_refuses_calibration_that_cannot_receive_split_groups() -> None:
+    pipe = Pipeline([("classifier", CalibratedClassifierCV(LogisticRegression(), cv=2))])
+    with pytest.raises(ValueError, match="group-disjoint calibration"):
+        cross_fit_classification(
+            loso_folds(GROUPS), X, Y, GROUPS, pipe, {}, inner=STRATIFIED, seed=0
+        )
+
+
+def test_a_soft_ensemble_with_an_uncalibrated_svm_is_refused_explicitly() -> None:
+    ensemble = VotingClassifier(
+        [("svm", SVC(probability=False)), ("lr", LogisticRegression())], voting="soft"
+    )
+    with pytest.raises(ValueError, match="Soft voting.*SVC"):
+        cross_fit_classification(
+            loso_folds(GROUPS),
+            X,
+            Y,
+            GROUPS,
+            Pipeline([("ensemble", ensemble)]),
+            {},
+            inner=STRATIFIED,
+            seed=0,
+        )
+
+
+def test_soft_voting_without_internal_probability_cv_remains_supported() -> None:
+    ensemble = VotingClassifier(
+        [("lr", LogisticRegression()), ("rf", RandomForestClassifier(n_estimators=5))],
+        voting="soft",
+    )
+    predictions = cross_fit_classification(
+        loso_folds(GROUPS),
+        X,
+        Y,
+        GROUPS,
+        Pipeline([("ensemble", ensemble)]),
+        {},
+        inner=STRATIFIED,
+        seed=0,
+    )
+    assert all(prediction.y_prob is not None for prediction in predictions)
+
+
+@pytest.mark.parametrize("factory", [svm_pipeline, ensemble_pipeline])
+def test_default_svm_and_ensemble_keep_grouped_predictions_without_calibration(factory) -> None:
+    pipeline = factory(PreprocessingConfig(), seed=0)
+    predictions = cross_fit_classification(
+        loso_folds(GROUPS), X, Y, GROUPS, pipeline, {}, inner=STRATIFIED, seed=0
+    )
+    assert all(prediction.y_prob is None for prediction in predictions)
+    assert all(set(prediction.y_pred) <= {0, 1} for prediction in predictions)

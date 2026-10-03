@@ -93,7 +93,7 @@ def test_subject_level_r_rejects_invalid_subjects() -> None:
             "y_pred": [1.0, 2.0, np.nan, np.nan],
         }
     )
-    with pytest.raises(ValueError, match="fewer than 3 finite predictions"):
+    with pytest.raises(ValueError, match="finite.*every trial"):
         subject_level_r(df)
 
 
@@ -105,8 +105,18 @@ def test_subject_level_errors_reject_invalid_subjects() -> None:
             "y_pred": [1.1, 2.1, np.nan, np.nan],
         }
     )
-    with pytest.raises(ValueError, match="no finite predictions"):
+    with pytest.raises(ValueError, match="finite.*every trial"):
         subject_level_errors(df)
+
+
+@pytest.mark.parametrize("function", [subject_level_r, subject_level_errors])
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("column", ["y_true", "y_pred"])
+def test_subject_evaluation_cannot_drop_a_failed_trial(function, invalid, column) -> None:
+    frame = _predictions({"s": ([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 2.0, 3.0])})
+    frame.loc[3, column] = invalid
+    with pytest.raises(ValueError, match="finite.*every trial"):
+        function(frame)
 
 
 def test_bootstrap_mean_ci_brackets_mean() -> None:

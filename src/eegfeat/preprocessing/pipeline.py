@@ -57,6 +57,8 @@ from .raw import (
     filter_raw,
     notch_raw,
     prepare_channels,
+    require_names,
+    restore_reference_channels,
     validate_source_raw,
 )
 from .rejection import (
@@ -284,7 +286,20 @@ def _stage_artifact_reference(
     state: StageData, settings: ProcessingSettings, decision: Any, n_jobs: int
 ) -> StageData:
     assert settings.artifact is not None and settings.artifact.reference is not None
-    return replace(state, raw=reference_artifact_data(state.raw, settings.artifact.reference))
+    raw, provenance = state.raw, state.provenance
+    if settings.reference.add_channels:
+        raw = restore_reference_channels(
+            raw, settings.reference.add_channels, settings.channels.montage
+        )
+        provenance = {
+            **provenance,
+            "restored_reference_channels": list(settings.reference.add_channels),
+        }
+    return replace(
+        state,
+        raw=reference_artifact_data(raw, settings.artifact.reference),
+        provenance=provenance,
+    )
 
 
 def _stage_fit_artifact(
@@ -379,7 +394,20 @@ def _stage_interpolate(
 def _stage_reference(
     state: StageData, settings: ProcessingSettings, decision: Any, n_jobs: int
 ) -> StageData:
-    return replace(state, epochs=reference_epochs(state.epochs, settings.reference))
+    epochs, reference, provenance = state.epochs, settings.reference, state.provenance
+    if reference.add_channels:
+        restored = provenance.get("restored_reference_channels", [])
+        if restored:
+            if restored != list(reference.add_channels):
+                raise ValueError("reference.add_channels: restored electrodes disagree with recipe")
+            require_names(epochs, reference.add_channels, "reference.add_channels")
+        else:
+            epochs = restore_reference_channels(
+                epochs, reference.add_channels, settings.channels.montage
+            )
+            provenance = {**provenance, "restored_reference_channels": list(reference.add_channels)}
+        reference = replace(reference, add_channels=())
+    return replace(state, epochs=reference_epochs(epochs, reference), provenance=provenance)
 
 
 def _stage_resample(

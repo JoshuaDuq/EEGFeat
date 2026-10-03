@@ -289,6 +289,7 @@ def expand_signal(
         # same signal a few lines below already counts a non-finite sample as
         # missing, and a kernel reducing over the raw trace would contradict it.
         trace = blank_non_finite(trace_of(signal))
+        trace_coverage = np.where(np.isfinite(trace), signal.coverage, 0.0)
         # One flag per epoch and channel, held across every window of this signal.
         signal_flags = {
             key: np.repeat(array[:, :, np.newaxis], len(windows), axis=2)
@@ -301,7 +302,7 @@ def expand_signal(
             measured = kernel(signal, trace[:, :, mask], signal.times[mask], mask)
             for name, values in measured.items():
                 by_measure.setdefault(name, []).append(values)
-            per_epoch = signal.coverage[:, :, mask].mean(axis=2)
+            per_epoch = trace_coverage[:, :, mask].mean(axis=2)
             coverages.append(
                 per_epoch
                 if row_groups is None

@@ -228,6 +228,14 @@ def pac(
             )
 
     unit_phase = np.exp(1j * phase_signal.phase)
+    joint_amplitude = replace(
+        amplitude_signal,
+        coverage=np.where(
+            np.isfinite(unit_phase),
+            np.minimum(phase_signal.coverage, amplitude_signal.coverage),
+            0.0,
+        ),
+    )
 
     def kernel(
         signal: BandSignal,
@@ -240,7 +248,7 @@ def pac(
         return {"pac": _mean_vector_length(unit_phase[:, :, mask], trace, normalize)}
 
     table = expand_signal(
-        [amplitude_signal],
+        [joint_amplitude],
         trace_of=lambda signal: signal.envelope,
         kernel=kernel,
         units={"pac": "a.u." if normalize else "V"},
@@ -253,6 +261,8 @@ def pac(
             "allow_overlap": allow_overlap,
             "phase_band": None if slow is None else (slow.name, slow.fmin, slow.fmax),
             "amplitude_band": None if fast is None else (fast.name, fast.fmin, fast.fmax),
+            "phase_input_source": phase_signal.source,
+            "phase_input_computation": phase_signal.computation.record(),
         },
     )
     return replace(

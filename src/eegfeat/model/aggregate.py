@@ -237,6 +237,10 @@ def _validate_predictions(predictions: pd.DataFrame, function: str) -> None:
         raise ValueError(msg)
     if predictions["subject_id"].isna().any():
         raise ValueError(f"{function} needs a subject_id label for every trial.")
+    for column in ("y_true", "y_pred"):
+        values = pd.to_numeric(predictions[column], errors="coerce").to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError(f"{function} needs finite targets and predictions for every trial.")
 
 
 def subject_level_r(
@@ -275,21 +279,19 @@ def subject_level_r(
     for subj, df_sub in predictions.groupby("subject_id"):
         yt = pd.to_numeric(df_sub["y_true"], errors="coerce").to_numpy(dtype=float)
         yp = pd.to_numeric(df_sub["y_pred"], errors="coerce").to_numpy(dtype=float)
-        finite = np.isfinite(yt) & np.isfinite(yp)
-        n_trials = int(finite.sum())
+        n_trials = len(yt)
 
         if n_trials < 3:
             invalid_subjects.append(f"{subj}: fewer than 3 finite predictions (got {n_trials})")
             continue
 
-        yt, yp = yt[finite], yp[finite]
         if has_folds:
             # A subject scored by several fold models (within-subject CV) carries each model's
             # offset, and that offset -- the mean target of the other runs -- is
             # anti-correlated with the run it scores, which biases r below zero with no signal
             # at all. Centring within folds keeps only trial-level tracking; each extra fold
             # mean removed costs one degree of freedom.
-            fold_labels = df_sub["fold"].to_numpy()[finite]
+            fold_labels = df_sub["fold"].to_numpy()
             yt = _center_within(yt, fold_labels)
             yp = _center_within(yp, fold_labels)
             n_trials -= len(pd.unique(fold_labels)) - 1
@@ -401,12 +403,6 @@ class _SubjectRScorer:
     ) -> float:
         y_pred = np.asarray(estimator.predict(X), dtype=np.float64)  # type: ignore[attr-defined]
         y_true = np.asarray(y, dtype=np.float64)
-        # subject_level_r skips non-finite pairs, which here would let a failed prediction
-        # drop out of the comparison between candidates.
-        if not (np.isfinite(y_true).all() and np.isfinite(y_pred).all()):
-            raise ValueError(
-                "Model selection requires finite targets and predictions for every trial."
-            )
         frame = pd.DataFrame({"subject_id": groups, "y_true": y_true, "y_pred": y_pred})
         sizes = frame.groupby("subject_id").size()
         if (sizes < 3).any():
@@ -492,12 +488,11 @@ def subject_level_errors(
     for subj, df_sub in predictions.groupby("subject_id"):
         yt = pd.to_numeric(df_sub["y_true"], errors="coerce").to_numpy(dtype=float)
         yp = pd.to_numeric(df_sub["y_pred"], errors="coerce").to_numpy(dtype=float)
-        finite = np.isfinite(yt) & np.isfinite(yp)
-        n_trials = int(finite.sum())
+        n_trials = len(yt)
         if n_trials < 1:
             invalid_subjects.append(f"{subj}: no finite predictions")
             continue
-        err = yp[finite] - yt[finite]
+        err = yp - yt
         per_subject_mae.append(float(np.mean(np.abs(err))))
         per_subject_rmse.append(float(np.sqrt(np.mean(err**2))))
         per_subject_n.append(n_trials)

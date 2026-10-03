@@ -11,3 +11,22 @@ def test_complete_acyclic_callable_catalog():
         assert stage.output
         seen.add(stage.name)
     assert len(STAGES) == 26 == len(OPERATIONS)
+
+
+def test_artifact_reference_identity_owns_restored_electrodes():
+    from eegfeat.preprocessing.config import (
+        ArtifactSettings,
+        FixedEpochSettings,
+        ICASettings,
+        ProcessingSettings,
+        ReferenceSettings,
+    )
+    from eegfeat.preprocessing.stages import get_stage, stage_settings
+
+    settings = ProcessingSettings(
+        FixedEpochSettings(2),
+        artifact=ArtifactSettings("ica", ICASettings(), "average"),
+        reference=ReferenceSettings("average", ("Cz",)),
+    )
+    fields = stage_settings(get_stage("artifact-reference"), settings)
+    assert fields["reference.add_channels"] == ["Cz"]

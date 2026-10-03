@@ -254,3 +254,39 @@ def test_regression_metrics_centre_the_subject_correlation_within_folds() -> Non
     assert pooled["subject_level_r"] < 0.0
     assert per_subject[0] == {"subject": "s1", "r": pytest.approx(1.0)}
     assert centred["subject_level_r"] > 0.9
+
+
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("side", ["target", "prediction"])
+def test_regression_evaluation_cannot_drop_failed_trials(invalid, side) -> None:
+    target, prediction = np.arange(4.0), np.arange(4.0)
+    (target if side == "target" else prediction)[-1] = invalid
+    with pytest.raises(ValueError, match="finite.*every trial"):
+        regression_metrics(target, prediction)
+
+
+@pytest.mark.parametrize("constant", [1.0, 0.1])
+def test_constant_targets_keep_undefined_variance_scores_visible(constant) -> None:
+    target = np.full(3, constant)
+    perfect, _ = regression_metrics(target, target.copy())
+    imperfect, _ = regression_metrics(target, target + np.arange(3.0))
+    assert np.isnan(perfect["r2"])
+    assert np.isnan(perfect["explained_variance"])
+    assert imperfect["r2"] == -np.inf
+    assert imperfect["explained_variance"] == -np.inf
+
+
+@pytest.mark.parametrize("function", [within_subject_centered_metrics, within_condition_metrics])
+def test_centered_evaluation_refuses_missing_predictions(function) -> None:
+    target = np.arange(4.0)
+    prediction = np.array([0.0, 1.0, 2.0, np.nan])
+    arrays = [target, prediction, np.zeros(4), np.full(4, "s")]
+    if function is within_condition_metrics:
+        arrays.append(np.full(4, "c"))
+    with pytest.raises(ValueError, match="finite.*every trial"):
+        function(*arrays)
+
+
+def test_regression_evaluation_refuses_multioutput_arrays() -> None:
+    with pytest.raises(ValueError, match="aligned 1-D arrays"):
+        regression_metrics(np.arange(6.0).reshape(3, 2), np.arange(6.0).reshape(3, 2))

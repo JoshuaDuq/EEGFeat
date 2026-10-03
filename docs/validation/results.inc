@@ -131,7 +131,7 @@ PhysioNet motor movement
      - pass
    * - Four resting microstate templates explain most of the topographic variance (``segment``)
      - global explained variance above 0.5; no two templates correlate above 0.9
-     - global explained variance 0.62
+     - global explained variance 0.63
      - pass
    * - Coverage sums to one and equals duration times occurrence; transitions sum to one (``microstate_coverage``, ``microstate_duration``, ``microstate_occurrence``, ``microstate_transitions``)
      - relative error below 1e-9
@@ -139,7 +139,7 @@ PhysioNet motor movement
      - pass
    * - Microstates last tens of milliseconds (``microstate_duration``)
      - median duration of every state between 30 and 150 ms
-     - median durations 67 to 116 ms
+     - median durations 68 to 96 ms
      - pass
    * - In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as well as mne.decoding.CSP (``CommonSpatialPattern``)
      - mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits

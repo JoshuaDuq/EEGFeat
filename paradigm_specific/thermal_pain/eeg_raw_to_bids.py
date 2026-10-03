@@ -95,7 +95,7 @@ def set_montage(raw: mne.io.BaseRaw, montage: str) -> None:
     # The recordings spell FPz against the 10-05 montage.
     if "FPz" in raw.ch_names and "Fpz" not in raw.ch_names:
         raw.rename_channels({"FPz": "Fpz"})
-    raw.set_montage(mne.channels.make_standard_montage(montage), on_missing="warn")
+    raw.set_montage(mne.channels.make_standard_montage(montage), on_missing="raise")
 
 
 def data_relative_onsets(raw: mne.io.BaseRaw) -> np.ndarray:

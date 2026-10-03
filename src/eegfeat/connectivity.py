@@ -231,14 +231,12 @@ def spectral_connectivity(
             f"{method} requires at least two epochs in every trial group: these "
             "estimators average a cross-spectrum over epochs."
         )
-    estimator = _require_mne_connectivity()
     node_names, picks = _nodes(signal.ch_names, groups)
     nodes = {
         name: sorted(signal.ch_names[i] for i in members)
         for name, members in zip(node_names, picks, strict=True)
     }
 
-    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
     for band in bands:
         if band.fmax > signal.sfreq / 2.0:
             raise ValueError(
@@ -247,6 +245,10 @@ def spectral_connectivity(
             )
         if signal.passband is not None:
             check_passband(band, *signal.passband, source=method)
+
+    estimator = _require_mne_connectivity()
+    columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
+    for band in bands:
         for window in windows:
             mask = window_mask(signal.times, window)
             if mode == "multitaper":
@@ -362,8 +364,10 @@ def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureT
 
     Edges above ``threshold`` in absolute weight are retained (:math:`A_{ij} = 1`)
     and subthreshold edges set to zero, then the unweighted clustering coefficient
-    is averaged over nodes with at least two neighbors. The threshold is an explicit
-    required argument. A non-finite edge makes the graph summary undefined.
+    is averaged over every node. Nodes with fewer than two neighbors contribute
+    zero, following NetworkX and the Brain Connectivity Toolbox. The threshold
+    is an explicit required argument. A non-finite edge makes the graph summary
+    undefined.
 
     Parameters
     ----------
@@ -385,6 +389,8 @@ def clustering_coefficient(pairs: FeatureTable, *, threshold: float) -> FeatureT
         lambda m: _clustering(m, threshold),
         unit=f"a.u. (>{threshold})",
         threshold=threshold,
+        node_aggregation="arithmetic_mean_all_nodes",
+        low_degree_coefficient=0.0,
     )
 
 
@@ -802,7 +808,6 @@ def _clustering(matrix: npt.NDArray[np.float64], threshold: float) -> float:
     degree = adjacency.sum(axis=1)
     triangles = np.diag(adjacency @ adjacency @ adjacency)
     eligible = degree >= 2
-    if not eligible.any():
-        return float("nan")
-    coefficients = triangles[eligible] / (degree[eligible] * (degree[eligible] - 1.0))
+    coefficients = np.zeros_like(degree)
+    coefficients[eligible] = triangles[eligible] / (degree[eligible] * (degree[eligible] - 1.0))
     return float(coefficients.mean())

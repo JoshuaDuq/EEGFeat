@@ -1,5 +1,6 @@
 import mne
 import numpy as np
+import pytest
 
 from eegfeat.preprocessing.config import (
     EventEpochSettings,
@@ -43,3 +44,95 @@ def test_reference_preserves_auxiliary(raw):
     np.testing.assert_array_equal(
         actual.get_data(picks=["VEOG", "ECG", "STI"]), raw.get_data(picks=["VEOG", "ECG", "STI"])
     )
+
+
+def test_missing_acquisition_reference_cannot_be_restored_after_rereferencing(raw):
+    referenced = raw.copy().set_eeg_reference("average", projection=False)
+    with pytest.raises(ValueError, match="before.*re-referencing"):
+        reference_epochs(referenced, ReferenceSettings("average", ("Cz",)))
+
+
+@pytest.mark.parametrize("artifact_reference", ["average", ("Cz",)])
+def test_acquisition_reference_is_restored_before_artifact_reference(raw, artifact_reference):
+    from eegfeat.preprocessing.checks import validate_processing
+    from eegfeat.preprocessing.config import (
+        ArtifactSettings,
+        ChannelSettings,
+        FixedEpochSettings,
+        ICASettings,
+        ProcessingSettings,
+    )
+    from eegfeat.preprocessing.pipeline import StageData, execute_numeric
+
+    settings = ProcessingSettings(
+        FixedEpochSettings(2),
+        channels=ChannelSettings(montage="colin27_1020"),
+        artifact=ArtifactSettings("ica", ICASettings(), artifact_reference),
+        reference=ReferenceSettings("average", ("Cz",)),
+    )
+    expected = mne.add_reference_channels(raw, ["Cz"])
+    expected.set_montage("colin27_1020")
+    expected.set_eeg_reference(
+        artifact_reference if isinstance(artifact_reference, str) else list(artifact_reference),
+        projection=False,
+    )
+    state = execute_numeric("artifact-reference", StageData(raw), settings)
+    assert state.raw.ch_names == expected.ch_names
+    np.testing.assert_allclose(state.raw.get_data(), expected.get_data(), atol=1e-18)
+    np.testing.assert_allclose(
+        state.raw.info["chs"][-1]["loc"][:3], expected.info["chs"][-1]["loc"][:3]
+    )
+    assert state.provenance["restored_reference_channels"] == ["Cz"]
+    validate_processing(raw, settings)
+    final = execute_numeric(
+        "reference", StageData(None, epochs=state.raw, provenance=state.provenance), settings
+    )
+    assert final.epochs.ch_names.count("Cz") == 1
+    expected.set_eeg_reference("average", projection=False)
+    np.testing.assert_allclose(final.epochs.get_data(), expected.get_data(), atol=1e-18)
+
+
+@pytest.mark.parametrize(
+    "artifact_reference,error", [("unknown", "missing channels"), ("VEOG", "good.*EEG")]
+)
+def test_preflight_rejects_invalid_artifact_reference(raw, artifact_reference, error):
+    from eegfeat.preprocessing.checks import validate_processing
+    from eegfeat.preprocessing.config import (
+        ArtifactSettings,
+        FixedEpochSettings,
+        ICASettings,
+        ProcessingSettings,
+    )
+
+    settings = ProcessingSettings(
+        FixedEpochSettings(2),
+        artifact=ArtifactSettings("ica", ICASettings(), (artifact_reference,)),
+        reference=ReferenceSettings("average", ("Cz",)),
+    )
+    with pytest.raises(ValueError, match=error):
+        validate_processing(raw, settings)
+
+
+def test_final_reference_locates_restored_electrodes(raw):
+    from eegfeat.preprocessing.config import ChannelSettings, FixedEpochSettings, ProcessingSettings
+    from eegfeat.preprocessing.pipeline import StageData, execute_numeric
+
+    settings = ProcessingSettings(
+        FixedEpochSettings(2),
+        channels=ChannelSettings(montage="colin27_1020"),
+        reference=ReferenceSettings("average", ("Cz",)),
+    )
+    state = execute_numeric("reference", StageData(None, epochs=raw), settings)
+    assert np.isfinite(state.epochs.info["chs"][-1]["loc"][:3]).all()
+    assert state.provenance["restored_reference_channels"] == ["Cz"]
+
+
+def test_preflight_rejects_restoration_from_custom_referenced_source(raw):
+    from eegfeat.preprocessing.checks import validate_processing
+    from eegfeat.preprocessing.config import FixedEpochSettings, ProcessingSettings
+
+    settings = ProcessingSettings(
+        FixedEpochSettings(2), reference=ReferenceSettings("average", ("Cz",))
+    )
+    with pytest.raises(ValueError, match="source already has a custom reference"):
+        validate_processing(raw.copy().set_eeg_reference("average", projection=False), settings)

@@ -61,6 +61,11 @@ def _check_aligned(label: str, *arrays: npt.NDArray[np.generic]) -> None:
         raise ValueError(f"{label} metrics require aligned 1-D arrays.")
 
 
+def _check_finite_predictions(label: str, *arrays: npt.NDArray[np.float64]) -> None:
+    if any(not np.isfinite(values).all() for values in arrays):
+        raise ValueError(f"{label} metrics require finite targets and predictions for every trial.")
+
+
 def _check_labelled(label: str, **named: npt.NDArray[np.object_]) -> None:
     # A trial with no subject or condition has no cell to be centred within, and inventing one
     # would change the statistic. Refuse it rather than dropping it from the denominator.
@@ -71,6 +76,21 @@ def _check_labelled(label: str, **named: npt.NDArray[np.object_]) -> None:
                 f"{label} metrics require a {name} label for every trial; "
                 f"{missing} of {len(values)} have none."
             )
+
+
+def _variance_scores(
+    target: npt.NDArray[np.float64], prediction: npt.NDArray[np.float64]
+) -> tuple[float, float]:
+    # A constant decimal can acquire a nonzero centered norm through rounding.
+    if np.all(target == target[0]):
+        residual = target - prediction
+        r2 = np.nan if np.array_equal(target, prediction) else -np.inf
+        explained = np.nan if np.all(residual == residual[0]) else -np.inf
+        return r2, explained
+    return (
+        float(r2_score(target, prediction, force_finite=False)),
+        float(explained_variance_score(target, prediction, force_finite=False)),
+    )
 
 
 def _subset_classification_metrics(
@@ -203,40 +223,45 @@ def regression_metrics(
 ) -> tuple[dict[str, float], list[dict[str, object]]]:
     yt = np.asarray(y_true, dtype=float)
     yp = np.asarray(y_pred, dtype=float)
-    finite = np.isfinite(yt) & np.isfinite(yp)
+    _check_aligned("Regression", yt, yp)
+    _check_finite_predictions("Regression", yt, yp)
+    if groups is not None:
+        groups = np.asarray(groups)
+        _check_aligned("Regression", yt, groups)
+        _check_labelled("Regression", subject=groups)
+    if folds is not None:
+        folds = np.asarray(folds)
+        _check_aligned("Regression", yt, folds)
 
-    if int(finite.sum()) < 2:
+    if len(yt) < 2:
         return {
             "pearson_r": np.nan,
             "subject_level_r": np.nan,
             "avg_subject_r_fisher_z": np.nan,
             "r2": np.nan,
             "explained_variance": np.nan,
-            "n": float(finite.sum()),
+            "n": float(len(yt)),
         }, []
 
-    yt_f, yp_f = yt[finite], yp[finite]
-    r_val, _ = safe_pearsonr(yt_f, yp_f)
-    r2_val = float(r2_score(yt_f, yp_f))
-    ev_val = float(explained_variance_score(yt_f, yp_f))
+    r_val, _ = safe_pearsonr(yt, yp)
+    r2_val, ev_val = _variance_scores(yt, yp)
 
     summary: dict[str, float] = {
         "pearson_r": r_val,
         "r2": r2_val,
         "explained_variance": ev_val,
-        "n": float(finite.sum()),
+        "n": float(len(yt)),
         "subject_level_r": np.nan,
         "avg_subject_r_fisher_z": np.nan,
     }
     per_subject_list: list[dict[str, object]] = []
 
     if groups is not None:
-        groups_arr = np.asarray(groups)[finite]
-        pred_df = pd.DataFrame({"subject_id": groups_arr, "y_true": yt_f, "y_pred": yp_f})
+        pred_df = pd.DataFrame({"subject_id": groups, "y_true": yt, "y_pred": yp})
         if folds is not None:
             # fold_results returns these ids; without them a subject scored by several fold
             # models (within-subject CV) has its r biased by the models' differing offsets.
-            pred_df["fold"] = np.asarray(folds)[finite]
+            pred_df["fold"] = folds
         subj_r = subject_level_r(pred_df, config=config)
         # Two names for one number, kept because both are in use. subject_level_r is always the
         # Fisher-z mean, under equal and trial-count weighting alike, so they cannot diverge.
@@ -260,6 +285,7 @@ def within_subject_centered_metrics(
     f = np.asarray(full_prediction, dtype=float)
     n = np.asarray(nuisance_prediction, dtype=float)
     _check_aligned("Within-subject prediction", grp, t, f, n)
+    _check_finite_predictions("Within-subject prediction", t, f, n)
     _check_labelled("Within-subject prediction", subject=grp)
 
     full_scores: list[float] = []
@@ -334,6 +360,7 @@ def within_condition_metrics(
     cond = np.asarray(conditions)
 
     _check_aligned("Within-condition prediction", grp, t, f, n, cond)
+    _check_finite_predictions("Within-condition prediction", t, f, n)
     _check_labelled("Within-condition prediction", subject=grp, condition=cond)
 
     full_scores: list[float] = []

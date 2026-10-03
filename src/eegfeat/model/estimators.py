@@ -217,7 +217,7 @@ def svm_pipeline(
             "svm",
             SVC(
                 kernel=kernel,
-                probability=True,
+                probability=False,
                 random_state=seed,
                 class_weight=class_weight,
             ),
@@ -305,9 +305,14 @@ def ensemble_pipeline(
     resampler: str = "none",
     resampler_seed: int = 42,
 ) -> Pipeline:
+    if calibrate_ensemble:
+        raise ValueError(
+            "Ensemble probabilities need group-disjoint calibration with preprocessing "
+            "fitted inside each calibration split; calibrate_ensemble=True is unsupported."
+        )
     svm = SVC(
         kernel=svm_kernel,
-        probability=True,
+        probability=False,
         random_state=seed,
         class_weight="balanced",
     )
@@ -330,16 +335,7 @@ def ensemble_pipeline(
         n_jobs=1,
     )
 
-    if calibrate_ensemble:
-        from sklearn.calibration import CalibratedClassifierCV
-
-        estimators: list[tuple[str, object]] = [
-            ("svm", CalibratedClassifierCV(svm, method="sigmoid", cv=2)),
-            ("lr", lr),
-            ("rf", CalibratedClassifierCV(rf, method="sigmoid", cv=2)),
-        ]
-    else:
-        estimators = [("svm", svm), ("lr", lr), ("rf", rf)]
+    estimators = [("svm", svm), ("lr", lr), ("rf", rf)]
 
     steps = base_preprocessing_steps(
         config,
@@ -348,7 +344,7 @@ def ensemble_pipeline(
         score_func=f_classif,
     )
     _append_classification_resampler(steps, resampler=resampler, resampler_seed=resampler_seed)
-    steps.append(("ensemble", VotingClassifier(estimators=estimators, voting="soft")))
+    steps.append(("ensemble", VotingClassifier(estimators=estimators, voting="hard")))
     return _assemble_pipeline(steps, resampler)
 
 

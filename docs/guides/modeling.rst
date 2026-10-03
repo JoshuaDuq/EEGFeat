@@ -336,11 +336,27 @@ Predictions are mapped back to the design groups, then scored.
 Classification details
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- SVM pipelines use ``probability=False``. Their predictions and decision scores
+  remain available; cross-fitting returns ``y_prob=None``.
+- The built-in SVM/logistic/random-forest ensemble uses hard votes and returns
+  ``y_prob=None``. ``calibrate_ensemble=True`` raises because calibration needs
+  group-disjoint splits with preprocessing fitted inside those splits.
+- Grouped fitting rejects ``SVC(probability=True)`` and
+  ``CalibratedClassifierCV``: their internal calibration is not routed the
+  subject or run groups used for evaluation. A requested soft ensemble with an
+  SVM also raises. Explicit soft ensembles of logistic regression and random
+  forests remain supported.
 - With ``groups``, each scalar is the equal-weight mean over the subjects for
   which it is defined.
 - A subject with one class is left out of the balanced-accuracy and AUC means.
 - The confusion matrix stays pooled over trials, so accuracy recomputed from it
   differs from the reported ``accuracy``.
+
+The `scikit-learn calibration guide
+<https://scikit-learn.org/stable/modules/calibration.html>`_ requires independent
+classifier-training and calibration data. `SVC probability estimates
+<https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html>`_ use
+internal five-fold cross-validation that cannot receive subject or run groups.
 
 Defined values
 ~~~~~~~~~~~~~~
@@ -349,9 +365,19 @@ Defined values
   missing labels raise instead of silently dropping trials during grouping.
 - Pearson correlation and centered ``R²`` use no absolute variance floor, so
   whether they are defined does not depend on the units of the target.
-- Classification probabilities and the predictions used for model selection must
-  be finite on every trial.
+- Targets and predictions used for regression evaluation, subject summaries,
+  centered scores, and model selection must be finite on every trial. Failed
+  predictions raise instead of dropping trials from the reported scores.
+- Constant targets leave ``R²`` and explained variance undefined: their
+  ``NaN`` or ``-inf`` values remain visible rather than being replaced with
+  a finite score. Classification probabilities must also be finite.
 - A failed prediction is an error.
+
+See scikit-learn's `R² documentation
+<https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html>`_
+and `explained-variance documentation
+<https://scikit-learn.org/stable/modules/generated/sklearn.metrics.explained_variance_score.html>`_
+for constant-target scores and the ``force_finite`` option.
 
 .. code-block:: python
 

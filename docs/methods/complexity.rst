@@ -133,9 +133,9 @@ power (Lehmann, Ozaki, and Pal, 1987; Pascual-Marqui, Michel, and Lehmann,
 Clustering and assignment
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Each peak map is oriented so that its largest-magnitude channel is positive.
 Clustering is the polarity-invariant modified :math:`k`-means of Pascual-Marqui
-et al. (1995). Assignment uses absolute spatial correlation.
+et al. (1995). Peak maps retain their average-referenced amplitudes during
+template fitting. Assignment uses absolute spatial correlation.
 
 .. math::
 
@@ -146,7 +146,10 @@ correlation.
 
 **Templates**
    Each template is the principal eigenvector of its members' scatter matrix,
-   so negating a member does not change the template.
+   so negating a member does not change the template. The raw peak amplitudes
+   give each map a weight proportional to GFP squared, matching the global
+   explained-variance objective. Unit-normalizing members before this update
+   would instead give every peak equal weight.
    An empty cluster raises an error because the data do not support that fit's
    requested number of states.
 
@@ -169,8 +172,10 @@ correlation.
 
    demeaned = epoch - np.mean(epoch, axis=0, keepdims=True)
    gfp = np.std(demeaned, axis=0)
-   maps = normalize_rows(demeaned.T)
-   seeds = KMeans(n_clusters=K, n_init=20, random_state=random_state).fit(maps[gfp_peaks])
+   maps = demeaned.T
+   seeds = KMeans(n_clusters=K, n_init=20, random_state=random_state).fit(
+       normalize_rows(maps[gfp_peaks])
+   )
    templates = unit_rows(seeds.cluster_centers_)
    while labels change:
        labels = np.argmax(np.abs(maps[gfp_peaks] @ templates.T), axis=1)
@@ -178,7 +183,7 @@ correlation.
            members = maps[gfp_peaks][labels == k]
            templates[k] = principal_eigenvector(members.T @ members)
    templates = normalize_rows(templates)
-   states = np.argmax(np.abs(templates @ maps.T), axis=0)
+   states = np.argmax(np.abs(templates @ normalize_rows(maps).T), axis=0)
 
 Row normalization subtracts the channel mean, divides by the Euclidean norm,
 and flips the sign so the largest-magnitude channel is positive. The sign flip

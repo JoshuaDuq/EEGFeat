@@ -56,6 +56,39 @@ def _planted(n_epochs: int = 6, n_times: int = 400, noise: float = 0.05) -> tupl
 
 
 @requires_sklearn
+@pytest.mark.parametrize("gain", [1.0, 1e-6, -3.0])
+def test_templates_preserve_gfp_weighting_in_the_scatter_objective(gain: float) -> None:
+    first = np.array([1.0, -1.0, 0.0, 0.0]) / np.sqrt(2.0)
+    tilted_axis = np.array([1.0, 1.0, -2.0, 0.0]) / np.sqrt(6.0)
+    separate = np.array([1.0, 1.0, 1.0, -3.0]) / np.sqrt(12.0)
+    angle = np.deg2rad(30.0)
+    stronger = 10.0 * (np.cos(angle) * first + np.sin(angle) * tilted_axis)
+    peak_maps = np.repeat(np.stack([first, stronger, separate]), 20, axis=0)
+    # Mixed polarities cannot change the scatter matrix or the fitted maps.
+    peak_maps[::2] *= -1.0
+    pulse = np.array([0.8, 1.0, 0.8])
+    data = (gain * peak_maps.T[:, :, None] * pulse).reshape(1, 4, -1)
+    signal = Signal.from_arrays(
+        data=data,
+        times=np.arange(data.shape[-1]) / SFREQ,
+        ch_names=("F3", "F4", "P3", "P4"),
+        sfreq=SFREQ,
+        row_ids=(("test", 0, "event"),),
+    )
+
+    segmentation = segment(signal, n_states=2, min_duration_ms=0.0)
+
+    # The leading direction of uu.T + 100 vv.T is 29.753 degrees from u,
+    # rather than the 15-degree midpoint produced by unit-normalized peak maps.
+    expected_angle = 0.5 * np.arctan2(
+        100.0 * np.sin(2.0 * angle), 1.0 + 100.0 * np.cos(2.0 * angle)
+    )
+    expected = np.cos(expected_angle) * first + np.sin(expected_angle) * tilted_axis
+    assert np.max(np.abs(segmentation.templates @ expected)) == pytest.approx(1.0, abs=1e-10)
+    assert segmentation.global_explained_variance > 0.997
+
+
+@requires_sklearn
 def test_segmentation_respects_fractional_sample_minimum_duration() -> None:
     signal, _ = _planted(noise=0.0)
     result = segment(signal, min_duration_ms=254.0)

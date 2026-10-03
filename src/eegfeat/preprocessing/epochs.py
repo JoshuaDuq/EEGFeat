@@ -10,7 +10,7 @@ from scipy.signal import detrend
 
 from .config import EventEpochSettings, FixedEpochSettings, ReferenceSettings, ThresholdSettings
 from .events import EventData, fixed_bounds
-from .raw import good_eeg_names, validate_geometry
+from .raw import good_eeg_names, restore_reference_channels, validate_geometry
 
 
 def analysis_bounds(
@@ -89,12 +89,7 @@ def interpolate_channels(epochs: Any) -> Any:
 
 
 def reference_epochs(epochs: Any, settings: ReferenceSettings) -> Any:
-    working = epochs.copy().load_data()
-    if settings.add_channels:
-        overlap = set(settings.add_channels) & set(working.ch_names)
-        if overlap:
-            raise ValueError(f"reference.add_channels: already present {sorted(overlap)}")
-        working = mne.add_reference_channels(working, list(settings.add_channels), copy=False)
+    working = restore_reference_channels(epochs, settings.add_channels)
     if settings.channels is None:
         return working
     good = good_eeg_names(working)

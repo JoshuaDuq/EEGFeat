@@ -127,6 +127,10 @@ A later ``run`` reuses a checkpoint whose recipe and parents still match.
   (``prepare`` for montages, ``events`` for events or metadata) and dependent
   checkpoints stale; reset from that stage before running again. Missing
   files raise an error. Rewriting identical contents preserves reuse.
+- **Missing acquisition reference**: ``reference.add_channels`` belongs to
+  ``artifact-reference`` when artifact fitting re-references the data, so
+  changing those electrodes also invalidates that reference and its fitted
+  artifact model. Restored electrode names are recorded once in provenance.
 - **Pending review file**: a file the run already wrote is kept, with any edits
   in it.
 - **next**: runs one pending stage.
@@ -317,8 +321,15 @@ Sections
          ``cv``, and ``random_state``.
    * - ``reference``
      - Final EEG reference. ``channels: average`` or a list of good EEG names.
-       ``add_channels`` inserts missing reference electrodes first. ``null``
-       leaves the reference unchanged.
+       ``add_channels`` restores missing acquisition-reference electrodes as
+       zeros before the first re-reference, including ``artifact.reference``.
+       The configured montage is reapplied to locate the restored electrodes.
+       Sources already marked as custom referenced cannot restore missing
+       acquisition electrodes. MNE also sets that flag when creating a bipolar
+       channel from an EEG anode. For that combination, restore the acquisition
+       reference on the original recording before bipolar preparation, save
+       the restored channels, and omit ``add_channels`` from the recipe.
+       ``null`` leaves the reference unchanged.
    * - ``sampling``
      - - ``method: decimate`` with integer ``factor``, which requires
          ``filter.h_freq``.

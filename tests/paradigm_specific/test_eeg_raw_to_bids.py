@@ -164,3 +164,9 @@ def test_source_glob_selects_only_the_paradigms_recordings(tmp_path):
         tmp_path, "brainvision", "thermalactive", "fastr", "ThermalPain*_run*.vhdr"
     )
     assert [p.name for p in found] == ["ThermalPainEEGFMRI_run1_sub0001_fastr.vhdr"]
+
+
+def test_montage_rejects_unknown_eeg_electrodes():
+    raw = mne.io.RawArray(np.zeros((2, 100)), mne.create_info(["Cz", "TypoChannel"], 100.0, "eeg"))
+    with pytest.raises(ValueError, match="TypoChannel"):
+        convert.set_montage(raw, "easycap-M1")

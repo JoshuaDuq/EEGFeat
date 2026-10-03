@@ -1,3 +1,4 @@
+import sys
 from dataclasses import replace
 
 import numpy as np
@@ -207,7 +208,8 @@ def test_aec_withholds_a_constant_envelope(amplitude, orthogonalize) -> None:
 
 
 @pytest.mark.parametrize("method", ["aec", "coh"])
-def test_connectivity_rejects_duplicated_roi_members(method) -> None:
+def test_connectivity_rejects_duplicated_roi_members(method, monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "mne_connectivity", None)
     groups = {"front": ["C3", "C3", "C4"], "back": ["P3", "P4"]}
     with pytest.raises(ValueError, match="duplicate"):
         if method == "aec":
@@ -316,17 +318,26 @@ def test_clustering_of_a_triangle_is_one_and_of_a_chain_is_zero() -> None:
     assert _clustering(chain, 0.5) == pytest.approx(0.0)
 
 
-def test_clustering_is_nan_when_no_node_has_two_neighbours() -> None:
+def test_clustering_is_zero_when_no_node_has_two_neighbours() -> None:
     sparse = np.zeros((4, 4))
     sparse[0, 1] = sparse[1, 0] = 1.0
-    assert np.isnan(_clustering(sparse, 0.5))
+    assert _clustering(sparse, 0.5) == 0.0
 
 
-def test_clustering_average_excludes_nodes_with_fewer_than_two_neighbours() -> None:
+def test_clustering_average_includes_isolated_nodes_as_zero() -> None:
     triangle_and_isolate = np.zeros((4, 4))
     triangle_and_isolate[:3, :3] = 1.0
     np.fill_diagonal(triangle_and_isolate, 0.0)
-    assert _clustering(triangle_and_isolate, 0.5) == pytest.approx(1.0)
+    assert _clustering(triangle_and_isolate, 0.5) == pytest.approx(0.75)
+
+
+def test_clustering_average_includes_leaf_nodes_as_zero() -> None:
+    triangle_and_leaf = np.zeros((4, 4))
+    triangle_and_leaf[:3, :3] = 1.0
+    triangle_and_leaf[0, 3] = triangle_and_leaf[3, 0] = 1.0
+    np.fill_diagonal(triangle_and_leaf, 0.0)
+
+    assert _clustering(triangle_and_leaf, 0.5) == pytest.approx(7.0 / 12.0)
 
 
 def test_hyphenated_node_names_are_not_parsed_from_display_strings() -> None:
@@ -371,23 +382,15 @@ def test_graph_measures_refuse_a_non_pairwise_table() -> None:
         global_efficiency(per_epoch)
 
 
-def test_wpli_reports_its_missing_dependency_clearly() -> None:
-    import importlib.util
-
-    if importlib.util.find_spec("mne_connectivity") is not None:
-        pytest.skip("mne-connectivity is installed here")
-    from eegfeat.connectivity import wpli
-    from eegfeat.signal import Signal
-
-    signal = Signal.from_arrays(
-        data=np.zeros((2, 4, 401)),
-        times=np.arange(401) / SFREQ,
-        ch_names=CHANNELS,
-        sfreq=SFREQ,
-        row_ids=(("test", 0, "event"), ("test", 1, "event")),
-    )
+@pytest.mark.parametrize("method", ["coh", "wpli"])
+def test_connectivity_reports_its_missing_dependency_clearly(method, monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "mne_connectivity", None)
+    signal = _coupled_broadband()
     with pytest.raises(ImportError, match=r"eegfeat\[connectivity\]"):
-        wpli(signal, bands=[ALPHA], windows=[WINDOW])
+        if method == "wpli":
+            ef.wpli(signal, bands=[ALPHA], windows=[WINDOW])
+        else:
+            ef.spectral_connectivity(signal, method=method, bands=[ALPHA], windows=[WINDOW])
 
 
 @pytest.mark.skipif(
@@ -691,7 +694,8 @@ def test_wpli_refuses_a_band_the_estimator_returned_no_frequencies_for(monkeypat
 
 
 @pytest.mark.parametrize("mode", ["fourier", "multitaper"])
-def test_connectivity_does_not_truncate_a_band_above_nyquist(mode) -> None:
+def test_connectivity_does_not_truncate_a_band_above_nyquist(mode, monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "mne_connectivity", None)
     with pytest.raises(ValueError, match="Nyquist"):
         ef.spectral_connectivity(
             _coupled_broadband(),

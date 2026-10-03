@@ -333,6 +333,12 @@ def csp_features(
     n_epochs = int(signal.data.shape[0])
     if y.shape != (n_epochs,):
         raise ValueError(f"labels must have one entry per epoch; got {y.shape} for {n_epochs}.")
+    classes = np.unique(y)
+    if classes.size != 2:
+        raise ValueError(
+            "csp_features requires exactly two classes across the whole dataset; "
+            f"got {classes.tolist()}."
+        )
     if not folds:
         raise ValueError(
             "csp_features requires at least one fold; features cannot be cross-fitted."

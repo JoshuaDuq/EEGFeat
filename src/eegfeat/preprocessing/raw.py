@@ -129,6 +129,26 @@ def _montage(source: str | Path) -> Any:
     return mne.channels.read_custom_montage(source, head_size=None)
 
 
+def restore_reference_channels(
+    inst: Any, channels: tuple[str, ...], montage: str | Path | None = None
+) -> Any:
+    working = inst.copy().load_data()
+    if not channels:
+        return working
+    overlap = set(channels) & set(working.ch_names)
+    if overlap:
+        raise ValueError(f"reference.add_channels: already present {sorted(overlap)}")
+    if working.info["custom_ref_applied"]:
+        raise ValueError(
+            "reference.add_channels: restore acquisition electrodes before re-referencing; "
+            "their signals cannot be recovered as zeros after a custom reference"
+        )
+    working = mne.add_reference_channels(working, list(channels), copy=False)
+    if montage is not None:
+        working.set_montage(_montage(montage), on_missing="raise")
+    return working
+
+
 def crop_raw(raw: Any, settings: CropSettings) -> Any:
     validate_raw(raw)
     if settings.tmax > raw.times[-1]:

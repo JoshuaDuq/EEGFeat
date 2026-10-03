@@ -20,7 +20,12 @@ from eegfeat.model.execution import run_folds
 from eegfeat.model.residualize import residualize_targets, residualize_within_subjects
 from eegfeat.model.splits import Fold, InnerSplit, inner_cv
 from eegfeat.model.transformers import _check_subject_missingness
-from eegfeat.model.tuning import FoldFitError, fit_untuned, tune
+from eegfeat.model.tuning import (
+    FoldFitError,
+    _validate_grouped_calibration,
+    fit_untuned,
+    tune,
+)
 
 __all__ = [
     "FoldClassification",
@@ -194,6 +199,7 @@ def _select_fold_local_params(
         for position, parameters in enumerate(candidates):
             candidate = clone(pipeline)
             candidate.set_params(**parameters)
+            _validate_grouped_calibration(candidate)
 
             try:
                 fitted = fit_untuned(
@@ -290,6 +296,7 @@ def _fit_fold(
 ) -> _FittedFold:
     # The single place a fold's model is fitted, so predictions and feature importance
     # always describe the same model.
+    _validate_grouped_calibration(pipeline)
     train_idx = f.train
     test_idx = f.test
     X_tr, X_te = X[train_idx], X[test_idx]

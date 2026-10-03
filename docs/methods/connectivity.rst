@@ -40,6 +40,8 @@ vector, averaged over time.
    - Cells below ``min_valid_trials`` are flagged.
    - Time points with fewer finite phases than ``min_valid_trials`` are
      omitted from the mean.
+   - Zero-amplitude analytic samples have undefined phase and contribute zero
+     coverage, even when their real and imaginary parts are finite.
 
 **Reference**
    ITPC is used by Tallon-Baudry, Bertrand, Delpuech, and Pernier (1996) and
@@ -99,6 +101,12 @@ amplitude instead of the sample count, which bounds the value in
 **Rows**
    The measure is computed inside each trial, so the table has one row per
    epoch.
+
+**Coverage and provenance**
+   Coverage counts samples with both a defined slow-band phase and a finite
+   fast-band amplitude, using the minimum of the two input coverages. Both
+   input estimators are recorded in the computation metadata, so changing the
+   phase estimator changes the feature identity.
 
 **Notes**
    - No surrogate distribution is computed.
@@ -363,27 +371,33 @@ Clustering coefficient
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The clustering coefficient averages the local clustering of Watts and
-Strogatz (1998) over nodes with degree :math:`k_i \ge 2`. The graph is
+Strogatz (1998) over all :math:`N` nodes. The graph is
 binarized at ``threshold`` :math:`\theta` (:math:`A_{ij} = 1` when
 :math:`|w_{ij}| > \theta`).
 
 .. math::
 
    \begin{aligned}
-   C_i &= \frac{(A^3)_{ii}}{k_i (k_i - 1)} = \frac{2 T_i}{k_i (k_i - 1)} \\[6pt]
-   C &= \frac{1}{|\{i : k_i \ge 2\}|} \sum_{i : k_i \ge 2} C_i
+   C_i &= \begin{cases}
+      \dfrac{(A^3)_{ii}}{k_i (k_i - 1)} = \dfrac{2 T_i}{k_i (k_i - 1)}, & k_i \ge 2, \\
+      0, & k_i < 2,
+   \end{cases} \\[6pt]
+   C &= \frac{1}{N} \sum_{i=1}^{N} C_i
    \end{aligned}
 
 :math:`(A^3)_{ii}` is twice the number of triangles at node :math:`i`, and
 :math:`k_i = \sum_j A_{ij}`.
 
-- Nodes with :math:`k_i < 2` are omitted.
+- Nodes with :math:`k_i < 2` contribute 0.
 - An eligible node with no triangles contributes 0.
 
 **Comparability**
-   networkx and the Brain Connectivity Toolbox instead average over all nodes
-   and count those with :math:`k_i < 2` as 0, so the values are not directly
-   comparable.
+   This follows `NetworkX average_clustering
+   <https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.cluster.average_clustering.html>`__
+   with ``count_zeros=True`` and the Brain Connectivity Toolbox convention.
+   Isolates and leaves remain in the denominator, so adding disconnected
+   nodes cannot preserve the average of a densely connected subnetwork.
+   The node-averaging convention is stored in the computation metadata.
 
 Missing values
 ~~~~~~~~~~~~~~
@@ -394,7 +408,8 @@ These rules apply to both graph measures unless stated otherwise.
   not entered as a zero-weight disconnection.
 - A pair absent from the table raises ``ValueError``, because the edge set must
   be complete.
-- The clustering coefficient is NaN when no node has two neighbours.
+- A finite graph with no triangles has clustering coefficient 0, including
+  when no node has two neighbours.
 
 References
 ----------
