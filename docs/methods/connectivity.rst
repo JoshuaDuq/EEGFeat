@@ -90,7 +90,8 @@ amplitude instead of the sample count, which bounds the value in
 
 **Flags**
    - ``normalize=True`` uses the summed-amplitude denominator. It returns NaN
-     when that denominator is at most :math:`10^{-20}`.
+     when that denominator is zero or no sample has both a defined phase and
+     a finite amplitude. Every positive sum is usable, independent of units.
    - ``normalize=False`` divides the modulus of the weighted sum by the number
      of finite samples. It returns that real mean, not the unscaled complex
      sum.
@@ -145,6 +146,8 @@ Requirements and options
   (``pip install eegfeat[connectivity]``).
 - Every trial group needs at least two epochs, for every spectral
   connectivity method.
+- A spectral band must lie at or below the signal's Nyquist frequency;
+  unavailable high frequencies raise an error rather than truncating the band.
 - ``method="wpli2_debiased"`` applies the sample-size correction in Vinck et
   al. (2011), which matters at low trial counts. ``method="wpli"`` does not.
 - Warnings raised by the MNE estimator are left visible.
@@ -157,6 +160,8 @@ Nodes and ROIs
   diagonal.
 - For ``envelope_correlation``, a node's series is the mean complex analytic
   signal of its member channels, and envelopes are taken from that mean.
+- Repeated channels within an ROI raise ``ValueError``; members have equal
+  weight and must be unique.
 - These measures have one row per trial group, as :func:`~eegfeat.itpc` does.
 
 Envelope correlation
@@ -182,6 +187,8 @@ For analytic signals :math:`z_i(t)`,
   take the absolute value before that average.
 - Trials are combined by a Fisher transform. Correlations are clipped to
   :math:`[-0.999999, 0.999999]` before :math:`\operatorname{arctanh}`.
+- A constant original envelope has undefined Pearson correlation and returns
+  NaN, including with orthogonalization. Its output coverage is zero.
 
 .. code-block:: python
 
@@ -264,6 +271,8 @@ Cross-fitting and leakage
 - :func:`~eegfeat.csp_features` fits on each training fold and transforms the
   held-out rows of that fold. The resulting table is a description of those
   held-out rows.
+- A supplied ``window`` restricts both fitting and held-out projected variance;
+  samples outside that window do not enter the features.
 - Reusing the same folds as a classifier's outer split still leaks. A fold's
   filters are estimated with labels from epochs that fall in the classifier's
   training set through another fold.
@@ -280,8 +289,10 @@ To use CSP as a predictor:
 Covariance and filters
 ~~~~~~~~~~~~~~~~~~~~~~
 
-For class :math:`c`, each finite epoch is centered in time and its covariance
-is normalized by the trace.
+For class :math:`c`, each selected training epoch is centered in time and its
+covariance is normalized by the trace. A non-finite or temporally constant
+training epoch raises an error; selected rows are never silently discarded.
+Missing samples in held-out transformations are omitted from projected variance.
 
 .. math::
 
@@ -317,9 +328,11 @@ Comparison with MNE
 
 `mne.decoding.CSP <https://mne.tools/stable/generated/mne.decoding.CSP.html>`__
 with ``cov_est="epoch"``, ``norm_trace=True``, and
-``component_order="alternate"`` should give the same filters up to sign and
-scale. Its features are log mean power, not the log relative variance used
-here.
+``component_order="alternate"`` follows the same generalized eigenvalue
+problem and component ordering. MNE normalizes each class covariance after
+averaging epochs; this implementation normalizes each epoch before averaging.
+Filters can therefore differ when epoch amplitudes vary. MNE's features are
+log mean power; these features are log relative variance.
 
 Graph Measures
 --------------

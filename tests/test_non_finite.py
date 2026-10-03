@@ -226,33 +226,33 @@ def test_a_bad_baseline_sample_is_skipped_rather_than_discarding_the_channel(
 
 
 @pytest.mark.parametrize("bad", [np.inf, -np.inf])
-def test_csp_features_skip_a_bad_sample_rather_than_voiding_the_epoch(bad: float) -> None:
-    # Fitting already drops a whole epoch that is not entirely finite, on purpose.
-    # Projecting does not, so its variance has to skip the bad sample the same way
-    # a NaN one is skipped, instead of turning the epoch's components into NaN.
+def test_csp_transform_skips_a_bad_sample_in_a_held_out_epoch(bad: float) -> None:
+    # Invalid training epochs raise. A held-out sample may be missing, and its
+    # projected variance uses the remaining finite samples.
     epochs, channels = 12, 4
     rng = np.random.default_rng(0)
     t = np.arange(400) / SFREQ
     data = np.sin(2 * np.pi * 10.0 * t) + 0.6 * rng.normal(size=(epochs, channels, t.size))
     labels = np.array([0, 1] * (epochs // 2))
-    folds = [
-        (np.setdiff1d(np.arange(epochs), np.arange(k, epochs, 3)), np.arange(k, epochs, 3))
-        for k in range(3)
-    ]
 
-    def features(value: float) -> np.ndarray:
-        spoiled = data.copy()
-        spoiled[0, 0, 200] = value
-        signal = Signal.from_arrays(
-            data=spoiled,
+    def wrap(values: np.ndarray) -> Signal:
+        return Signal.from_arrays(
+            data=values,
             times=t,
             ch_names=tuple(f"C{i}" for i in range(channels)),
             sfreq=SFREQ,
             row_ids=tuple(("test", i, "event") for i in range(epochs)),
         )
-        window = Window("all", 0.0, (t.size - 1) / SFREQ)
+
+    fitted = ef.CommonSpatialPattern.fit(
+        wrap(data), labels, rows=np.arange(1, epochs), n_components=2
+    )
+
+    def features(value: float) -> np.ndarray:
+        spoiled = data.copy()
+        spoiled[0, 0, 200] = value
         return np.asarray(
-            ef.csp_features(signal, labels, folds=folds, window=window, n_components=2).values,
+            fitted.transform(wrap(spoiled), rows=np.array([0])),
             dtype=float,
         )
 

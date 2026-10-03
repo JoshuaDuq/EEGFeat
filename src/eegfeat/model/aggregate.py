@@ -75,7 +75,10 @@ def bootstrap_mean_ci(
     :func:`~eegfeat.model.permutation_test`.
     """
     vals = np.asarray(values, dtype=float)
-    vals = vals[np.isfinite(vals)]
+    if vals.ndim != 1:
+        raise ValueError("Bootstrap inference requires a 1-D vector of subject values.")
+    if not np.isfinite(vals).all():
+        raise ValueError("Bootstrap inference requires a finite value for every subject.")
     if vals.size == 0:
         return np.nan, np.nan
     if vals.size == 1:
@@ -99,11 +102,15 @@ def paired_signflip_p_value(
 ) -> float:
     """Two-sided sign-flip p of a zero mean over independent per-subject differences.
 
-    Flipping each subject's sign on its own assumes the subjects are independent, which
-    scores held out from cross-subject folds are not (see :class:`AggregationConfig`).
+    Finite-sample validity requires independent differences whose null distributions are
+    symmetric about zero; zero mean alone is insufficient. Scores held out from
+    cross-subject folds are not independent (see :class:`AggregationConfig`).
     """
     vals = np.asarray(differences, dtype=float)
-    vals = vals[np.isfinite(vals)]
+    if vals.ndim != 1:
+        raise ValueError("Sign-flip inference requires a 1-D vector of subject differences.")
+    if not np.isfinite(vals).all():
+        raise ValueError("Sign-flip inference requires a finite value for every subject.")
     if vals.size == 0 or iterations <= 0:
         return np.nan
 

@@ -125,6 +125,8 @@ def segment(
             f"fit_on must have one entry per epoch; got {contributing.shape} for "
             f"{data.shape[0]} epochs."
         )
+    if contributing.dtype != np.bool_:
+        raise ValueError("fit_on must be a boolean mask with one entry per epoch.")
     if not contributing.any():
         raise ValueError("fit_on excludes every epoch, so there is nothing to cluster.")
 

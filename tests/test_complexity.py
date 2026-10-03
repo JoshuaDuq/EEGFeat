@@ -21,10 +21,25 @@ def _signal(values: np.ndarray) -> Signal:
     )
 
 
-def test_a_constant_signal_has_zero_entropy() -> None:
-    # Every template matches every other at both lengths, so the ratio is one.
-    table = sample_entropy([_signal(np.full(201, 2.0))], windows=[WINDOW], include_global=False)
-    assert table.values.item() == pytest.approx(0.0, abs=1e-12)
+@pytest.mark.parametrize("amplitude", [2.0, 0.1, 1e-6])
+def test_zero_tolerance_from_a_constant_signal_is_undefined(amplitude) -> None:
+    # With strict distance < r * SD, zero tolerance admits no matching pair.
+    table = sample_entropy(
+        [_signal(np.full(201, amplitude))], windows=[WINDOW], include_global=False
+    )
+    assert np.isnan(table.values).all()
+
+
+@pytest.mark.parametrize("tolerance_mode", ["original_sd", "scale_sd"])
+def test_constant_multiscale_entropy_has_no_epsilon_tolerance(tolerance_mode) -> None:
+    table = multiscale_entropy(
+        [_signal(np.ones(201))],
+        windows=[WINDOW],
+        scales=(1, 2),
+        tolerance_mode=tolerance_mode,
+        include_global=False,
+    )
+    assert np.isnan(table.values).all()
 
 
 def test_noise_is_less_self_similar_than_a_sine() -> None:
@@ -189,9 +204,7 @@ def test_matches_antropy_where_it_is_available() -> None:
     from antropy import sample_entropy as antropy_sampen
 
     rng = np.random.RandomState(6)
-    # A constant signal is left out on purpose: its tolerance is 0.2 * 0, and
-    # antropy returns NaN there while the definition gives -log(A/B) = 0 for a
-    # perfectly regular series. test_a_constant_signal_has_zero_entropy pins ours.
+    # Tolerance and strict Chebyshev matching follow the same definition.
     for values in (rng.randn(300), np.sin(np.linspace(0, 30 * np.pi, 300))):
         tolerance = 0.2 * float(np.std(values))
         expected = antropy_sampen(values, order=2, tolerance=tolerance, metric="chebyshev")

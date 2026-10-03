@@ -75,15 +75,15 @@ PhysioNet motor movement
      - pass
    * - Deep sleep against wake decodes across subjects (``loso_folds``, ``cross_fit_classification``, ``classification_metrics``)
      - balanced accuracy above 0.9 (chance 0.5)
-     - balanced accuracy 0.96, per subject 0.91 to 0.98, 893 epochs, p = 2e-198
+     - balanced accuracy 0.96, per subject 0.91 to 0.98, 893 epochs
      - pass
    * - Movement against rest decodes across subjects, leave-one-subject-out (``loso_folds``, ``cross_fit_classification``, ``classification_metrics``)
-     - balanced accuracy above 0.55 (chance 0.5); binomial p below 1e-3
-     - balanced accuracy 0.68, per subject 0.52 to 0.86, 1740 epochs, p = 2e-50
+     - balanced accuracy above 0.55 (chance 0.5)
+     - balanced accuracy 0.68, per subject 0.52 to 0.86, 1740 epochs
      - pass
    * - Movement against rest decodes within subject from sensorimotor power (``stack_rows``, ``build_design``, ``within_subject_folds``, ``cross_fit_classification``, ``classification_metrics``)
-     - balanced accuracy above 0.65 (chance 0.5); binomial p below 1e-6
-     - balanced accuracy 0.79, per subject 0.60 to 0.95, 1740 epochs, p = 7e-134
+     - balanced accuracy above 0.65 (chance 0.5)
+     - balanced accuracy 0.79, per subject 0.60 to 0.95, 1740 epochs
      - pass
    * - Band power is the trapezoid integral of the Welch PSD; mean PSD is that per Hz (``integrated_band_power``, ``mean_psd``, ``Spectra.from_spectrum``)
      - relative error below 1e-12
@@ -375,7 +375,7 @@ MNE SSVEP
      - pass
    * - With smoothing off and alpha excluded, the peak lands on the flicker frequency (``peak_frequency``)
      - condition medians within 0.3 Hz of 12 and 15 Hz; 70 percent of trials within
-     - medians 12.00 and 15.00 Hz; 17 of 20 trials within 0.3 Hz
+     - medians 12.00 and 15.00 Hz; 18 of 20 trials within 0.3 Hz
      - pass
    * - Occipital power at 12 Hz against 15 Hz separates the flicker conditions on every trial (``integrated_band_power``, ``band_ratio``)
      - smallest 12 Hz-trial ratio above largest 15 Hz-trial ratio

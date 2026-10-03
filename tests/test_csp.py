@@ -105,6 +105,37 @@ def test_three_classes_raise() -> None:
         ef.CommonSpatialPattern.fit(signal, y)
 
 
+def test_fractional_class_labels_cannot_collapse_into_one_class() -> None:
+    signal, y = _lateralised(n_per_class=6)
+    fractional = np.where(y == 0, 1.0, 1.5)
+    with pytest.raises(ValueError, match="labels.*integers"):
+        ef.CommonSpatialPattern.fit(signal, fractional)
+
+
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, 0.0, 0.1])
+def test_csp_cannot_silently_remove_a_selected_training_epoch(invalid) -> None:
+    from dataclasses import replace
+
+    signal, y = _lateralised(n_per_class=6)
+    invalid_data = signal.data.copy()
+    invalid_data[0] = invalid
+    with pytest.raises(ValueError, match="CSP fitting"):
+        ef.CommonSpatialPattern.fit(replace(signal, data=invalid_data), y)
+
+
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, 0.0])
+def test_unselected_invalid_epochs_do_not_enter_the_csp_fit(invalid) -> None:
+    from dataclasses import replace
+
+    signal, y = _lateralised(n_per_class=6)
+    selected = np.arange(1, y.size)
+    invalid_data = signal.data.copy()
+    invalid_data[0] = invalid
+    original = ef.CommonSpatialPattern.fit(signal, y, rows=selected)
+    changed = ef.CommonSpatialPattern.fit(replace(signal, data=invalid_data), y, rows=selected)
+    np.testing.assert_array_equal(changed.filters, original.filters)
+
+
 def test_transforming_different_channels_raises() -> None:
     signal, y = _lateralised(n_per_class=6)
     fitted = ef.CommonSpatialPattern.fit(signal, y)
@@ -382,6 +413,38 @@ def test_the_window_is_recorded_when_given() -> None:
     table = ef.csp_features(signal, y, folds=_folds(len(y)), window=window)
     assert table.meta[0].window == "stimulus"
     assert table.meta[0].window_bounds == (0.0, 1.5)
+
+
+def test_the_csp_window_restricts_fitting_and_held_out_power() -> None:
+    from dataclasses import replace
+
+    signal, y = _lateralised(n_per_class=10)
+    window = Window("stimulus", 0.4, 1.0)
+    within = (signal.times >= window.tmin) & (signal.times <= window.tmax)
+    cropped = replace(
+        signal,
+        data=signal.data[..., within],
+        times=signal.times[within],
+        coverage=signal.coverage[..., within],
+    )
+    folds = _folds(len(y))
+    expected = ef.csp_features(cropped, y, folds=folds)
+    actual = ef.csp_features(signal, y, folds=folds, window=window)
+    np.testing.assert_allclose(actual.values, expected.values, rtol=1e-12)
+
+
+def test_samples_outside_the_csp_window_cannot_change_its_features() -> None:
+    from dataclasses import replace
+
+    signal, y = _lateralised(n_per_class=10)
+    window = Window("stimulus", 0.4, 1.0)
+    outside = (signal.times < window.tmin) | (signal.times > window.tmax)
+    altered = signal.data.copy()
+    altered[:, 0, outside] *= 1000.0
+    folds = _folds(len(y))
+    original = ef.csp_features(signal, y, folds=folds, window=window)
+    changed = ef.csp_features(replace(signal, data=altered), y, folds=folds, window=window)
+    np.testing.assert_array_equal(changed.values, original.values)
 
 
 def test_it_joins_per_epoch_tables() -> None:

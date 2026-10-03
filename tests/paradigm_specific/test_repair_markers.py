@@ -7,6 +7,7 @@ import mne
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 from eegfeat.preprocessing.provenance import file_hash
 
@@ -57,6 +58,59 @@ def test_splice_refuses_when_the_generic_positions_do_not_match(tmp_path):
     assert "Stimulus,S  2,5,1,0" in old.read_text()
 
 
+@pytest.mark.parametrize(
+    "markers",
+    [
+        ["Stimulus,S  1,1,1,0", "Stimulus,S  2,300,1,0", "Stimulus,S  2,901,1,0"],
+        [*GENERIC, GENERIC[1]],
+        [GENERIC[0], "Stimulus,S  1,300,50,0", GENERIC[2]],
+        [GENERIC[0], "Stimulus,S  1,300,1,1", GENERIC[2]],
+    ],
+    ids=["swapped-codes", "duplicate-event", "changed-duration", "changed-channel"],
+)
+def test_splice_refuses_incompatible_events_at_matching_samples(tmp_path, markers):
+    fixed, old = tmp_path / "fixed.vmrk", tmp_path / "old.vmrk"
+    vmrk(fixed, "fixed.eeg", NAMED)
+    vmrk(old, "old.eeg", markers)
+    original = old.read_bytes()
+    with pytest.raises(ValueError, match="marker"):
+        repair.splice_markers(fixed, old)
+    assert old.read_bytes() == original
+
+
+def test_splice_accepts_a_new_segment_without_treating_it_as_a_task_event(tmp_path):
+    fixed, old = tmp_path / "fixed.vmrk", tmp_path / "old.vmrk"
+    segment = "New Segment,,1,1,0,20200101000000000000"
+    vmrk(fixed, "fixed.eeg", [segment, *NAMED])
+    vmrk(old, "old.eeg", [segment, *GENERIC])
+    repair.splice_markers(fixed, old)
+    assert repair.marker_lines(old) == [segment, *NAMED]
+
+
+@pytest.mark.parametrize(
+    "old_segments",
+    [
+        ["New Segment,,1,1,0,20250101000000000000"],
+        ["New Segment,,2,1,0,20200101000000000000"],
+        [],
+        [
+            "New Segment,,1,1,0,20200101000000000000",
+            "New Segment,,500,1,0,20200101000005000000",
+        ],
+    ],
+    ids=["changed-date", "changed-position", "missing-segment", "extra-discontinuity"],
+)
+def test_splice_preserves_recording_dates_and_discontinuities(tmp_path, old_segments):
+    fixed, old = tmp_path / "fixed.vmrk", tmp_path / "old.vmrk"
+    segment = "New Segment,,1,1,0,20200101000000000000"
+    vmrk(fixed, "fixed.eeg", [segment, *NAMED])
+    vmrk(old, "old.eeg", [*old_segments, *GENERIC])
+    original = old.read_bytes()
+    with pytest.raises(ValueError, match="New Segment"):
+        repair.splice_markers(fixed, old)
+    assert old.read_bytes() == original
+
+
 def bundle(tmp_path):
     stem = tmp_path / "sub-01_task-thermalactive_run-1"
     info = mne.create_info(["Cz"], sfreq=100.0, ch_types=["eeg"])
@@ -88,11 +142,94 @@ def test_bundle_repair_renames_everywhere_and_rehashes(tmp_path):
     repair.repair_bundle(Path(f"{stem}_preprocessing.json"))
     assert mne.read_epochs(f"{stem}_epo.fif", verbose=False).event_id == {"Trig_therm/T  1": 1}
     assert pd.read_csv(f"{stem}_events.tsv", sep="\t")["label"].tolist() == ["Trig_therm/T  1"] * 2
-    assert '"Trig_therm/T  1": 1' in Path(f"{stem}_recipe.yaml").read_text()
+    recipe = yaml.safe_load(Path(f"{stem}_recipe.yaml").read_text())
+    assert recipe["epochs"]["events"]["event_id"] == {"Trig_therm/T  1": 1}
     manifest = json.loads(Path(f"{stem}_preprocessing.json").read_text())
     assert manifest["provenance"]["events"]["event_id"] == {"Trig_therm/T  1": 1}
     for name, digest in manifest["files"].items():
         assert file_hash(tmp_path / name) == digest
+
+
+def test_bundle_repair_preserves_other_trigger_codes(tmp_path):
+    stem = bundle(tmp_path)
+    epochs_file = Path(f"{stem}_epo.fif")
+    epochs = mne.read_epochs(epochs_file, preload=True, verbose=False)
+    epochs.events[1, 2] = 10
+    epochs.event_id["Stimulus/S  10"] = 10
+    epochs.save(epochs_file, overwrite=True, verbose=False)
+    ledger = Path(f"{stem}_events.tsv")
+    frame = pd.read_csv(ledger, sep="\t")
+    frame.loc[1, "label"] = "Stimulus/S  10"
+    frame.to_csv(ledger, sep="\t", index=False)
+    recipe = Path(f"{stem}_recipe.yaml")
+    recipe.write_text(
+        "epochs:\n  events: {source: annotations, "
+        'event_id: {"Stimulus/S  1": 1, "Stimulus/S  10": 10}}\n'
+    )
+    manifest_path = Path(f"{stem}_preprocessing.json")
+    manifest = json.loads(manifest_path.read_text())
+    manifest["provenance"]["events"]["event_id"]["Stimulus/S  10"] = 10
+    manifest_path.write_text(json.dumps(manifest))
+
+    repair.repair_bundle(manifest_path)
+
+    assert mne.read_epochs(epochs_file, verbose=False).event_id == {
+        "Trig_therm/T  1": 1,
+        "Stimulus/S  10": 10,
+    }
+    assert pd.read_csv(ledger, sep="\t")["label"].tolist() == [
+        "Trig_therm/T  1",
+        "Stimulus/S  10",
+    ]
+    assert yaml.safe_load(recipe.read_text())["epochs"]["events"]["event_id"] == {
+        "Trig_therm/T  1": 1,
+        "Stimulus/S  10": 10,
+    }
+    assert json.loads(manifest_path.read_text())["provenance"]["events"]["event_id"] == {
+        "Trig_therm/T  1": 1,
+        "Stimulus/S  10": 10,
+    }
+
+
+@pytest.mark.parametrize(
+    "description",
+    ["Stimulus/S  10", "Stimulus/S  20", "Stimulus/S  1_other", "Comment/Stimulus/S  1"],
+)
+def test_rename_changes_only_the_two_complete_marker_descriptions(description):
+    assert repair.rename(description) == description
+
+
+def test_bundle_repair_refuses_colliding_event_labels_before_writing(tmp_path):
+    stem = bundle(tmp_path)
+    manifest_path = Path(f"{stem}_preprocessing.json")
+    manifest = json.loads(manifest_path.read_text())
+    manifest["provenance"]["events"]["event_id"]["Trig_therm/T  1"] = 10
+    manifest_path.write_text(json.dumps(manifest))
+    originals = {path: path.read_bytes() for path in tmp_path.iterdir()}
+    with pytest.raises(ValueError, match="collid"):
+        repair.repair_bundle(manifest_path)
+    assert {path: path.read_bytes() for path in tmp_path.iterdir()} == originals
+
+
+def test_bundle_repair_preserves_samples_and_inactive_projectors(tmp_path):
+    stem = bundle(tmp_path)
+    epochs_file = Path(f"{stem}_epo.fif")
+    info = mne.create_info(["Cz", "Pz"], sfreq=100.0, ch_types="eeg")
+    samples = np.broadcast_to(np.array([[1e-6], [3e-6]]), (2, 2, 10)).copy()
+    epochs = mne.EpochsArray(
+        samples,
+        info,
+        events=np.array([[50, 0, 1], [150, 0, 1]]),
+        event_id={"Stimulus/S  1": 1},
+    )
+    epochs.set_eeg_reference(projection=True)
+    epochs.save(epochs_file, overwrite=True, fmt="double", verbose=False)
+
+    repair.repair_bundle(Path(f"{stem}_preprocessing.json"))
+
+    repaired = mne.read_epochs(epochs_file, preload=True, proj=False, verbose=False)
+    np.testing.assert_array_equal(repaired.get_data(), samples)
+    assert repaired.info["projs"][0]["active"] is False
 
 
 def test_only_live_bundles_are_repaired(tmp_path):

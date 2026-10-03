@@ -145,7 +145,7 @@ def test_the_closed_form_ridge_null_equals_refitting_every_draw(name: str, monke
 
 
 @pytest.mark.parametrize("solver", ["svd", "cholesky", "auto"])
-@pytest.mark.parametrize("alpha", [0.0, 1e-20])
+@pytest.mark.parametrize("alpha", [1e-12, 1e-20])
 def test_ridge_null_preserves_low_variance_predictors(alpha: float, solver: str, monkeypatch):
     rng = np.random.default_rng(0)
     case = _case("untuned")
@@ -161,6 +161,22 @@ def test_ridge_null_preserves_low_variance_predictors(alpha: float, solver: str,
 
     np.testing.assert_allclose(fast.null, refitted.null, rtol=0, atol=1e-9)
     assert fast.p_value == refitted.p_value
+
+
+@pytest.mark.parametrize("grid", [{}, {"regressor__alpha": [0.0, 1.0]}])
+def test_batched_ridge_null_rejects_unregularized_fits(grid) -> None:
+    # With duplicate predictors, batching an unregularized SVD solve changes the
+    # null statistic and can change p, despite using the same solver as each refit.
+    case = _case("untuned")
+    rng = np.random.default_rng(6)
+    first = rng.normal(size=GROUPS.size)
+    case["X"] = np.column_stack([first, first, rng.normal(size=GROUPS.size)])
+    case["pipeline"] = Pipeline([("regressor", Ridge(alpha=0.0, solver="svd"))])
+    case["grid"] = grid
+
+    with pytest.raises(RuntimeError, match="No p-value") as error:
+        _null(case)
+    assert "strictly positive" in str(error.value.__cause__)
 
 
 def _count_refits(monkeypatch) -> list[int]:

@@ -52,6 +52,8 @@ def univariate_screen(
         raise ValueError("X, y and groups must have one row per trial.")
     if not np.all(np.isfinite(target)):
         raise ValueError("The screen needs a finite target for every trial.")
+    if pd.isna(labels).any():
+        raise ValueError("The screen needs a subject label for every trial.")
     if n_flips < 1:
         raise ValueError(f"n_flips must be at least 1, got {n_flips}.")
     names = (

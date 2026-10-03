@@ -240,6 +240,11 @@ def spectral_connectivity(
 
     columns: list[tuple[FeatureMeta, npt.NDArray[np.float64]]] = []
     for band in bands:
+        if band.fmax > signal.sfreq / 2.0:
+            raise ValueError(
+                f"band {band.name!r} ends at {band.fmax} Hz, above the "
+                f"Nyquist frequency ({signal.sfreq / 2.0} Hz)."
+            )
         if signal.passband is not None:
             check_passband(band, *signal.passband, source=method)
         for window in windows:
@@ -408,6 +413,8 @@ def _nodes(
             raise KeyError(f"group {roi!r} names unknown channels: {missing}")
         if not members:
             raise ValueError(f"group {roi!r} has no channels.")
+        if len(set(members)) != len(members):
+            raise ValueError(f"group {roi!r} contains duplicate channels.")
         picks.append([lookup[m] for m in members])
     return _checked(tuple(groups), picks)
 
@@ -466,13 +473,19 @@ def _trial_correlation(
     result is asymmetric, so it is averaged with its transpose.
     """
     magnitude = np.abs(trial)
+    variable = np.ptp(magnitude, axis=-1) > 0.0
     if orthogonalize is None:
-        return np.asarray(np.atleast_2d(np.corrcoef(magnitude)), dtype=float)
+        corr = np.asarray(np.atleast_2d(np.corrcoef(magnitude)), dtype=float)
+        corr[~variable, :] = np.nan
+        corr[:, ~variable] = np.nan
+        return corr
 
     conjugate_scaled = np.conj(trial) / magnitude
     centred = magnitude - magnitude.mean(axis=-1, keepdims=True)
     spread = np.linalg.norm(centred, axis=-1)
-    spread = np.where(spread == 0.0, 1.0, spread)
+    # A constant original envelope has no Pearson correlation; unit spread
+    # would turn an undefined measurement into an observed zero.
+    spread = np.where(variable, spread, np.nan)
 
     n_nodes = trial.shape[0]
     corr = np.empty((n_nodes, n_nodes), dtype=float)

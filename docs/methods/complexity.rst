@@ -37,15 +37,13 @@ Missing values
 - Zero is the value for a perfectly regular series, so those two outcomes are
   not replaced by zero.
 
-Tolerance fallback
-~~~~~~~~~~~~~~~~~~
+Zero tolerance
+~~~~~~~~~~~~~~
 
-If :math:`r` times the standard deviation of the finite samples is non-finite
-or non-positive, the tolerance falls back to
-:math:`\max(\epsilon, r \cdot \operatorname{nanstd})` of those samples. Here
-:math:`\epsilon` is double-precision machine epsilon (``np.finfo(float).eps``,
-about :math:`2.2 \times 10^{-16}`). The log is not evaluated when the match
-count in the denominator or the numerator is zero.
+A constant series has :math:`r\sigma_x = 0`. Under the strict distance
+criterion, no pair matches, so entropy is undefined and returns NaN. The
+tolerance is never replaced with an epsilon. A non-finite tolerance also
+returns NaN. The log is not evaluated when either match count is zero.
 
 Multiscale entropy
 ~~~~~~~~~~~~~~~~~~
@@ -114,7 +112,8 @@ with :math:`x` indexed from 0 and :math:`q_{\max} = \lfloor (N - m - 1) / k \rfl
    A window returns NaN if:
 
    - any sample is non-finite;
-   - it has ``k_max`` or fewer samples;
+   - it has fewer than ``2 * k_max`` samples, so not every starting offset has
+     a difference at the largest stride;
    - fewer than two strides give a positive :math:`L(k)` (a flat window, for
      example).
 
@@ -191,7 +190,7 @@ Fitting and labelling
 ~~~~~~~~~~~~~~~~~~~~~
 
 **fit_on**
-   ``fit_on`` names the trials whose maps may enter the fit, as a
+   ``fit_on`` is a boolean mask naming the trials whose maps may enter the fit, as a
    cross-validation fold would require. The default uses every trial. That pool
    includes the trial later scored if these features are used for prediction.
 

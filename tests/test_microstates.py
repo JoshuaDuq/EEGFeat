@@ -203,6 +203,14 @@ def test_excluding_every_epoch_raises() -> None:
 
 
 @requires_sklearn
+def test_a_non_boolean_fit_mask_cannot_admit_unselected_trials() -> None:
+    signal, _ = _planted(n_epochs=6)
+    mask = np.array([1.0, 1.0, 1.0, np.nan, np.nan, np.nan])
+    with pytest.raises(ValueError, match="fit_on.*boolean"):
+        segment(signal, fit_on=mask)
+
+
+@requires_sklearn
 @pytest.mark.parametrize("n_states", [1, 13])
 def test_an_unsupported_state_count_raises(n_states: int) -> None:
     signal, _ = _planted()

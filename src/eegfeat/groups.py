@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from eegfeat._validation import validate_names
 from eegfeat.table import SpaceKind
 
 
@@ -60,6 +61,7 @@ def aggregate(
         for roi, members in groups.items():
             if not members:
                 raise ValueError(f"group {roi!r} has no channels.")
+            validate_names(members, f"group {roi!r} channels")
             missing = [m for m in members if m not in index]
             if missing:
                 raise KeyError(f"group {roi!r} names unknown channels: {missing}")

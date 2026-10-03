@@ -69,3 +69,15 @@ def test_empty_group_raises() -> None:
     values, coverage = _inputs()
     with pytest.raises(ValueError, match="no channels"):
         aggregate(values, coverage, CH, groups={"front": []}, include_global=False)
+
+
+def test_duplicate_group_members_cannot_silently_reweight_the_mean() -> None:
+    values, coverage = _inputs()
+    with pytest.raises(ValueError, match="central.*unique"):
+        aggregate(
+            values,
+            coverage,
+            CH,
+            groups={"central": ["C3", "C3", "C4"]},
+            include_global=False,
+        )

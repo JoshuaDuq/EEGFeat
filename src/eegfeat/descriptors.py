@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping, Sequence
 from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
+from scipy.signal import find_peaks
 
 from eegfeat._expand import Kernel, expand
 from eegfeat.aperiodic import aperiodic_ratio
@@ -46,11 +46,10 @@ def peak_frequency(
       it into a neighbouring rhythm: on a public SSVEP recording the defaults
       reported the alpha peak instead of the 12 Hz flicker. For narrow lines set
       ``smoothing_hz=0.0`` and choose a band that excludes the neighbours.
-    - ``min_prominence`` guards against reporting noise as a peak. When the
-      maximum stands less than this far, in log10 units, above the band median,
-      the centre of gravity is reported instead and ``"cog_fallback"`` is set. A
-      centre of gravity degrades gracefully when no oscillation is present; an
-      argmax does not.
+    - ``min_prominence`` selects local maxima using SciPy's topographic
+      prominence in log10 power. The strongest qualifying peak is reported.
+      When none qualifies, the value is NaN and ``"no_peak"`` is set.
+      Missing frequency bins separate the search into contiguous finite runs.
 
     Every column reports ``freq_resolution_hz``, and every cell carries
     ``"edge_hit"``, set when the maximum landed on the first or last bin of the
@@ -69,8 +68,8 @@ def peak_frequency(
     smoothing_hz : float, default 1.0
         Width of the smoothing window in Hz. Zero disables smoothing.
     min_prominence : float, default 0.1
-        Minimum height above the band median, in log10 units, for the maximum to
-        be reported as a peak. Zero disables the centre-of-gravity fallback.
+        Minimum topographic prominence in log10 power. Zero selects the bare
+        in-band argmax, which may be an edge rather than a local peak.
     interpolate : bool, default True
         Refine the result by parabolic interpolation through the maximum and its
         neighbours, so it is not quantized to the frequency grid.
@@ -86,12 +85,12 @@ def peak_frequency(
     Returns
     -------
     FeatureTable
-        Peak frequency in Hz, with the ``"edge_hit"`` and ``"cog_fallback"`` flags.
+        Peak frequency in Hz, with the ``"edge_hit"`` and ``"no_peak"`` flags.
     """
-    if smoothing_hz < 0.0:
-        raise ValueError(f"smoothing_hz must be >= 0, got {smoothing_hz}.")
-    if min_prominence < 0.0:
-        raise ValueError(f"min_prominence must be >= 0, got {min_prominence}.")
+    if not np.isfinite(smoothing_hz) or smoothing_hz < 0.0:
+        raise ValueError(f"smoothing_hz must be finite and >= 0, got {smoothing_hz}.")
+    if not np.isfinite(min_prominence) or min_prominence < 0.0:
+        raise ValueError(f"min_prominence must be finite and >= 0, got {min_prominence}.")
     if fit_range is not None and not aperiodic_adjusted:
         raise ValueError("fit_range applies only when aperiodic_adjusted is True.")
 
@@ -121,6 +120,7 @@ def peak_frequency(
             "aperiodic_adjusted": aperiodic_adjusted,
             "smoothing_hz": smoothing_hz,
             "min_prominence": min_prominence,
+            "peak_selection": "scipy_log_smoothed_power_prominence",
             "interpolate": interpolate,
             "fit_range": fit_range,
         },
@@ -149,7 +149,27 @@ def _smooth(
         total = np.where(selected, values * spread, 0.0).sum(axis=3)
         with np.errstate(invalid="ignore", divide="ignore"):
             out[..., index] = np.where(count > 0, total / count, np.nan)
-    return out
+    return np.where(finite, out, np.nan)
+
+
+def _prominent_indices(
+    power: npt.NDArray[np.float64],
+    log_power: npt.NDArray[np.float64],
+    min_prominence: float,
+) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.bool_]]:
+    indices = np.zeros(power.shape[:3], dtype=int)
+    found = np.zeros(power.shape[:3], dtype=bool)
+    for cell in np.ndindex(power.shape[:3]):
+        finite = np.isfinite(log_power[cell])
+        boundaries = np.flatnonzero(np.diff(np.r_[False, finite, False]))
+        candidates = []
+        for start, stop in boundaries.reshape(-1, 2):
+            peaks, _ = find_peaks(log_power[cell][start:stop], prominence=min_prominence)
+            candidates.extend((start + peaks).tolist())
+        if candidates:
+            indices[cell] = candidates[int(np.argmax(power[cell][candidates]))]
+            found[cell] = True
+    return indices, found
 
 
 def _find_peak(
@@ -160,17 +180,19 @@ def _find_peak(
     min_prominence: float,
     interpolate: bool,
 ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
+    del weights
     finite = np.isfinite(data)
-    usable = finite.any(axis=3)
+    usable = (finite & (data > 0.0)).any(axis=3)
     present = np.where(finite, data, np.nan)
 
     power = _smooth(present, freqs, smoothing_hz)
-    # np.fmax skips the NaN of a missing bin, so an all-missing cell leaves a NaN peak.
-    floor = power_floor(np.fmax.reduce(present, axis=3, keepdims=True))
-    residual = _smooth(np.log10(np.maximum(present, floor)), freqs, smoothing_hz)
-
     filled = np.where(np.isfinite(power), power, -np.inf)
     index = np.argmax(filled, axis=3)
+    if min_prominence > 0.0:
+        floor = power_floor(np.fmax.reduce(power, axis=3, keepdims=True))
+        log_power = np.log10(np.maximum(power, floor))
+        index, found = _prominent_indices(power, log_power, min_prominence)
+        usable &= found
 
     last = freqs.size - 1
     interior = (index > 0) & (index < last)
@@ -191,23 +213,9 @@ def _find_peak(
         delta = np.where(np.isfinite(delta), np.clip(delta, -left_step / 2, right_step / 2), 0.0)
         peak = peak + np.where(interior, delta, 0.0)
 
-    use_cog = np.zeros(usable.shape, dtype=bool)
-    if min_prominence > 0.0:
-        with warnings.catch_warnings():
-            # A cell with no finite bin is an all-NaN slice by design.
-            warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
-            floor = np.nanmedian(residual, axis=3)
-        prominence = _at(residual, index) - floor
-        use_cog = usable & np.isfinite(prominence) & (prominence < min_prominence)
-
-    if bool(use_cog.any()):
-        centroid, _ = _centroid_kernel(power, freqs, weights)
-        use_cog &= np.isfinite(centroid)
-        peak = np.where(use_cog, centroid, peak)
-
     return (
         np.where(usable, peak, np.nan),
-        {"edge_hit": usable & ~interior & ~use_cog, "cog_fallback": use_cog},
+        {"edge_hit": usable & ~interior, "no_peak": ~usable},
     )
 
 

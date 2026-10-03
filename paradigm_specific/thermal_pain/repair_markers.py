@@ -15,11 +15,15 @@ import argparse
 import json
 import re
 import shutil
+from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import mne
 import pandas as pd
+import yaml
 
+from eegfeat.preprocessing.config import read_yaml
 from eegfeat.preprocessing.provenance import canonical_json, file_hash
 
 GENERIC = {"Stimulus/S  1": "Trig_therm/T  1", "Stimulus/S  2": "Volume/V  1"}
@@ -34,15 +38,33 @@ def marker_lines(path: Path) -> list[str]:
     ]
 
 
+def count_generic_task_markers(markers: list[str]) -> Counter[str]:
+    names = {named: generic for generic, named in GENERIC.items()}
+    events = []
+    for marker in markers:
+        kind, description, *geometry = marker.split(",")
+        label = f"{kind}/{description}"
+        if label in names:
+            events.append(",".join([*names[label].split("/", 1), *geometry]))
+    return Counter(events)
+
+
 def splice_markers(fixed: Path, old: Path) -> None:
-    # The generic file holds the same events at the same samples; only the names were lost.
+    # Codes, counts and geometry must agree before restoring the lost task labels.
     named = marker_lines(fixed)
-    positions = {
-        line.split(",")[2] for line in named if line.split(",")[0] in ("Volume", "Trig_therm")
-    }
-    generic = {line.split(",")[2] for line in marker_lines(old)}
-    if generic != positions:
-        raise ValueError(f"{old}: marker positions differ from {fixed}; not the same recording")
+    previous = marker_lines(old)
+    old_segments = Counter(marker for marker in previous if marker.startswith("New Segment,"))
+    new_segments = Counter(marker for marker in named if marker.startswith("New Segment,"))
+    if old_segments != new_segments:
+        raise ValueError(
+            f"{old}: New Segment counts, positions, durations, channels or timestamps "
+            f"differ from {fixed}"
+        )
+    generic = Counter(marker for marker in previous if not marker.startswith("New Segment,"))
+    if generic != count_generic_task_markers(named):
+        raise ValueError(
+            f"{old}: marker codes, counts, positions, durations or channels differ from {fixed}"
+        )
     kept = [
         line for line in old.read_text(encoding="utf-8").splitlines() if not line.startswith("Mk")
     ]
@@ -51,26 +73,41 @@ def splice_markers(fixed: Path, old: Path) -> None:
 
 
 def rename(text: str) -> str:
-    for generic, named in GENERIC.items():
-        text = text.replace(generic, named)
-    return text
+    return GENERIC.get(text, text)
+
+
+def rename_labels(value: Any) -> Any:
+    if isinstance(value, str):
+        return rename(value)
+    if isinstance(value, list):
+        return [rename_labels(item) for item in value]
+    if isinstance(value, dict):
+        renamed = {}
+        for name, item in value.items():
+            key = rename(name) if isinstance(name, str) else name
+            if key in renamed:
+                raise ValueError(f"Marker labels collide after renaming: {key!r}")
+            renamed[key] = rename_labels(item)
+        return renamed
+    return value
 
 
 def repair_bundle(manifest_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text())
+    manifest["provenance"] = rename_labels(manifest["provenance"])
     stem = manifest_path.name.removesuffix("_preprocessing.json")
     folder = manifest_path.parent
     epochs_file = folder / f"{stem}_epo.fif"
-    epochs = mne.read_epochs(epochs_file, preload=True, verbose=False)
-    epochs.event_id = {rename(name): code for name, code in epochs.event_id.items()}
-    epochs.save(epochs_file, overwrite=True, fmt="double", verbose=False)
+    epochs = mne.read_epochs(epochs_file, preload=True, proj=False, verbose=False)
+    epochs.event_id = rename_labels(epochs.event_id)
     ledger = folder / f"{stem}_events.tsv"
     frame = pd.read_csv(ledger, sep="\t")
     frame["label"] = frame["label"].map(rename)
-    frame.to_csv(ledger, sep="\t", index=False)
     recipe = folder / f"{stem}_recipe.yaml"
-    recipe.write_text(rename(recipe.read_text()))
-    manifest["provenance"] = json.loads(rename(json.dumps(manifest["provenance"])))
+    settings = rename_labels(read_yaml(recipe))
+    epochs.save(epochs_file, overwrite=True, fmt="double", verbose=False)
+    frame.to_csv(ledger, sep="\t", index=False)
+    recipe.write_text(yaml.safe_dump(settings, sort_keys=False))
     for name in manifest["files"]:
         manifest["files"][name] = file_hash(folder / name)
     manifest_path.write_text(canonical_json(manifest) + "\n")

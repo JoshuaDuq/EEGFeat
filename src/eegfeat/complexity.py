@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping, Sequence
 from numbers import Integral, Real
 from typing import Literal
@@ -214,7 +213,7 @@ def higuchi_fractal_dimension(
     windows : sequence of Window
         Analysis windows.
     k_max : int, default 10
-        Largest stride. The window needs more than ``k_max`` samples, and the
+        Largest stride. The window needs at least ``2 * k_max`` samples, and the
         estimate settles as ``k_max`` grows; 10 is the common choice.
     groups : mapping of str to sequence of str, optional
         ROI name to member channels. None gives one column per channel.
@@ -264,7 +263,7 @@ def _higuchi(x: npt.NDArray[np.float64], k_max: int) -> float:
     n = values.size
     # A gap would shorten one sub-curve and not the others, tilting the fit; the
     # measure is about how length scales, so a partial curve is not comparable.
-    if n <= k_max or not np.isfinite(values).all():
+    if n < 2 * k_max or not np.isfinite(values).all():
         return float("nan")
 
     lengths = np.empty(k_max, dtype=float)
@@ -272,14 +271,11 @@ def _higuchi(x: npt.NDArray[np.float64], k_max: int) -> float:
         per_start = np.empty(k, dtype=float)
         for m in range(k):
             sub = values[m::k]
-            if sub.size < 2:
-                per_start[m] = np.nan
-                continue
             steps = int((n - m - 1) // k)
             # (n - 1) / (steps * k) restores the scale the stride removed, and the
             # remaining 1/k makes lengths at different strides comparable.
             per_start[m] = np.abs(np.diff(sub)).sum() * (n - 1) / (steps * k * k)
-        lengths[k - 1] = np.nanmean(per_start)
+        lengths[k - 1] = per_start.mean()
 
     usable = np.isfinite(lengths) & (lengths > 0.0)
     if int(usable.sum()) < 2:
@@ -329,13 +325,11 @@ def _coarse_grain(x: npt.NDArray[np.float64], scale: int) -> npt.NDArray[np.floa
 def _tolerance(x: npt.NDArray[np.float64], r: float) -> float:
     finite = np.asarray(x, dtype=float)
     finite = finite[np.isfinite(finite)]
-    deviation = float(np.std(finite))
-    tolerance = r * deviation
-    if not np.isfinite(tolerance) or tolerance <= 0.0:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", "Degrees of freedom <= 0", RuntimeWarning)
-            tolerance = max(float(np.finfo(float).eps), r * float(np.nanstd(finite)))
-    return tolerance
+    if finite.size == 0:
+        return float("nan")
+    if np.ptp(finite) == 0.0:
+        return 0.0
+    return r * float(np.std(finite))
 
 
 def _sample_entropy(
@@ -350,6 +344,8 @@ def _sample_entropy(
         return float("nan")
 
     threshold = _tolerance(values, r) if tolerance is None else tolerance
+    if not np.isfinite(threshold) or threshold <= 0.0:
+        return float("nan")
     candidates = sliding_window_view(values, order + 1)
     templates = candidates[np.isfinite(candidates).all(axis=1)]
     n_templates = templates.shape[0]

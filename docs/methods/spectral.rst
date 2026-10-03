@@ -169,8 +169,9 @@ Coefficients outside this interval are excluded before the window mean.
 Peak Frequency
 --------------
 
-``peak_frequency`` returns the frequency of the largest in-band power, after
-three corrections to the argmax. Each can be turned off.
+``peak_frequency`` returns the strongest qualifying local maximum within a
+band, after aperiodic adjustment and smoothing. Setting ``min_prominence=0``
+selects the bare in-band argmax instead.
 
 Aperiodic Adjustment
 ~~~~~~~~~~~~~~~~~~~~
@@ -204,13 +205,23 @@ band edges.
 Prominence Guard
 ~~~~~~~~~~~~~~~~
 
-If the maximum is less than ``min_prominence`` above the band median, in
-:math:`\log_{10}` units, the reported frequency is the centre of gravity
-:math:`\sum f P(f) \Delta f / \sum P(f) \Delta f` and ``cog_fallback`` is set.
+SciPy's ``find_peaks`` selects local maxima whose topographic prominence in
+:math:`\log_{10}` power reaches ``min_prominence``. Prominence is the height
+above the higher of the two surrounding bases, rather than height above the
+band median. The strongest qualifying peak is retained.
 
-- **Power used**: :math:`P` here is the smoothed (and, if enabled,
-  aperiodic-adjusted) power. Trapezoidal bin widths :math:`\Delta f` account
-  for the frequency spacing, including on logarithmic grids.
+- **Power used**: take the log of the smoothed and, if enabled,
+  aperiodic-adjusted power. Selection and interpolation use the same spectrum.
+- **Missing values**: the search runs separately on contiguous finite spans;
+  missing bins cannot provide a peak's bases. Smoothing preserves missing bins.
+- **No peak**: when none qualifies, the frequency is NaN and ``no_peak`` is set.
+  A zero-power spectrum has no peak even with the guard disabled. A centroid is
+  available separately from ``spectral_centroid``.
+- **Reference**: `SciPy peak prominence
+  <https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.peak_prominences.html>`_
+  defines this estimator. Reporting NaN for an absent oscillation also follows
+  `FOOOF band-peak extraction
+  <https://fooof-tools.github.io/fooof/generated/fooof.analysis.get_band_peak_fg.html>`_.
 
 Parabolic Interpolation
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -238,8 +249,8 @@ and its two neighbours, using their actual frequency coordinates. Let
 - **Degenerate cases**: a zero denominator, or a non-finite :math:`\delta`, is
   treated as :math:`\delta = 0`.
 - **Clipping**: :math:`\delta` is clipped to :math:`[-h_L/2, h_R/2]` in Hz.
-- **Flags**: a maximum on the first or last bin of the band is not interpolated,
-  and ``edge_hit`` is set unless the centre-of-gravity fallback applies.
+- **Flags**: with the prominence guard disabled, a maximum on the first or last
+  bin is not interpolated and ``edge_hit`` is set.
 - **Stored resolution**: every column also stores ``freq_resolution_hz``, the
   median in-band bin spacing.
 

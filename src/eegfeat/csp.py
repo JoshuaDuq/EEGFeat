@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 import numpy as np
 import numpy.typing as npt
 from scipy.linalg import eigh
 
+from eegfeat._expand import window_mask
 from eegfeat._validation import blank_non_finite
 from eegfeat.signal import Signal
 from eegfeat.spectra import Window
@@ -70,22 +71,20 @@ def _covariance(epochs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     algorithm's step for removing between-subject and between-trial magnitude
     differences, so one loud epoch cannot decide the filters on its own.
     """
+    if not np.isfinite(epochs).all():
+        raise ValueError("CSP fitting requires finite data in every selected training epoch.")
     n_channels = epochs.shape[1]
     total = np.zeros((n_channels, n_channels), dtype=float)
-    used = 0
     for epoch in epochs:
-        if not np.isfinite(epoch).all():
-            continue
+        if not np.any(np.ptp(epoch, axis=-1) > 0.0):
+            raise ValueError("CSP fitting requires nonzero temporal variance in every epoch.")
         centred = epoch - epoch.mean(axis=-1, keepdims=True)
         covariance = centred @ centred.T
         trace = np.trace(covariance)
         if not np.isfinite(trace) or trace <= 0.0:
-            continue
+            raise ValueError("CSP fitting requires finite positive covariance traces.")
         total += covariance / trace
-        used += 1
-    if used == 0:
-        raise ValueError("no epoch in this class had finite data with non-zero variance.")
-    return total / used
+    return total / int(epochs.shape[0])
 
 
 def _shrink_covariance(
@@ -168,6 +167,8 @@ class CommonSpatialPattern:
                 f"labels must have one entry per epoch; got {y.shape} for "
                 f"{signal.data.shape[0]} epochs."
             )
+        if not np.issubdtype(y.dtype, np.integer):
+            raise ValueError("labels must be integers; class identities cannot be rounded.")
         if isinstance(n_components, bool) or not isinstance(n_components, (int, np.integer)):
             raise ValueError(f"n_components must be an even integer, got {n_components!r}.")
         if n_components < 2 or n_components % 2:
@@ -314,8 +315,8 @@ def csp_features(
         Objects with ``train`` and ``test`` index arrays, such as
         :class:`~eegfeat.model.Fold`, or plain ``(train, test)`` pairs.
     window : Window, optional
-        Recorded on every column so the table says what it covers. The signal is
-        used whole; slice it before calling if you want less.
+        Restrict covariance fitting and held-out projected variance to these
+        time samples. None uses the complete signal.
     n_components : int, default 4
         Number of filters, even.
     regularization : float, default 0.0
@@ -335,6 +336,20 @@ def csp_features(
     if not folds:
         raise ValueError(
             "csp_features requires at least one fold; features cannot be cross-fitted."
+        )
+    if window is not None:
+        within = window_mask(signal.times, window)
+        signal = replace(
+            signal,
+            data=signal.data[..., within],
+            times=signal.times[within],
+            coverage=signal.coverage[..., within],
+            computation=ComputationSpec.create(
+                "crop",
+                tmin=window.tmin,
+                tmax=window.tmax,
+                input_computation=signal.computation.record(),
+            ),
         )
 
     values = np.full((n_epochs, n_components), np.nan)

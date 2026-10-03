@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
-from scipy.integrate import trapezoid
-from scipy.signal import welch
+from scipy.signal import find_peaks, welch
 
 from eegfeat.bands import Band
 from eegfeat.descriptors import (
@@ -276,19 +275,19 @@ def test_the_prominence_guard_does_not_depend_on_the_power_unit(scale: float) ->
     # absolute floor, the log spectrum went flat, and every cell took the fallback.
     power = scale * 10.0 * WIDE**-1.0 * (1.0 + 2.0 * np.exp(-0.5 * ((WIDE - 10.5) / 0.6) ** 2))
     table = peak_frequency(_wide(power), band=ALPHA, aperiodic_adjusted=False, include_global=False)
-    assert not table.flags["cog_fallback"].any()
+    assert not table.flags["no_peak"].any()
     assert table.values.item() == pytest.approx(10.5, abs=0.1)
 
 
-def test_a_spectrum_with_no_oscillation_falls_back_to_centre_of_gravity() -> None:
+def test_a_spectrum_with_no_oscillation_has_no_peak() -> None:
     table = peak_frequency(_wide(10.0 * WIDE**-2.2), band=ALPHA, include_global=False)
-    assert table.flags["cog_fallback"].all()
+    assert table.flags["no_peak"].all()
     assert not table.flags["edge_hit"].any()
-    assert 8.0 < table.values.item() < 13.0
+    assert np.isnan(table.values.item())
 
 
 @pytest.mark.parametrize("freqs", [np.array([1.0, 2.0, 10.0]), np.geomspace(1.0, 10.0, 30)])
-def test_centre_of_gravity_integrates_density_on_a_nonuniform_grid(freqs) -> None:
+def test_a_flat_spectrum_on_a_nonuniform_grid_has_no_peak(freqs) -> None:
     power = np.ones_like(freqs)
     table = peak_frequency(
         _spectra(power, freqs),
@@ -297,16 +296,16 @@ def test_centre_of_gravity_integrates_density_on_a_nonuniform_grid(freqs) -> Non
         smoothing_hz=0.0,
         include_global=False,
     )
-    expected = trapezoid(freqs * power, freqs) / trapezoid(power, freqs)
-    assert table.flags["cog_fallback"].item()
-    assert table.values.item() == pytest.approx(expected)
+    assert table.flags["no_peak"].item()
+    assert np.isnan(table.values.item())
 
 
-def test_disabling_the_prominence_guard_disables_the_fallback() -> None:
+def test_disabling_the_prominence_guard_returns_the_flagged_argmax() -> None:
     table = peak_frequency(
         _wide(10.0 * WIDE**-2.2), band=ALPHA, min_prominence=0.0, include_global=False
     )
-    assert not table.flags["cog_fallback"].any()
+    assert not table.flags["no_peak"].any()
+    assert np.isfinite(table.values).all()
 
 
 def test_the_measure_name_records_whether_the_adjustment_ran() -> None:
@@ -344,7 +343,104 @@ def test_fit_range_without_the_adjustment_raises() -> None:
         )
 
 
-@pytest.mark.parametrize(("key", "value"), [("smoothing_hz", -1.0), ("min_prominence", -0.1)])
-def test_negative_tuning_values_raise(key: str, value: float) -> None:
+@pytest.mark.parametrize("key", ["smoothing_hz", "min_prominence"])
+@pytest.mark.parametrize("value", [-1.0, np.nan, np.inf, -np.inf])
+def test_invalid_tuning_values_raise(key: str, value: float) -> None:
     with pytest.raises(ValueError, match=key):
         peak_frequency(_wide(_alpha_on_a_slope()), band=ALPHA, include_global=False, **{key: value})
+
+
+def test_peak_prominence_matches_scipy_on_log_power() -> None:
+    freqs = np.arange(8.0, 13.0, 0.25)
+    log_power = 3.0 - 0.5 * (freqs - 8.0)
+    log_power[8] += 0.4
+    power = 10.0**log_power
+    indices, _ = find_peaks(log_power, prominence=0.2)
+    expected = freqs[indices[np.argmax(power[indices])]]
+    table = peak_frequency(
+        _spectra(power, freqs),
+        band=ALPHA,
+        aperiodic_adjusted=False,
+        smoothing_hz=0.0,
+        min_prominence=0.2,
+        interpolate=False,
+        include_global=False,
+    )
+    assert table.values.item() == expected
+
+
+@pytest.mark.parametrize("min_prominence", [0.0, 0.1])
+def test_zero_power_has_no_peak(min_prominence: float) -> None:
+    table = peak_frequency(
+        _spectra(np.zeros(UNIFORM.size), UNIFORM),
+        band=ALPHA,
+        aperiodic_adjusted=False,
+        min_prominence=min_prominence,
+        include_global=False,
+    )
+    assert np.isnan(table.values.item())
+    assert table.flags["no_peak"].item()
+
+
+def test_smoothing_preserves_a_missing_frequency_bin() -> None:
+    power = np.ones((1, 1, 1, UNIFORM.size))
+    power[..., 5] = np.nan
+    smoothed = _smooth(power, UNIFORM, smoothing_hz=1.0)
+    assert np.isnan(smoothed[..., 5]).all()
+    np.testing.assert_allclose(smoothed[..., np.arange(UNIFORM.size) != 5], 1.0)
+
+
+@pytest.mark.parametrize("gap", [np.nan, np.inf])
+def test_missing_bins_do_not_supply_peak_prominence(gap: float) -> None:
+    freqs = np.arange(8.0, 13.0, 0.5)
+    power = np.array([1.0, 2.0, gap, 4.0, 3.0, 2.0, 1.0, 1.0, 1.0, 1.0])
+    table = peak_frequency(
+        _spectra(power, freqs),
+        band=ALPHA,
+        aperiodic_adjusted=False,
+        smoothing_hz=0.0,
+        include_global=False,
+    )
+    assert np.isnan(table.values.item())
+    assert table.flags["no_peak"].item()
+
+
+def test_smoothing_and_prominence_use_the_same_power_spectrum() -> None:
+    freqs = np.arange(8.0, 13.0, 0.25)
+    power = np.array(
+        [
+            16.0,
+            5.0,
+            3.0,
+            6.0,
+            8.0,
+            16.0,
+            9.0,
+            2.0,
+            7.0,
+            12.0,
+            16.0,
+            14.0,
+            19.0,
+            4.0,
+            17.0,
+            2.0,
+            11.0,
+            6.0,
+            4.0,
+            13.0,
+        ]
+    )
+    # Independent trapezoid smoothing for interior bins, over a 1 Hz window.
+    smoothed = np.convolve(power, [0.125, 0.25, 0.25, 0.25, 0.125], mode="valid")
+    candidates, _ = find_peaks(np.log10(smoothed), prominence=0.1)
+    expected = freqs[2:-2][candidates[np.argmax(smoothed[candidates])]]
+    table = peak_frequency(
+        _spectra(power, freqs),
+        band=ALPHA,
+        aperiodic_adjusted=False,
+        smoothing_hz=1.0,
+        interpolate=False,
+        include_global=False,
+    )
+    assert table.values.item() == expected

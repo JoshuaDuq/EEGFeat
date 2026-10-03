@@ -127,16 +127,17 @@ To model a subset of the epochs, such as the trials that remain after
 exclusions, cut the table first.
 
 - :meth:`~eegfeat.FeatureTable.take` cuts the table to the given rows.
-- :meth:`~eegfeat.FeatureTable.drop_missing` keeps the columns missing in at
-  most a given fraction of rows.
-- Neither uses a target, so both can run before cross-validation. Each fold
-  still applies its own missingness limit.
+- Choose excluded trials before evaluation using the study's quality criteria.
+- Keep missingness-based feature selection inside the training folds. Calling
+  :meth:`~eegfeat.FeatureTable.drop_missing` on the full cohort uses held-out
+  observations to select columns even though it does not use the target.
+  The modeling pipeline fits its missingness limit on each training split.
 
 .. code-block:: python
 
    position = {row_id: i for i, row_id in enumerate(dataset.table.row_ids)}
    keys = zip(kept["recording"], kept["epoch"], kept["event"])
-   table = dataset.table.take([position[key] for key in keys]).drop_missing(0.2)
+   table = dataset.table.take([position[key] for key in keys])
 
 Selecting features and covariates
 ---------------------------------
@@ -396,7 +397,11 @@ not.
 - ``bootstrap_mean_ci`` is a 95% percentile interval of the mean. Pass
   Fisher-:math:`z` values, not correlations.
 - ``paired_signflip_p_value`` is a two-sided test of zero mean on paired
-  differences and returns :math:`(b + 1)/(B + 1)`.
+  differences and returns :math:`(b + 1)/(B + 1)`. Finite-sample validity also
+  requires each subject's null difference to be symmetric about zero;
+  independence and zero mean alone do not establish this.
+- Both functions require finite values for every included subject. Exclude
+  subjects using pre-specified study criteria before constructing the vector.
 
 Permutation nulls
 -----------------
@@ -422,6 +427,13 @@ Schemes
   (default 8).
 - A draw that fails to fit raises. Failed draws are not dropped from the null.
 
+These schemes specify rearrangements, not proof of their validity. Under the
+null, the joint label or residual distribution must be invariant under the
+chosen rearrangements. Run labels alone do not make temporally dependent
+trials exchangeable. Circular shifts require invariance under cyclic shifts
+of the retained, ordered trial sequence; ordinary stationarity alone does not
+establish that condition.
+
 Tail
 ~~~~
 
@@ -432,8 +444,9 @@ Tail
 - Left at the default, a strong effect on an error metric returns
   :math:`p \approx 1`, and only a model that scores worse than the permuted
   refits returns a small :math:`p`.
-- A model at chance gives a :math:`p` spread uniformly on :math:`(0, 1]` under
-  either tail.
+- The smallest attainable Monte Carlo :math:`p` is
+  :math:`1/(B + 1)` for :math:`B` draws. Ties count as at least as extreme;
+  the null :math:`p` distribution can be conservative and discrete.
 - The direction is an argument. It is not inferred from ``metric_fn``.
 
 Nuisance covariates
@@ -460,15 +473,19 @@ A ridge pipeline fits permutation targets together when all of these hold:
   ``ridge_pipeline``, including any ``ColumnTransformer`` remainder;
 - it is tuned on the subject-level ``r`` and scored with it.
 - its regressor is unconstrained ``Ridge`` with an intercept and an ``auto``,
-  ``cholesky`` or ``svd`` solver; only the scalar penalty is tuned.
+  ``cholesky`` or ``svd`` solver; only the scalar penalty is tuned, and every
+  candidate penalty is finite and strictly positive.
 
 Each fold and inner split transforms its features once. Its configured
 `scikit-learn Ridge solver
 <https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html>`_
 then fits batches of permutation targets as multiple outputs for each penalty.
 Target residualization and the Freedman-Lane rebuild are linear in the target.
-The resulting null matches individual refits to rounding error, including
-predictors with very small variance.
+The resulting null matches individual refits up to numerical roundoff. Very
+small penalties and nearly dependent predictors amplify that roundoff.
+``alpha=0`` raises for batched inference: with dependent predictors, fitting
+multiple targets together can change both the null statistic and the p-value.
+This restriction does not change ordinary cross-fitting.
 
 - **Full refitting**: other pipelines, custom container subclasses, a
   target-driven step such as ``feature_selection_percentile``, a ``metric_fn``
@@ -507,10 +524,13 @@ target within subjects.
   independent.
 - ``p_fwer``: flipping the sign of a subject's :math:`z` for every feature at
   once keeps the dependence between features. The largest :math:`|t|` over those
-  flips gives ``p_fwer``, controlled over the whole family.
+  flips gives ``p_fwer``. Its finite-sample family-wise error guarantee assumes
+  independent subject vectors with a joint null distribution invariant under
+  sign reversal. Independence alone does not establish that symmetry.
 - ``q``: the Benjamini-Hochberg adjustment of ``p``.
 - ``residualize_on``: removes each subject's own nuisance design from both sides
   first.
+- Every trial needs a subject label; missing labels raise.
 
 Statistics use centered sums of squares so identical or nearly identical
 subject effects do not produce negative variances through numerical

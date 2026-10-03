@@ -209,6 +209,23 @@ def test_shape_and_axis_mismatches_raise() -> None:
         Spectra(**{**good, "support": np.ones((2, 2, 1, 3))})
 
 
+def test_repeated_window_names_cannot_make_baseline_selection_ambiguous() -> None:
+    data = np.ones((1, 1, 2, 3))
+    with pytest.raises(ValueError, match="window names.*unique"):
+        Spectra(
+            data=data,
+            freqs=np.array([8.0, 10.0, 13.0]),
+            ch_names=("C3",),
+            windows=(Window("baseline", -1.0, -0.5), Window("baseline", -0.5, 0.0)),
+            coverage=np.ones_like(data),
+            source="test",
+            representation="psd",
+            support=np.ones_like(data),
+            row_ids=(("test", 0, "event"),),
+            computation=ComputationSpec.create("test"),
+        )
+
+
 @pytest.mark.parametrize("field", ["coverage", "support"])
 @pytest.mark.parametrize("invalid", [np.nan, np.inf, -0.1, 1.1])
 def test_spectral_fractions_must_be_finite_and_bounded(field: str, invalid: float) -> None:

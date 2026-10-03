@@ -77,6 +77,17 @@ def test_a_real_valued_input_raises_rather_than_silently_losing_phase() -> None:
         )
 
 
+def test_a_broadband_signal_cannot_discard_complex_data() -> None:
+    with pytest.raises(TypeError, match="real"):
+        Signal.from_arrays(
+            data=np.ones((1, 2, 4), dtype=complex) * (1.0 + 2.0j),
+            times=np.arange(4) / 100.0,
+            ch_names=("C3", "C4"),
+            sfreq=100.0,
+            row_ids=(("test", 0, "event"),),
+        )
+
+
 def test_non_positive_sfreq_raises() -> None:
     with pytest.raises(ValueError, match="sfreq"):
         BandSignal.from_arrays(
@@ -99,6 +110,24 @@ def _epochs(freq_hz: float, n_epochs: int = 3, sfreq: float = 200.0, dur: float 
     data = np.tile(wave, (n_epochs, 2, 1))
     info = mne.create_info(["C3", "C4"], sfreq, "eeg")
     return mne.EpochsArray(data, info, tmin=-1.0, verbose="ERROR")
+
+
+@pytest.mark.parametrize("container", [Signal, BandSignal])
+def test_epoch_constructors_reject_complex_samples(container) -> None:
+    sfreq = 200.0
+    times = np.arange(800) / sfreq
+    analytic = np.exp(2j * np.pi * 10.0 * times)[None, None, :]
+    epochs = mne.EpochsArray(analytic, mne.create_info(["C3"], sfreq, "eeg"), verbose=False)
+    arguments = {"band": ALPHA} if container is BandSignal else {}
+    with pytest.raises(TypeError, match="real"):
+        container.from_epochs(epochs, recording="test", **arguments)
+
+
+@pytest.mark.parametrize("parameter", ["pad_sec", "pad_cycles"])
+@pytest.mark.parametrize("value", [-1.0, np.nan, np.inf, -np.inf])
+def test_invalid_padding_settings_cannot_be_silently_ignored(parameter, value) -> None:
+    with pytest.raises(ValueError, match=parameter):
+        BandSignal.from_epochs(_epochs(10.0), ALPHA, recording="test", **{parameter: value})
 
 
 def test_a_sine_inside_the_band_yields_a_flat_envelope_at_its_amplitude() -> None:

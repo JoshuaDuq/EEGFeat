@@ -86,6 +86,15 @@ def test_a_window_shorter_than_k_max_is_withheld() -> None:
     assert np.isnan(_run(np.random.default_rng(0).normal(size=8), k_max=10))
 
 
+@pytest.mark.parametrize("n_times", [11, 19])
+def test_every_higuchi_subcurve_needs_at_least_one_difference(n_times) -> None:
+    assert np.isnan(_run(np.arange(n_times, dtype=float), k_max=10))
+
+
+def test_two_k_max_samples_support_every_subcurve() -> None:
+    assert _run(np.arange(20, dtype=float), k_max=10) == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize("k_max", [0, 1, -3, 2.5, True])
 def test_an_unusable_k_max_raises(k_max) -> None:
     with pytest.raises(ValueError, match="k_max"):

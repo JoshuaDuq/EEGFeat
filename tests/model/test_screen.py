@@ -9,6 +9,15 @@ from eegfeat.model.screen import univariate_screen
 GROUPS = np.repeat([f"s{i:02d}" for i in range(12)], 30).astype(object)
 
 
+@pytest.mark.parametrize("missing", [None, np.nan])
+def test_screen_requires_a_subject_label_for_every_trial(missing) -> None:
+    target = np.tile(np.arange(4.0), 4)
+    groups = np.repeat(np.arange(4), 4).astype(object)
+    groups[-4:] = missing
+    with pytest.raises(ValueError, match="subject label for every trial"):
+        univariate_screen(target[:, None], target, groups, n_flips=31, seed=0)
+
+
 @pytest.mark.parametrize("n_subjects", [5, 10, 11])
 @pytest.mark.parametrize("direction", [-1.0, 1.0])
 def test_identical_subject_effects_have_valid_significance(n_subjects, direction) -> None:

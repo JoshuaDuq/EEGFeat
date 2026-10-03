@@ -96,7 +96,7 @@ parts.
    constant across rows.
 
 ``flags``
-   Per-cell boolean annotations, for example ``cog_fallback``, ``edge_hit``,
+   Per-cell boolean annotations, for example ``no_peak``, ``edge_hit``,
    and ``aperiodic_fit_failed``. A fact that varies by row belongs here.
 
 ``row_ids`` / ``row_labels``

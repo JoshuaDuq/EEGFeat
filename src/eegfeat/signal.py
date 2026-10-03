@@ -106,6 +106,8 @@ class Signal:
     """
 
     def __post_init__(self) -> None:
+        if np.iscomplexobj(self.data):
+            raise TypeError("Signal data must be real; use BandSignal for analytic signals.")
         _validate_series(self.data, self.times, self.ch_names, self.coverage, self.sfreq, "data")
         _validate_row_ids(self.row_ids, self.n_epochs)
 
@@ -155,7 +157,7 @@ class Signal:
         Signal
         """
         selected = epochs.copy().pick(picks, exclude=exclude)
-        data = np.asarray(selected.get_data(), dtype=float)
+        data = np.asarray(selected.get_data())
         return cls(
             data=data,
             times=np.asarray(selected.times, dtype=float),
@@ -198,7 +200,10 @@ class Signal:
         -------
         Signal
         """
-        array = np.asarray(data, dtype=float)
+        array = np.asarray(data)
+        if np.iscomplexobj(array):
+            raise TypeError("Signal data must be real; use BandSignal for analytic signals.")
+        array = np.asarray(array, dtype=float)
         return cls(
             data=array,
             times=np.asarray(times, dtype=float),
@@ -444,7 +449,13 @@ class BandSignal:
             band, selected.info["highpass"], selected.info["lowpass"], source="this band signal"
         )
 
-        data = np.asarray(selected.get_data(), dtype=float)
+        data = np.asarray(selected.get_data())
+        if np.iscomplexobj(data):
+            raise TypeError(
+                "BandSignal.from_epochs requires real samples; "
+                "use BandSignal.from_arrays for analytic signals."
+            )
+        data = np.asarray(data, dtype=float)
         n_epochs, n_channels, n_times = data.shape
         flat = data.reshape(-1, n_times)
 
@@ -507,6 +518,9 @@ class BandSignal:
 def _padding_samples(
     pad_sec: float, pad_cycles: float, fmin: float, sfreq: float, n_times: int
 ) -> int:
+    for name, value in (("pad_sec", pad_sec), ("pad_cycles", pad_cycles)):
+        if not np.isfinite(value) or value < 0.0:
+            raise ValueError(f"{name} must be finite and non-negative, got {value}.")
     cycles_sec = pad_cycles / fmin if np.isfinite(fmin) and fmin > 0 and pad_cycles > 0 else 0.0
     seconds = max(pad_sec, cycles_sec)
     if not (np.isfinite(seconds) and seconds > 0) or n_times <= 1:

@@ -23,8 +23,8 @@ Querying a table
    # Fraction of finite input behind each cell. Not an artifact score.
    valid_fractions = spectral_features.coverage
 
-   if "cog_fallback" in spectral_features.flags:
-       fell_back = spectral_features.flags["cog_fallback"]
+   if "no_peak" in spectral_features.flags:
+       absent_peaks = spectral_features.flags["no_peak"]
 
    df = spectral_features.to_dataframe()
    print(df.head())

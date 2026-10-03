@@ -188,6 +188,40 @@ def test_groups_make_rois_the_nodes() -> None:
     assert [m.space for m in table.meta] == ["front-back"]
 
 
+@pytest.mark.parametrize("amplitude", [1.0, 0.1, 1e-6])
+@pytest.mark.parametrize("orthogonalize", ["pairwise", None])
+def test_aec_withholds_a_constant_envelope(amplitude, orthogonalize) -> None:
+    times = np.arange(401) / SFREQ
+    varying = (1.0 + times) * 1j
+    signal = BandSignal.from_arrays(
+        analytic=np.stack([np.full(times.size, amplitude, dtype=complex), varying])[None],
+        times=times,
+        ch_names=("C3", "C4"),
+        band=ALPHA,
+        sfreq=SFREQ,
+        row_ids=(("test", 0, "event"),),
+    )
+    table = envelope_correlation([signal], windows=[WINDOW], orthogonalize=orthogonalize)
+    assert np.isnan(table.values).all()
+    assert (table.coverage == 0.0).all()
+
+
+@pytest.mark.parametrize("method", ["aec", "coh"])
+def test_connectivity_rejects_duplicated_roi_members(method) -> None:
+    groups = {"front": ["C3", "C3", "C4"], "back": ["P3", "P4"]}
+    with pytest.raises(ValueError, match="duplicate"):
+        if method == "aec":
+            envelope_correlation([_shared_driver(1.0)], windows=[WINDOW], groups=groups)
+        else:
+            ef.spectral_connectivity(
+                _coupled_broadband(),
+                method=method,
+                bands=[ALPHA],
+                windows=[WINDOW],
+                groups=groups,
+            )
+
+
 @pytest.mark.parametrize("method", ["aec", "coh"])
 def test_roi_identity_records_members_independent_of_order(method) -> None:
     signal = _shared_driver(1.0)
@@ -654,6 +688,18 @@ def test_wpli_refuses_a_band_the_estimator_returned_no_frequencies_for(monkeypat
     _estimator_returning_frequency_as_value(monkeypatch, [20.0, 21.0])
     with pytest.raises(ValueError, match="contains none of the frequencies"):
         ef.wpli(_broadband(), bands=[Band("alpha", 8.0, 13.0)], windows=[WINDOW])
+
+
+@pytest.mark.parametrize("mode", ["fourier", "multitaper"])
+def test_connectivity_does_not_truncate_a_band_above_nyquist(mode) -> None:
+    with pytest.raises(ValueError, match="Nyquist"):
+        ef.spectral_connectivity(
+            _coupled_broadband(),
+            method="coh",
+            bands=[Band("unavailable", 40.0, 60.0)],
+            windows=[WINDOW],
+            mode=mode,
+        )
 
 
 # --- spectral_connectivity --------------------------------------------------------------

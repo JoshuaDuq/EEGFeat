@@ -115,6 +115,20 @@ def test_bootstrap_mean_ci_brackets_mean() -> None:
     assert lo <= 3.0 <= hi
 
 
+@pytest.mark.parametrize("function", [bootstrap_mean_ci, paired_signflip_p_value])
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -np.inf])
+def test_inference_does_not_drop_invalid_subject_statistics(function, invalid) -> None:
+    values = np.array([0.1, 0.2, invalid])
+    with pytest.raises(ValueError, match="finite.*subject"):
+        function(values, iterations=99, seed=0)
+
+
+@pytest.mark.parametrize("function", [bootstrap_mean_ci, paired_signflip_p_value])
+def test_inference_requires_one_statistic_per_subject(function) -> None:
+    with pytest.raises(ValueError, match="1-D"):
+        function(np.array([[0.1], [0.2]]), iterations=99, seed=0)
+
+
 def test_paired_signflip_p_value_zero_differences() -> None:
     diffs = np.zeros(10)
     p = paired_signflip_p_value(diffs, iterations=100, seed=42)

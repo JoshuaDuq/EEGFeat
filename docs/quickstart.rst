@@ -49,8 +49,8 @@ normalization is rejected, because it is not a density in V²/Hz.
    ]
    power_table = ef.integrated_band_power(spectra, bands=bands, include_global=True)
 
-   # Divides out a fitted 1/f, interpolates the peak, and falls back to the
-   # centre of gravity when prominence is below min_prominence.
+   # Divides out a fitted 1/f and interpolates a qualifying local peak.
+   # Returns NaN with a no_peak flag when no peak reaches min_prominence.
    peak_table = ef.peak_frequency(spectra, band=ef.Band("alpha", 8.0, 13.0))
 
    centroid_table = ef.spectral_centroid(spectra, band=ef.Band("alpha", 8.0, 13.0))

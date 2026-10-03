@@ -4,7 +4,7 @@ Validation on Public Datasets
 .. raw:: html
 
    <p class="hero-lede">
-     The unit tests prove each formula on synthetic signals. This page answers a
+     The unit tests check each formula on synthetic signals. This page answers a
      different question: pointed at <strong>real recordings</strong> nobody tuned it on,
      does EEGFeat compute the right numbers and find what the literature says is there?
    </p>
@@ -17,6 +17,14 @@ record what they observe, so those parts cannot drift from the code.
 
 **Hand-written parts.** The sections in between are written from those results and from
 exploratory analyses the suite does not re-run.
+
+**Decoding evidence.** Held-out balanced accuracy describes performance on these
+recordings. It is not assigned a binomial p-value: overlapping training sets and
+temporally dependent EEG epochs do not establish independent Bernoulli trials.
+`Noirhomme et al. (2014)
+<https://pmc.ncbi.nlm.nih.gov/articles/PMC4053638/>`_ demonstrate why binomial tests
+can misstate the significance of cross-validated accuracy. Group inference needs
+a null procedure whose exchangeability assumptions match the study design.
 
 .. _validation-scorecard:
 
@@ -124,9 +132,9 @@ What was not found, and is not asserted
   every persistence, so the onset is a weak single-trial detector even where the group effect
   is unmistakable.
 - **Prediction intervals** from split and CV+ calibration covered 89 and 91 percent of
-  exchangeable epochs at 90 percent nominal. Conformalized quantile intervals covered 99.8
-  percent, because the 0 to 3 depth target is discrete. Coverage for a subject outside the
-  calibration set is not tested, and group-disjoint fitting does not guarantee it.
+  held-out epochs in these recordings at 90 percent nominal. Conformalized quantile intervals
+  covered 99.8 percent, because the 0 to 3 depth target is discrete. Coverage for a subject
+  outside the calibration set is not tested, and group-disjoint fitting does not guarantee it.
 - **The frontal sleep derivation** (Fpz-Cz) does not separate wake from N3 on relative
   slow-wave power, because eye and movement activity in wake put as much power below 4 Hz as
   slow waves do. The band-power, spectral-descriptor, and Hjorth checks read Pz-Oz. Sample

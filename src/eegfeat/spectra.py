@@ -206,6 +206,7 @@ class Spectra:
             raise ValueError(
                 f"windows has {len(self.windows)} entries but data has {n_windows} windows."
             )
+        validate_names(tuple(window.name for window in self.windows), "window names")
         if self.freqs.ndim != 1 or self.freqs.size != n_freqs:
             raise ValueError(
                 f"freqs must be 1-D of length {n_freqs}, got shape {self.freqs.shape}."

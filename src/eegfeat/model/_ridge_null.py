@@ -128,6 +128,11 @@ def ridge_null(
     """The statistic of every draw, one row of ``sources`` each, as permutation_test refits it."""
     scorer = cast(_SubjectRScorer, _chosen_scorer(scoring, refit))
     alphas = np.asarray(grid[penalty] if grid else [pipeline.steps[-1][1].alpha], dtype=np.float64)
+    if not np.isfinite(alphas).all() or np.any(alphas <= 0.0):
+        raise ValueError(
+            "Batched ridge permutation inference requires finite, strictly positive alpha; "
+            "unregularized fits can change when targets are fitted together."
+        )
     n_draws = sources.shape[0]
     # Draws are taken a block at a time, so memory does not grow with n_permutations.
     blocks = np.array_split(np.arange(n_draws), max(1, -(-n_draws // _DRAWS)))
