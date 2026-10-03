@@ -237,6 +237,27 @@ def test_signal_shape_mismatches_raise() -> None:
 
 
 @pytest.mark.parametrize("container", [Signal, BandSignal])
+@pytest.mark.parametrize("times", [np.arange(4) / 200.0, np.array([0.0, 0.01, 0.025, 0.03])])
+def test_time_series_reject_timestamps_inconsistent_with_sampling_rate(
+    container: type[Signal] | type[BandSignal], times: np.ndarray
+) -> None:
+    arguments = {
+        "analytic" if container is BandSignal else "data": np.ones(
+            (1, 2, 4), dtype=complex if container is BandSignal else float
+        ),
+        "times": times,
+        "ch_names": ("C3", "C4"),
+        "sfreq": 100.0,
+        "row_ids": (("test", 0, "event"),),
+    }
+    if container is BandSignal:
+        arguments["band"] = BETA
+
+    with pytest.raises(ValueError, match="uniformly spaced.*sfreq"):
+        container.from_arrays(**arguments)
+
+
+@pytest.mark.parametrize("container", [Signal, BandSignal])
 @pytest.mark.parametrize("invalid", [np.nan, np.inf, -0.1, 1.1])
 def test_time_series_coverage_must_be_a_finite_fraction(
     container: type[Signal] | type[BandSignal], invalid: float

@@ -9,7 +9,7 @@ import numpy.typing as npt
 from scipy import stats
 
 from eegfeat._expand import Kernel, expand
-from eegfeat.bands import Band
+from eegfeat.bands import Band, passband_fraction
 from eegfeat.spectra import Spectra
 from eegfeat.table import ComputationSpec, FeatureTable, concat
 
@@ -21,6 +21,16 @@ _UNITS: dict[str, str] = {
     "offset": "log10 power",
     "r_squared": "a.u.",
 }
+
+
+def _validate_fit_band(spectra: Spectra, fit_range: tuple[float, float]) -> Band:
+    band = Band("fit", *fit_range)
+    if spectra.passband is not None and passband_fraction(band, *spectra.passband) < 1.0:
+        raise ValueError(
+            f"fit_range {fit_range} must lie within the recording passband "
+            f"{spectra.passband}; filtered-out frequencies bias the aperiodic fit."
+        )
+    return band
 
 
 def aperiodic(
@@ -64,7 +74,7 @@ def aperiodic(
         Columns for ``slope`` (negative for a typical spectrum) and ``offset``.
     """
     _validate_fit_settings(peak_rejection_z, max_iterations)
-    band = Band("fit", *fit_range)
+    band = _validate_fit_band(spectra, fit_range)
     mask = band.mask(spectra.freqs)
     # One fit per cell serves all three measures; expand only lays out the columns.
     fits = _fit_cells(
@@ -151,11 +161,11 @@ def aperiodic_ratio(
     Returns
     -------
     Spectra
-        Power divided by the fitted aperiodic component. Frequencies at or below
-        zero carry no 1/f value and pass through unchanged.
+        Dimensionless power divided by the fitted aperiodic component. The DC
+        bin is NaN with zero coverage because the fit is undefined there.
     """
     _validate_fit_settings(peak_rejection_z, max_iterations)
-    mask = Band("fit", *fit_range).mask(spectra.freqs)
+    mask = _validate_fit_band(spectra, fit_range).mask(spectra.freqs)
     n_bins = int(mask.sum())
     if n_bins < _MIN_FIT_POINTS:
         raise ValueError(
@@ -170,13 +180,14 @@ def aperiodic_ratio(
     slope, offset = fits[..., 0, np.newaxis], fits[..., 1, np.newaxis]
     failed = ~(np.isfinite(slope) & np.isfinite(offset))[..., 0]
     curve = 10.0 ** (offset + slope * _log_frequency(spectra.freqs))
-    out = np.where(spectra.freqs > 0.0, spectra.data / curve, spectra.data)
+    out = spectra.data / curve
     out[failed] = np.nan
 
     return replace(
         spectra,
         data=out,
-        coverage=np.where(failed[:, :, :, np.newaxis], 0.0, spectra.coverage),
+        representation="aperiodic_ratio",
+        coverage=np.where(np.isfinite(out), spectra.coverage, 0.0),
         source=f"{spectra.source}+aperiodic_ratio",
         computation=ComputationSpec.create(
             "aperiodic_ratio",

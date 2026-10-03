@@ -89,8 +89,57 @@ def test_bad_intervals_survive_the_default_filter(tmp_path):
 
 
 def test_a_bare_description_is_filed_as_a_comment():
-    assert convert.brainvision_marker("BAD_manual") == ("Comment", "BAD_manual")
+    assert convert.brainvision_marker("QC_manual") == ("Comment", "QC_manual")
     assert convert.brainvision_marker("Trig_therm/T  1") == ("Trig_therm", "T  1")
+
+
+@pytest.mark.parametrize("keep_all", [False, True])
+def test_native_bad_spans_still_reject_epochs_after_conversion(tmp_path, keep_all):
+    raw = mixed_raw()
+    raw.set_annotations(mne.Annotations([4.0, 4.1], [0.0, 0.5], ["Trig_test", "BAD_manual"]))
+    out = written(tmp_path, raw, keep_all_annotations=keep_all)
+    assert any(description.lower().startswith("bad") for description in out.annotations.description)
+    for recording in (raw, out):
+        events, event_id = mne.events_from_annotations(recording, verbose=False)
+        epochs = mne.Epochs(
+            recording,
+            events,
+            event_id,
+            tmin=0.0,
+            tmax=0.8,
+            baseline=None,
+            preload=True,
+            verbose=False,
+        )
+        assert len(epochs) == 0
+
+
+def test_volume_trimming_respects_a_nonzero_first_sample():
+    raw = mixed_raw().crop(tmin=0.5)
+    original_end = raw.annotations.onset[2] + 0.9
+    assert convert.trim_to_volume_bounds(raw)
+    assert raw.first_time == pytest.approx(1.0)
+    assert raw.first_time + raw.times[-1] == pytest.approx(original_end)
+    np.testing.assert_allclose(raw.annotations.onset, [1.0, 1.9, 2.8])
+
+
+def test_volume_trimming_stops_at_the_first_block_even_when_it_starts_at_zero():
+    raw = mixed_raw()
+    raw.set_annotations(
+        mne.Annotations([0.0, 0.9, 1.8, 10.0, 10.9], [0.0] * 5, ["Volume/V  1"] * 5)
+    )
+    assert convert.trim_to_volume_bounds(raw)
+    assert raw.times[-1] == pytest.approx(2.7)
+    assert len(raw.annotations) == 3
+
+
+def test_zero_basing_preserves_marker_alignment_with_eeg_samples():
+    raw = mixed_raw()
+    raw._data[0] = np.arange(raw.n_times)
+    convert.filter_annotations(raw, None, False, True)
+    assert raw.first_time == pytest.approx(1.0)
+    assert raw.get_data()[0, 0] == 100.0
+    np.testing.assert_allclose(convert.data_relative_onsets(raw)[:3], [0.0, 0.9, 1.8])
 
 
 def test_thermode_canonicalization_rewrites_exactly_eleven_legacy_markers():

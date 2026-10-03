@@ -365,16 +365,16 @@ def _modified_kmeans(
     previous: npt.NDArray[np.int_] | None = None
     for _ in range(max_iterations):
         labels = np.asarray(np.argmax(np.abs(maps @ templates.T), axis=1), dtype=int)
+        if np.unique(labels).size != templates.shape[0]:
+            raise ValueError(
+                "Fitting produced an empty microstate cluster; use fewer states "
+                "or provide more distinct topographies."
+            )
         if previous is not None and np.array_equal(labels, previous):
             break
         previous = labels
         for state in range(templates.shape[0]):
             members = maps[labels == state]
-            if members.shape[0] == 0:
-                # Keep the orphaned template rather than moving it to an arbitrary
-                # map: an empty cluster means n_states is too high, and inventing a
-                # centre would hide that behind a plausible-looking topography.
-                continue
             # Largest eigenvector of the scatter matrix: the direction the cluster's
             # maps lie along, irrespective of which way round each one points.
             _, vectors = np.linalg.eigh(members.T @ members)

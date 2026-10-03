@@ -21,12 +21,21 @@ METHODS: dict[str, tuple[str, dict[str, Any]]] = {
 }
 
 
+def validate_iclabel_passband(highpass: float, lowpass: float) -> None:
+    if highpass != 1.0 or lowpass != 100.0:
+        raise ValueError(
+            "artifact.ica.iclabel: requires ICA training data filtered to 1-100 Hz; "
+            f"got {highpass:g}-{lowpass:g} Hz."
+        )
+
+
 def fit_ica(raw: Any, settings: ICASettings) -> ArtifactModel:
     require("sklearn", "preprocessing")
     if settings.method == "picard":
         require("picard", "preprocessing-auto")
     if settings.iclabel is not None:
         require("mne_icalabel", "preprocessing-auto")
+        validate_iclabel_passband(max(raw.info["highpass"], settings.l_freq), raw.info["lowpass"])
     validate_geometry(raw)
     picks = good_eeg_names(raw)
     channels = [*settings.eog_channels, *([settings.ecg_channel] if settings.ecg_channel else [])]

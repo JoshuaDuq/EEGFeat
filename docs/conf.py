@@ -64,9 +64,6 @@ nitpick_ignore_regex = [("py:class", r"\(?-?\d+(\.\d+)?\)?")]
 
 # Keep the name written in the source (`BANDS_STANDARD`) instead of its repr.
 autodoc_preserve_defaults = True
-# One parameter per line once a signature no longer fits the content column.
-maximum_signature_line_length = 68
-python_trailing_comma_in_multi_line_signatures = True
 toc_object_entries_show_parents = "hide"
 
 # ---------------------------------------------------------------------------
@@ -100,10 +97,7 @@ notfound_urls_prefix = "/EEGFeat/"
 html_theme = "furo"
 html_title = "EEGFeat"
 html_static_path = ["_static"]
-html_css_files = [
-    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
-    "custom.css",
-]
+html_css_files = ["custom.css"]
 html_js_files = ["custom.js", "navigation.js"]
 html_permalinks_icon = "#"
 html_show_sphinx = False
@@ -118,50 +112,48 @@ html_theme_options = {
     "light_logo": "logo-light.svg",
     "dark_logo": "logo-dark.svg",
     "dark_css_variables": {
-        "color-background-primary": "#13211e",
-        "color-background-secondary": "#1a2b26",
-        "color-background-hover": "#243e34",
-        "color-background-border": "#30473e",
-        "color-foreground-primary": "#e7f0eb",
-        "color-foreground-secondary": "#b8cdc2",
-        "color-foreground-muted": "#9fb8aa",
-        "color-foreground-border": "#608171",
+        "color-background-primary": "#171c21",
+        "color-background-secondary": "#20272d",
+        "color-background-hover": "#293239",
+        "color-background-border": "#3a454e",
+        "color-foreground-primary": "#e5e9ec",
+        "color-foreground-secondary": "#bec8cf",
+        "color-foreground-muted": "#a4b0b9",
+        "color-foreground-border": "#6e7d89",
         "color-brand-primary": "#8dd9bd",
         "color-brand-content": "#8dd9bd",
         "color-brand-visited": "#8dd9bd",
-        "color-highlight-on-target": "#243e34",
+        "color-highlight-on-target": "#293239",
         "color-highlighted-background": "#315a45",
-        "color-admonition-background": "#1a2b26",
+        "color-admonition-background": "#20272d",
         "color-api-name": "#8dd9bd",
-        "color-api-pre-name": "#9fb8aa",
-        "color-api-background": "#1a2b26",
-        "color-api-background-hover": "#243e34",
+        "color-api-pre-name": "#a4b0b9",
+        "color-api-background": "#20272d",
+        "color-api-background-hover": "#293239",
         "color-accent-surface": "#243e34",
-        "color-on-accent": "#13211e",
+        "color-on-accent": "#171c21",
     },
     "light_css_variables": {
         "color-background-primary": "#ffffff",
-        "color-background-secondary": "#f5f8f6",
-        "color-background-hover": "#eaf3ee",
-        "color-background-border": "#dfe8e2",
-        "color-foreground-primary": "#203830",
-        "color-foreground-secondary": "#4e6559",
-        "color-foreground-muted": "#60776a",
-        "color-foreground-border": "#a8bbae",
+        "color-background-secondary": "#f6f7f8",
+        "color-background-hover": "#edf1f2",
+        "color-background-border": "#dce1e5",
+        "color-foreground-primary": "#202b33",
+        "color-foreground-secondary": "#4a5660",
+        "color-foreground-muted": "#65717a",
+        "color-foreground-border": "#a4afb8",
         "color-brand-primary": "#08745c",
         "color-brand-content": "#08745c",
         "color-brand-visited": "#08745c",
         "color-highlight-on-target": "#eaf3ee",
         "color-highlighted-background": "#d1eadb",
-        "color-admonition-background": "#f5f8f6",
+        "color-admonition-background": "#f6f7f8",
         "color-api-name": "#08745c",
-        "color-api-pre-name": "#60776a",
-        "color-api-background": "#f5f8f6",
-        "color-api-background-hover": "#eaf3ee",
+        "color-api-pre-name": "#65717a",
+        "color-api-background": "#f6f7f8",
+        "color-api-background-hover": "#edf1f2",
         "color-accent-surface": "#eaf3ee",
         "color-on-accent": "#ffffff",
-        "font-stack": "'Inter', 'Segoe UI', system-ui, sans-serif",
-        "font-stack--monospace": "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
     },
     "sidebar_hide_name": False,
     "navigation_with_keys": False,

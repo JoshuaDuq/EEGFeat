@@ -33,12 +33,7 @@
 {% endblock %}
 
 {% block content %}
-{%- if pagename == "index" %}
-<p class="hero-kicker">
-  <span>Python library for EEG research</span>
-  <span class="hero-release">{{ release }}</span>
-</p>
-{%- else %}
+{%- if pagename != "index" %}
 <nav class="breadcrumbs" aria-label="Breadcrumb">
   <a href="{{ pathto(master_doc) }}">Documentation</a>
   {%- for parent in parents %}
@@ -73,14 +68,15 @@
   <div class="toc-tree-container"><div class="toc-tree">{{ toc }}</div></div>
   <nav class="toc-resources" aria-label="Research resources">
     <span>Research resources</span>
-    <a href="{{ pathto('guides/validation') }}">Validation evidence <span aria-hidden="true">↗</span></a>
-    <a href="{{ pathto('examples') }}">Example outputs <span aria-hidden="true">↗</span></a>
+    <a href="{{ pathto('guides/validation') }}">Validation evidence</a>
+    <a href="{{ pathto('examples') }}">Example outputs</a>
   </nav>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block footer %}
+{%- if next or prev %}
 <div class="related-pages">
   {%- if next %}
   <a class="next-page" href="{{ next.link|e }}" rel="next">
@@ -105,6 +101,7 @@
   </a>
   {%- endif %}
 </div>
+{%- endif %}
 <div class="bottom-of-page">
   <div class="left-details">
     {%- if show_copyright %}

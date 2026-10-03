@@ -151,9 +151,29 @@ def test_iclabel_requires_its_training_band(raw):
     # ICLabel was trained on 1-100 Hz data; a 250 Hz recording without a low-pass is 125 Hz wide.
     with pytest.raises(ValueError, match="100 Hz"):
         validate_processing(raw, ProcessingSettings(FixedEpochSettings(2), artifact=artifact))
+    with pytest.raises(ValueError, match="100 Hz"):
+        validate_processing(
+            raw,
+            ProcessingSettings(
+                FixedEpochSettings(2), artifact=artifact, filter=FilterSettings(h_freq=40)
+            ),
+        )
     validate_processing(
         raw,
         ProcessingSettings(
-            FixedEpochSettings(2), artifact=artifact, filter=FilterSettings(h_freq=40)
+            FixedEpochSettings(2), artifact=artifact, filter=FilterSettings(h_freq=100)
         ),
     )
+
+
+@pytest.mark.parametrize("highpass", [0.5, 2.0])
+def test_iclabel_rejects_an_actual_training_band_outside_one_to_one_hundred_hz(raw, highpass):
+    pytest.importorskip("mne_icalabel")
+    from eegfeat.preprocessing.config import FilterSettings, ICLabelSettings
+    from eegfeat.preprocessing.ica import fit_ica
+    from eegfeat.preprocessing.raw import filter_raw
+
+    filtered = filter_raw(raw, FilterSettings(l_freq=highpass, h_freq=100.0))
+    settings = ICASettings(method="infomax", l_freq=highpass, iclabel=ICLabelSettings())
+    with pytest.raises(ValueError, match="1-100 Hz"):
+        fit_ica(filtered, settings)

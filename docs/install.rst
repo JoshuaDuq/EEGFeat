@@ -11,7 +11,7 @@ Installation
 Prerequisites
 -------------
 
-.. grid:: 2
+.. grid:: 1 1 2 2
    :gutter: 3
    :class-container: nav-cards
 

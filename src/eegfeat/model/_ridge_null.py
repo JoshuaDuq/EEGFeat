@@ -2,9 +2,9 @@
 
 What a ridge pipeline fits before its regressor never sees the target, and ridge
 predictions, target residualization and the Freedman-Lane rebuild are all linear in the
-target. So each fold and each of its inner splits is decomposed once, and every draw and
-every penalty is a product of those decompositions: the refitted null, to rounding
-error, at the cost of a single cross-fit.
+target. Each fold and inner split therefore transforms its features once, then
+scikit-learn Ridge fits all permutation targets together for each penalty. The
+batched null uses the same solver as the observed fit, to rounding error.
 """
 
 from __future__ import annotations
@@ -22,13 +22,13 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
+from eegfeat.model._nuisance import fit_coefficients
 from eegfeat.model.aggregate import AggregationConfig, _SubjectRScorer
 from eegfeat.model.crossfit import _chosen_scorer
 from eegfeat.model.design import harmonize_fold
 from eegfeat.model.execution import run_folds, seeded
 from eegfeat.model.residualize import (
     _design_matrix,
-    _fit_coefficients,
     residualize_targets,
     residualize_within_subjects,
 )
@@ -152,7 +152,7 @@ def ridge_null(
 
         inner_splits: list[_Split] = []
         if len(alphas) > 1:
-            # The inner splits cross-fitting would draw, decomposed once for every draw.
+            # Reuse the feature transforms of the same inner splits as cross-fitting.
             train_groups = inner_groups[f.train]
             splitter = inner_cv(train_groups, inner, random_state=seed + max(f.index - 1, 0))
             inner_splits = [
@@ -199,7 +199,7 @@ def ridge_null(
 
 
 class _Split:
-    """One fit/held-out split, decomposed once so any draw and penalty is a matrix product."""
+    """One transformed split, with permutation targets fitted together by Ridge."""
 
     def __init__(
         self,
@@ -245,15 +245,8 @@ class _Split:
                 _assign_random_state(steps, seed)
                 Z_fit = np.asarray(steps.fit_transform(X_fit), dtype=np.float64)
                 Z_held = np.asarray(steps.transform(X_held), dtype=np.float64)
-        # Ridge with an intercept fits centred data; the kernel form needs one n-by-n
-        # eigendecomposition however many features there are.
-        centre = Z_fit.mean(axis=0)
-        Z_fit, Z_held = Z_fit - centre, Z_held - centre
-        eigenvalues, vectors = np.linalg.eigh(Z_fit @ Z_fit.T)
-        keep = eigenvalues > eigenvalues.max(initial=0.0) * len(eigenvalues) * np.finfo(float).eps
-        self._eigenvalues = eigenvalues[keep]
-        self._vectors = vectors[:, keep]
-        self._held_basis = (Z_held @ Z_fit.T) @ self._vectors
+        self._features, self._held_features = Z_fit, Z_held
+        self._regressor = clone(pipeline.steps[-1][1])
 
     def targets(
         self, targets: npt.NDArray[np.float64]
@@ -272,7 +265,7 @@ class _Split:
                 columns=self._columns,
             )
         fit_design, held_design = self._designs
-        coefficients = _fit_coefficients(fit_design, targets[self.fit])
+        coefficients = fit_coefficients(fit_design, targets[self.fit])
         return (
             targets[self.fit] - fit_design @ coefficients,
             targets[self.held_out] - held_design @ coefficients,
@@ -281,12 +274,10 @@ class _Split:
     def predict(
         self, fitted: npt.NDArray[np.float64], alphas: npt.NDArray[np.float64]
     ) -> Iterator[npt.NDArray[np.float64]]:
-        # (Z Z' + alpha I)^-1 restricted to the kernel's range; its null space adds nothing.
-        mean = fitted.mean(axis=0)
-        coordinates = self._vectors.T @ (fitted - mean)
         for alpha in alphas:
-            shrunk = coordinates / (self._eigenvalues + alpha)[:, None]
-            yield np.asarray(self._held_basis @ shrunk + mean)
+            model = clone(self._regressor).set_params(alpha=float(alpha))
+            model.fit(self._features.copy(), fitted)
+            yield np.asarray(model.predict(self._held_features), dtype=np.float64)
 
 
 class _FreedmanLane:

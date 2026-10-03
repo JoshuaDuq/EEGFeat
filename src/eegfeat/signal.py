@@ -80,7 +80,8 @@ class Signal:
     data : ndarray, shape (n_epochs, n_channels, n_times)
         Signal amplitude.
     times : ndarray, shape (n_times,)
-        Time axis in seconds, ascending, relative to the epoch origin.
+        Time axis in seconds, uniformly spaced at ``1 / sfreq``, relative to
+        the epoch origin.
     ch_names : tuple of str
         Channel names, one per channel axis entry.
     sfreq : float
@@ -252,6 +253,8 @@ def _validate_series(
     validate_fraction_array(coverage, "coverage")
     if not np.isfinite(sfreq) or sfreq <= 0.0:
         raise ValueError(f"sfreq must be finite and positive, got {sfreq}.")
+    if n_times > 1 and not np.allclose(np.diff(times) * sfreq, 1.0, rtol=1e-7, atol=0.0):
+        raise ValueError("times must be uniformly spaced at 1 / sfreq.")
 
 
 def _validate_row_ids(row_ids: tuple[RowId, ...], n_epochs: int) -> None:
@@ -271,7 +274,8 @@ class BandSignal:
     analytic : ndarray of complex, shape (n_epochs, n_channels, n_times)
         Analytic signal, the bandpass output plus its Hilbert transform.
     times : ndarray, shape (n_times,)
-        Time axis in seconds, ascending, relative to the epoch origin.
+        Time axis in seconds, uniformly spaced at ``1 / sfreq``, relative to
+        the epoch origin.
     ch_names : tuple of str
         Channel names, one per channel axis entry.
     band : Band

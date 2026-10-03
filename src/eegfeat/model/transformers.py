@@ -13,6 +13,8 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
+from eegfeat.model._nuisance import fit_coefficients
+
 __all__ = [
     "Deconfounder",
     "DropAllNaNColumns",
@@ -250,7 +252,7 @@ class Deconfounder(BaseEstimator, TransformerMixin):  # type: ignore[misc]
         covariates = x_arr[:, n_features:]
 
         cov_design = np.column_stack([np.ones(len(x_arr)), covariates])
-        self.coef_, *_ = np.linalg.lstsq(cov_design, features, rcond=None)
+        self.coef_ = fit_coefficients(cov_design, features)
         return self
 
     def transform(self, X: Any) -> npt.NDArray[np.float64]:
@@ -264,7 +266,7 @@ class Deconfounder(BaseEstimator, TransformerMixin):  # type: ignore[misc]
 
         cov_design = np.column_stack([np.ones(len(x_arr)), covariates])
         residuals = features - (cov_design @ self.coef_)
-        return cast(npt.NDArray[np.float64], residuals)
+        return residuals
 
     def get_feature_names_out(self, input_features: Sequence[str] | None = None) -> list[str]:
         if input_features is None:

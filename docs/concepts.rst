@@ -19,7 +19,7 @@ Spectra and time-frequency representations are computed in MNE, then wrapped.
 :meth:`~eegfeat.BandSignal.from_epochs` applies its documented band-pass and
 Hilbert transform.
 
-.. grid:: 3
+.. grid:: 1 1 3 3
    :gutter: 3
    :class-container: nav-cards
 

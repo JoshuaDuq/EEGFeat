@@ -293,13 +293,13 @@ def test_mismatched_pac_epochs_sampling_or_row_identity_raise() -> None:
         pac(slow, fewer, windows=[WINDOW])
     wrong_rate = BandSignal.from_arrays(
         analytic=fast.analytic,
-        times=fast.times,
+        times=fast.times[0] + np.arange(fast.times.size) / (fast.sfreq * 2.0),
         ch_names=fast.ch_names,
         band=fast.band,
         sfreq=fast.sfreq * 2.0,
         row_ids=fast.row_ids,
     )
-    with pytest.raises(ValueError, match="sampling frequency"):
+    with pytest.raises(ValueError, match="same time axis"):
         pac(slow, wrong_rate, windows=[WINDOW])
     reordered = BandSignal.from_arrays(
         analytic=fast.analytic,

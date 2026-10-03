@@ -133,23 +133,16 @@ def filter_annotations(
         keep = [
             i
             for i, description in enumerate(raw.annotations.description)
-            if any(normalize_string(description).startswith(prefix) for prefix in wanted)
+            if description.lower().startswith(("bad", "edge"))
+            or any(normalize_string(description).startswith(prefix) for prefix in wanted)
         ]
         if not keep:
             logger.warning("No annotations matched %s; the run will have no events.", wanted)
-    onsets = [float(raw.annotations.onset[i]) for i in keep]
-    if zero_base and onsets:
-        base = min(onsets) - raw.first_time
-        onsets = [onset - base for onset in onsets]
-    set_annotations_at_absolute_onsets(
-        raw,
-        mne.Annotations(
-            onset=onsets,
-            duration=[raw.annotations.duration[i] for i in keep],
-            description=[raw.annotations.description[i] for i in keep],
-            orig_time=raw.annotations.orig_time,
-        ),
-    )
+    retained = raw.annotations[keep]
+    if zero_base and len(retained):
+        # Move the data origin with the markers so events keep their acquired samples.
+        raw.crop(tmin=max(0.0, float(retained.onset.min() - raw.first_time)))
+    set_annotations_at_absolute_onsets(raw, retained)
 
 
 def first_contiguous_volume_onsets(onsets: list[float]) -> list[float]:
@@ -181,12 +174,13 @@ def volume_onsets(raw: mne.io.BaseRaw) -> list[float]:
 # the recording), so unsaved dummy volumes and a later scanner restart are left out.
 def trim_to_volume_bounds(raw: mne.io.BaseRaw) -> bool:
     block = first_contiguous_volume_onsets(volume_onsets(raw))
-    if len(block) < 2 or block[0] <= 0:
+    if len(block) < 2:
         return False
+    start = block[0] - raw.first_time
     repetition_time = float(np.median(np.diff(block)))
-    end = min(block[-1] + repetition_time, float(raw.first_time + raw.times[-1]))
-    logger.info("Trimming to volume bounds: %.3f s to %.3f s.", block[0], end)
-    raw.crop(tmin=block[0], tmax=end)
+    end = min(block[-1] + repetition_time - raw.first_time, float(raw.times[-1]))
+    logger.info("Trimming to volume bounds: %.3f s to %.3f s.", start, end)
+    raw.crop(tmin=start, tmax=end)
     return True
 
 
@@ -260,6 +254,10 @@ def brainvision_marker(description: str) -> tuple[str, str]:
     # filed under Comment, the BrainVision type for free text.
     kind, slash, text = str(description).partition("/")
     if not slash:
+        if kind.lower().startswith("bad"):
+            return "Bad Interval", kind
+        if kind.lower().startswith("edge"):
+            return "edge", kind
         return "Comment", kind
     return kind, text
 
@@ -363,6 +361,8 @@ def run_raw_to_bids(
         if trimmed and not raw.preload:
             raw.load_data()
         filter_annotations(raw, event_prefixes, keep_all_annotations, zero_base_onsets)
+        if zero_base_onsets and not raw.preload:
+            raw.load_data()
         discard_unrecorded_terminal_volumes(raw)
         bids_path = BIDSPath(
             subject=parse_subject_id(source_file),

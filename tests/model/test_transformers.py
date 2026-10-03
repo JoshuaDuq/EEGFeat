@@ -86,3 +86,16 @@ def test_deconfounder_removes_covariate_projection() -> None:
     assert res.shape == (10, 1)
     assert not np.allclose(res, feature)
     np.testing.assert_allclose(res, 0.0, atol=1e-10)
+
+
+def test_deconfounding_is_invariant_to_covariate_units() -> None:
+    rng = np.random.default_rng(3)
+    covariates = rng.normal(size=(40, 2))
+    features = (covariates @ np.array([3.0, 5.0]))[:, None]
+    scaled = covariates * np.array([1e12, 1e-12])
+    train, test = np.arange(30), np.arange(30, 40)
+
+    for nuisance in (covariates, scaled):
+        data = np.column_stack([features, nuisance])
+        fitted = Deconfounder(n_covariates=2).fit(data[train])
+        np.testing.assert_allclose(fitted.transform(data[test]), 0.0, atol=1e-10)

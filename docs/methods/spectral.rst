@@ -333,6 +333,10 @@ refit, up to ``max_iterations`` times.
 - **One-sided**: only positive residuals are removed. Oscillatory peaks sit above
   the aperiodic component, and leaving them in flattens the slope.
 - **Input**: only positive finite power enters the fit.
+- **Passband**: ``fit_range`` must stay within the recording's reported filter
+  bounds. Including suppressed frequencies biases the fitted background, as
+  illustrated in `FOOOF's filtering example
+  <https://fooof-tools.github.io/fooof/auto_examples/processing/plot_line_noise.html>`_.
 - **Stopping**: the loop stops when any of these holds.
 
   - MAD is non-finite or below :math:`10^{-12}`.
@@ -362,6 +366,9 @@ power is the ratio of the observed power to that curve.
 - **Missing values**: if the fit fails, ``aperiodic_ratio`` returns NaN for that
   cell and sets ``aperiodic_fit_failed``. The unadjusted spectrum is not
   relabelled as adjusted.
+- **Units**: the ratio is dimensionless and records
+  ``representation="aperiodic_ratio"``. Physical PSD and TFR power reducers
+  reject this representation. The DC bin is undefined and has zero coverage.
 
 Periodic Power
 ~~~~~~~~~~~~~~

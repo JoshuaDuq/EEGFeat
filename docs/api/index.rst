@@ -11,6 +11,8 @@ These names are exported from ``eegfeat``, except ``eegfeat.model``,
 ``eegfeat.microstates``, and ``eegfeat.preprocessing``, which live in their submodules. Definitions are in
 :doc:`/methods/index`.
 
+Browse the complete :ref:`symbol index <genindex>` to find a function or class by name.
+
 Containers and files
 --------------------
 
@@ -79,10 +81,10 @@ Analysis workflows
    :hidden:
    :maxdepth: 2
 
-   containers
-   spectral
-   dynamics
-   connectivity
-   complexity
-   model
+   Containers & I/O <containers>
+   Spectral <spectral>
+   Dynamics <dynamics>
+   Phase & connectivity <connectivity>
+   Complexity & microstates <complexity>
+   Predictive modeling <model>
    preprocessing

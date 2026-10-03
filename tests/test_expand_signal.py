@@ -147,7 +147,7 @@ def test_signals_disagreeing_on_sampling_frequency_raise() -> None:
     other = _signal(BETA, 4.0)
     resampled = BandSignal.from_arrays(
         analytic=other.analytic,
-        times=other.times,
+        times=other.times[0] + np.arange(other.times.size) / (other.sfreq * 2.0),
         ch_names=other.ch_names,
         band=other.band,
         sfreq=other.sfreq * 2.0,

@@ -148,6 +148,8 @@ correlation.
 **Templates**
    Each template is the principal eigenvector of its members' scatter matrix,
    so negating a member does not change the template.
+   An empty cluster raises an error because the data do not support that fit's
+   requested number of states.
 
 **Start**
    The start is scikit-learn :math:`k`-means run to convergence on the

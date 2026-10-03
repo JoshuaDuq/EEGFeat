@@ -451,22 +451,25 @@ With ``residualize_on``, pooled or within subjects, the null is Freedman-Lane
 - The residuals are exchanged within the scheme's blocks, which must stay inside
   each fold.
 
-Closed-form draws
-~~~~~~~~~~~~~~~~~
+Batched ridge draws
+~~~~~~~~~~~~~~~~~~~
 
-A ridge pipeline gets every draw in closed form when all of these hold:
+A ridge pipeline fits permutation targets together when all of these hold:
 
 - its preprocessing never sees the target, as in the default
   ``ridge_pipeline``, including any ``ColumnTransformer`` remainder;
 - it is tuned on the subject-level ``r`` and scored with it.
+- its regressor is unconstrained ``Ridge`` with an intercept and an ``auto``,
+  ``cholesky`` or ``svd`` solver; only the scalar penalty is tuned.
 
-Its preprocessing, ridge predictions, target residualization and the
-Freedman-Lane rebuild are all linear in the target. Each fold and inner split is
-decomposed once and each draw is a few matrix products: the refitted null to
-rounding error, at the cost of one cross-fit.
+Each fold and inner split transforms its features once. Its configured
+`scikit-learn Ridge solver
+<https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html>`_
+then fits batches of permutation targets as multiple outputs for each penalty.
+Target residualization and the Freedman-Lane rebuild are linear in the target.
+The resulting null matches individual refits to rounding error, including
+predictors with very small variance.
 
-- **Speed**: on 12 subjects, 720 trials and 2,000 features a draw took about a
-  thousandth of the time a refit took.
 - **Full refitting**: other pipelines, custom container subclasses, a
   target-driven step such as ``feature_selection_percentile``, a ``metric_fn``
   or another ``scoring`` refit every draw.

@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from ._deps import require
 from .config import (
     EventEpochSettings,
@@ -16,6 +14,7 @@ from .config import (
     SSPSettings,
 )
 from .epochs import analysis_bounds
+from .ica import validate_iclabel_passband
 from .raw import (
     filter_coefficients,
     good_eeg_names,
@@ -56,13 +55,10 @@ def validate_processing(raw: Any, settings: ProcessingSettings) -> None:
                 require("picard", "preprocessing-auto")
             if model.iclabel is not None:
                 require("mne_icalabel", "preprocessing-auto")
-                # ICLabel was trained on 1-100 Hz data and mne-icalabel only warns outside it.
-                lowpass = min(raw.info["lowpass"], settings.filter.h_freq or np.inf)
-                if model.l_freq < 1.0 or lowpass > 100.0:
-                    raise ValueError(
-                        "artifact.ica.iclabel: requires ica.l_freq >= 1 Hz and a low-pass "
-                        f"(filter.h_freq or the recording's) <= 100 Hz; got {lowpass:g} Hz"
-                    )
+                validate_iclabel_passband(
+                    max(raw.info["highpass"], settings.filter.l_freq or 0.0, model.l_freq),
+                    min(raw.info["lowpass"], settings.filter.h_freq or raw.info["lowpass"]),
+                )
             if model.n_components is not None and model.n_components > len(good_eeg_names(raw)):
                 raise ValueError("artifact.ica.n_components: exceeds good EEG channel count")
         reference = settings.artifact.reference

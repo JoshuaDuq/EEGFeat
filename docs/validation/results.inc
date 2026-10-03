@@ -139,7 +139,7 @@ PhysioNet motor movement
      - pass
    * - Microstates last tens of milliseconds (``microstate_duration``)
      - median duration of every state between 30 and 150 ms
-     - median durations 54 to 83 ms
+     - median durations 67 to 116 ms
      - pass
    * - In MNE's CSP decoding pipeline, eegfeat's CSP separates movement from rest about as well as mne.decoding.CSP (``CommonSpatialPattern``)
      - mean accuracy over 20 subjects within 0.05 of MNE's, on the same splits
@@ -299,11 +299,11 @@ Sleep-EDF
      - pass
    * - Refitting under within-subject permuted targets puts the null at zero (``permutation_test``)
      - null within 0.2 of zero; p below 0.05; observed statistic recomputed identically
-     - null within 0.07 of zero over 50 permutations, p = 0.02
+     - null within 0.06 of zero over 50 permutations, p = 0.02
      - pass
    * - Sleep depth 0 to 3 is recovered across subjects by leave-one-subject-out ridge (``stack_rows``, ``build_design``, ``loso_folds``, ``cross_fit_regression``, ``regression_metrics``, ``subject_level_r``)
-     - subject-level r above 0.7 with interval above 0.5; R squared above 0.5
-     - subject-level r 0.88 (interval 0.87 to 0.90), R squared 0.67, 2511 epochs
+     - subject-level r above 0.7, and in every subject; R squared above 0.5
+     - subject-level r 0.88 (lowest subject 0.86), R squared 0.66, 2511 epochs
      - pass
    * - Relative delta rises and relative alpha and beta fall from wake to N3 at Pz-Oz (``integrated_band_power``, ``band_ratio``)
      - wake-vs-N3 AUC above 0.8 (delta), below 0.2 (alpha), below 0.1 (beta)

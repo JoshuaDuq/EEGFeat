@@ -353,8 +353,11 @@ requires:
 
 - ``infomax`` or ``picard``.
 - ``artifact.reference: average``.
-- ``l_freq`` of at least 1 Hz.
-- A low-pass at or below 100 Hz, the band ICLabel was trained on.
+- Training data filtered to exactly 1–100 Hz, matching
+  `MNE-ICALabel's documented requirements
+  <https://mne.tools/mne-icalabel/stable/generated/api/mne_icalabel.iclabel.iclabel_label_components.html>`_.
+  A source or analysis filter that removes more of this band is rejected;
+  filtering cannot restore frequencies already removed.
 
 **Fit evidence**: the fit checkpoint records every detector's verdict.
 

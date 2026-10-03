@@ -11,6 +11,7 @@ import pandas as pd
 
 from eegfeat._validation import blank_non_finite
 from eegfeat.model import _deps as _deps
+from eegfeat.model._nuisance import fit_coefficients
 from eegfeat.model.transformers import PreprocessingConfig, validate_subject_missingness
 
 __all__ = [
@@ -149,19 +150,6 @@ def _design_matrix(
     return design
 
 
-def _fit_coefficients(
-    design: npt.NDArray[np.float64],
-    target: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
-    # Solve in comparable units so lstsq's relative rank cutoff cannot erase
-    # a nuisance term solely because its measurement units are small.
-    scales = np.linalg.norm(design, axis=0)
-    coefficients, _, rank, _ = np.linalg.lstsq(design / scales, target, rcond=None)
-    if rank != design.shape[1]:
-        raise ValueError("Target residualization design is rank deficient after scaling.")
-    return np.asarray(coefficients / (scales if target.ndim == 1 else scales[:, None]))
-
-
 def fit_nuisance_model(
     y: npt.NDArray[np.float64] | Sequence[float],
     covariates: pd.DataFrame | npt.NDArray[np.float64],
@@ -207,7 +195,7 @@ def fit_nuisance_model(
         )
         raise ValueError(msg)
 
-    coefficients = _fit_coefficients(design_train, y_train)
+    coefficients = fit_coefficients(design_train, y_train)
     train_prediction = design_train @ coefficients
     train_residual = y_train - train_prediction
 
@@ -337,7 +325,7 @@ def _subject_residual(
         # Predicting held-out rows needs identified coefficients; residualizing the rows
         # that were fitted needs only the projection, which a constant column leaves intact.
         coefficients = (
-            _fit_coefficients(fit_design, target)
+            fit_coefficients(fit_design, target)
             if extrapolate
             else np.linalg.lstsq(fit_design / scales, target, rcond=None)[0] / scales
         )
@@ -520,7 +508,7 @@ def fit_staged_residual_preprocessor(
     imputed = np.where(np.isnan(kept), medians[None, :], kept)
 
     design = _design_matrix(cov, fit_rows, tuple(columns), check_rank=True)
-    feature_coefficients = _fit_coefficients(design, imputed)
+    feature_coefficients = fit_coefficients(design, imputed)
 
     y_fit = np.asarray(y, dtype=np.float64)[fit_rows]
     if not np.all(np.isfinite(y_fit)):
@@ -532,7 +520,7 @@ def fit_staged_residual_preprocessor(
             f"rows={y_fit.size}, parameters={design.shape[1]}."
         )
         raise ValueError(msg)
-    target_coefficients = _fit_coefficients(design, y_fit)
+    target_coefficients = fit_coefficients(design, y_fit)
 
     power_transform = PowerTransformer(method="yeo-johnson", standardize=True)
     power_transform.fit((y_fit - design @ target_coefficients).reshape(-1, 1))

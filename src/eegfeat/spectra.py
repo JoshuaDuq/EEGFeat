@@ -162,8 +162,9 @@ class Spectra:
         finiteness: clean data can have full ``coverage`` but partial ``support``.
     source : str
         Provenance, e.g. ``"morlet"``, ``"multitaper"``, ``"welch"``.
-    representation : {"psd", "time_frequency_power"}
-        A density per Hz or wavelet time-frequency power.
+    representation : {"psd", "time_frequency_power", "aperiodic_ratio"}
+        A density per Hz, wavelet time-frequency power, or a dimensionless
+        ratio to the aperiodic fit.
     """
 
     data: npt.NDArray[np.float64]
@@ -172,7 +173,7 @@ class Spectra:
     windows: tuple[Window, ...]
     coverage: npt.NDArray[np.float64]
     source: str
-    representation: Literal["psd", "time_frequency_power"]
+    representation: Literal["psd", "time_frequency_power", "aperiodic_ratio"]
     support: npt.NDArray[np.float64]
     row_ids: tuple[RowId, ...]
     computation: ComputationSpec
@@ -193,7 +194,7 @@ class Spectra:
         validate_nonempty_shape(self.data.shape, "spectral data")
         if np.any(np.isfinite(self.data) & (self.data < 0.0)):
             raise ValueError("spectral data must not contain negative power.")
-        if self.representation not in ("psd", "time_frequency_power"):
+        if self.representation not in ("psd", "time_frequency_power", "aperiodic_ratio"):
             raise ValueError(f"unknown spectral representation {self.representation!r}.")
         n_channels, n_windows, n_freqs = self.data.shape[1:]
         if len(self.ch_names) != n_channels:

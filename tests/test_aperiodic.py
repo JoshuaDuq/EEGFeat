@@ -1,8 +1,12 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 from scipy import stats
 
 from eegfeat.aperiodic import aperiodic, aperiodic_ratio
+from eegfeat.bands import Band
+from eegfeat.power import integrated_band_power, mean_psd, mean_tfr_power
 from eegfeat.spectra import Spectra, Window
 from eegfeat.table import ComputationSpec
 
@@ -91,6 +95,12 @@ def test_whitening_leaves_the_zero_hertz_bin_out_of_its_fit() -> None:
     np.testing.assert_allclose(whitened.data[..., WELCH_FREQS > 0], 1.0, rtol=1e-9)
 
 
+def test_aperiodic_ratio_has_no_dimensionless_dc_value() -> None:
+    ratio = aperiodic_ratio(_spectra(_power_law_with_dc(), WELCH_FREQS))
+    assert np.isnan(ratio.data[..., WELCH_FREQS == 0]).all()
+    assert (ratio.coverage[..., WELCH_FREQS == 0] == 0.0).all()
+
+
 def test_fit_range_outside_the_axis_raises() -> None:
     with pytest.raises(ValueError, match="no frequencies"):
         aperiodic(_spectra(10.0 * FREQS**-1.7), fit_range=(100.0, 200.0), include_global=False)
@@ -118,6 +128,24 @@ def test_max_iterations_must_be_a_positive_integer(max_iterations: object, measu
 def test_a_pure_power_law_flattens_to_one() -> None:
     ratio = aperiodic_ratio(_spectra(10.0 * FREQS**-1.7))
     np.testing.assert_allclose(ratio.data, 1.0, rtol=1e-6)
+
+
+@pytest.mark.parametrize("representation", ["psd", "time_frequency_power"])
+@pytest.mark.parametrize("measure", [mean_psd, integrated_band_power, mean_tfr_power])
+def test_dimensionless_aperiodic_ratios_cannot_be_reported_as_physical_power(
+    representation, measure
+) -> None:
+    spectra = replace(_spectra(10.0 * FREQS**-1.7), representation=representation)
+    ratio = aperiodic_ratio(spectra)
+    with pytest.raises(ValueError, match="requires spectral representation"):
+        measure(ratio, bands=[Band("alpha", 8.0, 13.0)])
+
+
+@pytest.mark.parametrize("measure", [aperiodic, aperiodic_ratio])
+def test_aperiodic_fits_reject_ranges_outside_the_recording_passband(measure) -> None:
+    spectra = replace(_spectra(10.0 * FREQS**-1.7), passband=(8.0, 40.0))
+    with pytest.raises(ValueError, match="fit_range.*passband"):
+        measure(spectra)
 
 
 def test_an_oscillation_survives_the_whitening_and_stands_above_one() -> None:

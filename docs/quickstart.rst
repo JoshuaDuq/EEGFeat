@@ -136,7 +136,7 @@ Workflow 3. Bursts and ERDS
 Where to go next
 ----------------
 
-.. grid:: 3
+.. grid:: 1 1 3 3
    :gutter: 3
    :class-container: nav-cards
 

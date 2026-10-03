@@ -50,7 +50,7 @@ Cross-fitting, permutation nulls, and conformal intervals are in
    :hidden:
    :maxdepth: 2
 
-   spectral
-   dynamics
-   connectivity
-   complexity
+   Spectral <spectral>
+   Dynamics <dynamics>
+   Phase & connectivity <connectivity>
+   Complexity & microstates <complexity>

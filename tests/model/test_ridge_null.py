@@ -144,6 +144,25 @@ def test_the_closed_form_ridge_null_equals_refitting_every_draw(name: str, monke
     assert fast.p_value == refitted.p_value
 
 
+@pytest.mark.parametrize("solver", ["svd", "cholesky", "auto"])
+@pytest.mark.parametrize("alpha", [0.0, 1e-20])
+def test_ridge_null_preserves_low_variance_predictors(alpha: float, solver: str, monkeypatch):
+    rng = np.random.default_rng(0)
+    case = _case("untuned")
+    X = rng.normal(size=(GROUPS.size, 2))
+    X[:, 1] *= 1e-8
+    case["X"] = X
+    case["y"] = rng.normal(size=GROUPS.size)
+    case["pipeline"] = Pipeline([("regressor", Ridge(alpha=alpha, solver=solver))])
+
+    fast = _null(case)
+    monkeypatch.setattr(_ridge_null, "ridge_penalty", lambda *args, **kwargs: None)
+    refitted = _null(case)
+
+    np.testing.assert_allclose(fast.null, refitted.null, rtol=0, atol=1e-9)
+    assert fast.p_value == refitted.p_value
+
+
 def _count_refits(monkeypatch) -> list[int]:
     calls: list[int] = []
     engine = nulls._cross_fit_engine

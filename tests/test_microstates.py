@@ -77,6 +77,21 @@ def test_segmentation_rejects_epochs_without_qualifying_gfp_peaks() -> None:
         segment(signal, n_states=2, peak_prominence=1e12)
 
 
+@requires_sklearn
+def test_segmentation_rejects_collapsed_microstate_clusters() -> None:
+    amplitudes = np.tile([1.0, 2.0, 1.0], 30)
+    topography = np.array([1.0, 2.0, -1.0, -2.0])
+    signal = Signal.from_arrays(
+        data=(topography[:, None] * amplitudes)[None],
+        times=np.arange(amplitudes.size) / SFREQ,
+        ch_names=("F3", "F4", "P3", "P4"),
+        sfreq=SFREQ,
+        row_ids=(("test", 0, "event"),),
+    )
+    with pytest.raises(ValueError, match="empty.*microstate cluster"):
+        segment(signal, n_states=2, min_duration_ms=0.0)
+
+
 def test_peak_topographies_never_substitutes_an_extremum() -> None:
     strength = np.array([1.0, 2.0, 3.0, 4.0])
     epoch = np.array([-1.0, 1.0])[:, None] * strength
