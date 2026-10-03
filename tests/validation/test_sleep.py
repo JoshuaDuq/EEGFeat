@@ -21,7 +21,7 @@ import pytest
 from sklearn.metrics import roc_auc_score
 
 import eegfeat as ef
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 DELTA = ef.Band("delta", 0.5, 4.0)
 ALPHA = ef.Band("alpha", 8.0, 12.0)

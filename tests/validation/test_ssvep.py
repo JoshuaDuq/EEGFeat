@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 import eegfeat as ef
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 OCCIPITAL = {"occipital": ["O1", "Oz", "O2"]}
 SEGMENT_SEC = 8.0

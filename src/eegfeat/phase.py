@@ -309,7 +309,7 @@ def _pac_observed_and_null(
     from eegfeat._expand import window_mask
 
     try:
-        from tensorpac.methods import (  # type: ignore[import-untyped]
+        from tensorpac.methods import (
             mean_vector_length,
             swap_blocks,
             time_lag,

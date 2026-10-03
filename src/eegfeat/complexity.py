@@ -73,7 +73,7 @@ def permutation_entropy(
     is divided by ``log2(order!)``. Ties follow AntroPy's deterministic ordinal
     ordering. Non-finite or unembeddable windows raise ``ValueError``.
     """
-    import antropy  # type: ignore[import-untyped]
+    import antropy
 
     for name, value, minimum in (("order", order, 2), ("delay", delay, 1)):
         if isinstance(value, bool) or not isinstance(value, Integral) or value < minimum:

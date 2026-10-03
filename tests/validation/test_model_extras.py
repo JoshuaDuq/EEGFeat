@@ -15,9 +15,9 @@ import numpy as np
 import pytest
 
 import eegfeat.model as efm
-from validation.loaders import Recording, load_sleep
-from validation.test_regression import CONFIG, DEPTH, INNER, SEED, _relative_power
-from validation.test_regression import design as design_fixture
+from tests.validation.loaders import Recording, load_sleep
+from tests.validation.test_regression import CONFIG, DEPTH, INNER, SEED, _relative_power
+from tests.validation.test_regression import design as design_fixture
 
 design = design_fixture
 

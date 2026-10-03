@@ -17,7 +17,7 @@ from scipy.integrate import trapezoid
 from scipy.stats import ttest_ind
 
 import eegfeat as ef
-from validation.loaders import Recording, load_erp_core
+from tests.validation.loaders import Recording, load_erp_core
 
 LATERAL_OCCIPITAL = {"occipital": ["PO7", "PO8", "O1", "O2"]}
 PARIETAL = {"parietal": ["Pz", "CPz"]}

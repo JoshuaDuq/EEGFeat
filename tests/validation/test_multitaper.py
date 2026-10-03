@@ -15,7 +15,7 @@ import pytest
 from scipy.integrate import trapezoid
 
 import eegfeat as ef
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 MU = ef.Band("mu", 8.0, 13.0)
 BETA = ef.Band("beta", 13.0, 30.0)

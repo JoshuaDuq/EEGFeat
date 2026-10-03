@@ -54,8 +54,8 @@ jobs:
           tests/test_runner_compute.py tests/test_complexity.py tests/test_higuchi.py
           tests/test_spectral_model.py tests/test_irasa.py tests/test_cycles.py
           tests/test_extended_complexity.py
-          tests/test_phase.py tests/model/test_learned.py tests/test_bids.py
-          tests/model/test_importance.py tests/paradigm_specific -ra
+          tests/test_phase.py tests/test_bids.py
+          tests/model tests/paradigm_specific -ra
 
   # The Go front end is optional for users; its own tests still run here.
   tui:

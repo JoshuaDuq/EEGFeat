@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from eegfeat.io import read_dataset, read_table
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 RECIPE = """
 [inputs]

@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import eegfeat as ef
-from validation.loaders import Recording, load_erp_core
+from tests.validation.loaders import Recording, load_erp_core
 
 N1 = ef.Window("n1", 0.1, 0.25)
 ALPHA = ef.Band("alpha", 8.0, 13.0)

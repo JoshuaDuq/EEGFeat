@@ -176,8 +176,8 @@ class MicrostateTransformer(TransformerMixin, BaseEstimator):  # type: ignore[mi
 
 def _require_riemann() -> tuple[Any, Any]:
     try:
-        from pyriemann.estimation import Covariances  # type: ignore[import-untyped]
-        from pyriemann.tangentspace import TangentSpace  # type: ignore[import-untyped]
+        from pyriemann.estimation import Covariances
+        from pyriemann.tangentspace import TangentSpace
     except ImportError as exc:
         raise ImportError(
             "Covariance and tangent features require pyriemann; "

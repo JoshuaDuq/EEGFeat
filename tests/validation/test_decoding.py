@@ -17,7 +17,7 @@ import pytest
 
 import eegfeat as ef
 import eegfeat.model as efm
-from validation.loaders import Recording, load_sleep
+from tests.validation.loaders import Recording, load_sleep
 
 SEED = 0
 CONFIG = efm.PreprocessingConfig(max_feature_missingness=0.2)

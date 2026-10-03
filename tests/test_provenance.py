@@ -7,7 +7,7 @@ import pytest
 
 from eegfeat.io import read_table
 from eegfeat.runner import load_recipe, run, status
-from synthetic import save_epochs
+from tests.synthetic import save_epochs
 
 
 def _extract(tmp_path, *, pattern="**/*_epo.fif"):

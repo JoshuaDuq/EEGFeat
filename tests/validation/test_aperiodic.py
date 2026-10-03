@@ -17,7 +17,7 @@ import pytest
 from sklearn.metrics import roc_auc_score
 
 import eegfeat as ef
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 FIT_RANGE = (2.0, 30.0)
 

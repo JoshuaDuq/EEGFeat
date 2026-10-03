@@ -66,7 +66,7 @@ def _validate_thresholds(
 def _detect_cycles(
     signal: Signal, band: Band, thresholds: Mapping[str, float | int]
 ) -> list[list[pd.DataFrame]]:
-    from bycycle.features import compute_features  # type: ignore[import-untyped]
+    from bycycle.features import compute_features
 
     if not isinstance(signal, Signal):
         raise TypeError("cycle_features requires broadband Signal inputs.")

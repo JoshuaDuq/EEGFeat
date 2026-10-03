@@ -16,7 +16,7 @@ from sklearn.metrics import roc_auc_score
 
 import eegfeat as ef
 import eegfeat.model as efm
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 MU = ef.Band("mu", 8.0, 13.0)
 BETA = ef.Band("beta", 13.0, 30.0)

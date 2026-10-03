@@ -13,7 +13,7 @@ import pytest
 from eegfeat.io import read_dataset, read_table
 from eegfeat.runner import RunError, check, load_recipe, run, status
 from eegfeat.runner.progress import JsonReporter
-from synthetic import save_epochs
+from tests.synthetic import save_epochs
 
 POWER = '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
 ITPC = (
@@ -25,7 +25,7 @@ ITPC = (
 @pytest.mark.parametrize("exclude_bads", [True, False])
 def test_explicit_channel_names_respect_recipe_bad_channel_exclusion(tmp_path, exclude_bads):
     from eegfeat.runner.batch import load_epochs
-    from synthetic import make_epochs
+    from tests.synthetic import make_epochs
 
     epochs = make_epochs()
     epochs.info["bads"] = ["Fz"]

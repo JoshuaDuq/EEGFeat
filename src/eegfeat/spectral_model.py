@@ -150,7 +150,7 @@ def spectral_parameterization(
     An absent peak is NaN with ``spectral_no_peak``. Backend fitting errors
     propagate because ``SpectralModel(debug=True)`` is mandatory.
     """
-    from specparam import SpectralModel  # type: ignore[import-untyped]
+    from specparam import SpectralModel
 
     _validate_settings(
         aperiodic_mode, peak_width_limits, max_n_peaks, min_peak_height, peak_threshold

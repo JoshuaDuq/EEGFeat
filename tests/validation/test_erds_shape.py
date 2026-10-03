@@ -22,7 +22,7 @@ import pytest
 from scipy.stats import ttest_1samp
 
 import eegfeat as ef
-from validation.loaders import Recording, load_eegbci
+from tests.validation.loaders import Recording, load_eegbci
 
 SUBJECTS = tuple(range(1, 21))
 MU = ef.Band("mu", 8.0, 13.0)

@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import eegfeat as ef
-from validation.loaders import Recording
+from tests.validation.loaders import Recording
 
 ALPHA = ef.Band("alpha", 8.0, 13.0)
 WINDOW = ef.Window("window", 0.5, 3.5)

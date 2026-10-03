@@ -23,7 +23,7 @@ __all__ = ["BIDSQuery", "BIDSRecording", "discover_bids", "preprocess_bids", "re
 
 def _require_mne_bids() -> Any:
     try:
-        import mne_bids  # type: ignore[import-untyped]
+        import mne_bids
     except ImportError as exc:
         raise ImportError("BIDS ingestion requires: pip install eegfeat[bids]") from exc
     return mne_bids

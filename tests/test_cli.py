@@ -10,7 +10,7 @@ import pytest
 
 from eegfeat.runner import load_recipe
 from eegfeat.runner.cli import main
-from synthetic import save_epochs
+from tests.synthetic import save_epochs
 
 POWER = '[[features]]\nmeasure = "integrated_band_power"\nbands = ["alpha"]\nspatial = ["global"]\n'
 FRONTAL_ROI = (

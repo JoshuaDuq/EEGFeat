@@ -76,7 +76,7 @@ def _decompose(
     factors: npt.NDArray[np.float64],
     fit_band: Band,
 ) -> _Decomposition:
-    from neurodsp.aperiodic import compute_irasa, fit_irasa  # type: ignore[import-untyped]
+    from neurodsp.aperiodic import compute_irasa, fit_irasa
 
     if trace.shape[-1] < np.ceil(nperseg * factors.max()):
         raise ValueError(

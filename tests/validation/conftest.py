@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 
 from eegfeat.provenance import implementation_hash
-from validation import report
-from validation.loaders import Recording, load_eegbci, load_sleep, load_ssvep
+from tests.validation import report
+from tests.validation.loaders import Recording, load_eegbci, load_sleep, load_ssvep
 
 ENABLE = "EEGFEAT_DATASETS"
 

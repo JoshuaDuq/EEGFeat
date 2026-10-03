@@ -14,7 +14,7 @@ import pytest
 import eegfeat as ef
 from eegfeat.runner import load_recipe
 from eegfeat.runner.compute import compute_features
-from synthetic import AMPLITUDE, NOISE, SFREQ, make_epochs
+from tests.synthetic import AMPLITUDE, NOISE, SFREQ, make_epochs
 
 HEAD = """
 [inputs]
