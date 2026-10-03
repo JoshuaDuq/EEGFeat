@@ -251,7 +251,8 @@ class Spectra:
         ----------
         spectrum : mne.time_frequency.Spectrum or EpochsSpectrum
             A computed power spectrum. A continuous ``Spectrum`` gains a
-            leading epoch axis of length 1.
+            leading epoch axis of length 1. Every channel retained in the
+            input is preserved, including explicitly selected bad channels.
         estimator_parameters : dict
             Parameters used to compute the spectrum. Multitaper spectra must
             be computed with ``normalization="full"`` and declare it here;
@@ -262,7 +263,7 @@ class Spectra:
         Spectra
             With a single window named ``"all"`` spanning the whole segment.
         """
-        data = np.asarray(spectrum.get_data())
+        data = np.asarray(spectrum.get_data(picks=spectrum.ch_names))
         if np.iscomplexobj(data):
             raise ValueError(
                 "Spectrum contains complex coefficients, not power; use output='power'."
@@ -340,7 +341,8 @@ class Spectra:
         Parameters
         ----------
         tfr : mne.time_frequency.EpochsTFR
-            Real-valued power, not baseline-corrected.
+            Real-valued power, not baseline-corrected. Every channel retained
+            in the input is preserved, including explicitly selected bad channels.
         windows : sequence of Window
             Time windows to average over, inclusive of both bounds.
         n_cycles : float or ndarray
@@ -386,7 +388,7 @@ class Spectra:
                 "compute it with method='morlet'."
             )
 
-        data = np.asarray(tfr.get_data())
+        data = np.asarray(tfr.get_data(picks=tfr.ch_names))
         if np.iscomplexobj(data):
             raise ValueError("from_tfr requires real power; got a complex TFR.")
         data = np.asarray(data, dtype=float)

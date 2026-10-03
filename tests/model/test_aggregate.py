@@ -367,7 +367,28 @@ def test_subject_level_errors_honour_the_configured_seed() -> None:
     assert first["ci_low_mae"] != second["ci_low_mae"]
 
 
-def test_bootstrap_intervals_are_not_silently_replaced_by_fixed_effects() -> None:
+def test_subject_level_errors_reject_unsupported_fixed_effects_intervals() -> None:
+    with pytest.raises(ValueError, match="subject_level_errors.*fixed_effects"):
+        subject_level_errors(_uneven_frame(), config=AggregationConfig(ci_method="fixed_effects"))
+
+
+@pytest.mark.parametrize("function", [subject_level_r, subject_level_errors])
+def test_bootstrap_intervals_reject_an_empty_cohort(function) -> None:
+    frame = pd.DataFrame(columns=["subject_id", "y_true", "y_pred"])
+    with pytest.raises(ValueError, match="at least 3 subjects"):
+        function(frame, config=AggregationConfig(ci_method="bootstrap"))
+
+
+@pytest.mark.parametrize("n_subjects", [1, 2])
+def test_subject_level_error_bootstrap_requires_enough_subjects(n_subjects: int) -> None:
+    frame = _uneven_frame()
+    frame = frame[frame["subject_id"].isin(frame["subject_id"].unique()[:n_subjects])]
+    with pytest.raises(ValueError, match="at least 3 subjects"):
+        subject_level_errors(frame, config=AggregationConfig(ci_method="bootstrap"))
+
+
+@pytest.mark.parametrize("n_subjects", [1, 2])
+def test_bootstrap_intervals_are_not_silently_replaced_by_fixed_effects(n_subjects: int) -> None:
     # With two subjects the bootstrap branch was skipped and the fixed-effects interval was
     # returned instead, byte-identical and with nothing on the result to say which ran.
     frame = pd.concat(
@@ -379,7 +400,7 @@ def test_bootstrap_intervals_are_not_silently_replaced_by_fixed_effects() -> Non
                     "y_pred": np.random.default_rng(s + 9).normal(size=20),
                 }
             )
-            for s in range(2)
+            for s in range(n_subjects)
         ]
     )
     with pytest.raises(ValueError, match="at least 3 subjects"):

@@ -11,7 +11,7 @@ Methods
 Each page matches a page in the :doc:`/api/index`. The method page is the
 definition. The API page is the signature.
 
-.. grid:: 2
+.. grid:: 1 1 2 2
    :gutter: 3
    :class-container: nav-cards
 

@@ -165,9 +165,10 @@ def peak_amplitude(
         Whether to find the largest value, the most negative, or the largest
         excursion in either direction. The value returned is always signed.
     prominence : float, optional
-        When given, the extremum is chosen among prominent local peaks rather than
-        by a plain extremum, which is more stable on noisy traces. Falls back to
-        the plain extremum when no peak meets the requirement.
+        When given, choose the local peak with the greatest prominence among
+        those meeting the minimum. Search contiguous finite stretches separately;
+        missing samples cannot establish a peak's baseline. Return NaN when no
+        local peak meets the requirement.
     groups : mapping of str to sequence of str, optional
         ROI name to member channels. None gives one column per channel.
     include_global : bool, default True
@@ -850,6 +851,22 @@ def _auc_one(trace: npt.NDArray[np.float64], times: npt.NDArray[np.float64]) -> 
     return total if measured else float("nan")
 
 
+def _prominent_peak(search: npt.NDArray[np.float64], prominence: float) -> int | None:
+    finite = np.flatnonzero(np.isfinite(search))
+    runs = np.split(finite, np.flatnonzero(np.diff(finite) > 1) + 1)
+    best_index = None
+    best_prominence = -np.inf
+    for run in runs:
+        peaks, properties = find_peaks(search[run], prominence=prominence)
+        if peaks.size:
+            candidate = int(np.argmax(properties["prominences"]))
+            strength = float(properties["prominences"][candidate])
+            if strength > best_prominence:
+                best_index = int(run[peaks[candidate]])
+                best_prominence = strength
+    return best_index
+
+
 def _find_peak(
     trace: npt.NDArray[np.float64],
     times: npt.NDArray[np.float64],
@@ -865,9 +882,10 @@ def _find_peak(
     if prominence is not None:
         for epoch in range(trace.shape[0]):
             for channel in range(trace.shape[1]):
-                peaks, properties = find_peaks(filled[epoch, channel], prominence=prominence)
-                if peaks.size:
-                    index[epoch, channel] = peaks[int(np.argmax(properties["prominences"]))]
+                peak = _prominent_peak(search[epoch, channel], prominence)
+                usable[epoch, channel] = peak is not None
+                if peak is not None:
+                    index[epoch, channel] = peak
 
     amplitude = np.take_along_axis(trace, index[..., np.newaxis], axis=2)[..., 0]
     return (

@@ -1,0 +1,18 @@
+{% extends "!search.html" %}
+
+{% block content %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="{{ pathto(master_doc) }}">Documentation</a>
+  <span aria-hidden="true">/</span>
+  <span aria-current="page">Search</span>
+</nav>
+<h1 id="search-documentation">Search documentation</h1>
+<p class="hero-lede">Find a function, feature, or analysis workflow.</p>
+<form class="main-search" action="{{ pathto('search') }}" method="get" role="search" aria-label="Search this documentation">
+  <label class="visually-hidden" for="search-query">Search terms</label>
+  <input id="search-query" type="search" name="q" placeholder="Try band power, microstates, or cross-fitting" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="search-guidance">
+  <button type="submit">Search <span aria-hidden="true">→</span></button>
+</form>
+<p id="search-guidance" class="search-guidance">Multiple words find pages that contain all of those words.</p>
+{{ super() }}
+{% endblock %}

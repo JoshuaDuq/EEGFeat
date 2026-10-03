@@ -391,11 +391,12 @@ inference of N2, P300, or any other named component.
 - Candidates are the local maxima returned by
   `scipy.signal.find_peaks <https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html>`__
   at that prominence, and the most prominent is kept.
-- An edge sample has no interior prominence, so it is never a candidate while
-  an interior peak qualifies.
-- When no local maximum reaches the prominence, the plain extremum is returned.
-  For a monotonic trend this is the edge sample.
-- An isolated tall sample is prominent and is kept.
+- An edge sample has no interior prominence, so it is never a candidate.
+- Non-finite samples split the search into contiguous finite stretches; gaps
+  cannot establish a peak's baseline.
+- When no local maximum reaches the prominence, amplitude and latency are NaN.
+  A monotonic trend has no qualifying interior peak.
+- A tall interior sample with finite neighbours may qualify, however narrow.
 
 **Reference.** Duncan et al. (2009) review windowed peak measures for ERP
 components. Report the window, the polarity, and the prominence.

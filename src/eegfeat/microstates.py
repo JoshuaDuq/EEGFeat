@@ -134,7 +134,7 @@ def segment(
         )
         for epoch in np.flatnonzero(contributing)
     ]
-    stacked = np.concatenate([m for m in maps if m.size], axis=0) if maps else np.empty((0, 0))
+    stacked = np.concatenate(maps, axis=0)
     if stacked.shape[0] < n_states:
         raise ValueError(
             f"only {stacked.shape[0]} global field power peaks were found across the "
@@ -408,8 +408,6 @@ def _peak_topographies(
         return np.empty((0, epoch.shape[0]), dtype=float)
     distance = minimum_sample_count(min_peak_distance_ms / 1000.0, sfreq)
     peaks, _ = find_peaks(strength, distance=distance, prominence=prominence)
-    if peaks.size == 0:
-        peaks = np.array([int(np.nanargmax(strength))], dtype=int)
     strongest = peaks[np.argsort(strength[peaks])[::-1][:max_peaks]]
     return _normalize_rows(epoch[:, strongest].T)
 

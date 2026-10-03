@@ -1,2479 +1,1708 @@
-/* =========================================================
-   eegfeat — Furo theme overrides
-   Monochrome Research Terminal: pure grayscale palette
-   matched 1:1 to the TUI. The only chromatic tones are
-   amber (#C49A5B) and muted red (#C07878), reserved for
-   Warning and Error states where typography alone would
-   be unsafe. All other emphasis is carried by weight + value.
-
-   Layout philosophy: hairline borders, tight typographic
-   rhythm, generous inter-section whitespace, no decorative
-   ornament. The page should read like a research note —
-   high information density, low visual noise.
-   ========================================================= */
-
-/* ---------------------------------------------------------
-   Tokens
-   --------------------------------------------------------- */
+/* EEGFeat documentation: a calm workspace for scientific reading. */
 :root {
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
-  --space-7: 3rem;
-
-  --radius-sm: 3px;
-  --radius-md: 4px;
-
-  /* Type scale — one ladder, 16px root. Every size in this sheet comes
-     from here; nothing picks its own value. The steps are wide enough
-     apart that a heading is legible as a heading from across the page. */
-  --fs-display:  2.5rem;    /* 40px — landing hero only            */
-  --fs-h1:       2rem;      /* 32px                                */
-  --fs-h2:       1.5rem;    /* 24px                                */
-  --fs-h3:       1.1875rem; /* 19px                                */
-  --fs-h4:       1.0625rem; /* 17px                                */
-  --fs-lede:     1.1875rem; /* 19px — standfirst paragraph         */
-  --fs-body:     1.0625rem; /* 17px — running prose                */
-  --fs-ui:       0.9375rem; /* 15px — cards, tables, admonitions   */
-  --fs-ui-sm:    0.875rem;  /* 14px — sidebar, captions, summaries */
-  --fs-ui-xs:    0.8125rem; /* 13px — right TOC, footer, buttons   */
-  --fs-label:    0.75rem;   /* 12px — uppercase eyebrows           */
-  --fs-code:     0.875rem;  /* 14px — code blocks                  */
-
-  /* Reading measure: ~76 characters at --fs-body. Prose is capped here,
-     while code, tables and card grids keep the full content width — the
-     text column stays readable without starving the data. */
-  --measure: 39rem;
-
-  /* Inter needs tightening as it grows and loosening at caption sizes. */
-  --track-display: -0.022em;
-  --track-heading: -0.014em;
-  --track-body:    -0.006em;
-  --track-label:    0.11em;
-}
-
-/* The hairlines are composed from the palette, so they have to be declared
-   on the element that carries the palette. Declared on :root — where the
-   colour tokens do not exist — `var()` substitution fails and the whole
-   border declaration falls back to `none`. */
-body {
-  --hairline: 1px solid var(--color-foreground-border);
-  --hairline-quiet: 1px solid var(--color-background-border);
-}
-
-body[data-theme="dark"],
-body[data-theme="auto"] {
-  --color-background-primary:    #0A0B0D;
-  --color-background-secondary:  #131518;
-  --color-background-hover:      #1A1C20;
-  --color-background-border:     #24262A;
-
-  --color-foreground-primary:    #E6E8EB;
-  --color-foreground-secondary:  #A4A8AD;
-  --color-foreground-muted:      #6A6D72;
-  --color-foreground-border:     #3D4045;
-
-  --color-brand-primary:         #F2F3F5;
-  --color-brand-content:         #BFC3C7;
-
-  --color-highlight-on-target:   rgba(242, 243, 245, 0.07);
-  --color-admonition-background: #131518;
-
-  --color-api-name:              #F2F3F5;
-  --color-api-pre-name:          #6A6D72;
-  --color-api-keyword:           #A4A8AD;
-  --color-api-paren:             #6A6D72;
-  --color-api-overall:           #E6E8EB;
-  --color-api-background:        #131518;
-  --color-api-background-hover:  #1A1C20;
-
-  --color-semantic-warning: #C49A5B;
-  --color-semantic-error:   #C07878;
-
-  --color-selection-bg: rgba(242, 243, 245, 0.18);
-  --color-focus-ring:   rgba(242, 243, 245, 0.45);
-
-  /* Search-term marks, on the results page and on a page opened from it.
-     Furo's default is blue. */
-  --color-highlighted-background: rgba(242, 243, 245, 0.16);
-  --color-highlighted-text:       #F2F3F5;
-
-  --font-stack:            "Inter", "Inter Tight", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-  --font-stack--monospace: "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, Menlo, monospace;
-}
-
-/* "auto" is the dark palette above whatever the OS asks for, but Furo still
-   picks logos and the toggle icon from prefers-color-scheme. Without this a
-   light-OS reader gets the light logo on a dark sidebar. custom.js makes
-   the toggle two-state to match. */
-html body[data-theme="auto"] .only-light {
-  display: none !important;
-}
-
-html body[data-theme="auto"] .only-dark {
-  display: block !important;
-}
-
-body[data-theme="auto"] .theme-toggle svg.theme-icon-when-auto-light,
-body[data-theme="auto"] .theme-toggle svg.theme-icon-when-auto-dark {
-  display: none !important;
-}
-
-body[data-theme="auto"] .theme-toggle svg.theme-icon-when-dark {
-  display: block;
-}
-
-body[data-theme="light"] {
-  --color-background-primary:    #FAFAFB;
-  --color-background-secondary:  #F1F2F4;
-  --color-background-hover:      #E8EAEC;
-  --color-background-border:     #D8DADD;
-
-  --color-foreground-primary:    #1A1C20;
-  --color-foreground-secondary:  #4A4D52;
-  --color-foreground-muted:      #74777C;
-  --color-foreground-border:     #C4C6C9;
-
-  --color-brand-primary:         #0E0F12;
-  --color-brand-content:         #3D4045;
-
-  --color-highlight-on-target:   rgba(26, 28, 32, 0.06);
-  --color-admonition-background: #F4F5F7;
-
-  --color-api-name:              #0E0F12;
-  --color-api-pre-name:          #74777C;
-  --color-api-keyword:           #4A4D52;
-  --color-api-paren:             #74777C;
-  --color-api-overall:           #1A1C20;
-  --color-api-background:        #F1F2F4;
-  --color-api-background-hover:  #E8EAEC;
-
-  --color-semantic-warning: #8A6322;
-  --color-semantic-error:   #8A3A3A;
-
-  --color-selection-bg: rgba(26, 28, 32, 0.12);
-  --color-focus-ring:   rgba(26, 28, 32, 0.45);
-
-  --color-highlighted-background: rgba(26, 28, 32, 0.12);
-  --color-highlighted-text:       #0E0F12;
-}
-
-/* ---------------------------------------------------------
-   Base — typography + selection + focus
-   --------------------------------------------------------- */
-html {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  --measure: 46rem;
+  --docs-header-height: 4rem;
+  --sidebar-width: 16rem;
+  --radius: 8px;
+  --label-size: 0.72rem;
+  --code-size: 0.84rem;
 }
 
 body {
+  --rule: 1px solid var(--color-background-border);
+  --color-api-overall: var(--color-foreground-primary);
+  --color-api-keyword: var(--color-foreground-secondary);
+  --color-api-paren: var(--color-foreground-muted);
+  --color-sidebar-link-text--top-level: var(--color-foreground-secondary);
+  --color-sidebar-item-background--current: var(--color-accent-surface);
+  --color-code-background: var(--color-background-secondary);
+  --color-code-foreground: var(--color-foreground-primary);
   font-family: var(--font-stack);
-  font-feature-settings: "cv11", "ss01", "ss03";
-  letter-spacing: var(--track-body);
-  line-height: 1.65;
+  line-height: 1.7;
   -webkit-text-size-adjust: 100%;
 }
 
-/* Tabular figures line up columns but leave gaps around 1 and punctuation
-   in a sentence, so they are scoped to data rather than applied globally. */
-table.docutils,
-.sig {
-  font-variant-numeric: tabular-nums;
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scroll-padding-top: 6rem;
 }
 
 ::selection {
-  background: var(--color-selection-bg);
-  color: var(--color-foreground-primary);
+  background: var(--color-highlighted-background);
 }
-
 :focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.docs-header ~ .skip-to-content {
+  display: none;
 }
 
-/* ---------------------------------------------------------
-   Typography hierarchy — emphasis by weight + size, never hue
-   --------------------------------------------------------- */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-stack);
-  font-feature-settings: "cv11", "ss01", "ss03";
+/* Header and navigation shell */
+.docs-header {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  height: var(--docs-header-height);
+  padding-inline: 1.5rem;
+  box-sizing: border-box;
+  border-bottom: var(--rule);
+  background: var(--color-background-primary);
+}
+
+.docs-wordmark, .docs-wordmark:visited {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   color: var(--color-foreground-primary);
-  padding-left: 0;
-  padding-right: 0;
-  /* Furo rounds headings for its :target highlight, which curls the ends
-     of the h1/h2 underline. */
-  border-radius: 0;
-  scroll-margin-top: var(--space-5);
-}
-
-/* Furo starts the title flush with the top of the viewport; this lines it
-   up with the view/edit/theme controls beside it. */
-article {
-  padding-top: var(--space-5);
-}
-
-/* Prose is set one step above the UI chrome so the thing you actually
-   read is the largest text on the page. */
-article {
-  font-size: var(--fs-body);
-  line-height: 1.7;
-}
-
-h1 {
-  font-size: var(--fs-h1);
+  font-size: 1.1rem;
   font-weight: 700;
-  letter-spacing: var(--track-display);
-  line-height: 1.15;
-  text-wrap: balance;
-  border-bottom: var(--hairline);
-  padding-bottom: var(--space-3);
-  margin: 0 0 var(--space-6);
+  letter-spacing: -0.035em;
+  text-decoration: none;
 }
-
-/* Landing page — drop the H1 border so the title flows into the
-   lede paragraph as a single visual block. */
-h1:has(+ .hero-lede) {
-  font-size: var(--fs-display);
-  border-bottom: none;
-  padding-bottom: 0;
-  margin-bottom: var(--space-4);
+.docs-wordmark img {
+  width: 30px;
+  height: 30px;
 }
-
-h2 {
-  font-size: var(--fs-h2);
-  font-weight: 600;
-  letter-spacing: var(--track-heading);
-  line-height: 1.25;
-  text-wrap: balance;
-  color: var(--color-foreground-primary);
-  border-bottom: var(--hairline-quiet);
-  padding-bottom: var(--space-2);
-  margin: var(--space-7) 0 var(--space-4);
-}
-
-h3 {
-  font-size: var(--fs-h3);
-  font-weight: 600;
-  letter-spacing: -0.008em;
-  line-height: 1.35;
-  text-wrap: balance;
-  color: var(--color-foreground-primary);
-  margin: var(--space-6) 0 var(--space-3);
-}
-
-h4 {
-  font-size: var(--fs-h4);
-  font-weight: 600;
+.docs-header-label {
+  padding-left: 0.75rem;
+  margin-left: 0.25rem;
+  border-left: var(--rule);
+  color: var(--color-foreground-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
   letter-spacing: 0;
-  line-height: 1.4;
-  color: var(--color-foreground-primary);
-  margin: var(--space-5) 0 var(--space-2);
 }
-
-/* Below h4 the ladder runs out of size, so the last two levels switch
-   to small caps and carry their rank by tracking instead. */
-h5, h6 {
-  font-size: var(--fs-label);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
+.docs-sections {
+  display: flex;
+  align-self: stretch;
+  gap: 1.4rem;
+  margin-left: auto;
+}
+.docs-sections a {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
   color: var(--color-foreground-secondary);
-  margin: var(--space-4) 0 var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 150ms ease, border-color 150ms ease;
 }
-
-p {
-  line-height: 1.7;
+.docs-sections a:hover, .docs-sections a[aria-current] {
+  color: var(--color-brand-primary);
+}
+.docs-sections a[aria-current] {
+  border-color: currentColor;
+}
+.docs-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.docs-repository, .docs-repository:visited {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-foreground-secondary);
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+.docs-repository svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.docs-repository:hover {
+  color: var(--color-brand-primary);
+}
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 12rem;
+  padding: 0.4rem 0.6rem;
+  border: var(--rule);
+  border-radius: 6px;
+  background: var(--color-background-secondary);
+}
+.header-search:focus-within {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+.header-search svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  stroke: var(--color-foreground-muted);
+  stroke-width: 1.6;
+}
+.header-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: var(--color-foreground-primary);
-  margin: 0 0 1.35em;
-  text-wrap: pretty;
+  font: 0.78rem var(--font-stack);
 }
-
-ul, ol {
-  margin: 0 0 1.35em;
-  padding-left: 1.35rem;
-}
-
-li {
-  line-height: 1.7;
-  margin-bottom: 0.3rem;
-}
-
-/* Reading measure. A 46em content column is right for code and tables but
-   runs prose out to ~96 characters, so the text column is capped and the
-   wide blocks keep the rest. */
-article p,
-article ul,
-article ol,
-article blockquote {
-  max-width: var(--measure);
-}
-
-/* The ruled headings keep the full column so their underline spans the
-   code blocks and signatures beneath them, not just the prose. */
-article h3,
-article h4 {
-  max-width: var(--measure);
-}
-
-/* Anything that already sets its own box fills it — a capped paragraph
-   inside a card or a table cell would just look like a mistake. */
-.admonition :is(p, ul, ol),
-.sd-card :is(p, ul, ol),
-.sd-tab-content :is(p, ul, ol),
-details.sd-dropdown :is(p, ul, ol),
-table.docutils :is(p, ul, ol),
-dl.field-list :is(p, ul, ol),
-.module-ref p,
-#search-results :is(p, ul) {
-  max-width: none;
-}
-
-li::marker {
+.header-search input::placeholder {
   color: var(--color-foreground-muted);
 }
-
-strong, b {
-  font-weight: 600;
-  color: var(--color-foreground-primary);
+.header-search kbd {
+  flex-shrink: 0;
+  padding: 0.05rem 0.25rem;
+  border: var(--rule);
+  border-radius: 3px;
+  color: var(--color-foreground-muted);
+  font: 0.65rem var(--font-stack--monospace);
 }
 
-em, i {
-  font-style: italic;
-  color: var(--color-foreground-primary);
+.sidebar-drawer, .sidebar-container {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
 }
-
-/* ---------------------------------------------------------
-   Sidebar — quiet, recedes from content
-   --------------------------------------------------------- */
 .sidebar-drawer {
-  border-right: var(--hairline-quiet);
+  flex-shrink: 0;
+  background: var(--color-background-secondary);
+  border-right: var(--rule);
+}
+.sidebar-sticky, .toc-sticky {
+  top: var(--docs-header-height);
+  height: calc(100vh - var(--docs-header-height));
+}
+.sidebar-scroll, .toc-scroll {
+  scrollbar-width: thin;
+}
+.toc-scroll {
+  max-height: calc(100vh - var(--docs-header-height));
+}
+.toc-drawer {
+  width: 15rem;
+  flex-shrink: 0;
+}
+[data-overlay="true"] :is(.sidebar-sticky, .toc-sticky) {
+  top: 0;
+  height: 100vh;
+  max-height: 100vh;
 }
 
 .sidebar-brand {
-  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0.7rem;
-  padding: 1rem 0.9rem 0.85rem;
-  border-bottom: var(--hairline-quiet);
-  margin-bottom: 0.35rem;
+  padding: 1.6rem 1.4rem 0.75rem;
   text-decoration: none;
 }
-
-.sidebar-brand:hover {
-  background: transparent;
-  text-decoration: none;
-}
-
 .sidebar-logo-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   margin: 0;
-  flex: none;
 }
-
 .sidebar-logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  display: block;
+  width: 30px;
+  height: 30px;
 }
-
 .sidebar-brand-lockup {
   display: flex;
   flex-direction: column;
-  gap: 0.08rem;
-  min-width: 0;
 }
-
 .sidebar-brand-text {
-  font-weight: 600;
+  margin: 0;
   font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
   letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: var(--color-foreground-primary);
 }
-
-.sidebar-brand-version {
+.sidebar-brand-caption {
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: var(--color-foreground-muted);
+}
+.sidebar-release {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 1.4rem 1.2rem;
+  font-size: 0.67rem;
+  color: var(--color-foreground-muted);
+}
+.sidebar-release span:first-child {
   font-family: var(--font-stack--monospace);
-  font-size: 0.68rem;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  color: var(--color-foreground-muted);
 }
-
-/* Furo runs the tree to the drawer edge, so link highlights touched it and
-   sat 12px outside the search box above. Match the search box's inset. */
-.sidebar-tree {
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
+.sidebar-release span:last-child {
+  padding-left: 0.6rem;
+  border-left: var(--rule);
 }
-
-.sidebar-tree .reference {
-  font-size: var(--fs-ui-sm);
-  color: var(--color-foreground-secondary);
-  letter-spacing: 0.005em;
-  padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-sm);
-  transition: color 0.12s ease, background 0.12s ease;
+.sidebar-search-container {
+  margin: 0 1rem;
+  border: var(--rule);
+  border-radius: 6px;
+  background: var(--color-background-primary);
 }
-
-.sidebar-tree .reference:hover {
-  color: var(--color-foreground-primary);
-  background: var(--color-background-hover);
-}
-
-.sidebar-tree .current > .reference,
-.sidebar-tree .current-page > .reference {
-  color: var(--color-foreground-primary);
-  font-weight: 600;
-  position: relative;
-  background: var(--color-background-hover);
-}
-
-.sidebar-tree .current-page > .reference::before {
-  content: "";
-  position: absolute;
-  left: -0.25rem;
-  top: 0.35rem;
-  bottom: 0.35rem;
-  width: 2px;
-  background: var(--color-foreground-primary);
-  border-radius: 1px;
-}
-
-.sidebar-tree .caption-text {
-  font-size: var(--fs-label);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--color-foreground-muted);
-  margin-top: 1.25rem;
-  padding-bottom: 0.3rem;
-}
-
-/* Furo insets captions by 1rem, links by their own 0.5rem padding; line the
-   caption up with the link text under it. */
-.sidebar-tree .caption {
-  padding-left: 0.5rem;
-}
-
-/* ---------------------------------------------------------
-   Right-side TOC — tighter, quieter
-   --------------------------------------------------------- */
-.toc-tree .reference {
-  font-size: var(--fs-ui-xs);
-  color: var(--color-foreground-secondary);
-  padding: 0.15rem 0;
-  letter-spacing: 0.005em;
-  transition: color 0.12s ease;
-}
-
-.toc-tree .reference:hover {
-  color: var(--color-foreground-primary);
-}
-
-/* API pages list every member here as code. The prose chip made the
-   outline a column of badges, and a long name broke mid-badge. Wrapping at
-   any character keeps names like compute_train_group_intersection_mask()
-   inside the 240px column. */
-.toc-tree code.literal {
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-  font-size: 0.94em !important;
-  color: inherit !important;
-  overflow-wrap: anywhere;
-}
-
-.toc-title {
-  font-size: var(--fs-label);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--color-foreground-muted);
-}
-
-/* ---------------------------------------------------------
-   sphinx-design cards — hairline, monochrome hover
-   --------------------------------------------------------- */
-.sd-card {
-  border: var(--hairline) !important;
-  background: var(--color-background-secondary) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: none !important;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.sd-card:hover,
-.sd-card-hover:hover {
-  border-color: var(--color-foreground-secondary) !important;
-  background: var(--color-background-hover) !important;
-  transform: none !important;
-}
-
-.sd-card:has(.sd-stretched-link:focus-visible) {
-  outline: 2px solid var(--color-focus-ring);
+.sidebar-search-container:focus-within {
+  border-color: var(--color-brand-primary);
+  outline: 2px solid var(--color-accent-surface);
   outline-offset: 2px;
 }
-
-.sd-card-header {
-  background: transparent !important;
-  border-bottom: var(--hairline) !important;
-  padding: 0.55rem 0.9rem !important;
-  font-weight: 600 !important;
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-primary) !important;
-  letter-spacing: -0.005em;
+.sidebar-search-container::before {
+  left: 0.7rem;
+}
+.sidebar-search {
+  border: none;
+  padding: 0.7rem 2.2rem 0.7rem 2rem;
+  font: 0.8rem var(--font-stack);
+  color: var(--color-foreground-primary);
+}
+.sidebar-search::placeholder {
+  font-size: 0.8rem;
+}
+.search-hint {
+  position: absolute;
+  right: 0.65rem;
+  padding: 0 0.25rem;
+  border: var(--rule);
+  border-radius: 3px;
+  color: var(--color-foreground-muted);
+  font: 0.7rem var(--font-stack--monospace);
+  pointer-events: none;
+}
+.sidebar-tree {
+  padding: 0 0.8rem;
+  margin-top: 1.1rem;
+}
+.sidebar-tree .caption {
+  padding: 0.3rem 0.7rem;
+  margin-top: 1.2rem;
+}
+.sidebar-tree .caption-text {
+  color: var(--color-foreground-muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+}
+.sidebar-tree .reference {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  border-radius: 5px;
+  transition: background 140ms ease, color 140ms ease;
+}
+.sidebar-tree .reference:hover {
+  background: var(--color-background-hover);
+  color: var(--color-foreground-primary);
+}
+.sidebar-tree .current-page > .reference {
+  color: var(--color-brand-primary);
+  background: var(--color-accent-surface);
+  font-weight: 600;
+  box-shadow: inset 2px 0 var(--color-brand-primary);
+}
+.sidebar-tree .current:not(.current-page) > .reference {
+  background: transparent;
+  color: var(--color-foreground-primary);
+}
+.sidebar-tree label {
+  height: 2.2rem;
+  border-radius: 4px;
+}
+.sidebar-tree ul {
+  gap: 0.05rem;
+}
+.sidebar-tree li > ul {
+  margin-left: 0.5rem;
+  border-left: var(--rule);
+}
+.sidebar-home {
+  margin-bottom: 0.3rem;
+}
+.sidebar-help {
+  margin: 1.8rem 0.7rem 1rem;
+  padding-top: 1rem;
+  border-top: var(--rule);
+  font-size: 0.72rem;
+}
+.sidebar-help > span {
+  display: block;
+  color: var(--color-foreground-muted);
+}
+.sidebar-help a {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.3rem;
+  color: var(--color-brand-primary);
+  text-decoration: none;
 }
 
-.sd-card-body {
-  padding: 0.75rem 0.95rem !important;
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-secondary) !important;
+.toc-sticky {
+  box-sizing: border-box;
+  padding-top: 2.6rem;
+}
+.toc-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+}
+.toc-tree {
+  margin-top: 0.7rem;
+}
+.toc-tree .reference {
+  padding: 0.2rem 0.8rem;
+  font-size: 0.76rem;
   line-height: 1.6;
 }
-
-.sd-card-body p {
-  margin-bottom: 0.35rem;
+.toc-tree li {
+  padding-top: 0.3rem;
+}
+.toc-tree > ul > li > ul > li > .reference {
+  color: var(--color-foreground-secondary);
+  font-weight: 500;
+}
+.toc-tree ul ul ul .reference {
+  color: var(--color-foreground-muted);
+  font-size: 0.72rem;
+}
+.toc-tree li.scroll-current > .reference {
+  border-left: 2px solid var(--color-brand-primary);
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+.toc-tree code.literal {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+.toc-resources {
+  margin: 1.5rem 1rem;
+  padding-top: 1.1rem;
+  border-top: var(--rule);
+  font-size: 0.72rem;
+}
+.toc-resources > span {
+  color: var(--color-foreground-muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.toc-resources a {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  color: var(--color-foreground-secondary);
+  text-decoration: none;
+}
+.toc-resources a:hover {
+  color: var(--color-brand-primary);
 }
 
+/* Reading column and hierarchy */
+.main, .content, .article-container {
+  min-width: 0;
+}
+.content {
+  box-sizing: border-box;
+  width: 58rem;
+  max-width: 100%;
+  padding-inline: 3rem;
+  margin-inline: auto;
+}
+body:has(#eegfeat) .content {
+  width: 72rem;
+  padding-inline: 4rem;
+}
+article {
+  padding-top: 2.6rem;
+  padding-bottom: 0.5rem;
+  font-size: 0.97rem;
+}
+article :is(p, ul, ol, blockquote) {
+  max-width: var(--measure);
+}
+:is(.sd-card, .admonition, .sd-tab-content, .field-list, table) :is(p, ul, ol) {
+  max-width: none;
+}
+p {
+  line-height: 1.75;
+  margin: 0 0 1.2rem;
+}
+li {
+  margin-bottom: 0.3rem;
+}
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-foreground-primary);
+  font-weight: 650;
+  scroll-margin-top: 6rem;
+  text-wrap: balance;
+  border-radius: 0;
+  padding-inline: 0;
+}
+h1 {
+  margin: 0 0 1.3rem;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  line-height: 1.2;
+  letter-spacing: -0.045em;
+}
+h2 {
+  margin: 2.8rem 0 1.1rem;
+  padding-top: 1.5rem;
+  border-top: var(--rule);
+  font-size: 1.45rem;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+}
+h3 {
+  margin: 2rem 0 0.8rem;
+  font-size: 1.12rem;
+  letter-spacing: -0.015em;
+}
+h4 {
+  font-size: 1rem;
+}
+h5, h6 {
+  font-size: 0.9rem;
+}
+strong {
+  font-weight: 600;
+}
+article a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+a.headerlink {
+  color: var(--color-foreground-muted);
+  font-size: 0.7em;
+  text-decoration: none;
+}
+hr.docutils {
+  border: none;
+  border-top: var(--rule);
+  margin: 2.5rem 0;
+}
+hr.docutils + section > h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.hero-lede {
+  color: var(--color-foreground-secondary);
+  font-size: 1.06rem;
+  line-height: 1.75;
+  margin-bottom: 1.6rem;
+}
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-right: 4rem;
+  margin-bottom: 1.6rem;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--color-foreground-muted);
+}
+.breadcrumbs a {
+  color: var(--color-foreground-secondary);
+  text-decoration: none;
+}
+.breadcrumbs a:hover {
+  color: var(--color-brand-primary);
+}
+.breadcrumbs [aria-current] {
+  color: var(--color-foreground-secondary);
+}
+.reference-switcher {
+  display: flex;
+  gap: 1.4rem;
+  margin: 0 0 1.8rem;
+  border-bottom: var(--rule);
+  font-size: 0.78rem;
+}
+.reference-switcher a {
+  padding: 0.5rem 0 0.65rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--color-foreground-muted);
+  text-decoration: none;
+}
+.reference-switcher a[aria-current], .reference-switcher a:hover {
+  color: var(--color-brand-primary);
+}
+.reference-switcher a[aria-current] {
+  border-color: currentColor;
+  font-weight: 600;
+}
+.content-icon-container {
+  position: relative;
+  z-index: 1;
+}
+.content-icon-container :is(a, button, label) {
+  color: var(--color-foreground-muted);
+  border-radius: 4px;
+}
+.content-icon-container :is(a, button):hover {
+  color: var(--color-brand-primary);
+  background: var(--color-background-hover);
+}
+
+/* Homepage: orientation, an illustrative workflow, and document directories. */
+.hero-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding-right: 3rem;
+  margin: 0 0 1rem;
+  color: var(--color-brand-primary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.hero-release {
+  padding-left: 1rem;
+  border-left: var(--rule);
+  color: var(--color-foreground-muted);
+  font: 0.65rem var(--font-stack--monospace);
+  letter-spacing: 0;
+  text-transform: none;
+}
+#eegfeat > h1 {
+  margin-bottom: 1.8rem;
+  font-size: clamp(3.2rem, 5vw, 4.3rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.065em;
+}
+.home-overview {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  align-items: start;
+  gap: 2.7rem;
+  padding-bottom: 2.5rem;
+  border-bottom: var(--rule);
+}
+.home-intro {
+  margin: 0 0 1rem;
+  font-size: clamp(1.5rem, 2.3vw, 2rem);
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+  color: var(--color-foreground-primary);
+  text-wrap: balance;
+}
+.home-description {
+  max-width: 26rem;
+  font-size: 0.9rem;
+  color: var(--color-foreground-secondary);
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 1.4rem 0 1rem;
+}
+.hero-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.9rem;
+  box-sizing: border-box;
+  border: var(--rule);
+  border-radius: 6px;
+  color: var(--color-foreground-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.hero-actions a:first-child {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: var(--color-on-accent);
+}
+.hero-actions a:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-accent-surface);
+}
+.hero-actions a:first-child:hover {
+  background: var(--color-foreground-primary);
+  border-color: var(--color-foreground-primary);
+}
+.hero-actions a span {
+  transition: transform 150ms ease;
+}
+.hero-actions a:hover span {
+  transform: translateX(3px);
+}
+.hero-install {
+  color: var(--color-foreground-muted);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+.hero-install:hover {
+  color: var(--color-brand-primary);
+}
+.hero-visual {
+  min-width: 0;
+  margin: -0.3rem 0 0;
+  padding-left: 1.5rem;
+  border-left: var(--rule);
+}
+.hero-visual svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  color: var(--color-brand-primary);
+}
+.plot-grid {
+  stroke: var(--color-background-border);
+  stroke-width: 1;
+}
+.plot-trace {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.plot-trace-secondary {
+  opacity: 0.5;
+}
+.plot-band {
+  fill: var(--color-brand-primary);
+  fill-opacity: 0.09;
+}
+.plot-connector {
+  stroke: var(--color-foreground-border);
+  stroke-width: 1.2;
+}
+.plot-label {
+  fill: var(--color-foreground-muted);
+  font: 10px var(--font-stack--monospace);
+}
+.plot-heading {
+  fill: var(--color-foreground-secondary);
+  font: 600 10px var(--font-stack--monospace);
+  letter-spacing: 0.5px;
+}
+.hero-visual figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  color: var(--color-foreground-muted);
+  font-size: 0.65rem;
+}
+.hero-visual figcaption a {
+  color: inherit;
+  text-decoration: none;
+}
+.hero-visual figcaption a:hover {
+  color: var(--color-brand-primary);
+}
+#start-here > h2 {
+  margin-top: 2.3rem;
+  border: none;
+  padding-top: 0;
+}
+#eegfeat h2 {
+  font-size: 1.35rem;
+}
+
+.sd-container-fluid {
+  padding-inline: 0;
+}
+.sd-card {
+  background: transparent !important;
+  border: var(--rule) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+}
+.sd-card-body {
+  padding: 1.1rem !important;
+  font-size: 0.9rem;
+}
+.sd-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.sd-card-text {
+  color: var(--color-foreground-secondary);
+}
 .sd-card-body p:last-child {
   margin-bottom: 0;
 }
-
-.sd-card-body strong {
-  color: var(--color-foreground-primary);
-  font-weight: 600;
+.sd-card:has(.sd-stretched-link:focus-visible) {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 4px;
 }
-
-/* ---------------------------------------------------------
-   Tab set — line indicator, no chromatic accent
-   --------------------------------------------------------- */
-.sd-tab-set {
-  margin: var(--space-5) 0;
+.nav-cards .sd-row {
+  row-gap: 0 !important;
 }
-
-.sd-tab-set > input ~ label {
-  font-size: var(--fs-ui-sm);
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  padding: 0.4rem 0.85rem;
-  border-bottom: 2px solid transparent;
-  color: var(--color-foreground-secondary);
-  transition: color 0.12s, border-color 0.12s;
-  background: transparent;
-}
-
-.sd-tab-set > input ~ label:hover {
-  color: var(--color-foreground-primary);
-}
-
-.sd-tab-set > input:checked ~ label {
-  color: var(--color-foreground-primary);
-  border-bottom-color: var(--color-foreground-primary);
-  font-weight: 600;
-}
-
-.sd-tab-content {
-  border: var(--hairline);
-  border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
-  padding: 1rem 1.15rem;
-  background: var(--color-background-secondary);
-}
-
-/* ---------------------------------------------------------
-   Admonitions — single left rule, monochrome by default;
-   amber/red appear only on Warning/Error variants.
-   --------------------------------------------------------- */
-.admonition {
+.nav-cards .sd-card {
+  height: 100%;
   border: none !important;
-  border-left: 2px solid var(--color-foreground-secondary) !important;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
-  background: var(--color-admonition-background) !important;
-  padding: 0.6rem 0.95rem !important;
-  margin: var(--space-4) 0 !important;
-  font-size: var(--fs-ui);
+  border-top: var(--rule) !important;
+  border-radius: 0 !important;
+  transition: background 160ms ease;
+}
+.nav-cards .sd-card:hover {
+  background: var(--color-background-secondary) !important;
+  transform: none !important;
+}
+.nav-cards .sd-card-body {
+  padding: 1.2rem 0.75rem 1.3rem 0 !important;
+}
+.nav-cards .sd-card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+  color: var(--color-foreground-primary);
+  margin-bottom: 0.6rem !important;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+}
+.nav-cards .sd-card-title::after {
+  content: "→";
+  color: var(--color-brand-primary);
+  font-weight: 400;
+  transition: transform 150ms ease;
+}
+.nav-cards .sd-card:hover .sd-card-title::after {
+  transform: translateX(3px);
+}
+.nav-cards .sd-card-text {
+  font-size: 0.85rem;
   line-height: 1.65;
+  margin-bottom: 0.65rem;
 }
-
-.admonition-title {
-  font-size: var(--fs-label) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: var(--track-label) !important;
-  margin: 0 0 0.3rem !important;
-  color: var(--color-foreground-primary) !important;
-  background: transparent !important;
-  padding: 0 !important;
+.start-directory {
+  counter-reset: entry;
+}
+.start-directory .sd-card-body {
+  counter-increment: entry;
+}
+.start-directory .sd-card-body::before {
+  content: "0" counter(entry);
   display: block;
+  margin-bottom: 0.8rem;
+  color: var(--color-brand-primary);
+  font: 0.7rem var(--font-stack--monospace);
 }
-
-.admonition-title::before {
-  display: none !important;
+.method-directory {
+  counter-reset: method;
 }
-
-.admonition p:last-child {
+.method-directory .sd-row {
+  row-gap: 0 !important;
+}
+.method-directory .sd-col {
+  padding-top: 0 !important;
+}
+.method-directory .sd-card {
+  counter-increment: method;
+  border: none !important;
+  border-bottom: var(--rule) !important;
+  border-radius: 0 !important;
+  transition: background 160ms ease;
+}
+.method-directory .sd-card:hover {
+  background: var(--color-background-secondary) !important;
+  transform: none !important;
+}
+.method-directory .sd-card-body {
+  display: grid;
+  grid-template-columns: 1.5rem 12.5rem minmax(0, 1fr);
+  gap: 0.4rem 1rem;
+  padding: 1.4rem 0.6rem !important;
+}
+.method-directory .sd-card-body::before {
+  content: "0" counter(method);
+  grid-row: span 2;
+  color: var(--color-foreground-muted);
+  font: 0.7rem var(--font-stack--monospace);
+}
+.method-directory .sd-card-title {
+  grid-row: span 2;
+  color: var(--color-foreground-primary);
+  font-size: 1rem;
+  letter-spacing: -0.025em;
+}
+.method-directory .sd-card-title::after {
+  content: " ↗";
+  color: var(--color-brand-primary);
+}
+.method-directory .sd-card-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.method-directory .sd-card-text:last-child {
+  grid-column: 3;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+}
+.method-directory code.literal {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-foreground-muted);
+}
+article .research-note {
+  margin-top: 2rem;
+  padding: 1.4rem 1.6rem;
+  border-left: 2px solid var(--color-brand-primary);
+  background: var(--color-background-secondary);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.research-note p {
+  font-size: 0.9rem;
+}
+.research-note p:last-child {
   margin-bottom: 0;
 }
-
-.admonition.note,
-.admonition.tip,
-.admonition.important,
-.admonition.hint {
-  border-left-color: var(--color-foreground-secondary) !important;
+.research-note .rubric {
+  color: var(--color-foreground-primary);
+  font-weight: 600;
+}
+.dev-status {
+  margin-top: 2rem;
+  font-size: 0.72rem;
+  color: var(--color-foreground-muted);
 }
 
-.admonition.note .admonition-title,
-.admonition.tip .admonition-title,
-.admonition.important .admonition-title,
-.admonition.hint .admonition-title {
-  color: var(--color-foreground-primary) !important;
+/* Code and API reference */
+code, pre, .sig {
+  font-family: var(--font-stack--monospace);
+}
+article code.literal {
+  padding: 0.12em 0.28em;
+  border-radius: 3px;
+  background: var(--color-background-secondary);
+  color: var(--color-foreground-primary);
+  font-size: 0.83em;
+  overflow-wrap: anywhere;
 }
 
-.admonition.seealso {
-  border-left-color: var(--color-foreground-muted) !important;
+article :is(h1, h2, h3, h4) code.literal {
+  background: none;
+  padding: 0;
 }
-.admonition.seealso .admonition-title {
-  color: var(--color-foreground-muted) !important;
-}
-
-.admonition.warning,
-.admonition.caution,
-.admonition.attention {
-  border-left-color: var(--color-semantic-warning) !important;
-}
-.admonition.warning .admonition-title,
-.admonition.caution .admonition-title,
-.admonition.attention .admonition-title {
-  color: var(--color-semantic-warning) !important;
-}
-
-.admonition.danger,
-.admonition.error {
-  border-left-color: var(--color-semantic-error) !important;
-}
-.admonition.danger .admonition-title,
-.admonition.error .admonition-title {
-  color: var(--color-semantic-error) !important;
-}
-
-/* ---------------------------------------------------------
-   Code blocks — monochrome syntax tokens, weight-based emphasis
-   --------------------------------------------------------- */
-div.highlight {
-  box-sizing: border-box;
-  border-radius: var(--radius-md) !important;
-  border: var(--hairline-quiet) !important;
-  position: relative;
-  background: var(--color-background-secondary) !important;
-  margin: var(--space-4) 0;
-}
-
-/* The language class lives on the wrapper Sphinx puts around div.highlight.
-   That wrapper becomes the frame; the label sits on its top edge.
-
-   Furo sets this wrapper to display:flex (a row). The ::before label is then
-   a flex item beside the code, and Furo's .highlight { width: 100% } will not
-   shrink, so the command paints past the frame. Column flex keeps the label
-   on the top edge and the code inside the frame. */
 div[class*="highlight-"]:not(.highlight) {
-  box-sizing: border-box;
-  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  max-width: 100%;
   min-width: 0;
-  margin: var(--space-4) 0;
-  border: var(--hairline-quiet);
-  border-radius: var(--radius-md);
+  max-width: 100%;
+  position: relative;
+  margin: 1.5rem 0;
+  border: var(--rule);
+  border-radius: var(--radius);
   background: var(--color-background-secondary);
   overflow: hidden;
 }
 
 div[class*="highlight-"]:not(.highlight)::before {
   content: "Code";
-  display: block;
-  padding: 0.38rem 2.5rem 0.32rem 0.95rem;
-  border-bottom: var(--hairline-quiet);
-  font-family: var(--font-stack);
-  font-size: var(--fs-label);
-  font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 2.9rem;
+  padding: 0.5rem 6rem 0.5rem 1.1rem;
+  border-bottom: var(--rule);
   color: var(--color-foreground-muted);
-  line-height: 1.4;
-  user-select: none;
+  font: 0.65rem var(--font-stack--monospace);
 }
 
-div.highlight-python:not(.highlight)::before { content: "Python"; }
-div.highlight-bash:not(.highlight)::before,
-div.highlight-shell:not(.highlight)::before,
-div.highlight-console:not(.highlight)::before,
-div.highlight-sh:not(.highlight)::before { content: "Shell"; }
-div.highlight-powershell:not(.highlight)::before { content: "PowerShell"; }
-div.highlight-toml:not(.highlight)::before { content: "TOML"; }
-div.highlight-yaml:not(.highlight)::before { content: "YAML"; }
-div.highlight-text:not(.highlight)::before,
-div.highlight-none:not(.highlight)::before,
-div.highlight-default:not(.highlight)::before {
-  content: none;
-  display: none;
+div.highlight-python::before {
+  content: "Python" !important;
 }
-
-div[class*="highlight-"]:not(.highlight) > div.highlight {
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  margin: 0;
-  position: static;
-  /* Override Furo's width:100%, which refuses to shrink beside the label. */
-  width: auto;
+:is(div.highlight-bash, div.highlight-shell, div.highlight-console, div.highlight-sh)::before {
+  content: "Shell" !important;
+}
+div.highlight-powershell::before {
+  content: "PowerShell" !important;
+}
+div.highlight-toml::before {
+  content: "TOML" !important;
+}
+div.highlight-yaml::before {
+  content: "YAML" !important;
+}
+:is(div.highlight-text, div.highlight-none, div.highlight-default)::before {
+  content: none !important;
+}
+div.highlight {
   min-width: 0;
   max-width: 100%;
-}
-
-div.highlight pre {
-  font-family: var(--font-stack--monospace);
-  font-size: var(--fs-code);
-  font-feature-settings: "calt", "ss03";
-  line-height: 1.6;
-  padding: 0.9rem 1.1rem !important;
   background: transparent !important;
-  color: var(--color-foreground-primary);
-  max-width: 100%;
-  overflow-x: auto;
 }
-
-/* Pygments token overrides — neutralise every syntax colour to grayscale so
-   code carries emphasis by weight and value, like the rest of the page.
-
-   Sphinx emits the dark Pygments theme behind `body[data-theme="dark"]` and
-   `body:not([data-theme="light"])`, both of which outrank a bare
-   `.highlight .c1`. Each group therefore ships a second, guarded selector at
-   matching specificity; custom.css loads after pygments.css, so source order
-   decides it. Without that guard the light theme is grayscale and the dark
-   theme falls back to Monokai. */
-
-/* Highlighted line */
-.highlight :is(.hll),
-body:not([data-theme="light"]) .highlight :is(.hll) {
-  background-color: var(--color-background-hover);
-}
-
-/* Comments */
-.highlight :is(.c, .ch, .cm, .c1, .cs, .cp, .cpf),
-body:not([data-theme="light"]) .highlight :is(.c, .ch, .cm, .c1, .cs, .cp, .cpf) {
-  color: var(--color-foreground-muted);
-  font-style: italic;
-}
-
-/* Keywords */
-.highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kt),
-body:not([data-theme="light"]) .highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kt) {
-  color: var(--color-brand-primary);
-  font-weight: 600;
-}
-
-/* Operators */
-.highlight :is(.o, .ow),
-body:not([data-theme="light"]) .highlight :is(.o, .ow) {
-  color: var(--color-foreground-primary);
-}
-
-/* Punctuation */
-.highlight :is(.p),
-body:not([data-theme="light"]) .highlight :is(.p) {
-  color: var(--color-foreground-secondary);
-}
-
-/* Names and variables */
-.highlight :is(.n, .nx, .nv, .vc, .vg, .vi),
-body:not([data-theme="light"]) .highlight :is(.n, .nx, .nv, .vc, .vg, .vi) {
-  color: var(--color-foreground-primary);
-}
-
-/* Builtins */
-.highlight :is(.nb, .bp),
-body:not([data-theme="light"]) .highlight :is(.nb, .bp) {
-  color: var(--color-foreground-primary);
-  font-weight: 500;
-}
-
-/* Definitions — functions, classes, modules */
-.highlight :is(.nf, .nc, .nn),
-body:not([data-theme="light"]) .highlight :is(.nf, .nc, .nn) {
-  color: var(--color-brand-content);
-  font-weight: 600;
-}
-
-/* Decorators, exceptions, constants */
-.highlight :is(.nd, .ni, .ne, .nl, .no, .py),
-body:not([data-theme="light"]) .highlight :is(.nd, .ni, .ne, .nl, .no, .py) {
-  color: var(--color-brand-content);
-}
-
-/* Strings */
-.highlight :is(.s, .s1, .s2, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss, .sa, .dl),
-body:not([data-theme="light"]) .highlight :is(.s, .s1, .s2, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss, .sa, .dl) {
-  color: var(--color-foreground-secondary);
-}
-
-/* Numbers */
-.highlight :is(.m, .mf, .mh, .mi, .mo, .il, .mb),
-body:not([data-theme="light"]) .highlight :is(.m, .mf, .mh, .mi, .mo, .il, .mb) {
-  color: var(--color-brand-content);
-}
-
-/* Diff and generic headings */
-.highlight :is(.gh, .gu),
-body:not([data-theme="light"]) .highlight :is(.gh, .gu) {
-  color: var(--color-brand-primary);
-  font-weight: 700;
-}
-
-/* Deletions */
-.highlight :is(.gd),
-body:not([data-theme="light"]) .highlight :is(.gd) {
-  color: var(--color-semantic-error);
-}
-
-/* Insertions */
-.highlight :is(.gi),
-body:not([data-theme="light"]) .highlight :is(.gi) {
-  color: var(--color-foreground-primary);
-  font-weight: 600;
-}
-
-/* Generic emphasis */
-.highlight :is(.ge),
-body:not([data-theme="light"]) .highlight :is(.ge) {
-  font-style: italic;
-}
-
-/* Generic strong */
-.highlight :is(.gs),
-body:not([data-theme="light"]) .highlight :is(.gs) {
-  font-weight: 700;
-}
-
-/* Tracebacks and errors */
-.highlight :is(.gr, .gt, .err),
-body:not([data-theme="light"]) .highlight :is(.gr, .gt, .err) {
-  color: var(--color-semantic-error);
-  border: none;
-  background: transparent;
-}
-
-/* Shell and REPL prompts — recede so the typed command stands out */
-.highlight :is(.gp, .go),
-body:not([data-theme="light"]) .highlight :is(.gp, .go) {
-  color: var(--color-foreground-muted);
-  user-select: none;
-}
-
-/* Copy button (sphinx-copybutton) — hairline chip */
-button.copybtn {
-  opacity: 0 !important;
-  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
-  background: var(--color-background-hover) !important;
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-sm) !important;
-  color: var(--color-foreground-secondary) !important;
-  padding: 2px 6px !important;
-  font-size: var(--fs-ui-xs) !important;
-  top: 0.32rem !important;
-  right: 0.4rem !important;
-  z-index: 2;
-}
-
-div.highlight:hover button.copybtn,
-div[class*="highlight-"]:hover button.copybtn {
-  opacity: 1 !important;
-}
-
-button.copybtn:hover {
-  color: var(--color-foreground-primary) !important;
-  border-color: var(--color-foreground-secondary) !important;
-}
-
-button.copybtn.success {
-  color: var(--color-foreground-primary) !important;
-  border-color: var(--color-foreground-primary) !important;
-}
-
-/* Inline code — monospace only. A border on every name turns a paragraph
-   into a row of badges. */
-code.literal,
-p code,
-li code,
-td code,
-dd code {
-  background: var(--color-background-hover);
-  border: none !important;
-  border-radius: 3px;
-  padding: 0.02em 0.22em;
-  font-size: 0.88em !important;
-  color: var(--color-foreground-primary) !important;
-  font-family: var(--font-stack--monospace);
-  font-feature-settings: "calt", "ss03";
-}
-
-pre code,
-.sig code,
-dl.field-list code,
-.stage-grid code,
-.highlight code,
-.nav-cards code,
-h1 code, h2 code, h3 code, h4 code {
-  background: transparent !important;
-  padding: 0 !important;
-  border-radius: 0;
-}
-
-/* Code inside headings should stay quiet */
-h1 code, h2 code, h3 code, h4 code {
-  font-size: 0.9em !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  color: inherit !important;
-}
-
-/* ---------------------------------------------------------
-   Links — hairline underline, brightens on hover
-   --------------------------------------------------------- */
-a, a:visited {
-  color: var(--color-foreground-primary);
-  text-decoration: underline;
-  text-decoration-color: var(--color-foreground-border);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  transition: text-decoration-color 0.15s ease;
-}
-
-a:hover {
-  color: var(--color-foreground-primary);
-  text-decoration-color: var(--color-foreground-secondary);
-}
-
-/* ---------------------------------------------------------
-   Tables — hairline rows, dense header
-   --------------------------------------------------------- */
-.table-wrapper {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-table.docutils {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: var(--fs-ui);
-  margin: var(--space-4) 0;
-  border-top: var(--hairline);
-  border-bottom: var(--hairline);
-  /* Furo floats tables on a drop shadow; everything else here is ruled. */
-  box-shadow: none;
-}
-
-/* The wrapper already carries the vertical spacing, and scrolling makes
-   it a formatting context, so the table's own margin added a second gap. */
-.table-wrapper > table.docutils {
+div[class*="highlight-"] > div.highlight {
+  position: static;
+  width: auto;
   margin: 0;
 }
-
-table.docutils th {
+div.highlight pre {
+  padding: 1.1rem !important;
+  margin: 0;
   background: transparent !important;
-  color: var(--color-foreground-secondary) !important;
-  font-weight: 700;
-  font-size: var(--fs-label);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  border-bottom: var(--hairline) !important;
-  border-top: none !important;
-  padding: 0.5rem 0.8rem !important;
-  text-align: left;
-}
-
-table.docutils td {
-  border-bottom: var(--hairline-quiet) !important;
-  padding: 0.5rem 0.8rem !important;
-  vertical-align: top;
   color: var(--color-foreground-primary);
-  line-height: 1.6;
+  font-size: var(--code-size);
+  line-height: 1.75;
+  overflow-x: auto;
 }
 
-table.docutils tr:last-child td {
-  border-bottom: none !important;
+/* A small syntax palette makes examples scannable in either theme. */
+body[data-theme] .highlight :is(.c, .c1, .cm, .cs, .cp, .cpf, .gp, .go) {
+  color: var(--color-foreground-muted);
+  font-style: italic;
 }
-
-table.docutils tr:hover td {
+body[data-theme] .highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kt, .nb, .bp) {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+body[data-theme] .highlight :is(.s, .s1, .s2, .sa, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss, .dl) {
+  color: var(--color-brand-content);
+}
+body[data-theme] .highlight :is(.n, .nf, .nc, .nn, .o, .ow, .p, .m, .mi, .mf, .mb, .mh, .mo, .il) {
+  color: var(--color-foreground-primary);
+}
+body[data-theme] .highlight .hll {
   background: var(--color-background-hover);
 }
 
-table.docutils caption {
-  caption-side: top;
-  text-align: left;
-  padding: 0 0.15rem 0.45rem;
-  font-size: var(--fs-label);
-  font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--color-foreground-muted);
-}
-
-table.docutils td:first-child:nth-last-child(2) {
-  font-weight: 600;
-}
-
-/* Wide tables and long code lines scroll sideways, which nothing showed:
-   the scorecard's last column and the end of `pip install` lines were
-   simply cut off. custom.js marks what overflows and which end is reached;
-   the hidden side fades out. */
-.is-overflowing:not(.at-end) {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
-}
-
-/* Tables keep the first column pinned instead, so no left fade. */
-pre.is-overflowing:not(.at-start):not(.at-end) {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
-}
-
-pre.is-overflowing.at-end:not(.at-start) {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem);
-  mask-image: linear-gradient(to right, transparent, #000 3rem);
-}
-
-/* The row label stays in view while the columns scroll under it. */
-.table-wrapper.is-overflowing :is(th, td):first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: var(--color-background-primary) !important;
-  box-shadow: inset -1px 0 0 var(--color-background-border);
-}
-
-.admonition .table-wrapper.is-overflowing :is(th, td):first-child {
-  background: var(--color-admonition-background) !important;
-}
-
-.table-wrapper.is-overflowing tr:hover td:first-child {
-  background: var(--color-background-hover) !important;
-}
-
-/* ---------------------------------------------------------
-   Horizontal rule — quiet section break
-   --------------------------------------------------------- */
-hr,
-hr.docutils {
-  border: none !important;
-  border-top: var(--hairline-quiet) !important;
-  margin: var(--space-7) 0 !important;
+.highlight button.copybtn {
+  top: 0.25rem;
+  right: 0.45rem;
+  width: 4.6rem;
+  height: 2.35rem;
+  justify-content: center;
+  gap: 0.4rem;
+  border: var(--rule);
+  border-radius: 4px;
+  background: var(--color-background-primary);
+  color: var(--color-foreground-secondary);
   opacity: 1;
 }
 
-/* ---------------------------------------------------------
-   Landing page — hero, primary CTAs, stage grid, docs nav
-
-   Note: sphinx-design grid-item-card emits .sd-card-title inside
-   .sd-card-body (not a separate .sd-card-header). All landing-page
-   header styling targets .sd-card-title, not .sd-card-header.
-   --------------------------------------------------------- */
-.hero-kicker {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin: 0 0 var(--space-3);
-  font-size: var(--fs-label);
-  font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  line-height: 1.3;
-  color: var(--color-foreground-muted);
-}
-
-.hero-kicker-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--color-foreground-border);
-  flex: none;
-}
-
-.hero-version {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-
-.hero-lede {
-  font-size: var(--fs-lede);
-  font-weight: 400;
-  line-height: 1.6;
-  color: var(--color-foreground-secondary);
-  max-width: var(--measure);
-  margin: 0 0 var(--space-6);
-  letter-spacing: var(--track-heading);
-  text-wrap: pretty;
-}
-
-.hero-lede strong {
-  color: var(--color-foreground-primary);
-  font-weight: 600;
-}
-
-/* sphinx-design pads every grid 0.75rem inside the column, so card edges
-   sat indented from the text and rules around them. */
-.sd-container-fluid {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-
-/* An odd card out in the two-up stage grid spans the row instead of
-   leaving a hole beside it. Below 701px every card is full width anyway. */
-@media (min-width: 701px) {
-  .stage-grid .sd-col:last-child:nth-child(odd) {
-    flex: 0 0 100% !important;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-}
-
-/* Disable the default sphinx-design hover lift on landing grids —
-   minimalist surfaces shouldn't move under the cursor. */
-.nav-cards .sd-row,
-.stage-grid .sd-row {
-  align-items: stretch;
-}
-
-.nav-cards .sd-col,
-.stage-grid .sd-col {
-  display: flex;
-  min-width: 0;
-}
-
-.nav-cards .sd-card,
-.stage-grid .sd-card,
-.docs-nav .sd-card {
-  transform: none !important;
-  box-shadow: none !important;
-  width: 100%;
-  height: 100%;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-}
-
-.nav-cards .sd-card:hover,
-.stage-grid .sd-card:hover,
-.docs-nav .sd-card:hover {
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-/* Primary navigation cards — aerated, hairline, with a chevron affordance.
-   Used on the landing page hero CTAs and on every section index page
-   (user_guide, methods, cli, etc.) to give navigation a consistent voice. */
-.nav-cards {
-  margin: 0 0 var(--space-6);
-}
-
-.nav-cards .sd-card {
-  background: transparent !important;
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-md) !important;
-  position: relative;
-}
-
-.nav-cards .sd-card:hover {
-  background: var(--color-background-secondary) !important;
-  border-color: var(--color-foreground-secondary) !important;
-}
-
-.nav-cards .sd-card-body {
-  padding: 1rem 1.1rem 1.1rem !important;
-}
-
-.nav-cards .sd-card-title {
-  font-size: var(--fs-h4) !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.005em;
-  color: var(--color-foreground-primary) !important;
-  margin: 0 0 0.4rem !important;
-  padding-right: 1.1rem;
-}
-
-.nav-cards .sd-card-title::after {
-  content: "→";
-  position: absolute;
-  top: 1rem;
-  right: 1.1rem;
-  font-size: 1rem;
-  color: var(--color-foreground-muted);
-  transition: transform 0.15s ease, color 0.15s ease;
-}
-
-.nav-cards .sd-card:hover .sd-card-title::after {
-  color: var(--color-foreground-primary);
-  transform: translateX(2px);
-}
-
-.nav-cards .sd-card-text {
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-secondary) !important;
-  line-height: 1.6;
-  margin: 0 0 0.35rem !important;
-}
-
-.nav-cards .sd-card-text:last-child {
-  margin-bottom: 0 !important;
-}
-
-/* Anchor cards (link-type: url) carry an external indicator instead. */
-.nav-cards .sd-card[href^="http"] .sd-card-title::after,
-.nav-cards .sd-card:has(a[href^="http"].sd-stretched-link) .sd-card-title::after {
-  content: "↗";
-}
-
-/* Hero screenshot — quiet framed image, no caption clutter */
-.hero-screenshot,
-a.hero-screenshot {
-  display: block;
-  margin: var(--space-7) auto !important;
-  max-width: 100%;
-}
-
-img.hero-screenshot {
-  display: block;
-  margin: 0 auto !important;
-  max-width: 100%;
-  height: auto;
-  border: var(--hairline-quiet);
-  border-radius: var(--radius-md);
-}
-
-/* Feature stage cards — eyebrow title, mono output footer */
-.stage-grid .sd-card {
-  background: var(--color-background-secondary) !important;
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-md) !important;
-}
-
-.stage-grid .sd-card:hover {
-  border-color: var(--color-foreground-secondary) !important;
-  background: var(--color-background-hover) !important;
-}
-
-.stage-grid .sd-card-body {
-  padding: 0.85rem 1rem 0.95rem !important;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.stage-grid .sd-card-title {
-  font-size: var(--fs-label) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--color-foreground-secondary) !important;
-  margin: 0 !important;
-  padding-bottom: 0.45rem;
-  border-bottom: var(--hairline-quiet);
-}
-
-.stage-grid .sd-card-text {
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-primary) !important;
-  line-height: 1.6;
-  margin: 0 !important;
-}
-
-.stage-grid .sd-card-text:not(:first-child):last-child {
-  font-family: var(--font-stack--monospace);
-  font-size: var(--fs-ui-xs) !important;
-  color: var(--color-foreground-muted) !important;
-  margin-top: auto !important;
-  letter-spacing: 0.005em;
-}
-
-.stage-grid .sd-card-text:not(:first-child):last-child code {
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  color: inherit !important;
-  font-size: 1em !important;
-  /* A name wraps whole. index.rst glues each " ·" to the name before it
-     with a no-break space, so a line never starts with a separator. */
-  white-space: nowrap;
-}
-
-/* Secondary docs navigation — borderless, top-rule emphasis */
-.docs-nav {
-  margin-top: var(--space-3);
-}
-
-.docs-nav .sd-card {
-  background: transparent !important;
-  border: none !important;
-  border-top: var(--hairline-quiet) !important;
-  border-radius: 0 !important;
-}
-
-.docs-nav .sd-card:hover {
-  background: transparent !important;
-  border-top-color: var(--color-foreground-primary) !important;
-}
-
-.docs-nav .sd-card-body {
-  padding: 0.7rem 0 0.85rem !important;
-}
-
-.docs-nav .sd-card-title {
-  font-size: var(--fs-ui) !important;
-  font-weight: 600 !important;
-  color: var(--color-foreground-primary) !important;
-  margin: 0 0 0.25rem !important;
-}
-
-.docs-nav .sd-card-text {
-  font-size: var(--fs-ui-sm) !important;
-  color: var(--color-foreground-muted) !important;
-  line-height: 1.55;
-  margin: 0 !important;
-}
-
-/* Quiet status line under the landing grids. */
-.dev-status {
-  font-size: var(--fs-ui-sm);
-  color: var(--color-foreground-muted);
-  border-left: none;
-  border-top: var(--hairline-quiet);
-  padding: 0.85rem 0 0;
-  margin: var(--space-6) 0 0;
-  max-width: none;
-  line-height: 1.6;
-}
-
-.dev-status strong {
-  color: var(--color-foreground-secondary);
-  font-weight: 600;
-}
-
-/* Step-progress eyebrow — shows the n-step roadmap at the top of a
-   tutorial page (e.g. Quick Start). Renders as a single horizontal
-   strip of small uppercase tokens separated by hairline arrows. */
-.step-progress {
-  font-size: var(--fs-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--color-foreground-muted);
-  margin: 0 0 var(--space-6);
-  padding: 0.55rem 0;
-  border-top: var(--hairline-quiet);
-  border-bottom: var(--hairline-quiet);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem 0.65rem;
-  line-height: 1.4;
-}
-
-.step-progress .step-count {
-  color: var(--color-foreground-secondary);
-  margin-right: 0.5rem;
-  padding-right: 0.65rem;
-  border-right: var(--hairline-quiet);
-}
-
-.step-progress a {
-  color: var(--color-foreground-muted);
-  text-decoration: none;
-  transition: color 0.12s ease;
-}
-
-.step-progress a:hover {
-  color: var(--color-foreground-primary);
-}
-
-.step-progress .sep {
-  color: var(--color-foreground-border);
-  user-select: none;
-}
-
-/* Landing-page responsive — collapse the 4-up docs nav before the
-   global 700px breakpoint so titles don't get cramped. */
-@media (max-width: 900px) {
-  .docs-nav .sd-row.sd-row-cols-4 > .sd-col {
-    width: 50% !important;
-    flex: 0 0 50% !important;
-    max-width: 50% !important;
-  }
-}
-
-/* ---------------------------------------------------------
-   Breadcrumb / prev-next navigation
-   --------------------------------------------------------- */
-.related-pages {
-  display: flex;
-  gap: 0.75rem;
-  border-top: none;
-  padding-top: 0;
-  margin-top: var(--space-7);
-}
-
-.related-pages a {
-  flex: 1 1 0;
-  align-items: center;
-  max-width: calc(50% - 0.375rem);
-  float: none;
-  border: var(--hairline-quiet);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 0.85rem;
-  background: transparent;
-  text-decoration: none;
-  color: var(--color-foreground-secondary);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.related-pages a.prev-page {
-  order: 1;
-}
-
-.related-pages a.next-page {
-  order: 2;
-  margin-left: auto;
-  text-align: right;
-  /* The link is a flex row; text-align alone left the label and arrow
-     floating mid-card. */
-  justify-content: flex-end;
-}
-
-.related-pages a:hover {
-  background: var(--color-background-secondary);
-  border-color: var(--color-foreground-secondary);
-  color: var(--color-foreground-primary);
-  text-decoration: none;
-}
-
-.related-pages a:hover .page-info .title {
-  color: var(--color-foreground-primary);
-  text-decoration: none;
-}
-
-.related-pages .context {
-  font-size: var(--fs-label);
-  font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--color-foreground-muted);
-  margin-bottom: 0.15rem;
-}
-
-.related-pages .title {
-  font-size: var(--fs-ui);
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--color-foreground-primary);
-  text-wrap: balance;
-}
-
-.related-pages a svg.furo-related-icon,
-.related-pages a svg.furo-related-icon > use {
-  color: var(--color-foreground-muted);
-}
-
-.related-pages a:hover svg.furo-related-icon,
-.related-pages a:hover svg.furo-related-icon > use {
-  color: var(--color-foreground-primary);
-}
-
-/* ---------------------------------------------------------
-   Footer
-   --------------------------------------------------------- */
-footer {
-  font-size: var(--fs-ui-xs);
-  color: var(--color-foreground-muted);
-  border-top: none;
-  padding-top: 0;
-  margin-top: var(--space-6);
-  letter-spacing: 0.01em;
-}
-
-.bottom-of-page {
-  border-top: var(--hairline-quiet);
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  padding-bottom: var(--space-2);
-}
-
-.bottom-of-page .right-details {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.7rem;
-  text-align: right;
-}
-
-.footer-link {
-  color: var(--color-foreground-secondary);
-  text-decoration: none;
-}
-
-.footer-link:hover {
-  color: var(--color-foreground-primary);
-  text-decoration: none;
-}
-
-.footer-sep {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--color-foreground-border);
-  flex: none;
-}
-
-.footer-version {
-  font-family: var(--font-stack--monospace);
-  font-size: 0.75rem;
-  color: var(--color-foreground-muted);
-  letter-spacing: 0.01em;
-}
-
-/* ---------------------------------------------------------
-   Search input
-   --------------------------------------------------------- */
-.sidebar-search-container {
-  margin: 0.4rem 0.75rem 0.85rem;
-  border: var(--hairline-quiet);
-  border-radius: var(--radius-md);
-  background: var(--color-background-secondary);
-}
-
-.sidebar-search-container:hover,
-.sidebar-search-container:focus-within {
-  border-color: var(--color-foreground-secondary);
-  background: var(--color-background-primary);
-}
-
-.sidebar-search-container::before {
-  left: 0.7rem;
-}
-
-input[type="search"] {
-  border: none !important;
-  border-radius: var(--radius-md) !important;
-  background: transparent !important;
-  font-size: var(--fs-ui-sm) !important;
-  color: var(--color-foreground-primary) !important;
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
-  padding-right: 2rem !important;
-  font-family: var(--font-stack);
-}
-
-.search-hint {
-  position: absolute;
-  right: 0.45rem;
-  top: 50%;
-  transform: translateY(-50%);
-  margin: 0;
-  padding: 0.05rem 0.32rem;
-  border: var(--hairline-quiet);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--color-foreground-muted);
-  font-family: var(--font-stack--monospace);
-  font-size: 0.68rem;
-  font-weight: 500;
-  line-height: 1.4;
-  pointer-events: none;
-}
-
-.sidebar-search-container:focus-within .search-hint {
-  opacity: 0;
-}
-
-input[type="search"]::placeholder {
-  color: var(--color-foreground-muted);
-}
-
-/* ---------------------------------------------------------
-   Dropdown (sphinx-design) — collapsibles
-   --------------------------------------------------------- */
-details.sd-dropdown {
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-md) !important;
-  background: var(--color-background-secondary) !important;
-  margin: var(--space-2) 0 !important;
-}
-
-details.sd-dropdown summary {
-  padding: 0.6rem 0.95rem !important;
-  font-size: var(--fs-ui) !important;
-  font-weight: 500 !important;
-  color: var(--color-foreground-primary) !important;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-details.sd-dropdown summary:hover {
-  background: var(--color-background-hover) !important;
-}
-
-details.sd-dropdown[open] summary {
-  border-bottom: var(--hairline-quiet);
-  font-weight: 600 !important;
-}
-
-details.sd-dropdown .sd-summary-content {
-  padding: 0.8rem 0.95rem !important;
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-secondary) !important;
-  line-height: 1.65;
-}
-
-details.sd-dropdown .sd-summary-content p:last-child {
-  margin-bottom: 0;
-}
-
-/* ---------------------------------------------------------
-   Search results
-   --------------------------------------------------------- */
-#search-results .context {
-  font-size: var(--fs-ui-sm);
-  color: var(--color-foreground-secondary);
-  line-height: 1.6;
-  border-left: 2px solid var(--color-foreground-border);
-  padding-left: 0.75rem;
-  margin: 0.25rem 0 0.75rem;
-}
-
-#search-results li {
-  border-bottom: var(--hairline-quiet);
-  padding: 0.6rem 0;
-  list-style: none;
-}
-
-#search-results li:last-child {
-  border-bottom: none;
-}
-
-#search-results a {
-  font-size: var(--fs-h4);
-  font-weight: 600;
-  color: var(--color-foreground-primary);
-  text-decoration: none;
-}
-
-#search-results a:hover {
-  text-decoration: underline;
-}
-
-#search-results .highlighted {
-  background: var(--color-highlighted-background);
-  color: var(--color-highlighted-text);
-  border-radius: var(--radius-sm);
-  padding: 0 2px;
-  font-weight: 600;
-}
-
-#search-results h2 {
-  font-size: var(--fs-label);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--color-foreground-muted);
-  border-bottom: none;
-  margin: var(--space-4) 0 var(--space-2);
-  padding-bottom: 0;
-}
-
-/* ---------------------------------------------------------
-   Math — block equations rendered in a subtle bordered panel
-   matching the code-block aesthetic. Inline math stays
-   transparent so it flows with prose.
-
-   Sphinx emits block math as:
-     <div class="math-wrapper docutils container">
-       <div class="math notranslate nohighlight">\[ ... \]</div>
-     </div>
-   MathJax then injects an <mjx-container display="true"> inside the
-   inner div. Style the inner div as the visible panel, and zero out
-   the wrapper so we don't get double padding.
-   --------------------------------------------------------- */
-.math-wrapper.docutils.container {
-  padding: 0 !important;
-  margin: var(--space-4) 0;
-  background: transparent !important;
-  border: none !important;
-}
-
-div.math.notranslate.nohighlight,
-div.math {
-  background: var(--color-background-secondary) !important;
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-md) !important;
-  padding: 0.9rem 1.15rem !important;
-  margin: var(--space-4) 0 !important;
-  overflow-x: auto;
-  overflow-y: hidden;
-  color: var(--color-foreground-primary);
-  position: relative;
-  font-size: var(--fs-body);
-  line-height: 1.5;
-}
-
-/* MathJax-rendered block container inside our div.math should sit flat */
-div.math mjx-container[display="true"] {
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  color: inherit;
-}
-
-/* Equation number — quiet right-aligned tag */
-div.math span.eqno,
-.math .eqno {
-  color: var(--color-foreground-muted) !important;
-  font-size: var(--fs-ui-xs) !important;
-  font-family: var(--font-stack--monospace);
-  letter-spacing: 0.01em;
-  float: right;
-  padding-left: 0.75rem;
-}
-
-/* Inline math — no panel, inherits flow */
-mjx-container:not([display="true"]),
-span.math.notranslate.nohighlight {
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  color: inherit;
-}
-
-/* MathJax glyph color tracks the foreground primary */
-mjx-container,
-mjx-container * {
-  color: var(--color-foreground-primary);
-}
-
-/* Math inside admonitions and tables — drop the panel so the
-   surrounding container provides the framing */
-.admonition div.math,
-.admonition mjx-container[display="true"],
-table.docutils div.math,
-table.docutils mjx-container[display="true"] {
-  background: transparent !important;
-  border: none !important;
-  padding: 0.25rem 0 !important;
-  margin: 0.25rem 0 !important;
-}
-
-/* ---------------------------------------------------------
-   Meta-cards strip — Inputs / Outputs / CLI / Config eyebrow
-   strip at the top of every methods page. Compact, eyebrow
-   uppercase title, transparent surface so it reads as page
-   metadata rather than as a major visual element.
-   --------------------------------------------------------- */
-.meta-cards {
-  margin: 0 0 var(--space-5);
-}
-
-.meta-cards .sd-card {
-  background: transparent !important;
-  border: none !important;
-  border-top: var(--hairline-quiet) !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transition: border-top-color 0.15s ease;
+.highlight button.copybtn::before {
+  content: "Copy";
+  font: 0.7rem var(--font-stack);
 }
 
-.meta-cards .sd-card:hover {
-  background: transparent !important;
-  border-top-color: var(--color-foreground-secondary) !important;
+.highlight button.copybtn svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
-
-.meta-cards .sd-card-body {
-  padding: 0.55rem 0 0.7rem !important;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.meta-cards .sd-card-title {
-  font-size: var(--fs-label) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--color-foreground-muted) !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
-}
-
-.meta-cards .sd-card-text {
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-primary) !important;
-  line-height: 1.55;
-  margin: 0 !important;
-}
-
-/* ---------------------------------------------------------
-   Stage / Step section headers — long methods pages have many
-   sequential "Stage N — Foo" sections. A subtle horizontal
-   pre-rule above each h3 starting with "Stage" or "Step"
-   improves vertical rhythm. Pure CSS, no markup change needed.
-   --------------------------------------------------------- */
-section[id^="stage-"] > h3,
-section[id^="step-"] > h3 {
-  border-top: var(--hairline-quiet);
-  padding-top: var(--space-4);
-  margin-top: var(--space-6);
-}
-
-/* ---------------------------------------------------------
-   Module-ref caption — small uppercase eyebrow line that
-   identifies the source module implementing a stage. Rendered
-   directly under the section heading. The literal "Module:"
-   prefix becomes a small letter-spaced label; the code path
-   keeps its monospace styling.
-   --------------------------------------------------------- */
-.module-ref {
-  margin: -0.4rem 0 var(--space-4);
-  padding: 0;
-  font-size: var(--fs-ui-sm);
-  color: var(--color-foreground-muted);
-  border-left: 2px solid var(--color-foreground-border);
-  padding-left: 0.7rem;
-}
-
-.module-ref p {
-  margin: 0 !important;
-  line-height: 1.5;
-}
-
-.module-ref code,
-.module-ref .docutils.literal {
-  font-size: var(--fs-ui-sm) !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  color: var(--color-foreground-secondary) !important;
-}
-
-/* ---------------------------------------------------------
-   Dropdown directive — slightly tighter chevron + monospace
-   summary for the "click to expand" affordance. Used on
-   source_localization Manual Docker Workflow.
-   --------------------------------------------------------- */
-details.sd-dropdown summary svg.octicon {
-  color: var(--color-foreground-muted);
-}
-
-details.sd-dropdown[open] summary svg.octicon {
-  color: var(--color-foreground-primary);
-}
-
-/* ---------------------------------------------------------
-   Glossary — definition list
-   --------------------------------------------------------- */
-dl.glossary dt {
-  font-weight: 600;
-  font-size: var(--fs-h4);
-  color: var(--color-foreground-primary);
-  margin-top: 1.1rem;
-  padding-bottom: 0.2rem;
-  border-bottom: var(--hairline-quiet);
-}
-
-dl.glossary dd {
-  margin-left: 1rem;
-  font-size: var(--fs-ui);
-  color: var(--color-foreground-secondary);
-  line-height: 1.65;
-  margin-bottom: 0.2rem;
-}
-
-/* ---------------------------------------------------------
-   Step-header cards (quickstart numbered steps)
-   --------------------------------------------------------- */
-.sd-col-12 > .sd-card,
-.sd-col-xs-12 > .sd-card {
-  border-left: 2px solid var(--color-foreground-secondary) !important;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
-  background: var(--color-background-secondary) !important;
-}
-
-.sd-col-12 > .sd-card .sd-card-body,
-.sd-col-xs-12 > .sd-card .sd-card-body {
-  padding: 0.6rem 0.95rem !important;
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-secondary) !important;
-}
-
-/* ---------------------------------------------------------
-   Mobile / narrow viewport
-   --------------------------------------------------------- */
-/* Narrow viewports step the whole ladder down at once rather than patching
-   rule by rule, so the proportions that hold on a desktop still hold here. */
-/* Furo sets `.content { width: 100%; padding: 0 1em }` below ~48em with
-   content-box sizing, so the padding is added on top of the viewport and the
-   right edge of every line is clipped. */
-@media (max-width: 800px) {
-  .content {
-    box-sizing: border-box !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-  }
-
-  /* View and edit sit in the title row once the sidebar is gone. */
-  .view-this-page,
-  .edit-this-page {
-    display: none !important;
-  }
-
-  .main,
-  .page,
-  article {
-    max-width: 100%;
-    min-width: 0;
-  }
-
-  .sd-card-text,
-  .hero-lede {
-    overflow-wrap: break-word;
-  }
+.highlight button.copybtn:hover {
+  color: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  background: var(--color-background-hover);
 }
-
-@media (max-width: 700px) {
-  :root {
-    --fs-display: 1.875rem;
-    --fs-h1:      1.625rem;
-    --fs-h2:      1.3125rem;
-    --fs-h3:      1.0625rem;
-    --fs-h4:      1rem;
-    --fs-lede:    1.0625rem;
-    --fs-body:    1rem;
-    --fs-ui:      0.875rem;
-    --fs-ui-sm:   0.8125rem;
-    --fs-code:    0.8125rem;
-    --measure:    100%;
-  }
-
-  .sd-row.sd-row-cols-3 > .sd-col,
-  .sd-row.sd-row-cols-xs-3 > .sd-col,
-  .sd-row.sd-row-cols-2 > .sd-col,
-  .sd-row.sd-row-cols-xs-2 > .sd-col {
-    width: 100% !important;
-    flex: 0 0 100% !important;
-    max-width: 100% !important;
-  }
-
-  table.docutils th,
-  table.docutils td {
-    padding: 0.4rem 0.55rem !important;
-  }
-}
-
-@media (max-width: 480px) {
-  :root {
-    --fs-code: 0.75rem;
-    --fs-ui:   0.8125rem;
-  }
-}
-
-/* ---------------------------------------------------------
-   Scrollbar — thin, unobtrusive
-   --------------------------------------------------------- */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.highlight button.copybtn:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 1px;
 }
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-foreground-border);
-  border-radius: 3px;
+.highlight button.copybtn.success {
+  color: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-foreground-muted);
+.highlight button.copybtn.success::before {
+  content: "Copied";
 }
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-foreground-border) transparent;
+.highlight button.copybtn::after {
+  display: none !important;
 }
-
-/* ---------------------------------------------------------
-   Print / PDF — clean grayscale scholarly output
-   --------------------------------------------------------- */
-@media print {
-  :root {
-    --measure: 100%;
-    --fs-body: 10.5pt;
-    --fs-code: 8.5pt;
-    --fs-ui:   9.5pt;
-  }
-
-  body,
-  .page,
-  .content,
-  article {
-    background: #ffffff !important;
-    color: #1a1a1a !important;
-  }
-
-  .sidebar-drawer,
-  .toc-drawer,
-  .mobile-header,
-  .related-pages,
-  button.copybtn,
-  footer,
-  nav {
-    display: none !important;
-  }
-
-  .main,
-  .content,
-  article.bd-article {
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 1cm 1.5cm !important;
-  }
-
-  h1, h2, h3, h4 {
-    color: #111111 !important;
-    border-color: #cccccc !important;
-    page-break-after: avoid;
-  }
-
-  div.highlight,
-  pre {
-    background: #f5f5f5 !important;
-    border: 1px solid #cccccc !important;
-    color: #1a1a1a !important;
-    font-size: var(--fs-code) !important;
-    white-space: pre-wrap !important;
-    word-break: break-word !important;
-    page-break-inside: avoid;
-  }
-
-  .sd-card {
-    border: 1px solid #cccccc !important;
-    background: #fafafa !important;
-    box-shadow: none !important;
-    page-break-inside: avoid;
-  }
-
-  .sd-card-header {
-    color: #1a1a1a !important;
-    border-bottom-color: #cccccc !important;
-    background: #f0f0f0 !important;
-  }
-
-  .sd-card-body {
-    color: #333333 !important;
-  }
-
-  table.docutils th {
-    background: #eeeeee !important;
-    color: #333333 !important;
-    border-color: #aaaaaa !important;
-  }
-
-  table.docutils td {
-    border-color: #dddddd !important;
-    color: #1a1a1a !important;
-  }
-
-  .admonition {
-    background: #f9f9f9 !important;
-    border-left-color: #666666 !important;
-  }
-
-  .admonition-title {
-    color: #111111 !important;
-  }
-
-  .admonition.warning,
-  .admonition.caution,
-  .admonition.attention {
-    border-left-color: #8A6322 !important;
-  }
-  .admonition.warning .admonition-title,
-  .admonition.caution .admonition-title,
-  .admonition.attention .admonition-title {
-    color: #8A6322 !important;
-  }
-
-  .admonition.danger,
-  .admonition.error {
-    border-left-color: #8A3A3A !important;
-  }
-  .admonition.danger .admonition-title,
-  .admonition.error .admonition-title {
-    color: #8A3A3A !important;
-  }
-
-  a[href]::after {
-    content: " (" attr(href) ")";
-    font-size: 0.75em;
-    color: #666666;
-  }
-
-  a[href^="#"]::after,
-  a[href^="javascript:"]::after {
-    content: "";
-  }
-
-  .hero-lede {
-    color: #444444 !important;
-  }
-
-  .step-progress,
-  .dev-status {
-    color: #555555 !important;
-    border-color: #cccccc !important;
-  }
+:is(div.highlight-text, div.highlight-none, div.highlight-default) pre {
+  padding-right: 5.8rem !important;
 }
 
-/* ---------------------------------------------------------
-   API signatures & autodoc (Sphinx)
-   --------------------------------------------------------- */
 .sig:not(.sig-inline) {
-  border: var(--hairline-quiet) !important;
-  border-radius: var(--radius-md) !important;
-  padding: 0.7rem 0.95rem !important;
+  margin: 1.7rem 0 1rem !important;
+  padding: 0.9rem 1rem !important;
+  border: var(--rule);
+  border-left: 2px solid var(--color-brand-primary);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--color-api-background);
+  font-size: var(--code-size);
+  line-height: 1.75;
   text-indent: 0 !important;
-  /* Furo bleeds signatures 0.25rem past the column; once they carry a
-     border that reads as a misalignment against the h1 rule. */
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  background: var(--color-api-background) !important;
-  color: var(--color-api-overall) !important;
-  margin-top: var(--space-5) !important;
-  margin-bottom: var(--space-3) !important;
-  line-height: 1.55;
   overflow-x: auto;
-  transition: background 0.12s ease, border-color 0.12s ease;
 }
 
-/* Multiline signatures are a nested dl. Keep each parameter on its own
-   line, indented under the opening parenthesis. */
 .sig:not(.sig-inline) dl {
-  margin: 0.15rem 0 0.15rem 0 !important;
+  margin: 0 !important;
+}
+.sig:not(.sig-inline) dl dd {
+  margin: 0 0 0 1.4rem !important;
   padding: 0;
 }
-
-.sig:not(.sig-inline) dl dd {
-  margin: 0 0 0 1.35rem !important;
-  padding: 0 !important;
-  line-height: 1.5;
+.sig-name {
+  font-weight: 600;
 }
-
-.sig:not(.sig-inline):hover {
-  background: var(--color-api-background-hover) !important;
-  border-color: var(--color-foreground-secondary) !important;
-}
-
-.sig:not(.sig-inline) .sig-name {
-  color: var(--color-api-name) !important;
-  font-weight: 700 !important;
-}
-
-.sig:not(.sig-inline) .sig-prename {
-  color: var(--color-api-pre-name) !important;
-  font-weight: 400 !important;
-}
-
-.sig:not(.sig-inline) .sig-paren {
-  color: var(--color-api-paren) !important;
-}
-
-.sig:not(.sig-inline) em.property,
-.sig:not(.sig-inline) span.property {
-  color: var(--color-api-keyword) !important;
+.sig-param {
   font-style: normal;
 }
-
-.sig:not(.sig-inline) .sig-param {
-  color: var(--color-foreground-secondary);
-  font-style: normal;
-}
-
-.sig:not(.sig-inline) .sig-param .n {
-  color: var(--color-foreground-primary);
-}
-
-.sig:not(.sig-inline) .default_value {
+.sig-prename, .default_value {
   color: var(--color-foreground-muted);
 }
-
-/* Field lists inside docstrings (Parameters, Returns, etc.) */
-dl.field-list {
-  margin: var(--space-3) 0 var(--space-4);
+dl.py > dd {
+  margin-left: 0;
 }
-
+dl.py.class > dd {
+  padding-left: 1rem;
+  border-left: var(--rule);
+}
+dl.py.class > dd dl.py > dt.sig {
+  border: none;
+  border-top: var(--rule);
+  border-radius: 0;
+  background: transparent;
+  padding-left: 0 !important;
+}
+p.api-bases {
+  color: var(--color-foreground-muted);
+  font-size: 0.8rem;
+}
 dl.field-list > dt {
-  font-size: var(--fs-label) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: var(--track-label) !important;
-  color: var(--color-foreground-secondary) !important;
-  margin-top: var(--space-3) !important;
-  padding-bottom: 0.2rem;
-  border-bottom: var(--hairline-quiet);
+  margin-top: 0.9rem;
+  padding-bottom: 0.4rem;
+  border-bottom: var(--rule);
+  color: var(--color-foreground-secondary);
+  font-size: var(--label-size);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
 }
 
 dl.field-list > dd {
-  margin-left: 0 !important;
-  padding-left: 0 !important;
-  font-size: var(--fs-ui) !important;
-  color: var(--color-foreground-primary) !important;
-  line-height: 1.6;
+  margin-left: 0;
+  font-size: 0.9rem;
 }
-
-/* Furo pulls this list 1.2rem left of its label with a high-specificity
-   rule, so the parameter rows would hang outside the docstring column. */
 dl.field-list > dd > ul {
-  padding-left: 0;
   list-style: none;
-  margin: 0.35rem 0 0 !important;
+  padding-left: 0;
+  margin: 0.4rem 0 1rem !important;
 }
-
 dl.field-list > dd > ul > li {
   margin: 0;
   padding: 0.55rem 0;
-  border-bottom: var(--hairline-quiet);
+  border-bottom: var(--rule);
 }
-
 dl.field-list > dd > ul > li:last-child {
   border-bottom: none;
-  padding-bottom: 0.15rem;
 }
-
 dl.field-list > dd > ul > li > p {
   margin: 0;
 }
-
-dl.field-list > dd > ul > li > p > strong {
-  font-family: var(--font-stack--monospace);
-  font-weight: 500;
-  font-size: 0.92em;
-}
-
 dl.field-list em {
-  font-style: normal;
   color: var(--color-foreground-secondary);
 }
-
-dl.field-list a,
-.sig a {
-  text-decoration: none;
-}
-
-dl.field-list a:hover,
-.sig a:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--color-foreground-border);
-}
-
 dl.field-list .colon {
   display: none;
 }
 
-/* Permalink anchors. Furo already hides them until hover. */
-a.headerlink {
+/* Scientific content: equations and data have their own reading surfaces. */
+.table-wrapper {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  border: var(--rule);
+  border-radius: var(--radius);
+}
+
+table.docutils {
+  width: 100%;
+  margin: 0;
+  border: none;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+table.docutils:has(th:nth-child(3)) {
+  min-width: 35rem;
+}
+
+.table-wrapper.is-overflowing::after {
+  content: "Scroll horizontally to view all columns →";
+  position: sticky;
+  left: 0;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.55rem 0.9rem;
+  border-top: var(--rule);
+  background: var(--color-background-secondary);
   color: var(--color-foreground-muted);
-  font-weight: 500;
-  text-decoration: none;
+  font-size: 0.68rem;
 }
 
-a.headerlink:hover {
-  color: var(--color-foreground-primary);
-  text-decoration: none;
+table.docutils th {
+  padding: 0.75rem 0.9rem;
+  background: var(--color-background-secondary);
+  color: var(--color-foreground-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  border: none;
+  border-bottom: var(--rule);
 }
 
-/* Top-of-page controls: view, edit, theme, contents. */
-.content-icon-container a,
-.theme-toggle {
-  border-radius: var(--radius-sm);
+table.docutils td {
+  padding: 0.75rem 0.9rem;
+  border: none;
+  border-bottom: var(--rule);
+  vertical-align: top;
+}
+table.docutils tr:last-child td {
+  border-bottom: none;
+}
+table.docutils td p {
+  margin: 0;
+  line-height: 1.6;
+}
+table.docutils tr:hover td {
+  background: var(--color-background-secondary);
+}
+.table-wrapper.is-overflowing :is(th, td):first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-background-secondary);
+  border-right: var(--rule);
+}
+.is-overflowing {
+  scrollbar-width: thin;
+}
+
+.math-wrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+div.math {
+  margin: 1.5rem 0;
+  padding: 1rem 1.2rem;
+  border-left: 2px solid var(--color-background-border);
+  background: var(--color-background-secondary);
+  overflow-x: auto;
+  font-size: 0.95rem;
+}
+
+div.math mjx-container[display="true"] {
+  margin: 0.3rem 0 !important;
+}
+.math .eqno {
+  font-size: 0.8rem;
   color: var(--color-foreground-muted);
 }
-
-.content-icon-container a:hover,
-.theme-toggle:hover {
-  background: var(--color-background-hover);
-  color: var(--color-foreground-primary);
-}
-
-.theme-toggle {
+.admonition div.math {
+  padding: 0.6rem 0;
   border: none;
   background: transparent;
-  padding: 0.2rem;
+}
+
+.admonition {
+  margin: 1.5rem 0 !important;
+  padding: 1rem 1.15rem !important;
+  border: none !important;
+  border-left: 2px solid var(--color-brand-primary) !important;
+  border-radius: 0 var(--radius) var(--radius) 0 !important;
+  box-shadow: none !important;
+  background: var(--color-admonition-background) !important;
+  font-size: 0.9rem;
+}
+
+.admonition-title {
+  margin: 0 0 0.5rem !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--color-foreground-primary) !important;
+  font-size: 0.85rem !important;
+  font-weight: 600;
+}
+
+.admonition-title::before {
+  display: none !important;
+}
+.admonition p:last-child {
+  margin-bottom: 0;
+}
+.admonition:is(.warning, .caution, .attention) {
+  border-left-color: var(--color-admonition-title--warning) !important;
+}
+.admonition:is(.danger, .error) {
+  border-left-color: var(--color-admonition-title--error) !important;
+}
+
+.sd-tab-set > input + label {
+  color: var(--color-foreground-secondary);
+  font-size: 0.85rem;
+  padding: 0.65rem 1rem;
+}
+
+.sd-tab-set > input:checked + label {
+  color: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+}
+.sd-tab-content {
+  padding: 1rem;
+  border: var(--rule);
+}
+details.sd-dropdown {
+  border: var(--rule);
+  border-radius: var(--radius);
+  box-shadow: none;
+  background: transparent;
+}
+details.sd-dropdown summary {
+  padding: 0.9rem 1rem;
+  font-size: 0.9rem;
+  background: var(--color-background-secondary);
+}
+details.sd-dropdown .sd-summary-content {
+  padding: 1rem;
+}
+dl.glossary dt {
+  font-weight: 600;
+  margin-top: 1.5rem;
+}
+
+/* Footer and search */
+footer {
+  margin-top: 3rem;
+  padding-bottom: 2rem;
+  color: var(--color-foreground-muted);
+  font-size: 0.73rem;
+}
+.related-pages {
+  display: flex;
+  gap: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: var(--rule);
+}
+.related-pages a {
+  padding: 0.65rem 0;
+  flex: 1;
+  max-width: 50%;
+  color: var(--color-foreground-primary);
+  text-decoration: none;
+}
+.related-pages a:hover {
+  color: var(--color-brand-primary);
+}
+.related-pages .next-page {
+  margin-left: auto;
+}
+.related-pages .context {
+  color: var(--color-foreground-muted);
+  font-size: 0.68rem;
+}
+.related-pages .title {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+.related-pages .furo-related-icon {
+  color: var(--color-brand-primary);
+}
+footer .bottom-of-page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-top: 2rem;
+}
+footer .bottom-of-page .right-details {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.7rem;
+}
+.footer-link {
+  color: var(--color-foreground-secondary);
+  text-decoration: none;
+}
+.footer-version {
+  font: 0.65rem var(--font-stack--monospace);
+}
+.footer-sep {
+  height: 0.75rem;
+  border-left: var(--rule);
+}
+.back-to-top {
+  border: var(--rule);
+  border-radius: var(--radius);
+  background: var(--color-background-primary);
+  box-shadow: none;
+  font-size: 0.75rem;
+}
+#search-results li {
+  padding: 1.3rem 0;
+  border-bottom: var(--rule);
+}
+#search-results .context {
+  color: var(--color-foreground-secondary);
+  font-size: 0.9rem;
+}
+#search-results a {
+  font-weight: 600;
+}
+
+/* Responsive controls and drawers */
+.mobile-header, .mobile-header.scrolled {
+  background: var(--color-background-primary);
+  border-bottom: var(--rule);
+  box-shadow: none;
+}
+.mobile-header .brand {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.mobile-header .header-right {
+  gap: 0.15rem;
+}
+.mobile-header .header-left .nav-overlay-icon,
+.mobile-header .header-right :is(.theme-toggle, .toc-header-icon, .mobile-search) {
+  flex: none;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-search {
+  display: flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-foreground-secondary);
   cursor: pointer;
 }
-
-.theme-toggle svg {
+.mobile-search svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  stroke: currentColor;
   stroke-width: 1.6;
 }
-
-/* Right-hand outline. */
-.toc-tree li.scroll-current > .reference {
-  color: var(--color-foreground-primary);
-  box-shadow: inset 2px 0 0 var(--color-foreground-secondary);
+.drawer-tools {
+  display: none;
 }
-
-.back-to-top {
-  border: var(--hairline);
-  border-radius: var(--radius-md);
-  box-shadow: none;
+[data-overlay="true"] .drawer-tools {
+  display: flex;
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  z-index: 1;
+}
+.drawer-close {
+  min-height: 2.75rem;
+  padding: 0 0.65rem;
+  border: var(--rule);
+  border-radius: 5px;
   background: var(--color-background-primary);
   color: var(--color-foreground-secondary);
-  font-size: var(--fs-ui-xs);
+  font: 0.76rem var(--font-stack);
+  cursor: pointer;
 }
-
-.back-to-top:hover {
+.drawer-close:hover {
+  color: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+}
+[data-overlay="true"] :is(.sidebar-brand, .toc-sticky) {
+  padding-top: 3.7rem;
+}
+html:has(body.drawer-open) {
+  overflow: hidden;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.main-search {
+  display: flex;
+  gap: 0.6rem;
+  margin: 1.6rem 0 0.6rem;
+}
+.main-search input {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0.7rem 0.9rem;
+  border: var(--rule);
+  border-radius: var(--radius);
+  background: var(--color-background-secondary);
   color: var(--color-foreground-primary);
-  border-color: var(--color-foreground-secondary);
-  text-decoration: none;
+  font: 0.9rem var(--font-stack);
 }
-
-/* An explicit rule already separates the section, so the heading
-   underline would be a second line. */
-hr.docutils:has(+ section) {
-  margin-bottom: var(--space-4) !important;
-}
-
-hr.docutils + section > h2:first-child {
-  margin-top: var(--space-4);
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.mobile-header {
-  background: var(--color-background-primary);
-  border-bottom: var(--hairline-quiet);
-}
-
-.mobile-header .brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-weight: 600;
-  font-size: var(--fs-ui);
-  letter-spacing: -0.02em;
-}
-
-.mobile-header .brand::before {
-  content: "";
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: url("logo-light.svg") center / contain no-repeat;
-  flex: none;
-}
-
-body:not([data-theme="light"]) .mobile-header .brand::before {
-  background-image: url("logo-dark.svg");
-}
-
-.mobile-header a {
-  text-decoration: none;
-}
-
-@media (hover: none) {
-  button.copybtn {
-    opacity: 1 !important;
-  }
-}
-
-@media (max-width: 480px) {
-  .search-hint {
-    display: none;
-  }
-
-  .related-pages {
-    flex-direction: column;
-  }
-
-  .related-pages a,
-  .related-pages a.next-page,
-  .related-pages a.prev-page {
-    max-width: none;
-    margin-left: 0;
-    text-align: left;
-  }
-
-  .related-pages a.next-page {
-    justify-content: space-between;
-  }
-
-  .related-pages a.next-page .page-info {
-    align-items: flex-start;
-    text-align: left;
-  }
-}
-
-/* ---------------------------------------------------------
-   API classes — the class signature stays a panel. Members
-   under it are a ruled list, and the inheritance line recedes.
-   --------------------------------------------------------- */
-dl.py.class > dd {
-  margin-left: 0 !important;
-  margin-bottom: var(--space-6);
-  padding: 0.2rem 0 0.15rem 0.9rem;
-  border-left: 2px solid var(--color-background-border);
-}
-
-dl.py.class > dd dl.py > dt.sig:not(.sig-inline) {
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  border-top: var(--hairline-quiet) !important;
-  padding: 0.85rem 0 0.35rem !important;
-  margin: 0.55rem 0 0.15rem !important;
-}
-
-dl.py.class > dd dl.py > dt.sig:not(.sig-inline):hover {
-  background: transparent !important;
-  border-top-color: var(--color-foreground-border) !important;
-}
-
-p.api-bases {
-  margin: 0.1rem 0 0.85rem;
-  font-size: var(--fs-ui-xs);
+.main-search input::placeholder {
   color: var(--color-foreground-muted);
 }
+.main-search button {
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--color-brand-primary);
+  border-radius: var(--radius);
+  background: var(--color-brand-primary);
+  color: var(--color-on-accent);
+  font: 500 0.85rem var(--font-stack);
+  cursor: pointer;
+}
+.main-search button:hover {
+  background: var(--color-foreground-primary);
+  border-color: var(--color-foreground-primary);
+}
+.search-guidance {
+  font-size: 0.76rem;
+  color: var(--color-foreground-muted);
+}
+.sd-tab-content > div[class*="highlight-"] {
+  margin: 0;
+}
+.sd-tab-set > input:focus-visible + label {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -3px;
+}
 
-p.api-bases a,
-p.api-bases code {
-  color: var(--color-foreground-secondary) !important;
-  background: transparent !important;
-  padding: 0 !important;
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-kicker, #eegfeat > h1, .home-copy, .hero-visual {
+    animation: arrive 400ms ease both;
+  }
+  .home-copy {
+    animation-delay: 60ms;
+  }
+  .hero-visual {
+    animation-delay: 120ms;
+  }
+}
+@media (min-width: 63.01em) {
+  .sidebar-brand {
+    display: none;
+  }
+  .sidebar-release {
+    margin-top: 1.8rem;
+  }
+}
+@media (min-width: 75.01em) {
+  .sidebar-search-container {
+    display: none;
+  }
+  .sidebar-tree {
+    margin-top: 0.5rem;
+  }
+}
+@media (max-width: 85em) {
+  .docs-header {
+    gap: 1.5rem;
+  }
+  .docs-sections {
+    gap: 1rem;
+  }
+  .docs-repository span {
+    display: none;
+  }
+  body:has(#eegfeat) .content {
+    padding-inline: 3rem;
+  }
+}
+@media (max-width: 75em) {
+  .header-search {
+    display: none;
+  }
+  .content, body:has(#eegfeat) .content {
+    width: 100%;
+    padding-inline: 2.5rem;
+  }
+  .home-overview {
+    gap: 1.8rem;
+  }
+}
+@media (max-width: 63em) {
+  :root {
+    --docs-header-height: 0rem;
+  }
+  .docs-header {
+    display: none;
+  }
+  .sidebar-drawer {
+    left: calc(-1 * var(--sidebar-width));
+  }
+  .sidebar-tree .reference {
+    min-height: 2.75rem;
+    padding-block: 0.7rem;
+    box-sizing: border-box;
+  }
+  .sidebar-tree label {
+    height: 2.75rem;
+  }
+  article {
+    padding-top: 2rem;
+  }
+}
+@media (max-width: 50em) {
+  .content, body:has(#eegfeat) .content {
+    padding-inline: 1.5rem;
+  }
+  .breadcrumbs {
+    padding-right: 0;
+    margin-bottom: 1.3rem;
+  }
+  .hero-kicker {
+    padding-right: 0;
+  }
+  .home-overview {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .hero-visual {
+    padding: 1.5rem 0 0;
+    border: none;
+    border-top: var(--rule);
+    max-width: 34rem;
+  }
+  .home-description {
+    max-width: 34rem;
+  }
+  .method-directory .sd-card-body {
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    gap: 0.4rem 0.7rem;
+  }
+  .method-directory .sd-card-title {
+    grid-row: auto;
+  }
+  .method-directory .sd-card-text, .method-directory .sd-card-text:last-child {
+    grid-column: 2;
+  }
+  .method-directory .sd-card-body::before {
+    grid-row: span 3;
+  }
+  h2 {
+    margin-top: 2.2rem;
+  }
+}
+@media (max-width: 36em) {
+  article {
+    padding-top: 1.5rem;
+  }
+  .hero-kicker {
+    gap: 0.5rem 0.75rem;
+    font-size: 0.62rem;
+  }
+  .hero-release {
+    padding-left: 0.75rem;
+    font-size: 0.61rem;
+  }
+  #eegfeat > h1 {
+    margin-bottom: 1.4rem;
+  }
+  .home-overview {
+    padding-bottom: 1.8rem;
+  }
+  .hero-visual {
+    padding-top: 1rem;
+  }
+  .hero-visual figcaption {
+    font-size: 0.7rem;
+  }
+  .hero-visual .plot-heading {
+    font-size: 18px;
+  }
+  .hero-visual .plot-label {
+    display: none;
+  }
+  .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .hero-actions a {
+    gap: 0.65rem;
+    padding-inline: 0.75rem;
+    font-size: 0.78rem;
+  }
+  .related-pages {
+    gap: 1rem;
+  }
+  .related-pages .title {
+    font-size: 0.82rem;
+  }
+  div.highlight pre {
+    font-size: 0.78rem;
+  }
+  .sig:not(.sig-inline) {
+    padding: 0.8rem !important;
+    font-size: 0.78rem;
+  }
+  dl.py.class > dd {
+    padding-left: 0.6rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html, .sidebar-scroll, .toc-scroll {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media print {
+  .docs-header, .breadcrumbs, .reference-switcher, .hero-kicker, .hero-actions, .hero-install, .back-to-top, .related-pages, button.copybtn {
+    display: none !important;
+  }
+  .content, body:has(#eegfeat) .content {
+    width: 100%;
+    padding: 0;
+  }
+  article {
+    padding-top: 0;
+  }
+  h2 {
+    break-after: avoid;
+  }
+  .table-wrapper, div.math, div.highlight pre, .sig:not(.sig-inline) {
+    overflow: visible;
+  }
+  div.highlight pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .sd-card, .research-note, .admonition {
+    break-inside: avoid;
+  }
+  .home-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+  .table-wrapper.is-overflowing::after, .drawer-tools, .main-search {
+    display: none !important;
+  }
+  table.docutils:has(th:nth-child(3)) {
+    min-width: 0;
+  }
+  .sd-tab-set > .sd-tab-content {
+    display: block !important;
+  }
 }

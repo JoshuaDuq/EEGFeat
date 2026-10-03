@@ -56,6 +56,23 @@ class ClassificationResult:
     mean_subject_auc: float
 
 
+def _check_aligned(label: str, *arrays: npt.NDArray[np.generic]) -> None:
+    if any(a.ndim != 1 for a in arrays) or len({a.shape for a in arrays}) != 1:
+        raise ValueError(f"{label} metrics require aligned 1-D arrays.")
+
+
+def _check_labelled(label: str, **named: npt.NDArray[np.object_]) -> None:
+    # A trial with no subject or condition has no cell to be centred within, and inventing one
+    # would change the statistic. Refuse it rather than dropping it from the denominator.
+    for name, values in named.items():
+        missing = int(np.sum(pd.isna(values)))
+        if missing:
+            raise ValueError(
+                f"{label} metrics require a {name} label for every trial; "
+                f"{missing} of {len(values)} have none."
+            )
+
+
 def _subset_classification_metrics(
     y_true: npt.NDArray[np.intp],
     y_pred: npt.NDArray[np.intp],
@@ -114,6 +131,7 @@ def classification_metrics(
         raise ValueError(msg)
     y_t = np.asarray(y_true, dtype=np.intp)
     y_p = np.asarray(y_pred, dtype=np.intp)
+    _check_aligned("Classification", y_t, y_p)
     if y_prob is not None:
         y_prob = np.asarray(y_prob, dtype=float)
         if y_prob.shape not in ((len(y_t),), (len(y_t), 2)):
@@ -124,6 +142,8 @@ def classification_metrics(
 
     if groups is not None:
         groups_arr = np.asarray(groups)
+        _check_aligned("Classification", y_t, groups_arr)
+        _check_labelled("Classification", subject=groups_arr)
         per_subject: dict[str, Mapping[str, float]] = {}
         for subj in np.unique(groups_arr):
             mask = groups_arr == subj
@@ -227,23 +247,6 @@ def regression_metrics(
             per_subject_list.append({"subject": s, "r": r})
 
     return summary, per_subject_list
-
-
-def _check_aligned(label: str, *arrays: npt.NDArray[np.generic]) -> None:
-    if any(a.ndim != 1 for a in arrays) or len({a.shape for a in arrays}) != 1:
-        raise ValueError(f"{label} metrics require aligned 1-D arrays.")
-
-
-def _check_labelled(label: str, **named: npt.NDArray[np.object_]) -> None:
-    # A trial with no subject or condition has no cell to be centred within, and inventing one
-    # would change the statistic. Refuse it rather than dropping it from the denominator.
-    for name, values in named.items():
-        missing = int(np.sum(pd.isna(values)))
-        if missing:
-            raise ValueError(
-                f"{label} metrics require a {name} label for every trial; "
-                f"{missing} of {len(values)} have none."
-            )
 
 
 def within_subject_centered_metrics(

@@ -31,6 +31,27 @@ def test_a_single_class_confusion_matrix_still_has_both_axes() -> None:
     assert result.confusion.shape == (2, 2)
 
 
+def test_classification_requires_a_subject_label_for_every_trial() -> None:
+    with pytest.raises(ValueError, match="subject label for every trial"):
+        classification_metrics(
+            np.array([0, 1, 0, 1]),
+            np.array([0, 1, 1, 0]),
+            groups=np.array([1.0, 1.0, np.nan, np.nan]),
+        )
+
+
+@pytest.mark.parametrize("groups", [np.array([]), np.array([["s1"], ["s1"]])])
+def test_classification_requires_aligned_group_labels(groups) -> None:
+    with pytest.raises(ValueError, match="aligned 1-D arrays"):
+        classification_metrics(np.array([0, 1]), np.array([0, 1]), groups=groups)
+
+
+def test_classification_requires_one_label_per_trial() -> None:
+    labels = np.array([[0, 1], [1, 0]])
+    with pytest.raises(ValueError, match="aligned 1-D arrays"):
+        classification_metrics(labels, labels)
+
+
 def test_regression_metrics_report_subject_level_r() -> None:
     y_true = np.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
     groups = np.array(["s1"] * 3 + ["s2"] * 3, dtype=object)

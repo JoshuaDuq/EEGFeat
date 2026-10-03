@@ -30,29 +30,37 @@ Prerequisites
 Setup
 -----
 
-macOS / Linux
-~~~~~~~~~~~~~
+Choose your operating system. Run these commands in a terminal to create
+an environment and install EEGFeat from source.
 
-.. code-block:: bash
+.. tab-set::
+   :sync-group: operating-system
 
-   git clone https://github.com/JoshuaDuq/EEGFeat.git
-   cd EEGFeat
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install --upgrade pip
-   pip install -e .
+   .. tab-item:: macOS / Linux
+      :sync: unix
+      :name: macos-linux
 
-Windows PowerShell
-~~~~~~~~~~~~~~~~~~
+      .. code-block:: bash
 
-.. code-block:: powershell
+         git clone https://github.com/JoshuaDuq/EEGFeat.git
+         cd EEGFeat
+         python3 -m venv .venv
+         source .venv/bin/activate
+         pip install --upgrade pip
+         pip install -e .
 
-   git clone https://github.com/JoshuaDuq/EEGFeat.git
-   cd EEGFeat
-   py -3.11 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   python -m pip install --upgrade pip
-   pip install -e .
+   .. tab-item:: Windows PowerShell
+      :sync: windows
+      :name: windows-powershell
+
+      .. code-block:: powershell
+
+         git clone https://github.com/JoshuaDuq/EEGFeat.git
+         cd EEGFeat
+         py -3.11 -m venv .venv
+         .\.venv\Scripts\Activate.ps1
+         python -m pip install --upgrade pip
+         pip install -e .
 
 Optional Dependencies
 ---------------------

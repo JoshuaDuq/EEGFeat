@@ -124,17 +124,44 @@ def test_prominence_restricts_the_search_to_interior_local_peaks() -> None:
     assert prominent.values.item() == pytest.approx(0.5)
 
 
-def test_prominence_falls_back_to_the_extremum_when_no_peak_qualifies() -> None:
-    n = 201
-    values = np.linspace(0.0, 5.0, n).reshape(1, 1, n)
+@pytest.mark.parametrize("values", [[0.0, 1.0, 2.0], [0.0, 1.0, 0.0], [np.nan] * 3])
+@pytest.mark.parametrize("measure", [peak_amplitude, peak_latency])
+def test_prominence_without_a_qualifying_peak_is_undefined(values, measure) -> None:
+    table = measure(
+        [_signal(np.array(values).reshape(1, 1, -1))],
+        windows=[WINDOW],
+        polarity="positive",
+        prominence=2.0,
+        include_global=False,
+    )
+    assert np.isnan(table.values.item())
+
+
+@pytest.mark.parametrize("gap", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("polarity", ["positive", "negative", "absolute"])
+def test_prominence_does_not_use_missing_samples_as_peak_bases(gap, polarity) -> None:
+    sign = -1.0 if polarity == "negative" else 1.0
+    values = np.array([0.0, 10.0 * sign, 0.0, gap, sign, gap, 0.0, 5.0 * sign, 0.0])
+    signal = _signal(values.reshape(1, 1, -1))
+    kwargs = dict(windows=[WINDOW], polarity=polarity, prominence=2.0, include_global=False)
+
+    amplitude = peak_amplitude([signal], **kwargs)
+    latency = peak_latency([signal], **kwargs)
+
+    assert amplitude.values.item() == pytest.approx(10.0 * sign)
+    assert latency.values.item() == pytest.approx(1.0 / SFREQ)
+
+
+def test_prominence_keeps_original_latency_after_a_gap() -> None:
+    values = np.array([0.0, 2.0, 0.0, np.nan, 0.0, 10.0, 0.0]).reshape(1, 1, -1)
     table = peak_latency(
         [_signal(values)],
         windows=[WINDOW],
         polarity="positive",
-        prominence=10.0,
+        prominence=1.0,
         include_global=False,
     )
-    assert table.values.item() == pytest.approx(2.0)
+    assert table.values.item() == pytest.approx(5.0 / SFREQ)
 
 
 def test_measures_work_on_a_band_envelope_too() -> None:

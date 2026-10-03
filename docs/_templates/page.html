@@ -1,14 +1,83 @@
 {% extends "!page.html" %}
 
+{% block body %}
+<a class="skip-to-content muted-link" href="#furo-main-content">{{ _("Skip to content") }}</a>
+<header class="docs-header">
+  <a class="docs-wordmark" href="{{ pathto(master_doc) }}">
+    <img class="only-light" src="{{ pathto('_static/' + theme_light_logo, 1) }}" alt="" width="28" height="28">
+    <img class="only-dark" src="{{ pathto('_static/' + theme_dark_logo, 1) }}" alt="" width="28" height="28">
+    <span>{{ project }}</span>
+    <span class="docs-header-label">Docs</span>
+  </a>
+  <nav class="docs-sections" aria-label="Documentation sections">
+    <a href="{{ pathto('quickstart') }}"{% if pagename in ['install', 'quickstart', 'concepts'] %} aria-current="true"{% endif %}>Get started</a>
+    <a href="{{ pathto('guides/tables') }}"{% if pagename.startswith('guides/') and pagename != 'guides/validation' %} aria-current="true"{% endif %}>Guides</a>
+    <a href="{{ pathto('methods/index') }}"{% if pagename.startswith('methods/') %} aria-current="true"{% endif %}>Methods</a>
+    <a href="{{ pathto('api/index') }}"{% if pagename.startswith('api/') %} aria-current="true"{% endif %}>API reference</a>
+    <a href="{{ pathto('guides/validation') }}"{% if pagename == 'guides/validation' %} aria-current="page"{% endif %}>Validation</a>
+  </nav>
+  <div class="docs-header-tools">
+    <form class="header-search" action="{{ pathto('search') }}" method="get" role="search" aria-label="Search documentation">
+      <label class="visually-hidden" for="header-search-query">Search documentation</label>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input id="header-search-query" type="search" name="q" placeholder="Search docs" autocomplete="off" spellcheck="false">
+      <kbd aria-hidden="true">Ctrl K</kbd>
+    </form>
+    <a class="docs-repository" href="{{ theme_source_repository }}" aria-label="{{ project }} on GitHub">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 19c-4.3 1.3-4.3-2.2-6-2.7M15 22v-3.5c0-1 .1-1.5-.5-2.1 3.3-.4 6.8-1.6 6.8-7.1 0-1.5-.5-2.8-1.5-3.8.2-.8.3-2.2-.2-3.5 0 0-1.3-.4-4.1 1.5a14.1 14.1 0 0 0-7.4 0C5.8 1.6 4.5 2 4.5 2 4 3.3 4.1 4.7 4.3 5.5c-1 1-1.5 2.3-1.5 3.8 0 5.5 3.5 6.7 6.8 7.1-.5.5-.6 1.1-.6 2.1V22"/></svg>
+      <span>GitHub</span>
+    </a>
+  </div>
+</header>
+{{ super() }}
+{% endblock %}
+
 {% block content %}
 {%- if pagename == "index" %}
 <p class="hero-kicker">
-  <span>Documentation</span>
-  <span class="hero-kicker-dot" aria-hidden="true"></span>
-  <span class="hero-version">{{ release }}</span>
+  <span>Python library for EEG research</span>
+  <span class="hero-release">{{ release }}</span>
 </p>
+{%- else %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="{{ pathto(master_doc) }}">Documentation</a>
+  {%- for parent in parents %}
+  {%- if parent.link != pathto(master_doc) %}
+  <span aria-hidden="true">/</span>
+  <a href="{{ parent.link|e }}">{{ parent.title }}</a>
+  {%- endif %}
+  {%- endfor %}
+  <span aria-hidden="true">/</span>
+  <span aria-current="page">{{ title|striptags|e }}</span>
+</nav>
+{%- if pagename in companion_pages %}
+{%- set companion, label = companion_pages[pagename] %}
+<nav class="reference-switcher" aria-label="Related documentation">
+  {%- if pagename.startswith('api/') %}
+  <a href="{{ pathto(companion) }}">{{ label }}</a>
+  <a href="{{ pathto(pagename) }}" aria-current="page">API reference</a>
+  {%- else %}
+  <a href="{{ pathto(pagename) }}" aria-current="page">{{ 'Method definitions' if pagename.startswith('methods/') else 'Guide' }}</a>
+  <a href="{{ pathto(companion) }}">{{ label }}</a>
+  {%- endif %}
+</nav>
+{%- endif %}
 {%- endif %}
 {{ body }}
+{% endblock %}
+
+{% block right_sidebar %}
+{% if not furo_hide_toc %}
+<div class="toc-sticky toc-scroll">
+  <div class="toc-title-container"><span class="toc-title">{{ _("On this page") }}</span></div>
+  <div class="toc-tree-container"><div class="toc-tree">{{ toc }}</div></div>
+  <nav class="toc-resources" aria-label="Research resources">
+    <span>Research resources</span>
+    <a href="{{ pathto('guides/validation') }}">Validation evidence <span aria-hidden="true">↗</span></a>
+    <a href="{{ pathto('examples') }}">Example outputs <span aria-hidden="true">↗</span></a>
+  </nav>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block footer %}

@@ -104,8 +104,7 @@ def peak_frequency(
         freqs: npt.NDArray[np.float64],
         weights: npt.NDArray[np.float64],
     ) -> tuple[npt.NDArray[np.float64], dict[str, npt.NDArray[np.bool_]]]:
-        del weights  # a peak location does not depend on bin widths
-        return _find_peak(data, freqs, smoothing_hz, min_prominence, interpolate)
+        return _find_peak(data, freqs, weights, smoothing_hz, min_prominence, interpolate)
 
     return expand(
         spectra,
@@ -156,6 +155,7 @@ def _smooth(
 def _find_peak(
     data: npt.NDArray[np.float64],
     freqs: npt.NDArray[np.float64],
+    weights: npt.NDArray[np.float64],
     smoothing_hz: float,
     min_prominence: float,
     interpolate: bool,
@@ -201,10 +201,7 @@ def _find_peak(
         use_cog = usable & np.isfinite(prominence) & (prominence < min_prominence)
 
     if bool(use_cog.any()):
-        weights = np.where(np.isfinite(power) & (power > 0.0), power, 0.0)
-        total = weights.sum(axis=3)
-        with np.errstate(invalid="ignore", divide="ignore"):
-            centroid = np.where(total > 0.0, (weights * freqs).sum(axis=3) / total, np.nan)
+        centroid, _ = _centroid_kernel(power, freqs, weights)
         use_cog &= np.isfinite(centroid)
         peak = np.where(use_cog, centroid, peak)
 

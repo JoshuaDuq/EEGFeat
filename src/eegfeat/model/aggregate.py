@@ -301,6 +301,12 @@ def subject_level_r(
         details = "; ".join(invalid_subjects)
         raise ValueError(f"Invalid subject-level correlation inputs: {details}")
 
+    if config.ci_method == "bootstrap" and len(valid_entries) < 3:
+        raise ValueError(
+            f"Bootstrap confidence intervals need at least 3 subjects, got {len(valid_entries)}. "
+            "Use ci_method='none'."
+        )
+
     if not valid_entries:
         return SubjectLevelR(
             r=np.nan,
@@ -337,15 +343,7 @@ def subject_level_r(
     agg_r = float(np.tanh(mean_z))
 
     ci_low, ci_high = np.nan, np.nan
-    # Falling through to the fixed-effects branch would hand back a different estimator than
-    # the one asked for, with nothing on the result to say so.
-    if config.ci_method == "bootstrap" and 1 < len(z_vals) < 3:
-        raise ValueError(
-            f"Bootstrap confidence intervals need at least 3 subjects, got {len(z_vals)}. "
-            "Use ci_method='fixed_effects'."
-        )
-
-    if config.ci_method == "bootstrap" and len(z_vals) >= 3:
+    if config.ci_method == "bootstrap":
         rng = np.random.default_rng(config.seed)
         n_sub = len(z_vals)
         boot_means = np.empty(config.bootstrap_iterations, dtype=float)
@@ -469,9 +467,16 @@ def subject_level_errors(
         One row per trial, with a ``subject_id`` label and the ``y_true`` and
         ``y_pred`` values of that trial.
     config : AggregationConfig
-        Subject weighting, confidence-interval method and bootstrap settings.
+        Subject weighting and optional bootstrap intervals, which require at
+        least three subjects. ``ci_method="fixed_effects"`` applies only to
+        correlations and is rejected here.
     """
     _validate_predictions(predictions, "subject_level_errors")
+    if config.ci_method == "fixed_effects":
+        raise ValueError(
+            "subject_level_errors does not support ci_method='fixed_effects'; "
+            "use ci_method='none' or 'bootstrap'."
+        )
     per_subject_mae: list[float] = []
     per_subject_rmse: list[float] = []
     per_subject_n: list[int] = []
@@ -493,6 +498,12 @@ def subject_level_errors(
     if invalid_subjects:
         details = "; ".join(invalid_subjects)
         raise ValueError(f"Invalid subject-level error inputs: {details}")
+
+    if config.ci_method == "bootstrap" and len(per_subject_mae) < 3:
+        raise ValueError(
+            f"Bootstrap confidence intervals need at least 3 subjects, got {len(per_subject_mae)}. "
+            "Use ci_method='none'."
+        )
 
     if not per_subject_mae:
         return {
@@ -517,7 +528,7 @@ def subject_level_errors(
     ci_low_mae, ci_high_mae = np.nan, np.nan
     ci_low_rmse, ci_high_rmse = np.nan, np.nan
 
-    if config.ci_method == "bootstrap" and len(maes) >= 3:
+    if config.ci_method == "bootstrap":
         ci_low_mae, ci_high_mae = _weighted_bootstrap_ci(
             maes, weights, iterations=config.bootstrap_iterations, seed=config.seed
         )

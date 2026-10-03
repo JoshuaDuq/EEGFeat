@@ -67,6 +67,7 @@ autodoc_preserve_defaults = True
 # One parameter per line once a signature no longer fits the content column.
 maximum_signature_line_length = 68
 python_trailing_comma_in_multi_line_signatures = True
+toc_object_entries_show_parents = "hide"
 
 # ---------------------------------------------------------------------------
 # MyST (Markdown support)
@@ -103,7 +104,7 @@ html_css_files = [
     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
     "custom.css",
 ]
-html_js_files = ["custom.js"]
+html_js_files = ["custom.js", "navigation.js"]
 html_permalinks_icon = "#"
 html_show_sphinx = False
 pygments_style = "friendly"
@@ -117,56 +118,75 @@ html_theme_options = {
     "light_logo": "logo-light.svg",
     "dark_logo": "logo-dark.svg",
     "dark_css_variables": {
-        "color-background-primary": "#0A0B0D",
-        "color-background-secondary": "#131518",
-        "color-background-hover": "#1A1C20",
-        "color-background-border": "#24262A",
-        "color-foreground-primary": "#E6E8EB",
-        "color-foreground-secondary": "#A4A8AD",
-        "color-foreground-muted": "#6A6D72",
-        "color-foreground-border": "#3D4045",
-        "color-brand-primary": "#F2F3F5",
-        "color-brand-content": "#BFC3C7",
-        "color-highlight-on-target": "rgba(242, 243, 245, 0.07)",
-        "color-admonition-background": "#131518",
-        "color-api-name": "#F2F3F5",
-        "color-api-pre-name": "#6A6D72",
-        "color-api-keyword": "#A4A8AD",
-        "color-api-paren": "#6A6D72",
-        "color-api-overall": "#E6E8EB",
-        "color-api-background": "#131518",
-        "color-api-background-hover": "#1A1C20",
-        "font-stack": "'Inter', 'Segoe UI', system-ui, sans-serif",
-        "font-stack--monospace": "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
+        "color-background-primary": "#13211e",
+        "color-background-secondary": "#1a2b26",
+        "color-background-hover": "#243e34",
+        "color-background-border": "#30473e",
+        "color-foreground-primary": "#e7f0eb",
+        "color-foreground-secondary": "#b8cdc2",
+        "color-foreground-muted": "#9fb8aa",
+        "color-foreground-border": "#608171",
+        "color-brand-primary": "#8dd9bd",
+        "color-brand-content": "#8dd9bd",
+        "color-brand-visited": "#8dd9bd",
+        "color-highlight-on-target": "#243e34",
+        "color-highlighted-background": "#315a45",
+        "color-admonition-background": "#1a2b26",
+        "color-api-name": "#8dd9bd",
+        "color-api-pre-name": "#9fb8aa",
+        "color-api-background": "#1a2b26",
+        "color-api-background-hover": "#243e34",
+        "color-accent-surface": "#243e34",
+        "color-on-accent": "#13211e",
     },
     "light_css_variables": {
-        "color-background-primary": "#FAFAFB",
-        "color-background-secondary": "#F1F2F4",
-        "color-background-hover": "#E8EAEC",
-        "color-background-border": "#D8DADD",
-        "color-foreground-primary": "#1A1C20",
-        "color-foreground-secondary": "#4A4D52",
-        "color-foreground-muted": "#74777C",
-        "color-foreground-border": "#C4C6C9",
-        "color-brand-primary": "#1A1C20",
-        "color-brand-content": "#3D4045",
-        "color-highlight-on-target": "rgba(26, 28, 32, 0.06)",
-        "color-admonition-background": "#F1F2F4",
-        "color-api-name": "#0E0F12",
-        "color-api-pre-name": "#74777C",
-        "color-api-keyword": "#4A4D52",
-        "color-api-paren": "#74777C",
-        "color-api-overall": "#1A1C20",
-        "color-api-background": "#F1F2F4",
-        "color-api-background-hover": "#E8EAEC",
+        "color-background-primary": "#ffffff",
+        "color-background-secondary": "#f5f8f6",
+        "color-background-hover": "#eaf3ee",
+        "color-background-border": "#dfe8e2",
+        "color-foreground-primary": "#203830",
+        "color-foreground-secondary": "#4e6559",
+        "color-foreground-muted": "#60776a",
+        "color-foreground-border": "#a8bbae",
+        "color-brand-primary": "#08745c",
+        "color-brand-content": "#08745c",
+        "color-brand-visited": "#08745c",
+        "color-highlight-on-target": "#eaf3ee",
+        "color-highlighted-background": "#d1eadb",
+        "color-admonition-background": "#f5f8f6",
+        "color-api-name": "#08745c",
+        "color-api-pre-name": "#60776a",
+        "color-api-background": "#f5f8f6",
+        "color-api-background-hover": "#eaf3ee",
+        "color-accent-surface": "#eaf3ee",
+        "color-on-accent": "#ffffff",
         "font-stack": "'Inter', 'Segoe UI', system-ui, sans-serif",
         "font-stack--monospace": "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
     },
     "sidebar_hide_name": False,
-    "navigation_with_keys": True,
+    "navigation_with_keys": False,
+    "top_of_page_buttons": ["view"],
     "source_repository": "https://github.com/JoshuaDuq/EEGFeat",
     "source_branch": "main",
     "source_directory": "docs/",
+}
+
+html_context = {
+    "companion_pages": {
+        **{
+            f"methods/{name}": (f"api/{name}", "API reference")
+            for name in ("spectral", "dynamics", "connectivity", "complexity")
+        },
+        **{
+            f"api/{name}": (f"methods/{name}", "Method definitions")
+            for name in ("spectral", "dynamics", "connectivity", "complexity")
+        },
+        "api/containers": ("concepts", "Data concepts"),
+        "api/model": ("guides/modeling", "Modeling guide"),
+        "api/preprocessing": ("guides/preprocessing", "Preprocessing guide"),
+        "guides/modeling": ("api/model", "API reference"),
+        "guides/preprocessing": ("api/preprocessing", "API reference"),
+    }
 }
 
 

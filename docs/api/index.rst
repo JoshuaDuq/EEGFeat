@@ -11,7 +11,10 @@ These names are exported from ``eegfeat``, except ``eegfeat.model``,
 ``eegfeat.microstates``, and ``eegfeat.preprocessing``, which live in their submodules. Definitions are in
 :doc:`/methods/index`.
 
-.. grid:: 2
+Containers and files
+--------------------
+
+.. grid:: 1
    :gutter: 3
    :class-container: nav-cards
 
@@ -21,6 +24,13 @@ These names are exported from ``eegfeat``, except ``eegfeat.model``,
 
       ``FeatureTable``, ``Spectra``, ``Signal``, ``BandSignal``, ``Band``,
       ``Window``, and table reading and writing.
+
+Feature extraction
+------------------
+
+.. grid:: 1 1 2 2
+   :gutter: 3
+   :class-container: nav-cards
 
    .. grid-item-card:: Spectral Features
       :link: spectral
@@ -45,6 +55,13 @@ These names are exported from ``eegfeat``, except ``eegfeat.model``,
       :link-type: doc
 
       Higuchi fractal dimension, sample and multiscale entropy, microstates.
+
+Analysis workflows
+------------------
+
+.. grid:: 1 1 2 2
+   :gutter: 3
+   :class-container: nav-cards
 
    .. grid-item-card:: Predictive Modeling
       :link: model

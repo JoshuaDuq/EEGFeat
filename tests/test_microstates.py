@@ -71,6 +71,19 @@ def test_peak_separation_is_not_rounded_down() -> None:
 
 
 @requires_sklearn
+def test_segmentation_rejects_epochs_without_qualifying_gfp_peaks() -> None:
+    signal, _ = _planted()
+    with pytest.raises(ValueError, match="only 0 global field power peaks"):
+        segment(signal, n_states=2, peak_prominence=1e12)
+
+
+def test_peak_topographies_never_substitutes_an_extremum() -> None:
+    strength = np.array([1.0, 2.0, 3.0, 4.0])
+    epoch = np.array([-1.0, 1.0])[:, None] * strength
+    assert _peak_topographies(epoch, 100.0, 10.0, 10, None).shape == (0, 2)
+
+
+@requires_sklearn
 def test_planted_topographies_are_recovered() -> None:
     signal, truth = _planted()
     seg = segment(signal, n_states=4)

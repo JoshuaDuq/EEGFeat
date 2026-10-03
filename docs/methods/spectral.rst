@@ -206,10 +206,11 @@ Prominence Guard
 
 If the maximum is less than ``min_prominence`` above the band median, in
 :math:`\log_{10}` units, the reported frequency is the centre of gravity
-:math:`\sum f P(f) / \sum P(f)` and ``cog_fallback`` is set.
+:math:`\sum f P(f) \Delta f / \sum P(f) \Delta f` and ``cog_fallback`` is set.
 
 - **Power used**: :math:`P` here is the smoothed (and, if enabled,
-  aperiodic-adjusted) power, not weighted by bin width.
+  aperiodic-adjusted) power. Trapezoidal bin widths :math:`\Delta f` account
+  for the frequency spacing, including on logarithmic grids.
 
 Parabolic Interpolation
 ~~~~~~~~~~~~~~~~~~~~~~~

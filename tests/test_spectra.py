@@ -111,6 +111,33 @@ def test_from_continuous_spectrum_gains_epoch_and_window_axes() -> None:
     assert spectra.data.shape[2] == 1
 
 
+@pytest.mark.parametrize("epoched", [False, True])
+def test_from_spectrum_preserves_explicitly_retained_channels(epoched: bool) -> None:
+    import mne
+
+    info = mne.create_info(["C3", "C4", "VEOG"], 200.0, ["eeg", "eeg", "eog"])
+    info["bads"] = ["C4"]
+    data = np.random.default_rng(0).normal(size=(2, 3, 800)) * 1e-6
+    source = (
+        mne.EpochsArray(data, info, verbose=False)
+        if epoched
+        else mne.io.RawArray(data[0], info, verbose=False)
+    )
+    spectrum = source.compute_psd(
+        "welch", picks=source.ch_names, exclude=(), n_fft=200, verbose=False
+    )
+
+    spectra = Spectra.from_spectrum(spectrum, recording="test", estimator_parameters={})
+
+    expected = spectrum.get_data(picks=spectrum.ch_names)
+    if not epoched:
+        expected = expected[np.newaxis]
+    assert spectra.ch_names == tuple(spectrum.ch_names)
+    np.testing.assert_array_equal(spectra.data[:, :, 0], expected)
+    assert spectrum.ch_names == ["C3", "C4", "VEOG"]
+    assert spectrum.info["bads"] == ["C4"]
+
+
 @pytest.mark.parametrize("parameters", [{}, {"normalization": "length"}])
 def test_multitaper_spectrum_requires_explicit_density_normalization(parameters) -> None:
     import mne
@@ -129,7 +156,7 @@ def test_complex_fourier_coefficients_cannot_be_interpreted_as_power() -> None:
     from types import SimpleNamespace
 
     spectrum = SimpleNamespace(
-        get_data=lambda: np.ones((1, 3), dtype=complex) * (1 + 2j),
+        get_data=lambda **kwargs: np.ones((1, 3), dtype=complex) * (1 + 2j),
         freqs=np.array([1.0, 2.0, 3.0]),
         ch_names=["Cz"],
         method="welch",
@@ -267,6 +294,29 @@ def test_from_tfr_produces_one_spectrum_per_window() -> None:
     assert spectra.data.shape == (4, 2, 2, 3)
     assert tuple(w.name for w in spectra.windows) == ("base", "stim")
     assert spectra.source == "morlet"
+
+
+def test_from_tfr_preserves_explicitly_retained_channels() -> None:
+    import mne
+
+    info = mne.create_info(["C3", "C4", "VEOG"], 200.0, ["eeg", "eeg", "eog"])
+    info["bads"] = ["C4"]
+    epochs = mne.EpochsArray(
+        np.random.default_rng(0).normal(size=(2, 3, 800)) * 1e-6, info, verbose=False
+    )
+    tfr = epochs.compute_tfr(
+        "morlet", freqs=[10.0], n_cycles=3.0, picks=epochs.ch_names, verbose=False
+    )
+    window = Window("middle", 1.0, 3.0)
+
+    spectra = Spectra.from_tfr(tfr, [window], recording="test", n_cycles=3.0, sfreq=200.0)
+
+    mask = support_restricted_mask(tfr.times, tfr.freqs, window, 3.0)[0]
+    expected = tfr.get_data(picks=tfr.ch_names)[:, :, 0, mask].mean(axis=-1) / 200.0
+    assert spectra.ch_names == tuple(tfr.ch_names)
+    np.testing.assert_allclose(spectra.data[:, :, 0, 0], expected)
+    assert tfr.ch_names == ["C3", "C4", "VEOG"]
+    assert tfr.info["bads"] == ["C4"]
 
 
 def test_from_tfr_window_mean_equals_a_manual_mean_over_the_time_mask() -> None:
@@ -414,7 +464,7 @@ def test_from_tfr_rejects_complex_output() -> None:
             "freqs": np.asarray(tfr.freqs),
             "ch_names": list(tfr.ch_names),
             "method": "morlet",
-            "get_data": lambda self: np.asarray(tfr.get_data(), dtype=complex),
+            "get_data": lambda self, **kwargs: np.asarray(tfr.get_data(**kwargs), dtype=complex),
         },
     )()
     with pytest.raises(ValueError, match="complex"):

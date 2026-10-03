@@ -1,0 +1,12 @@
+<nav class="sidebar-tree" aria-label="Documentation navigation">
+  <ul class="sidebar-home">
+    <li{% if pagename == master_doc %} class="current-page"{% endif %}>
+      <a class="reference internal" href="{{ pathto(master_doc) }}"{% if pagename == master_doc %} aria-current="page"{% endif %}>Overview</a>
+    </li>
+  </ul>
+  {{ furo_navigation_tree }}
+  <div class="sidebar-help">
+    <span>Working with a feature?</span>
+    <a href="{{ pathto('methods/index') }}">Read its definition <span aria-hidden="true">→</span></a>
+  </div>
+</nav>

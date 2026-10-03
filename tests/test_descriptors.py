@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from scipy.integrate import trapezoid
 from scipy.signal import welch
 
 from eegfeat.bands import Band
@@ -284,6 +285,21 @@ def test_a_spectrum_with_no_oscillation_falls_back_to_centre_of_gravity() -> Non
     assert table.flags["cog_fallback"].all()
     assert not table.flags["edge_hit"].any()
     assert 8.0 < table.values.item() < 13.0
+
+
+@pytest.mark.parametrize("freqs", [np.array([1.0, 2.0, 10.0]), np.geomspace(1.0, 10.0, 30)])
+def test_centre_of_gravity_integrates_density_on_a_nonuniform_grid(freqs) -> None:
+    power = np.ones_like(freqs)
+    table = peak_frequency(
+        _spectra(power, freqs),
+        band=Band("wide", 1.0, 11.0),
+        aperiodic_adjusted=False,
+        smoothing_hz=0.0,
+        include_global=False,
+    )
+    expected = trapezoid(freqs * power, freqs) / trapezoid(power, freqs)
+    assert table.flags["cog_fallback"].item()
+    assert table.values.item() == pytest.approx(expected)
 
 
 def test_disabling_the_prominence_guard_disables_the_fallback() -> None:
